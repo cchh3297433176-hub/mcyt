@@ -13,9 +13,17 @@ function escapeHtml(str) {
 function stripThought(text) {
     if (!text) return '';
     let processed = String(text);
-    if (processed.includes('')) processed += '</think>';
-    if (processed.includes('<thought>') && !processed.includes('</thought>')) processed += '</thought>';
-    if (processed.includes('<reasoning>') && !processed.includes('</reasoning>')) processed += '</reasoning>';
+    const tkOpen = '<' + 'think>';
+    const tkClose = '<' + '/think>';
+    if (processed.includes(tkOpen) && !processed.includes(tkClose)) {
+        processed += tkClose;
+    }
+    if (processed.includes('<thought>') && !processed.includes('</thought>')) {
+        processed += '</thought>';
+    }
+    if (processed.includes('<reasoning>') && !processed.includes('</reasoning>')) {
+        processed += '</reasoning>';
+    }
     const thinkRegex = /<(think|thought|reasoning)>[\s\S]*?<\/\1>/gi;
     return processed.replace(thinkRegex, '').trim();
 }
@@ -24,9 +32,17 @@ function stripThought(text) {
 function renderContentWithThoughts(text) {
     if (!text) return '';
     let processed = String(text);
-    if (processed.includes('')) processed += '</think>';
-    if (processed.includes('<thought>') && !processed.includes('</thought>')) processed += '</thought>';
-    if (processed.includes('<reasoning>') && !processed.includes('</reasoning>')) processed += '</reasoning>';
+    const tkOpen = '<' + 'think>';
+    const tkClose = '<' + '/think>';
+    if (processed.includes(tkOpen) && !processed.includes(tkClose)) {
+        processed += tkClose;
+    }
+    if (processed.includes('<thought>') && !processed.includes('</thought>')) {
+        processed += '</thought>';
+    }
+    if (processed.includes('<reasoning>') && !processed.includes('</reasoning>')) {
+        processed += '</reasoning>';
+    }
 
     const thinkRegex = /<(think|thought|reasoning)>([\s\S]*?)<\/\1>/gi;
     let lastIndex = 0;
@@ -110,9 +126,9 @@ function buildModelSettingsHTML(prefix) {
     return `
         <div class="model-settings">
             ${hasConfig ? `
-            <div id="${prefix}ConfigSummary" style="display:flex;justify-content:space-between;align-items:center;padding:8px 12px;background:#e8f5e9;border-radius:8px;margin-bottom:8px;border:1px solid #c8e6c9;">
-                <span style="font-size:12px;color:#2e7d32;font-weight:700;">✅ 已配置：${escapeHtml(G.ai.model || '自定义模型')}</span>
-                <button type="button" class="upload-btn" id="${prefix}ToggleDetailBtn" style="padding:3px 8px;font-size:11px;">⚙️ 展开修改</button>
+            <div id="${prefix}ConfigSummary" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#e8f5e9;border-radius:8px;margin-bottom:8px;border:1px solid #c8e6c9;">
+                <span style="font-size:12px;color:#2e7d32;font-weight:700;">✅ 已配置模型：${escapeHtml(G.ai.model || '未命名')}</span>
+                <button type="button" class="upload-btn" id="${prefix}ToggleDetailBtn" style="padding:4px 10px;font-size:11px;pointer-events:none;">⚙️ 展开修改</button>
             </div>
             ` : ''}
             <div id="${prefix}DetailArea" style="${hasConfig ? 'display:none;' : ''}">
@@ -295,14 +311,20 @@ function bindModelSettingsUI(prefix) {
         renderModelListBox(prefix, list, this.value.trim());
     });
     $(`${prefix}SaveProfileBtn`)?.addEventListener('click', () => saveModelProfile(prefix));
-    $(`${prefix}ToggleDetailBtn`)?.addEventListener('click', () => {
-        const area = $(`${prefix}DetailArea`);
-        if (!area) return;
-        const isHidden = area.style.display === 'none';
-        area.style.display = isHidden ? 'block' : 'none';
-        const btn = $(`${prefix}ToggleDetailBtn`);
-        if (btn) btn.textContent = isHidden ? '🔼 收起' : '⚙️ 展开修改';
-    });
+    
+    // 点击整个摘要条直接展开/收起
+    const summaryBox = $(`${prefix}ConfigSummary`);
+    if (summaryBox) {
+        summaryBox.addEventListener('click', () => {
+            const area = $(`${prefix}DetailArea`);
+            if (!area) return;
+            const isHidden = area.style.display === 'none';
+            area.style.display = isHidden ? 'block' : 'none';
+            const btn = $(`${prefix}ToggleDetailBtn`);
+            if (btn) btn.textContent = isHidden ? '🔼 收起' : '⚙️ 展开修改';
+        });
+    }
+
     if (G._pulledModels[prefix] && G._pulledModels[prefix].length) {
         $(`${prefix}ModelListWrap`).style.display = '';
         renderModelListBox(prefix, G._pulledModels[prefix], '');
@@ -434,7 +456,10 @@ async function callAI(messages, options = {}) {
     const message = data.choices[0].message;
     let content = message.content || '';
     const reasoning = message.reasoning_content || message.reasoning || '';
-    if (reasoning && !content.includes('\n\n` + content;
+    const tkOpen = '<' + 'think>';
+    const tkClose = '<' + '/think>';
+    if (reasoning && !content.includes(tkOpen)) {
+        content = tkOpen + '\n' + reasoning + '\n' + tkClose + '\n\n' + content;
     }
     return content;
 }
