@@ -1,5 +1,5 @@
 // ============================================================
-// CONFIG & STATE (已彻底剔除死板硬编码文本，全面转为 AI 实时生成)
+// CONFIG & STATE 
 // ============================================================
 const CONFIG = {
     DEFAULT_BASE_URL: 'https://api.deepseek.com/v1',
@@ -226,11 +226,42 @@ let G = {
     _npcInitiatedToday: {},
 };
 
-// DOM 安全引用代理（防止元素尚未挂载导致报错）
+// 安全 DOM 索引助手（摒弃易出错的 Proxy，直接返回原生元素）
 const $ = id => document.getElementById(id);
-const dom = new Proxy({}, {
-    get: (_, prop) => document.getElementById(prop)
-});
+const dom = {
+    get setupPage() { return $('setupPage'); },
+    get gamePage() { return $('gamePage'); },
+    get identityGroup() { return $('identityGroup'); },
+    get age() { return $('ageInput'); },
+    get ytName() { return $('ytNameInput'); },
+    get persona() { return $('personaInput'); },
+    get skin() { return $('skinInput'); },
+    get category() { return $('categorySelect'); },
+    get startBtn() { return $('startGameBtn'); },
+    get dayDisplay() { return $('dayDisplay'); },
+    get timeDisplay() { return $('timeDisplay'); },
+    get apDisplay() { return $('apDisplay'); },
+    get apDots() { return $('apDots'); },
+    get storyArea() { return $('storyArea'); },
+    get streamContainer() { return $('streamContainer'); },
+    get dashboardTab() { return $('dashboardTab'); },
+    get shopTab() { return $('shopTab'); },
+    get socialTab() { return $('socialTab'); },
+    get dataTab() { return $('dataTab'); },
+    get memoirTab() { return $('memoirTab'); },
+    get achievementsTab() { return $('achievementsTab'); },
+    get modal() { return $('modal'); },
+    get modalBody() { return $('modalBody'); },
+    get modalClose() { return $('modalClose'); },
+    get toast() { return $('toast'); },
+    get storyTab() { return $('storyTab'); },
+    get headerAvatarImg() { return $('headerAvatarImg'); },
+    get avatarPreview() { return $('avatarPreview'); },
+    get avatarFileInput() { return $('avatarFileInput'); },
+    get uploadAvatarBtn() { return $('uploadAvatarBtn'); },
+    get saveGameBtn() { return $('saveGameBtn'); },
+    get loadGameBtn() { return $('loadGameBtn'); },
+};
 
 // ============================================================
 // UTILITY
