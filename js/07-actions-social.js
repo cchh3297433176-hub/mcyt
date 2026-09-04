@@ -1,10 +1,11 @@
-        // 行动处理
+        // 行动处理（全面整合到新版聊天系统与好友申请机制）
         // ============================================================
         async function performAction(action, detail = '', useSearch = false) {
             if (G.isGenerating) { showToast('⏳ 正在生成剧情...'); return; }
             if (action === 'next') { advanceDayFree(); return; }
             if (action !== 'video' && G.actionPoints < 2) { showToast('⚠️ 行动点不足，需要2点推进时段', 'error'); return; }
             if (action !== 'video') G.actionPoints -= 2;
+
             switch (action) {
                 case 'stream':
                     switchTab('stream');
@@ -13,17 +14,20 @@
                 case 'video':
                     openVideoModal();
                     return;
+                // 统一合并：私信、交友、粉丝群全部引导进入统一的「💬 聊天」中心
                 case 'dm':
-                    await handleDM(detail, useSearch);
-                    break;
                 case 'friend':
-                    await handleFriend(detail, useSearch);
+                case 'fanclub':
+                case 'chat':
+                    switchTab('social');
+                    showToast('💬 已进入聊天中心', 'success', 1500);
+                    // 行动概率触发新的好友申请
+                    if (Math.random() < 0.65) {
+                        triggerRandomFriendRequest();
+                    }
                     break;
                 case 'collab':
                     await handleCollab(detail, useSearch);
-                    break;
-                case 'fanclub':
-                    await handleFanClub(detail, useSearch);
                     break;
                 case 'fanart':
                     await handleFanArt(detail, useSearch);
@@ -45,32 +49,30 @@
             checkAchievements();
         }
 
-        async function handleDM(detail, useSearch = false) {
-            await generateStory('💬 私信', `玩家查看了私信并回复粉丝，${detail || '与粉丝亲切交流'}`, useSearch);
-            G.totalDMs++;
-            G.player.followers += rand(10, 80);
-            G.player.likes += rand(5, 20);
-            updateUI();
-            addMemoir('私信互动', '回复粉丝私信');
-        }
-
-        async function handleFriend(detail, useSearch = false) {
-            await generateStory('🤝 交友', `玩家尝试与新的 MC 主播交友，${detail || '互相交流心得'}`, useSearch);
-            const names = ['Dreamy', 'TechnoBlade', 'Grian', 'MumboJumbo', 'Scar', 'Pearl', 'Impulse', 'Tango', 'Zedaph',
-                'Stress', 'Doc', 'Ren', 'Martyn', 'BigB', 'Cleo', 'Joe', 'Xisuma', 'Keralis', 'Beef', 'Etho'
+        // 随机好友申请生成器（粉丝、路人主播、同行）
+        function triggerRandomFriendRequest() {
+            const fanTypes = [
+                { name: 'RedstoneBoy_' + rand(10, 99), reason: '视频热心粉丝', persona: '超喜欢你的红石黑科技视频，希望能向你请教！' },
+                { name: 'PixelBuilder' + rand(1, 99), reason: '建筑同好', persona: '也是一名MC建筑爱好者，看了你的实况特别想加好友一起交流！' },
+                { name: 'SpeedRunnerMC', reason: '速通同行主播', persona: '经常在各大榜单看到你的名字，加个好友有机会联机切磋！' },
+                { name: 'MikuCraft' + rand(100, 999), reason: '直播铁粉', persona: '从你开播第一天就在看直播的老粉，天天给你刷礼物！' },
+                { name: 'EndCityWalker', reason: '探索模组玩家', persona: '性格比较随和，喜欢到处挖矿和探索遗迹的休闲玩家。' }
             ];
-            const name = pick(names);
-            if (!G.player.friends.includes(name)) {
-                G.player.friends.push(name);
-                showToast(`🎉 与 ${name} 成为好友！`, 'success');
-                addMemoir('结交好友', `与 ${name} 成为好友`);
-                checkAchievements();
-            } else showToast(`💬 与 ${name} 的关系更好了`, 'success');
-            updateUI();
+            const chosen = pick(fanTypes);
+            // 避免重复申请
+            if (Object.values(G.npcs).some(n => n.name === chosen.name) || (G.friendRequests || []).some(r => r.name === chosen.name)) return;
+            
+            receiveFriendRequest({
+                name: chosen.name,
+                fromReason: chosen.reason,
+                persona: chosen.persona,
+                avatarEmoji: pick(['🎮', '⛏️', '🏹', '🎨', '🌟', '👒', '🎧', '👾']),
+                day: G.day
+            });
         }
 
         async function handleCollab(detail, useSearch = false) {
-            const availableNPCs = Object.values(G.npcs).filter(n => n.favor >= 40);
+            const availableNPCs = Object.values(G.npcs).filter(n => (n.favor || 0) >= 40);
             let npc = null;
             if (availableNPCs.length > 0) npc = pick(availableNPCs);
             let extra = 0;
@@ -92,75 +94,7 @@
         }
 
         // ============================================================
-        // 👥 粉丝群 —— 模拟群聊页面（AI 输出结构化消息，渲染成聊天气泡）
-        // ============================================================
-        function openFanClubView() {
-            const msgs = (G.fanclubMessages || []).slice(-40);
-            const p = G.player;
-            const rows = msgs.map(m => `
-                <div style="display:flex;gap:8px;margin-bottom:10px;align-items:flex-start;">
-                    <div style="width:32px;height:32px;border-radius:50%;background:#fff3cd;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;">${escapeHtml(m.avatar||'👤')}</div>
-                    <div style="flex:1;min-width:0;">
-                        <div style="font-size:11px;color:#888;margin-bottom:2px;">${escapeHtml(m.user)} · 第${m.day}天</div>
-                        <div style="display:inline-block;background:#fff;border:1px solid #eee;border-radius:0 10px 10px 10px;padding:8px 12px;font-size:13px;color:#333;line-height:1.5;max-width:90%;word-break:break-word;">${escapeHtml(m.text)}</div>
-                    </div>
-                </div>`).join('');
-            const html = `
-            <div style="margin:-10px;background:#e3ecf5;border-radius:10px;overflow:hidden;">
-                <div style="background:linear-gradient(135deg,#5b8def,#3866c4);color:#fff;padding:12px 16px;">
-                    <div style="font-size:15px;font-weight:700;">💛 ${escapeHtml(p.ytName)} 的粉丝群</div>
-                    <div style="font-size:11px;opacity:.85;margin-top:2px;">Lv.${Math.floor(p.fanClubLevel||0)} · 群成员 ${Math.max(8, Math.floor((p.followers||0)/50))} 人</div>
-                </div>
-                <div style="padding:14px;max-height:55vh;overflow-y:auto;">
-                    ${rows || '<p style="font-size:12px;color:#999;text-align:center;">群里还很安静...</p>'}
-                </div>
-            </div>
-            <div class="btn-row" style="margin-top:12px;"><button class="btn-secondary" onclick="closeModal()">关闭</button></div>
-            `;
-            openModal(html);
-        }
-        async function handleFanClub(detail, useSearch = false) {
-            if (G.isGenerating) { showToast('⏳ 正在生成中，请稍候'); return; }
-            G.isGenerating = true;
-            showLoading();
-            try {
-                const p = G.player;
-                const npcNames = Object.values(G.npcs).map(n => n.name).join('、');
-                const sysPrompt = `
-                你正在模拟主播「${p.ytName}」（人设：${p.persona}，赛道：${p.category}）的粉丝群聊天记录。
-                群里活跃着4-7位不同性格的粉丝（可以偶尔提及路人NPC：${npcNames}），正在热烈讨论主播最近的动态。
-                ${detail ? `本次讨论围绕：${detail}` : '内容自由发挥，语气活泼真实，像真实粉丝群聊天，可以互相打趣、刷梗。'}
-                请严格按以下格式输出多条消息，不要有多余文字说明，每条一行：
-                [MSG user=昵称 avatar=emoji]消息内容[/MSG]
-                至少输出5条消息，avatar 使用单个可爱 emoji。
-                `;
-                const raw = await callAI([{ role: 'system', content: sysPrompt }, { role: 'user', content: '请生成这段群聊记录。' }], { maxTokens: 10000, temperature: 0.95 });
-                hideLoading();
-                const re = /\[MSG\s+user=([^\]]*?)\s+avatar=([^\]]*?)\]([\s\S]*?)\[\/MSG\]/g;
-                let m; const msgs = [];
-                while ((m = re.exec(raw))) { msgs.push({ user: m[1].trim() || '粉丝', avatar: m[2].trim() || '👤', text: m[3].trim() }); }
-                if (!msgs.length) { msgs.push({ user: '热心粉丝', avatar: '👤', text: raw.trim().slice(0, 200) || '（消息生成失败）' }); }
-                if (!G.fanclubMessages) G.fanclubMessages = [];
-                for (const msg of msgs) {
-                    G.fanclubMessages.push({ _id: 'fc_' + (G._fanclubMsgId = (G._fanclubMsgId || 0) + 1), ...msg, day: G.day, time: G.timeSlot });
-                }
-                if (G.fanclubMessages.length > 300) G.fanclubMessages = G.fanclubMessages.slice(-300);
-                G.player.fanClubLevel += 0.5;
-                G.player.followers += rand(30, 150);
-                G.player.money += rand(5, 20);
-                updateUI();
-                addMemoir('粉丝群活动', '管理粉丝群');
-                appendStory(`👥 你打开了粉丝群，群里正在热烈讨论着你的近况。`, '👥 粉丝群', { action: detail, useSearch });
-                openFanClubView();
-            } catch (e) {
-                hideLoading();
-                console.error('粉丝群生成失败', e);
-                showToast('❌ 粉丝群内容生成失败，请检查网络或 API Key', 'error');
-            } finally { G.isGenerating = false; updateUI(); }
-        }
-
-        // ============================================================
-        // 🎨 看同人 —— 模拟 AO3 风格阅读页（AI 输出结构化标题/标签/正文）
+        // 🎨 看同人 —— 模拟 AO3 风格阅读页
         // ============================================================
         function openFanWorksListModal() {
             const works = [...(G.fanworks || [])].reverse();
@@ -185,6 +119,7 @@
                 el.addEventListener('click', () => { const id = el.dataset.work; closeModal(); setTimeout(() => openFanWorkView(id), 150); });
             });
         }
+
         function openFanWorkView(id) {
             const work = (G.fanworks || []).find(w => w._id === id);
             if (!work) { showToast('⚠️ 找不到该作品', 'error', 1800); return; }
@@ -210,6 +145,7 @@
             openModal(html);
             document.getElementById('fanWorkHistoryBtn')?.addEventListener('click', openFanWorksListModal);
         }
+
         async function handleFanArt(detail, useSearch = false) {
             if (G.isGenerating) { showToast('⏳ 正在生成中，请稍候'); return; }
             G.isGenerating = true;
@@ -219,16 +155,16 @@
                 const npcNames = Object.values(G.npcs).map(n => n.name).join('、');
                 const sysPrompt = `
                 你是一个热爱创作的 MC 主播粉丝，正在同人共享站上为主播「${p.ytName}」（人设：${p.persona}，赛道：${p.category}）创作一篇同人短篇。
-                可能出现的相关角色（可选择使用）：${npcNames}。
-                ${detail ? `玩家希望同人内容围绕：${detail}` : '内容自由发挥，符合角色人设与平日剧情基调。'}
-                请严格按以下格式输出，不要有多余文字说明：
+                可能出现的相关角色：${npcNames}。
+                ${detail ? `围绕主题：${detail}` : '自由发挥，符合主播平日风格。'}
+                按以下格式输出：
                 [TITLE]标题[/TITLE]
-                [PAIRING]CP或人物关系，没有则留空[/PAIRING]
-                [TAGS]标签1, 标签2, 标签3[/TAGS]
-                [SUMMARY]一句话简介[/SUMMARY]
-                [CONTENT]正文内容，300-600字，细腻生动[/CONTENT]
+                [PAIRING]CP关系[/PAIRING]
+                [TAGS]标签1, 标签2[/TAGS]
+                [SUMMARY]简介[/SUMMARY]
+                [CONTENT]正文内容300-500字[/CONTENT]
                 `;
-                const raw = await callAI([{ role: 'system', content: sysPrompt }, { role: 'user', content: '请创作这篇同人作品。' }], { maxTokens: 10000, temperature: 0.95 });
+                const raw = await callAI([{ role: 'system', content: sysPrompt }, { role: 'user', content: '请创作。' }], { maxTokens: 10000, temperature: 0.95 });
                 hideLoading();
                 const grab = (tag) => { const m = raw.match(new RegExp(`\\[${tag}\\]([\\s\\S]*?)\\[/${tag}\\]`)); return m ? m[1].trim() : ''; };
                 const title = grab('TITLE') || '无题';
@@ -244,15 +180,14 @@
                 };
                 if (!G.fanworks) G.fanworks = [];
                 G.fanworks.push(work);
-                appendStory(`🎨 你在同人共享站上读到了一篇粉丝创作的《${title}》，${summary || '内容很有意思'}。`, '🎨 看同人', { action: detail, useSearch });
+                appendStory(`🎨 你在同人共享站上读到了粉丝创作的《${title}》，${summary || '非常有爱'}。`, '🎨 看同人', { action: detail, useSearch });
                 G.player.followers += rand(10, 60);
                 G.player.likes += rand(5, 25);
                 updateUI();
                 openFanWorkView(work._id);
             } catch (e) {
                 hideLoading();
-                console.error('同人生成失败', e);
-                showToast('❌ 同人内容生成失败，请检查网络或 API Key', 'error');
+                showToast('❌ 同人内容生成失败', 'error');
             } finally { G.isGenerating = false; updateUI(); }
         }
 
@@ -266,21 +201,16 @@
         async function handleSubAction(detail, useSearch = false) {
             await generateStory('🧘 皮下活动', `玩家选择进行皮下活动：${detail || '放松身心'}`, useSearch);
             const lower = (detail || '').toLowerCase();
-            const isMinecraft = lower.includes('minecraft') || lower.includes('mc') || lower.includes('我的世界') || lower
-                .includes('玩');
-            if (isMinecraft && Math.random() < 0.08) {
+            const isMinecraft = lower.includes('minecraft') || lower.includes('mc') || lower.includes('我的世界') || lower.includes('玩');
+            if (isMinecraft && Math.random() < 0.12) {
                 const npc = G.npcs.dream;
                 if (npc) {
                     const gain = rand(3, 6);
-                    npc.favor = Math.min(100, npc.favor + gain);
+                    npc.favor = Math.min(100, (npc.favor || 0) + gain);
                     G.player.metDream = true;
-                    const msg =
-                        `🎉 你在玩Minecraft时偶遇了神秘大神 Dream！他戴着白色笑脸面具，似乎对你产生了兴趣。他和你聊了几句，你感觉距离拉近了一些。好感度 +${gain}！`;
-                    appendStory(msg, '👾 偶遇 Dream');
+                    appendStory(`🎉 你在MC中偶遇了神秘大神 Dream！好感度 +${gain}！`, '👾 偶遇 Dream');
                     showToast('🌟 你偶遇了 Dream！好感度增加！', 'success', 3000);
                     updateUI();
-                    if (document.querySelector('.tab-btn.active')?.dataset.tab === 'data') renderDataPanel();
-                    addMemoir('偶遇 Dream', `好感度 +${gain}`);
                 }
             }
             G.player.followers += rand(1, 10);

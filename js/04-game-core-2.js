@@ -60,6 +60,7 @@ function renderAchievements() {
     html += `</div>`;
     container.innerHTML = html;
 }
+
 // ============================================================
 // 赞助商/广告商系统
 // ============================================================
@@ -426,7 +427,7 @@ function renderDataPanel() {
         html += `
         <div class="npc-card" onclick="openChat('${id}')">
             <div class="npc-info">
-                <div class="npc-name">${npc.avatarEmoji || '👤'} ${npc.name} ${isLover ? '💕' : ''}</div>
+                <div class="npc-name">${npc.avatarUrl ? `<img src="${npc.avatarUrl}" style="width:20px;height:20px;border-radius:50%;vertical-align:middle;">` : (npc.avatarEmoji || '👤')} ${npc.name} ${isLover ? '💕' : ''}</div>
                 <div class="npc-desc">${npc.isCustom ? '自定义角色' : `平均技术 ${avg}`} · 好感 ${npc.favor||0}</div>
             </div>
             <div style="font-size:11px;color:var(--text2);display:flex;gap:4px;flex-wrap:wrap;">
@@ -461,11 +462,20 @@ function renderDataPanel() {
 }
 
 // ============================================================
-// 📱 统一社交聊天系统（类微信设计：单人 / 群聊 / 闪电触发 / 灵活API）
+// 📱 统一社交聊天系统（单人 / 群聊 / 好友申请红点 / NPC专属记忆）
 // ============================================================
-if (!G.chatActiveTab) G.chatActiveTab = 'direct'; // 'direct' | 'group'
+if (!G.chatActiveTab) G.chatActiveTab = 'direct';
 if (!G.groups) G.groups = {};
 if (!G.groupChatHistory) G.groupChatHistory = {};
+if (!G.friendRequests) G.friendRequests = []; // 好友申请池 [{ id, name, persona, avatarEmoji, avatarUrl, fromReason, day }]
+
+// 辅助渲染头像（优先 URL/本地图片，其次 Emoji）
+function renderAvatarBadge(obj, size = 44) {
+    if (obj && obj.avatarUrl) {
+        return `<img src="${obj.avatarUrl}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;display:block;">`;
+    }
+    return `<div style="width:${size}px;height:${size}px;border-radius:50%;background:#eaf2ea;display:flex;align-items:center;justify-content:center;font-size:${Math.floor(size*0.45)}px;flex-shrink:0;">${(obj && obj.avatarEmoji) || '👤'}</div>`;
+}
 
 function renderSocialPanel() {
     const container = dom.socialTab;
@@ -480,37 +490,64 @@ function renderSocialPanel() {
     renderChatHome(container);
 }
 
-// 聊天主页（单人 / 群聊切换）
+// 收到好友申请的核心入口（弹窗通知 + 红点机制）
+function receiveFriendRequest(req) {
+    req._id = 'freq_' + Date.now() + '_' + rand(100, 999);
+    G.friendRequests.push(req);
+    autoSaveGame();
+
+    // 弹窗提示：你收到一条好友申请，点击我已知晓后关闭
+    openModal(`
+        <div style="text-align:center;padding:10px 0;">
+            <div style="font-size:36px;margin-bottom:8px;">📬</div>
+            <h3 style="margin-bottom:6px;">收到新的好友申请！</h3>
+            <p style="font-size:14px;color:#333;margin:8px 0;">来自 <b>${escapeHtml(req.name)}</b> 的好友申请：</p>
+            <div style="background:#f5faf5;padding:10px 14px;border-radius:10px;font-size:13px;color:#666;line-height:1.6;text-align:left;border:1px dashed #c8e6c9;">
+                <div><b>身份：</b>${escapeHtml(req.fromReason || '粉丝/路人主播')}</div>
+                <div style="margin-top:4px;"><b>人设：</b>${escapeHtml(req.persona || '希望能和你交个朋友！')}</div>
+            </div>
+            <div style="font-size:11px;color:#999;margin-top:10px;">可在「聊天」右上角 ➕ 查看并处理。</div>
+            <div class="btn-row" style="margin-top:16px;">
+                <button class="btn-primary" style="width:100%;" onclick="closeModal()">我已知晓</button>
+            </div>
+        </div>
+    `);
+    if (document.querySelector('.tab-btn.active')?.dataset.tab === 'social') renderSocialPanel();
+}
+
 function renderChatHome(container) {
     const isDirect = G.chatActiveTab !== 'group';
+    const pendingCount = (G.friendRequests || []).length;
+
     let html = `
     <div class="chat-app" style="background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.06);min-height:550px;display:flex;flex-direction:column;">
         <div class="chat-header" style="padding:12px 16px;background:#f8fbf8;border-bottom:1px solid #eef3ee;display:flex;justify-content:space-between;align-items:center;">
             <div style="display:flex;gap:6px;background:#e9f2e9;padding:3px;border-radius:8px;">
-                <button id="tabDirectBtn" style="border:none;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;background:${isDirect ? '#fff' : 'transparent'};color:${isDirect ? 'var(--primary)' : '#666'};box-shadow:${isDirect ? '0 2px 6px rgba(0,0,0,0.08)' : 'none'};">👤 单人私聊</button>
-                <button id="tabGroupBtn" style="border:none;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;background:${!isDirect ? '#fff' : 'transparent'};color:${!isDirect ? 'var(--primary)' : '#666'};box-shadow:${!isDirect ? '0 2px 6px rgba(0,0,0,0.08)' : 'none'};">👥 群聊中心</button>
+                <button id="tabDirectBtn" style="border:none;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;background:${isDirect ? '#fff' : 'transparent'};color:${isDirect ? 'var(--primary)' : '#666'};">👤 私聊</button>
+                <button id="tabGroupBtn" style="border:none;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;background:${!isDirect ? '#fff' : 'transparent'};color:${!isDirect ? 'var(--primary)' : '#666'};">👥 群聊</button>
             </div>
-            <button id="addChatTargetBtn" style="border:none;background:var(--primary);color:#fff;width:32px;height:32px;border-radius:50%;font-size:18px;line-height:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;">➕</button>
+            <div style="position:relative;">
+                <button id="addChatTargetBtn" title="新建与好友申请" style="border:none;background:var(--primary);color:#fff;width:34px;height:34px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;">➕</button>
+                ${pendingCount > 0 ? `<span style="position:absolute;top:-4px;right:-4px;width:12px;height:12px;background:#ff4757;border:2px solid #fff;border-radius:50%;"></span>` : ''}
+            </div>
         </div>
-        <div style="font-size:11px;color:#999;padding:6px 16px;background:#fcfdfc;border-bottom:1px dashed #eee;">
-            💡 提示：长按列表条目可编辑角色人设、头像或解散群聊
+        <div style="font-size:11px;color:#888;padding:6px 16px;background:#fcfdfc;border-bottom:1px dashed #eee;">
+            💡 长按联系人或群可编辑头像、人设设定与记忆总结设置
         </div>
         <div class="chat-list" style="flex:1;overflow-y:auto;padding:8px;">
     `;
 
     if (isDirect) {
-        // 单人列表
         for (const [id, npc] of Object.entries(G.npcs)) {
             const chatHist = G.chatHistory[id] || [];
             const lastMsg = chatHist.length > 0 ? chatHist[chatHist.length - 1] : null;
-            const purePreview = lastMsg ? stripThought(lastMsg.text) : '暂无新消息';
+            const purePreview = lastMsg ? stripThought(lastMsg.text) : (npc.memorySummary ? `[记忆: ${stripThought(npc.memorySummary).slice(0, 15)}...]` : '暂无新消息');
             const time = lastMsg ? (lastMsg.time || '') : '';
             const isLover = G.player.lovers.includes(npc.name);
-            const avatarDisplay = npc.avatarUrl ? `<img src="${npc.avatarUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` : (npc.avatarEmoji || '👤');
             
             html += `
-            <div class="chat-item" data-id="${id}" style="display:flex;align-items:center;padding:10px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;transition:background 0.2s;background:#fff;border:1px solid #f0f4f0;">
-                <div style="width:44px;height:44px;border-radius:50%;background:#eaf2ea;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;margin-right:12px;overflow:hidden;">${avatarDisplay}</div>
+            <div class="chat-item" data-id="${id}" style="display:flex;align-items:center;padding:10px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;background:#fff;border:1px solid #f0f4f0;">
+                <div style="margin-right:12px;flex-shrink:0;">${renderAvatarBadge(npc, 44)}</div>
                 <div style="flex:1;min-width:0;">
                     <div style="display:flex;justify-content:space-between;align-items:center;">
                         <span style="font-weight:700;font-size:14px;color:var(--text);">${escapeHtml(npc.name)} ${isLover ? '💕' : ''} ${npc.isCustom ? '<span style="font-size:10px;color:var(--primary);border:1px solid;padding:0 4px;border-radius:4px;">自定义</span>' : ''}</span>
@@ -521,19 +558,17 @@ function renderChatHome(container) {
             </div>`;
         }
     } else {
-        // 群聊列表
         const groupKeys = Object.keys(G.groups);
         if (!groupKeys.length) {
-            html += `<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">暂无群聊，点击右上角 ➕ 创建专属粉丝群或主播群！</div>`;
+            html += `<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">暂无群聊，点击右上角 ➕ 即可自建专属粉丝群或主播交流群！</div>`;
         } else {
             for (const [gid, grp] of Object.entries(G.groups)) {
                 const msgs = G.groupChatHistory[gid] || [];
                 const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
                 const purePreview = lastMsg ? `${lastMsg.senderName}: ${stripThought(lastMsg.text)}` : (grp.desc || '开启热烈讨论吧');
-                const avatarDisplay = grp.avatarUrl ? `<img src="${grp.avatarUrl}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;">` : (grp.avatarEmoji || '👥');
                 html += `
                 <div class="group-item" data-gid="${gid}" style="display:flex;align-items:center;padding:10px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;background:#fff;border:1px solid #f0f4f0;">
-                    <div style="width:44px;height:44px;border-radius:50%;background:#e3ecf5;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0;margin-right:12px;overflow:hidden;">${avatarDisplay}</div>
+                    <div style="margin-right:12px;flex-shrink:0;">${renderAvatarBadge(grp, 44)}</div>
                     <div style="flex:1;min-width:0;">
                         <div style="display:flex;justify-content:space-between;align-items:center;">
                             <span style="font-weight:700;font-size:14px;color:var(--text);">${escapeHtml(grp.name)} <span style="font-size:11px;color:#999;">(${grp.members.length}人)</span></span>
@@ -549,27 +584,21 @@ function renderChatHome(container) {
     html += `</div></div>`;
     container.innerHTML = html;
 
-    // Tab 切换事件
     document.getElementById('tabDirectBtn').onclick = () => { G.chatActiveTab = 'direct'; renderSocialPanel(); };
     document.getElementById('tabGroupBtn').onclick = () => { G.chatActiveTab = 'group'; renderSocialPanel(); };
-
-    // ➕ 创建联系人或群聊
     document.getElementById('addChatTargetBtn').onclick = () => openAddChatTargetModal();
 
-    // 绑定单人点击与长按事件
     container.querySelectorAll('.chat-item').forEach(el => {
         const id = el.dataset.id;
         bindLongPressEvent(el, () => openEditNpcModal(id), () => openChat(id));
     });
 
-    // 绑定群聊点击与长按事件
     container.querySelectorAll('.group-item').forEach(el => {
         const gid = el.dataset.gid;
         bindLongPressEvent(el, () => openGroupSettingsModal(gid), () => openGroupChat(gid));
     });
 }
 
-// 触摸/鼠标长按与点击通用绑定
 function bindLongPressEvent(element, onLongPress, onClick) {
     let pressTimer = null;
     let isLong = false;
@@ -578,24 +607,18 @@ function bindLongPressEvent(element, onLongPress, onClick) {
         pressTimer = setTimeout(() => {
             isLong = true;
             onLongPress();
-        }, 600);
+        }, 550);
     };
     const cancel = () => { clearTimeout(pressTimer); };
     element.addEventListener('touchstart', start, { passive: true });
-    element.addEventListener('touchend', () => {
-        cancel();
-        if (!isLong) onClick();
-    });
+    element.addEventListener('touchend', () => { cancel(); if (!isLong) onClick(); });
     element.addEventListener('touchmove', cancel);
     element.addEventListener('mousedown', start);
-    element.addEventListener('mouseup', () => {
-        cancel();
-        if (!isLong) onClick();
-    });
+    element.addEventListener('mouseup', () => { cancel(); if (!isLong) onClick(); });
 }
 
 // ============================================================
-// 单人聊天窗口（支持右上角 ⚡ 触发，消息不自动回复）
+// 单人聊天窗口
 // ============================================================
 function renderSingleChatWindow(container) {
     const npcId = G.currentChatNpc;
@@ -614,14 +637,14 @@ function renderSingleChatWindow(container) {
             const isSelf = msg.from === 'player';
             messagesHtml += `
             <div style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
-                ${!isSelf ? `<div style="width:34px;height:34px;border-radius:50%;background:#eaf2ea;display:flex;align-items:center;justify-content:center;font-size:16px;margin-right:8px;flex-shrink:0;">${npc.avatarEmoji || '👤'}</div>` : ''}
+                ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${renderAvatarBadge(npc, 34)}</div>` : ''}
                 <div style="max-width:75%;">
                     <div style="background:${isSelf ? '#95ec69' : '#fff'};color:#111;padding:8px 12px;border-radius:${isSelf ? '10px 0 10px 10px' : '0 10px 10px 10px'};box-shadow:0 1px 3px rgba(0,0,0,0.08);font-size:14px;line-height:1.5;word-break:break-word;">
                         ${isSelf ? escapeHtml(msg.text).replace(/\n/g, '<br>') : renderContentWithThoughts(msg.text)}
                     </div>
                     <div style="font-size:10px;color:#bbb;margin-top:2px;text-align:${isSelf ? 'right' : 'left'};">${msg.time || ''}</div>
                 </div>
-                ${isSelf ? `<div style="width:34px;height:34px;border-radius:50%;background:#dce8dc;display:flex;align-items:center;justify-content:center;font-size:16px;margin-left:8px;flex-shrink:0;">${G.player.avatarEmoji || '🧑'}</div>` : ''}
+                ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${renderAvatarBadge({ avatarUrl: G.player.avatar, avatarEmoji: '🧑' }, 34)}</div>` : ''}
             </div>`;
         }
     }
@@ -633,21 +656,21 @@ function renderSingleChatWindow(container) {
                 <button onclick="closeChat()" style="border:none;background:none;font-size:20px;color:#333;cursor:pointer;padding:0 4px;">❮</button>
                 <div>
                     <div style="font-weight:700;font-size:15px;">${escapeHtml(npc.name)}</div>
-                    <div style="font-size:11px;color:#2e7d32;">● 在线</div>
+                    <div style="font-size:11px;color:#2e7d32;">● 在线 ${npc.memorySummary ? '· 🧠已建立专属记忆' : ''}</div>
                 </div>
             </div>
             <div style="display:flex;gap:8px;align-items:center;">
-                <button id="triggerAIReplyBtn" title="让AI根据上方消息生成回复" style="border:none;background:#ff4757;color:#fff;width:34px;height:34px;border-radius:8px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(255,71,87,0.35);">⚡</button>
+                <button id="triggerAIReplyBtn" title="让AI生成回复" style="border:none;background:#ff4757;color:#fff;width:34px;height:34px;border-radius:8px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(255,71,87,0.35);">⚡</button>
             </div>
         </div>
 
         <div id="chatMessageArea" style="flex:1;overflow-y:auto;padding:14px;">
-            ${messagesHtml || '<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">打个招呼吧！发消息不会立即触发AI，写完点击右上角 ⚡ 闪电即可触发回复。</div>'}
+            ${messagesHtml || '<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">发消息不消耗点数、不触发AI；输入完毕点击右上角 ⚡ 闪电即可触发回复。</div>'}
         </div>
 
         <div style="padding:8px 10px;background:#fff;border-top:1px solid #e5ebe5;display:flex;gap:8px;align-items:center;">
             <button id="chatActionInsertBtn" title="插入动作或环境叙事" style="border:1px solid #ccc;background:#f8f9f8;color:#555;width:36px;height:36px;border-radius:50%;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;">➕</button>
-            <textarea id="singleChatInput" rows="1" placeholder="输入消息（可连续发送多条）..." style="flex:1;padding:8px 12px;border-radius:18px;border:1px solid #ddd;background:#f8faf8;font-size:14px;resize:none;outline:none;font-family:inherit;"></textarea>
+            <textarea id="singleChatInput" rows="1" placeholder="输入消息（可连续发多条）..." style="flex:1;padding:8px 12px;border-radius:18px;border:1px solid #ddd;background:#f8faf8;font-size:14px;resize:none;outline:none;font-family:inherit;"></textarea>
             <button id="singleSendBtn" style="border:none;background:var(--primary);color:#fff;padding:8px 16px;border-radius:18px;font-size:13px;font-weight:700;cursor:pointer;">发送</button>
         </div>
     </div>
@@ -663,8 +686,7 @@ function renderSingleChatWindow(container) {
     const doSend = () => {
         const text = input.value.trim();
         if (!text) return;
-        const now = new Date();
-        pushChat(npcId, { from: 'player', text, time: now.toLocaleTimeString().slice(0, 5) });
+        pushChat(npcId, { from: 'player', text, time: new Date().toLocaleTimeString().slice(0, 5) });
         input.value = '';
         renderSingleChatWindow(container);
         autoSaveGame();
@@ -678,13 +700,12 @@ function renderSingleChatWindow(container) {
         }
     };
 
-    // ➕ 插入动作/环境描述
     document.getElementById('chatActionInsertBtn').onclick = () => {
         openModal(`
             <h3>📝 插入场景/动作描写</h3>
-            <p style="font-size:12px;color:#666;">以第三人称或旁白视角描写此时的环境或动作（如：*端起茶杯喝了一口*）</p>
+            <p style="font-size:12px;color:#666;">以旁白视角描写此时的环境或动作（如：*端起咖啡喝了一口*）</p>
             <div class="form-group">
-                <textarea id="actionNarrativeInput" rows="3" placeholder="例如：转过头看向窗外，若有所思地叹了口气..." style="width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;font-size:13px;"></textarea>
+                <textarea id="actionNarrativeInput" rows="3" placeholder="例如：转过头看向窗外，微笑着说道..." style="width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;font-size:13px;"></textarea>
             </div>
             <div class="btn-row">
                 <button class="btn-secondary" onclick="closeModal()">取消</button>
@@ -701,7 +722,6 @@ function renderSingleChatWindow(container) {
         };
     };
 
-    // ⚡ 点击闪电触发 AI 回复
     document.getElementById('triggerAIReplyBtn').onclick = async () => {
         if (G.isGenerating) { showToast('⏳ AI 正在组织语言中...'); return; }
         showToast('⚡ 正在请求回复...', 'success', 1200);
@@ -710,7 +730,37 @@ function renderSingleChatWindow(container) {
     };
 }
 
-// 触发单人 AI 回复调用
+// 检查并自动执行 NPC 专属私聊/群聊记忆总结
+async function checkNpcMemorySummarize(npcId) {
+    const npc = G.npcs[npcId];
+    if (!npc) return;
+    const history = G.chatHistory[npcId] || [];
+    const threshold = npc.summaryThreshold || 12; // 默认满12轮自动总结
+
+    if (history.length >= threshold && !npc._summarizing) {
+        npc._summarizing = true;
+        try {
+            const toSummarize = history.slice(0, history.length - 4); // 保留最后4条
+            const textToSummarize = toSummarize.map(m => `${m.from === 'player' ? '玩家' : npc.name}: ${stripThought(m.text)}`).join('\n');
+            const prior = npc.memorySummary ? `此前已有记忆：\n${npc.memorySummary}\n\n` : '';
+            const sys = `你是角色记忆归纳助手。请将角色「${npc.name}」与玩家的对话提炼为一段不超过150字的专属记忆总结，保留双方关系变化、聊过的关键话题和承诺。只输出精炼总结内容。`;
+            const summary = await callAI([
+                { role: 'system', content: sys },
+                { role: 'user', content: `${prior}需要总结的对话：\n${textToSummarize}` }
+            ], { maxTokens: 400, temperature: 0.5 });
+
+            npc.memorySummary = stripThought(summary.trim());
+            // 归档更早的历史，释放上下文
+            G.chatHistory[npcId] = history.slice(history.length - 4);
+            autoSaveGame();
+        } catch (e) {
+            console.warn('NPC 记忆总结失败', e);
+        } finally {
+            npc._summarizing = false;
+        }
+    }
+}
+
 async function triggerAIReplyForSingle(npcId) {
     const npc = G.npcs[npcId];
     if (!npc) return;
@@ -718,19 +768,24 @@ async function triggerAIReplyForSingle(npcId) {
     if (!history.length) { showToast('请先发送至少一条对话'); return; }
 
     const recent = history.slice(-10).map(m => {
-        if (m.from === 'action') return `[旁白/动作描写: ${m.text}]`;
+        if (m.from === 'action') return `[旁白: ${m.text}]`;
         return `${m.from === 'player' ? '玩家' : npc.name}: ${stripThought(m.text)}`;
     }).join('\n');
 
+    // 融入群聊与专属私聊记忆
+    const npcMemoryContext = npc.memorySummary ? `【与玩家的历史记忆】\n${npc.memorySummary}\n` : '';
+    const groupMemoryContext = npc.groupMemorySummary ? `【在群聊中的记忆印象】\n${npc.groupMemorySummary}\n` : '';
+
     const sysPrompt = `
     你正在扮演角色「${npc.name}」。
-    人设与性格：${npc.persona || '一位性格鲜明的角色'}。
-    当前与玩家的好感度：${npc.favor || 0}/100。
-    【核心要求】
-    1. 请仔细阅读玩家最近发送的消息或动作描写，自然、贴切地做出回应。
-    2. 严禁复读玩家原句，使用口语化、接地气的手机聊天语气。
-    3. 只输出你的发言正文，无需添加“${npc.name}:”前缀。
-    最近聊天记录：
+    设定：${npc.persona || '普通朋友'}。
+    好感度：${npc.favor || 0}/100。
+    ${npcMemoryContext}
+    ${groupMemoryContext}
+    【要求】
+    1. 自然接住玩家发送的最后内容，使用手机聊天的口吻。
+    2. 严禁复读玩家原话，只输出发言正文。
+    最近对话记录：
     ${recent}
     `;
 
@@ -739,22 +794,22 @@ async function triggerAIReplyForSingle(npcId) {
         showLoading();
         const reply = await callAI([
             { role: 'system', content: sysPrompt },
-            { role: 'user', content: '请对上方玩家的消息做出回复。' }
+            { role: 'user', content: '请进行回复。' }
         ], { maxTokens: 800, temperature: 0.85 });
         hideLoading();
         pushChat(npcId, { from: 'npc', text: reply, time: new Date().toLocaleTimeString().slice(0, 5) });
+        await checkNpcMemorySummarize(npcId);
         autoSaveGame();
     } catch (e) {
         hideLoading();
-        showToast('❌ 生成回复失败，请检查网络或配置', 'error');
-        console.error(e);
+        showToast('❌ 回复失败，请检查网络', 'error');
     } finally {
         G.isGenerating = false;
     }
 }
 
 // ============================================================
-// 👥 群聊系统（支持统一合成 / 独立调用，多成员勾选）
+// 👥 群聊系统
 // ============================================================
 function openGroupChat(gid) {
     G.currentChatGroup = gid;
@@ -783,7 +838,7 @@ function renderGroupChatWindow(container) {
             const isSelf = msg.from === 'player';
             messagesHtml += `
             <div style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
-                ${!isSelf ? `<div style="width:34px;height:34px;border-radius:50%;background:#e3ecf5;display:flex;align-items:center;justify-content:center;font-size:16px;margin-right:8px;flex-shrink:0;">${msg.senderAvatar || '👤'}</div>` : ''}
+                ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${renderAvatarBadge({ avatarUrl: msg.senderAvatarUrl, avatarEmoji: msg.senderAvatar || '👤' }, 34)}</div>` : ''}
                 <div style="max-width:75%;">
                     ${!isSelf ? `<div style="font-size:11px;color:#777;margin-bottom:2px;">${escapeHtml(msg.senderName)}</div>` : ''}
                     <div style="background:${isSelf ? '#95ec69' : '#fff'};color:#111;padding:8px 12px;border-radius:${isSelf ? '10px 0 10px 10px' : '0 10px 10px 10px'};box-shadow:0 1px 3px rgba(0,0,0,0.08);font-size:14px;line-height:1.5;word-break:break-word;">
@@ -791,7 +846,7 @@ function renderGroupChatWindow(container) {
                     </div>
                     <div style="font-size:10px;color:#bbb;margin-top:2px;text-align:${isSelf ? 'right' : 'left'};">${msg.time || ''}</div>
                 </div>
-                ${isSelf ? `<div style="width:34px;height:34px;border-radius:50%;background:#dce8dc;display:flex;align-items:center;justify-content:center;font-size:16px;margin-left:8px;flex-shrink:0;">${G.player.avatarEmoji || '🧑'}</div>` : ''}
+                ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${renderAvatarBadge({ avatarUrl: G.player.avatar, avatarEmoji: '🧑' }, 34)}</div>` : ''}
             </div>`;
         }
     }
@@ -803,12 +858,12 @@ function renderGroupChatWindow(container) {
                 <button onclick="closeGroupChat()" style="border:none;background:none;font-size:20px;color:#333;cursor:pointer;padding:0 4px;">❮</button>
                 <div>
                     <div style="font-weight:700;font-size:15px;">${escapeHtml(grp.name)} <span style="font-size:12px;color:#888;">(${grp.members.length})</span></div>
-                    <div style="font-size:11px;color:#888;">${grp.desc ? escapeHtml(grp.desc.slice(0, 18)) : '群聊交流中'}</div>
+                    <div style="font-size:11px;color:#888;">${grp.desc ? escapeHtml(grp.desc.slice(0, 18)) : '群聊自由交流'}</div>
                 </div>
             </div>
             <div style="display:flex;gap:8px;align-items:center;">
-                <button id="groupSettingsBtn" title="群管理与API设置" style="border:1px solid #ddd;background:#fff;color:#555;padding:4px 8px;border-radius:8px;font-size:12px;cursor:pointer;">⚙️ 管理</button>
-                <button id="triggerGroupAIBtn" title="触发群成员回复" style="border:none;background:#ff4757;color:#fff;width:34px;height:34px;border-radius:8px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(255,71,87,0.35);">⚡</button>
+                <button id="groupSettingsBtn" style="border:1px solid #ddd;background:#fff;color:#555;padding:4px 8px;border-radius:8px;font-size:12px;cursor:pointer;">⚙️ 管理</button>
+                <button id="triggerGroupAIBtn" style="border:none;background:#ff4757;color:#fff;width:34px;height:34px;border-radius:8px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(255,71,87,0.35);">⚡</button>
             </div>
         </div>
 
@@ -855,8 +910,6 @@ function renderGroupChatWindow(container) {
     };
 
     document.getElementById('groupSettingsBtn').onclick = () => openGroupSettingsModal(gid);
-
-    // ⚡ 触发群聊回复
     document.getElementById('triggerGroupAIBtn').onclick = async () => {
         if (G.isGenerating) { showToast('⏳ AI 正在组织群聊中...'); return; }
         showToast('⚡ 触发群聊讨论...', 'success', 1200);
@@ -865,7 +918,6 @@ function renderGroupChatWindow(container) {
     };
 }
 
-// 触发群聊 AI 回复（支持模式A：统一回复 / 模式B：独立调用）
 async function triggerGroupAIReply(gid) {
     const grp = G.groups[gid];
     if (!grp) return;
@@ -875,7 +927,6 @@ async function triggerGroupAIReply(gid) {
     const activeList = grp.activeMembers && grp.activeMembers.length ? grp.activeMembers : grp.members;
     if (!activeList.length) { showToast('群内暂无可接话的成员'); return; }
 
-    // 区分主播与普通群友
     const activeStreamers = [];
     const activeFans = [];
     activeList.forEach(mid => {
@@ -892,12 +943,10 @@ async function triggerGroupAIReply(gid) {
         G.isGenerating = true;
         showLoading();
 
-        // 如果设置了“主播每人独立使用一次 API”
         if (grp.streamerMode === 'separate' && activeStreamers.length) {
-            // 随机挑 1~2 位活跃主播各自独立生成一条回复
             const picked = activeStreamers.sort(() => 0.5 - Math.random()).slice(0, rand(1, 2));
             for (const st of picked) {
-                const sys = `你是主播「${st.name}」，人设：${st.persona}。你正在群聊「${grp.name}」中。根据上下文直接给出你在群里的一句简短回复，只输出对话正文。`;
+                const sys = `你是主播「${st.name}」，人设：${st.persona}。你正在群聊「${grp.name}」中。根据最近聊天直接给出你在群里的一句简短回复，只输出对话正文。`;
                 const rep = await callAI([{ role: 'system', content: sys }, { role: 'user', content: `最近聊天：\n${recent}` }], { maxTokens: 200, temperature: 0.9 });
                 if (!G.groupChatHistory[gid]) G.groupChatHistory[gid] = [];
                 G.groupChatHistory[gid].push({
@@ -905,23 +954,23 @@ async function triggerGroupAIReply(gid) {
                     from: 'npc',
                     senderName: st.name,
                     senderAvatar: st.avatarEmoji || '👤',
+                    senderAvatarUrl: st.avatarUrl || null,
                     text: rep.trim(),
                     time: new Date().toLocaleTimeString().slice(0, 5)
                 });
             }
         }
 
-        // 统一模式（1次调用让 AI 扮演群成员，挑选 1~3 人接话）
         if (grp.streamerMode !== 'separate' || activeFans.length) {
             const memberPoolDesc = activeList.map(mid => {
                 const n = G.npcs[mid];
-                return n ? `【${n.name}】(${n.persona || '群成员'})` : null;
+                return n ? `【${n.name}】(${n.persona || '群友'})` : null;
             }).filter(Boolean).join('、');
 
             const sys = `
             你正在模拟群聊「${grp.name}」（简介：${grp.desc || '自由讨论'}）。
-            本群可参与发言的成员有：${memberPoolDesc}。
-            请根据最近群聊，随机选择 1 到 3 位成员进行接话互动，输出格式必须严格如下（每行一条）：
+            参与成员有：${memberPoolDesc}。
+            请根据最近群聊，随机选择 1 到 3 位成员进行生动接话，格式必须如下（每行一条）：
             [MSG name=角色名]回复正文[/MSG]
             `;
             const raw = await callAI([{ role: 'system', content: sys }, { role: 'user', content: `最近群聊记录：\n${recent}` }], { maxTokens: 600, temperature: 0.95 });
@@ -936,6 +985,7 @@ async function triggerGroupAIReply(gid) {
                     from: 'npc',
                     senderName: sName,
                     senderAvatar: matchedNpc ? (matchedNpc.avatarEmoji || '👤') : '💬',
+                    senderAvatarUrl: matchedNpc ? (matchedNpc.avatarUrl || null) : null,
                     text: m[2].trim(),
                     time: new Date().toLocaleTimeString().slice(0, 5)
                 });
@@ -947,46 +997,119 @@ async function triggerGroupAIReply(gid) {
     } catch (e) {
         hideLoading();
         showToast('❌ 群聊生成失败', 'error');
-        console.error(e);
     } finally {
         G.isGenerating = false;
     }
 }
 
 // ============================================================
-// ✏️ 弹窗：新建联系人 / 群聊 / 编辑 / 勾选参与
+// ➕ 新建与好友申请管理弹窗
 // ============================================================
 function openAddChatTargetModal() {
+    const requests = G.friendRequests || [];
+    let requestsHtml = '';
+    if (!requests.length) {
+        requestsHtml = `<div style="font-size:12px;color:#999;padding:8px 0;">暂无待处理的好友申请</div>`;
+    } else {
+        requestsHtml = requests.map(r => `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#f9fbf9;border-radius:8px;margin-bottom:6px;border:1px solid #eef2ee;">
+                <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
+                    ${renderAvatarBadge(r, 34)}
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-weight:700;font-size:13px;">${escapeHtml(r.name)} <span style="font-size:10px;color:#999;">(${escapeHtml(r.fromReason||'申请')])</span></div>
+                        <div style="font-size:11px;color:#777;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(r.persona||'')}</div>
+                    </div>
+                </div>
+                <div style="display:flex;gap:4px;margin-left:8px;">
+                    <button class="upload-btn" onclick="handleFriendRequestAction('${r._id}', true)" style="padding:3px 8px;font-size:11px;">✅ 通过</button>
+                    <button class="upload-btn" onclick="handleFriendRequestAction('${r._id}', false)" style="padding:3px 8px;font-size:11px;background:#c62828;">❌ 拒绝</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
     openModal(`
-        <h3>➕ 新建聊天</h3>
-        <p style="font-size:12px;color:#666;">你可以添加自定义的粉丝/主播角色，或创建新的群聊。</p>
-        <div class="btn-row" style="margin-top:14px;flex-direction:column;gap:8px;">
+        <h3>➕ 社交与好友中心</h3>
+        <div style="margin:10px 0 12px;border:1px solid #eee;border-radius:10px;padding:10px;background:#fff;">
+            <div style="font-size:13px;font-weight:700;margin-bottom:6px;color:var(--primary);display:flex;align-items:center;justify-content:space-between;">
+                <span>📬 好友申请列表</span>
+                ${requests.length ? `<span style="background:#ff4757;color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;">${requests.length}条新申请</span>` : ''}
+            </div>
+            ${requestsHtml}
+        </div>
+        <div class="btn-row" style="flex-direction:column;gap:8px;">
             <button class="btn-primary" id="btnNewCustomNPC" style="width:100%;">👤 新建自定义联系人 / 粉丝</button>
             <button class="btn-primary" id="btnNewGroup" style="width:100%;background:#3866c4;">👥 创建新群聊</button>
-            <button class="btn-secondary" onclick="closeModal()" style="width:100%;">取消</button>
+            <button class="btn-secondary" onclick="closeModal()" style="width:100%;">关闭</button>
         </div>
     `);
+
     document.getElementById('btnNewCustomNPC').onclick = () => { closeModal(); openEditNpcModal(null); };
     document.getElementById('btnNewGroup').onclick = () => { closeModal(); openEditGroupModal(null); };
 }
 
-// 编辑/新建角色
+// 通过/拒绝好友申请
+function handleFriendRequestAction(reqId, accept) {
+    const idx = (G.friendRequests || []).findIndex(r => r._id === reqId);
+    if (idx === -1) return;
+    const req = G.friendRequests[idx];
+    G.friendRequests.splice(idx, 1);
+
+    if (accept) {
+        const id = 'custom_npc_' + Date.now();
+        G.npcs[id] = {
+            id,
+            name: req.name,
+            avatarEmoji: req.avatarEmoji || '👤',
+            avatarUrl: req.avatarUrl || null,
+            persona: req.persona || '一位热心好友',
+            favor: 40,
+            isCustom: true,
+            summaryThreshold: 12
+        };
+        showToast(`🎉 已同意 ${req.name} 的好友申请！`, 'success', 2500);
+        appendStory(`🤝 你通过了「${req.name}」的好友申请，已添加到联系人列表中。`, '🤝 新增好友');
+    } else {
+        showToast(`已婉拒 ${req.name} 的好友申请`, 'info', 1500);
+    }
+    autoSaveGame();
+    closeModal();
+    renderSocialPanel();
+}
+window.handleFriendRequestAction = handleFriendRequestAction;
+
+// 编辑/新建角色（支持本地相册图片上传 & 图片 URL & 独立记忆总结轮数）
 function openEditNpcModal(npcId) {
     const isNew = !npcId;
-    const npc = !isNew ? G.npcs[npcId] : { name: '', avatarEmoji: '👤', persona: '', favor: 50, isCustom: true };
+    const npc = !isNew ? G.npcs[npcId] : { name: '', avatarEmoji: '👤', avatarUrl: '', persona: '', favor: 50, isCustom: true, summaryThreshold: 12 };
+    
     openModal(`
         <h3>${isNew ? '👤 新建角色 / 粉丝' : `✏️ 编辑角色：${escapeHtml(npc.name)}`}</h3>
         <div class="form-group">
             <label>角色姓名</label>
-            <input type="text" id="npcNameInput" value="${escapeHtml(npc.name)}" placeholder="如：热心粉丝小明 / 知名主播Alex">
+            <input type="text" id="npcNameInput" value="${escapeHtml(npc.name)}" placeholder="如：铁粉小明 / 主播Alex">
         </div>
         <div class="form-group">
-            <label>头像 Emoji / 图标</label>
-            <input type="text" id="npcEmojiInput" value="${escapeHtml(npc.avatarEmoji || '👤')}" placeholder="输入单个 Emoji">
+            <label>头像设置（支持 Emoji / 图片 URL / 本地相册）</label>
+            <div style="display:flex;gap:6px;margin-bottom:6px;">
+                <input type="text" id="npcEmojiInput" value="${escapeHtml(npc.avatarEmoji || '👤')}" placeholder="Emoji" style="width:70px;text-align:center;">
+                <input type="text" id="npcAvatarUrlInput" value="${escapeHtml(npc.avatarUrl || '')}" placeholder="图片外链 URL (可留空)" style="flex:1;">
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <label class="upload-btn" style="padding:6px 12px;font-size:12px;cursor:pointer;">
+                    📁 从相册选择本地图片
+                    <input type="file" id="npcLocalAvatarInput" accept="image/*" style="display:none;">
+                </label>
+                <div id="npcAvatarPreviewBox" style="width:36px;height:36px;border-radius:50%;border:1px solid #ddd;overflow:hidden;">${renderAvatarBadge(npc, 36)}</div>
+            </div>
         </div>
         <div class="form-group">
-            <label>角色人设与性格设定</label>
-            <textarea id="npcPersonaInput" rows="3" placeholder="描述此人的性格、与你的关系、口头禅...">${escapeHtml(npc.persona || '')}</textarea>
+            <label>角色人设设定</label>
+            <textarea id="npcPersonaInput" rows="3" placeholder="描述此人的性格、口头禅、与你的渊源...">${escapeHtml(npc.persona || '')}</textarea>
+        </div>
+        <div class="form-group">
+            <label>🧠 独立记忆总结轮数（满多少轮自动提炼精炼记忆并归档）</label>
+            <input type="number" id="npcThresholdInput" min="4" max="50" value="${npc.summaryThreshold || 12}" style="width:100%;padding:6px 10px;border-radius:8px;border:1px solid #ccc;font-size:13px;">
         </div>
         <div class="btn-row" style="margin-top:12px;">
             ${!isNew && npc.isCustom ? `<button class="btn-secondary" id="delNpcBtn" style="color:#e53935;">🗑️ 删除角色</button>` : ''}
@@ -995,10 +1118,34 @@ function openEditNpcModal(npcId) {
         </div>
     `);
 
+    let currentAvatarDataUrl = npc.avatarUrl || '';
+
+    // 本地相册图片选择并转为 Base64
+    document.getElementById('npcLocalAvatarInput').onchange = function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+            currentAvatarDataUrl = evt.target.result;
+            document.getElementById('npcAvatarPreviewBox').innerHTML = `<img src="${currentAvatarDataUrl}" style="width:100%;height:100%;object-fit:cover;">`;
+            document.getElementById('npcAvatarUrlInput').value = '';
+            showToast('✅ 本地头像已加载', 'success', 1200);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    document.getElementById('npcAvatarUrlInput').oninput = function() {
+        if (this.value.trim()) {
+            currentAvatarDataUrl = this.value.trim();
+            document.getElementById('npcAvatarPreviewBox').innerHTML = `<img src="${currentAvatarDataUrl}" style="width:100%;height:100%;object-fit:cover;">`;
+        }
+    };
+
     document.getElementById('saveNpcBtn').onclick = () => {
         const name = document.getElementById('npcNameInput').value.trim();
         const emoji = document.getElementById('npcEmojiInput').value.trim() || '👤';
         const persona = document.getElementById('npcPersonaInput').value.trim() || '普通朋友';
+        const threshold = parseInt(document.getElementById('npcThresholdInput').value) || 12;
         if (!name) { showToast('⚠️ 角色姓名不能为空', 'error'); return; }
 
         const id = isNew ? ('custom_npc_' + Date.now()) : npcId;
@@ -1007,10 +1154,12 @@ function openEditNpcModal(npcId) {
             id,
             name,
             avatarEmoji: emoji,
+            avatarUrl: currentAvatarDataUrl,
             persona,
+            summaryThreshold: threshold,
             isCustom: true
         };
-        showToast('✅ 角色已保存', 'success');
+        showToast('✅ 角色信息已保存', 'success');
         closeModal();
         renderSocialPanel();
         autoSaveGame();
@@ -1029,23 +1178,30 @@ function openEditNpcModal(npcId) {
     }
 }
 
-// 编辑/新建群聊
+// 编辑/新建群聊（同样支持本地图片和 URL 头像）
 function openEditGroupModal(gid) {
     const isNew = !gid;
-    const grp = !isNew ? G.groups[gid] : { name: '', avatarEmoji: '👥', desc: '', members: Object.keys(G.npcs).slice(0, 3) };
+    const grp = !isNew ? G.groups[gid] : { name: '', avatarEmoji: '👥', avatarUrl: '', desc: '', members: Object.keys(G.npcs).slice(0, 3) };
     openModal(`
         <h3>${isNew ? '👥 创建群聊' : '✏️ 编辑群资料'}</h3>
         <div class="form-group">
             <label>群聊名称</label>
-            <input type="text" id="grpNameInput" value="${escapeHtml(grp.name)}" placeholder="如：主播联机交流群 / 铁粉聚集地">
+            <input type="text" id="grpNameInput" value="${escapeHtml(grp.name)}" placeholder="如：主播日常开黑群 / 粉丝基地">
         </div>
         <div class="form-group">
-            <label>群图标 Emoji</label>
-            <input type="text" id="grpEmojiInput" value="${escapeHtml(grp.avatarEmoji || '👥')}" placeholder="输入单个 Emoji">
+            <label>群图标（Emoji 或 图片）</label>
+            <div style="display:flex;gap:6px;margin-bottom:6px;">
+                <input type="text" id="grpEmojiInput" value="${escapeHtml(grp.avatarEmoji || '👥')}" placeholder="Emoji" style="width:70px;text-align:center;">
+                <input type="text" id="grpAvatarUrlInput" value="${escapeHtml(grp.avatarUrl || '')}" placeholder="图片 URL" style="flex:1;">
+            </div>
+            <label class="upload-btn" style="padding:6px 12px;font-size:12px;cursor:pointer;">
+                📁 选择群本地图标
+                <input type="file" id="grpLocalAvatarInput" accept="image/*" style="display:none;">
+            </label>
         </div>
         <div class="form-group">
             <label>群聊简介 / 话题</label>
-            <textarea id="grpDescInput" rows="2" placeholder="介绍群聊的日常基调或本次讨论的主题...">${escapeHtml(grp.desc || '')}</textarea>
+            <textarea id="grpDescInput" rows="2" placeholder="介绍群聊的日常基调或话题...">${escapeHtml(grp.desc || '')}</textarea>
         </div>
         <div class="btn-row" style="margin-top:12px;">
             <button class="btn-secondary" onclick="closeModal()">取消</button>
@@ -1053,9 +1209,22 @@ function openEditGroupModal(gid) {
         </div>
     `);
 
+    let currentGroupAvatar = grp.avatarUrl || '';
+    document.getElementById('grpLocalAvatarInput').onchange = function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+            currentGroupAvatar = evt.target.result;
+            showToast('✅ 群图标已载入', 'success', 1200);
+        };
+        reader.readAsDataURL(file);
+    };
+
     document.getElementById('saveGrpBtn').onclick = () => {
         const name = document.getElementById('grpNameInput').value.trim();
         const emoji = document.getElementById('grpEmojiInput').value.trim() || '👥';
+        const url = document.getElementById('grpAvatarUrlInput').value.trim();
         const desc = document.getElementById('grpDescInput').value.trim();
         if (!name) { showToast('⚠️ 群名称不能为空', 'error'); return; }
 
@@ -1065,6 +1234,7 @@ function openEditGroupModal(gid) {
             id,
             name,
             avatarEmoji: emoji,
+            avatarUrl: url || currentGroupAvatar,
             desc,
             members: grp.members || Object.keys(G.npcs).slice(0, 4),
             activeMembers: grp.activeMembers || grp.members,
@@ -1077,7 +1247,6 @@ function openEditGroupModal(gid) {
     };
 }
 
-// 群管理与接话勾选设置
 function openGroupSettingsModal(gid) {
     const grp = G.groups[gid];
     if (!grp) return;
@@ -1093,7 +1262,7 @@ function openGroupSettingsModal(gid) {
         <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0f0f0;">
             <label style="font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer;">
                 <input type="checkbox" class="grp-mem-check" data-id="${nid}" ${isMember ? 'checked' : ''} style="width:16px;height:16px;">
-                <span>${n.avatarEmoji || '👤'} ${escapeHtml(n.name)}</span>
+                <span>${n.avatarUrl ? `<img src="${n.avatarUrl}" style="width:18px;height:18px;border-radius:50%;vertical-align:middle;">` : (n.avatarEmoji || '👤')} ${escapeHtml(n.name)}</span>
             </label>
             <label style="font-size:11px;color:#666;display:flex;align-items:center;gap:4px;cursor:pointer;">
                 <input type="checkbox" class="grp-active-check" data-id="${nid}" ${isActive && isMember ? 'checked' : ''} ${!isMember ? 'disabled' : ''} style="width:14px;height:14px;">
@@ -1104,11 +1273,11 @@ function openGroupSettingsModal(gid) {
 
     openModal(`
         <h3>⚙️ 群管理：${escapeHtml(grp.name)}</h3>
-        <div style="font-size:13px;font-weight:700;margin:10px 0 6px;">🤖 AI 回复模式</div>
+        <div style="font-size:13px;font-weight:700;margin:10px 0 6px;">🤖 回复模式</div>
         <div style="background:#f9fbf9;padding:8px 12px;border-radius:8px;font-size:12px;line-height:1.6;margin-bottom:12px;">
             <label style="display:block;cursor:pointer;margin-bottom:6px;">
                 <input type="radio" name="streamerMode" value="unified" ${grp.streamerMode !== 'separate' ? 'checked' : ''}>
-                <b>模式 A（统一合成回复）</b>：只调用 1 次 API，由 AI 统筹挑选 1~3 位活跃成员发言（极省 Token）
+                <b>模式 A（统一合成回复）</b>：只调 1 次 API，由 AI 统筹挑选 1~3 位活跃成员发言（极省 Token）
             </label>
             <label style="display:block;cursor:pointer;">
                 <input type="radio" name="streamerMode" value="separate" ${grp.streamerMode === 'separate' ? 'checked' : ''}>
@@ -1116,7 +1285,7 @@ function openGroupSettingsModal(gid) {
             </label>
         </div>
 
-        <div style="font-size:13px;font-weight:700;margin-bottom:6px;">👥 成员名单与本次接话勾选</div>
+        <div style="font-size:13px;font-weight:700;margin-bottom:6px;">👥 成员勾选与接话配置</div>
         <div style="max-height:220px;overflow-y:auto;border:1px solid #eee;border-radius:8px;padding:4px 10px;">
             ${memberCheckboxes}
         </div>
@@ -1128,7 +1297,6 @@ function openGroupSettingsModal(gid) {
         </div>
     `);
 
-    // 动态联动勾选
     document.querySelectorAll('.grp-mem-check').forEach(chk => {
         chk.onchange = () => {
             const nid = chk.dataset.id;
