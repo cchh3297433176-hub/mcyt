@@ -462,14 +462,15 @@ function renderDataPanel() {
 }
 
 // ============================================================
-// 📱 统一社交聊天系统（单人 / 群聊 / 好友申请红点 / NPC专属记忆）
+// 📱 手机社交中心（模仿微信：消息 / 朋友圈动态 / 名片看动态）
 // ============================================================
-if (!G.chatActiveTab) G.chatActiveTab = 'direct';
+if (!G.phoneNav) G.phoneNav = 'chats'; // 'chats' | 'moments'
+if (!G.chatActiveTab) G.chatActiveTab = 'direct'; // 'direct' | 'group'
 if (!G.groups) G.groups = {};
 if (!G.groupChatHistory) G.groupChatHistory = {};
-if (!G.friendRequests) G.friendRequests = []; // 好友申请池 [{ id, name, persona, avatarEmoji, avatarUrl, fromReason, day }]
+if (!G.friendRequests) G.friendRequests = [];
+if (!G.momentsFilterNpcId) G.momentsFilterNpcId = null;
 
-// 辅助渲染头像（优先 URL/本地图片，其次 Emoji）
 function renderAvatarBadge(obj, size = 44) {
     if (obj && obj.avatarUrl) {
         return `<img src="${obj.avatarUrl}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;display:block;">`;
@@ -487,55 +488,56 @@ function renderSocialPanel() {
         renderSingleChatWindow(container);
         return;
     }
-    renderChatHome(container);
+    renderPhoneApp(container);
 }
 
-// 收到好友申请的核心入口（弹窗通知 + 红点机制）
-function receiveFriendRequest(req) {
-    req._id = 'freq_' + Date.now() + '_' + rand(100, 999);
-    G.friendRequests.push(req);
-    autoSaveGame();
-
-    // 弹窗提示：你收到一条好友申请，点击我已知晓后关闭
-    openModal(`
-        <div style="text-align:center;padding:10px 0;">
-            <div style="font-size:36px;margin-bottom:8px;">📬</div>
-            <h3 style="margin-bottom:6px;">收到新的好友申请！</h3>
-            <p style="font-size:14px;color:#333;margin:8px 0;">来自 <b>${escapeHtml(req.name)}</b> 的好友申请：</p>
-            <div style="background:#f5faf5;padding:10px 14px;border-radius:10px;font-size:13px;color:#666;line-height:1.6;text-align:left;border:1px dashed #c8e6c9;">
-                <div><b>身份：</b>${escapeHtml(req.fromReason || '粉丝/路人主播')}</div>
-                <div style="margin-top:4px;"><b>人设：</b>${escapeHtml(req.persona || '希望能和你交个朋友！')}</div>
-            </div>
-            <div style="font-size:11px;color:#999;margin-top:10px;">可在「聊天」右上角 ➕ 查看并处理。</div>
-            <div class="btn-row" style="margin-top:16px;">
-                <button class="btn-primary" style="width:100%;" onclick="closeModal()">我已知晓</button>
-            </div>
-        </div>
-    `);
-    if (document.querySelector('.tab-btn.active')?.dataset.tab === 'social') renderSocialPanel();
-}
-
-function renderChatHome(container) {
-    const isDirect = G.chatActiveTab !== 'group';
+// 手机App框架（仿微信底部导航：消息 / 朋友圈）
+function renderPhoneApp(container) {
+    const isMoments = G.phoneNav === 'moments';
     const pendingCount = (G.friendRequests || []).length;
 
-    let html = `
-    <div class="chat-app" style="background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.06);min-height:550px;display:flex;flex-direction:column;">
-        <div class="chat-header" style="padding:12px 16px;background:#f8fbf8;border-bottom:1px solid #eef3ee;display:flex;justify-content:space-between;align-items:center;">
-            <div style="display:flex;gap:6px;background:#e9f2e9;padding:3px;border-radius:8px;">
-                <button id="tabDirectBtn" style="border:none;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;background:${isDirect ? '#fff' : 'transparent'};color:${isDirect ? 'var(--primary)' : '#666'};">👤 私聊</button>
-                <button id="tabGroupBtn" style="border:none;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;background:${!isDirect ? '#fff' : 'transparent'};color:${!isDirect ? 'var(--primary)' : '#666'};">👥 群聊</button>
-            </div>
-            <div style="position:relative;">
-                <button id="addChatTargetBtn" title="新建与好友申请" style="border:none;background:var(--primary);color:#fff;width:34px;height:34px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;">➕</button>
-                ${pendingCount > 0 ? `<span style="position:absolute;top:-4px;right:-4px;width:12px;height:12px;background:#ff4757;border:2px solid #fff;border-radius:50%;"></span>` : ''}
-            </div>
+    let contentHtml = '';
+    if (isMoments) {
+        contentHtml = buildMomentsHTML();
+    } else {
+        contentHtml = buildChatListHTML();
+    }
+
+    const html = `
+    <div class="phone-app-wrap" style="background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.06);min-height:580px;display:flex;flex-direction:column;">
+        <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;">
+            ${contentHtml}
         </div>
-        <div style="font-size:11px;color:#888;padding:6px 16px;background:#fcfdfc;border-bottom:1px dashed #eee;">
-            💡 长按联系人或群可编辑头像、人设设定与记忆总结设置
+        <!-- 微信风格底部栏 -->
+        <div style="height:54px;background:#fcfdfc;border-top:1px solid #eef2ee;display:flex;justify-content:space-around;align-items:center;padding:0 10px;">
+            <button id="phoneNavChatsBtn" style="border:none;background:none;font-size:12px;font-weight:700;color:${!isMoments ? 'var(--primary)' : '#888'};display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;">
+                <span style="font-size:18px;">💬</span>
+                <span>消息</span>
+            </button>
+            <button id="phoneNavMomentsBtn" style="border:none;background:none;font-size:12px;font-weight:700;color:${isMoments ? 'var(--primary)' : '#888'};display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;">
+                <span style="font-size:18px;">🌟</span>
+                <span>朋友圈</span>
+            </button>
         </div>
-        <div class="chat-list" style="flex:1;overflow-y:auto;padding:8px;">
+    </div>
     `;
+    container.innerHTML = html;
+
+    document.getElementById('phoneNavChatsBtn').onclick = () => { G.phoneNav = 'chats'; renderSocialPanel(); };
+    document.getElementById('phoneNavMomentsBtn').onclick = () => { G.phoneNav = 'moments'; G.momentsFilterNpcId = null; renderSocialPanel(); };
+
+    if (!isMoments) {
+        bindChatListEvents(container);
+    } else {
+        bindMomentsEvents(container);
+    }
+}
+
+// 构造消息列表 HTML
+function buildChatListHTML() {
+    const isDirect = G.chatActiveTab !== 'group';
+    const pendingCount = (G.friendRequests || []).length;
+    let itemsHtml = '';
 
     if (isDirect) {
         for (const [id, npc] of Object.entries(G.npcs)) {
@@ -545,7 +547,7 @@ function renderChatHome(container) {
             const time = lastMsg ? (lastMsg.time || '') : '';
             const isLover = G.player.lovers.includes(npc.name);
             
-            html += `
+            itemsHtml += `
             <div class="chat-item" data-id="${id}" style="display:flex;align-items:center;padding:10px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;background:#fff;border:1px solid #f0f4f0;">
                 <div style="margin-right:12px;flex-shrink:0;">${renderAvatarBadge(npc, 44)}</div>
                 <div style="flex:1;min-width:0;">
@@ -560,13 +562,13 @@ function renderChatHome(container) {
     } else {
         const groupKeys = Object.keys(G.groups);
         if (!groupKeys.length) {
-            html += `<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">暂无群聊，点击右上角 ➕ 即可自建专属粉丝群或主播交流群！</div>`;
+            itemsHtml += `<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">暂无群聊，点击右上角 ➕ 创建专属粉丝群或主播交流群！</div>`;
         } else {
             for (const [gid, grp] of Object.entries(G.groups)) {
                 const msgs = G.groupChatHistory[gid] || [];
                 const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
                 const purePreview = lastMsg ? `${lastMsg.senderName}: ${stripThought(lastMsg.text)}` : (grp.desc || '开启热烈讨论吧');
-                html += `
+                itemsHtml += `
                 <div class="group-item" data-gid="${gid}" style="display:flex;align-items:center;padding:10px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;background:#fff;border:1px solid #f0f4f0;">
                     <div style="margin-right:12px;flex-shrink:0;">${renderAvatarBadge(grp, 44)}</div>
                     <div style="flex:1;min-width:0;">
@@ -581,9 +583,26 @@ function renderChatHome(container) {
         }
     }
 
-    html += `</div></div>`;
-    container.innerHTML = html;
+    return `
+    <div class="chat-header" style="padding:12px 16px;background:#f8fbf8;border-bottom:1px solid #eef3ee;display:flex;justify-content:space-between;align-items:center;">
+        <div style="display:flex;gap:6px;background:#e9f2e9;padding:3px;border-radius:8px;">
+            <button id="tabDirectBtn" style="border:none;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;background:${isDirect ? '#fff' : 'transparent'};color:${isDirect ? 'var(--primary)' : '#666'};">👤 私聊</button>
+            <button id="tabGroupBtn" style="border:none;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;background:${!isDirect ? '#fff' : 'transparent'};color:${!isDirect ? 'var(--primary)' : '#666'};">👥 群聊</button>
+        </div>
+        <div style="position:relative;">
+            <button id="addChatTargetBtn" title="新建与好友申请" style="border:none;background:var(--primary);color:#fff;width:34px;height:34px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;">➕</button>
+            ${pendingCount > 0 ? `<span style="position:absolute;top:-4px;right:-4px;width:12px;height:12px;background:#ff4757;border:2px solid #fff;border-radius:50%;"></span>` : ''}
+        </div>
+    </div>
+    <div style="font-size:11px;color:#888;padding:6px 16px;background:#fcfdfc;border-bottom:1px dashed #eee;">
+        💡 提示：长按联系人或群聊可编辑人设、头像与独立记忆总结
+    </div>
+    <div class="chat-list" style="flex:1;overflow-y:auto;padding:8px;">
+        ${itemsHtml}
+    </div>`;
+}
 
+function bindChatListEvents(container) {
     document.getElementById('tabDirectBtn').onclick = () => { G.chatActiveTab = 'direct'; renderSocialPanel(); };
     document.getElementById('tabGroupBtn').onclick = () => { G.chatActiveTab = 'group'; renderSocialPanel(); };
     document.getElementById('addChatTargetBtn').onclick = () => openAddChatTargetModal();
@@ -596,6 +615,70 @@ function renderChatHome(container) {
     container.querySelectorAll('.group-item').forEach(el => {
         const gid = el.dataset.gid;
         bindLongPressEvent(el, () => openGroupSettingsModal(gid), () => openGroupChat(gid));
+    });
+}
+
+// 构造朋友圈（动态）HTML
+function buildMomentsHTML() {
+    let feedItems = [...(G.feed || [])].reverse();
+    let filterTitle = '🌟 动态朋友圈';
+
+    if (G.momentsFilterNpcId) {
+        const targetNpc = G.npcs[G.momentsFilterNpcId];
+        const targetName = targetNpc ? targetNpc.name : G.momentsFilterNpcId;
+        feedItems = feedItems.filter(f => f.npcId === G.momentsFilterNpcId || f.author === targetName);
+        filterTitle = `🌟 ${escapeHtml(targetName)} 的朋友圈`;
+    }
+
+    let listHtml = '';
+    if (!feedItems.length) {
+        listHtml = `<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">暂无动态，多和好友主播交流吧！</div>`;
+    } else {
+        for (const item of feedItems) {
+            const isLiked = item.liked ? '❤️ 已赞' : '🤍 赞';
+            listHtml += `
+            <div style="padding:12px;background:#fff;border-radius:10px;margin-bottom:8px;border:1px solid #f0f4f0;">
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+                    <div style="font-size:20px;">${item.avatar || '👤'}</div>
+                    <div style="flex:1;">
+                        <div style="font-weight:700;font-size:13px;color:var(--text);">${escapeHtml(item.author)}</div>
+                        <div style="font-size:10px;color:#bbb;">${item.time || ''}</div>
+                    </div>
+                </div>
+                <div style="font-size:13px;color:#333;line-height:1.6;margin-bottom:8px;">${escapeHtml(item.body)}</div>
+                <div style="display:flex;gap:12px;font-size:12px;border-top:1px solid #f7f9f7;padding-top:6px;">
+                    <button class="moment-like-btn" data-id="${item.id}" style="border:none;background:none;cursor:pointer;color:#e53935;font-size:12px;">${isLiked} (${item.likes||0})</button>
+                </div>
+            </div>`;
+        }
+    }
+
+    return `
+    <div style="padding:12px 16px;background:#f8fbf8;border-bottom:1px solid #eef3ee;display:flex;justify-content:space-between;align-items:center;">
+        <span style="font-weight:700;font-size:15px;">${filterTitle}</span>
+        ${G.momentsFilterNpcId ? `<button id="clearMomentFilterBtn" style="border:1px solid #ccc;background:#fff;padding:2px 8px;border-radius:6px;font-size:11px;cursor:pointer;">查看全部</button>` : ''}
+    </div>
+    <div style="flex:1;overflow-y:auto;padding:10px;background:#f4f6f4;">
+        ${listHtml}
+    </div>`;
+}
+
+function bindMomentsEvents(container) {
+    document.getElementById('clearMomentFilterBtn')?.addEventListener('click', () => {
+        G.momentsFilterNpcId = null;
+        renderSocialPanel();
+    });
+
+    container.querySelectorAll('.moment-like-btn').forEach(btn => {
+        btn.onclick = () => {
+            const id = parseInt(btn.dataset.id);
+            const item = G.feed.find(f => f.id === id);
+            if (!item) return;
+            item.liked = !item.liked;
+            item.likes = (item.likes || 0) + (item.liked ? 1 : -1);
+            renderSocialPanel();
+            autoSaveGame();
+        };
     });
 }
 
@@ -618,7 +701,7 @@ function bindLongPressEvent(element, onLongPress, onClick) {
 }
 
 // ============================================================
-// 单人聊天窗口
+// 单人聊天窗口（点击头像弹出名片：支持查看TA的朋友圈）
 // ============================================================
 function renderSingleChatWindow(container) {
     const npcId = G.currentChatNpc;
@@ -637,7 +720,7 @@ function renderSingleChatWindow(container) {
             const isSelf = msg.from === 'player';
             messagesHtml += `
             <div style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
-                ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${renderAvatarBadge(npc, 34)}</div>` : ''}
+                ${!isSelf ? `<div class="chat-npc-avatar-btn" style="margin-right:8px;flex-shrink:0;cursor:pointer;" title="点击查看资料名片与动态">${renderAvatarBadge(npc, 34)}</div>` : ''}
                 <div style="max-width:75%;">
                     <div style="background:${isSelf ? '#95ec69' : '#fff'};color:#111;padding:8px 12px;border-radius:${isSelf ? '10px 0 10px 10px' : '0 10px 10px 10px'};box-shadow:0 1px 3px rgba(0,0,0,0.08);font-size:14px;line-height:1.5;word-break:break-word;">
                         ${isSelf ? escapeHtml(msg.text).replace(/\n/g, '<br>') : renderContentWithThoughts(msg.text)}
@@ -654,9 +737,9 @@ function renderSingleChatWindow(container) {
         <div style="padding:10px 14px;background:#fff;border-bottom:1px solid #e5ebe5;display:flex;justify-content:space-between;align-items:center;">
             <div style="display:flex;align-items:center;gap:10px;">
                 <button onclick="closeChat()" style="border:none;background:none;font-size:20px;color:#333;cursor:pointer;padding:0 4px;">❮</button>
-                <div>
+                <div id="singleChatHeaderProfileBtn" style="cursor:pointer;" title="点击查看TA的名片">
                     <div style="font-weight:700;font-size:15px;">${escapeHtml(npc.name)}</div>
-                    <div style="font-size:11px;color:#2e7d32;">● 在线 ${npc.memorySummary ? '· 🧠已建立专属记忆' : ''}</div>
+                    <div style="font-size:11px;color:#2e7d32;">● 在线 ${npc.memorySummary ? '· 🧠专属记忆' : ''}</div>
                 </div>
             </div>
             <div style="display:flex;gap:8px;align-items:center;">
@@ -665,7 +748,7 @@ function renderSingleChatWindow(container) {
         </div>
 
         <div id="chatMessageArea" style="flex:1;overflow-y:auto;padding:14px;">
-            ${messagesHtml || '<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">发消息不消耗点数、不触发AI；输入完毕点击右上角 ⚡ 闪电即可触发回复。</div>'}
+            ${messagesHtml || '<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">打个招呼吧！发消息不消耗点数，发送完毕后点击右上角 ⚡ 闪电即可触发回复。</div>'}
         </div>
 
         <div style="padding:8px 10px;background:#fff;border-top:1px solid #e5ebe5;display:flex;gap:8px;align-items:center;">
@@ -700,6 +783,11 @@ function renderSingleChatWindow(container) {
         }
     };
 
+    // 点击头像或名字弹出专属资料名片（可查看动态）
+    const showCard = () => openNpcProfileCardModal(npcId);
+    document.getElementById('singleChatHeaderProfileBtn')?.addEventListener('click', showCard);
+    container.querySelectorAll('.chat-npc-avatar-btn').forEach(btn => btn.onclick = showCard);
+
     document.getElementById('chatActionInsertBtn').onclick = () => {
         openModal(`
             <h3>📝 插入场景/动作描写</h3>
@@ -730,17 +818,53 @@ function renderSingleChatWindow(container) {
     };
 }
 
-// 检查并自动执行 NPC 专属私聊/群聊记忆总结
+// 弹出 NPC 个人名片（支持点击直接进入 TA 的专属朋友圈）
+function openNpcProfileCardModal(npcId) {
+    const npc = G.npcs[npcId];
+    if (!npc) return;
+    openModal(`
+        <div style="text-align:center;padding:10px 0;">
+            <div style="display:flex;justify-content:center;margin-bottom:8px;">
+                ${renderAvatarBadge(npc, 64)}
+            </div>
+            <div style="font-weight:700;font-size:17px;color:var(--text);">${escapeHtml(npc.name)}</div>
+            <div style="font-size:12px;color:#888;margin-top:2px;">好感度：<b>${npc.favor||0}</b> / 100</div>
+            <div style="background:#f8faf8;padding:10px 14px;border-radius:10px;margin:12px 0;text-align:left;font-size:13px;color:#555;line-height:1.6;border:1px solid #eee;">
+                <div><b>人设标签：</b>${escapeHtml(npc.persona || '普通朋友')}</div>
+                ${npc.memorySummary ? `<div style="margin-top:6px;padding-top:6px;border-top:1px dashed #ddd;color:#2e7d32;"><b>🧠 记忆摘要：</b>${escapeHtml(npc.memorySummary)}</div>` : ''}
+            </div>
+            <div class="btn-row" style="flex-direction:column;gap:8px;">
+                <button class="btn-primary" id="cardViewMomentsBtn" style="width:100%;background:#3866c4;">📱 查看 TA 的朋友圈动态</button>
+                <button class="btn-secondary" id="cardEditNpcBtn" style="width:100%;">✏️ 编辑人设与头像</button>
+                <button class="btn-secondary" onclick="closeModal()" style="width:100%;">返回聊天</button>
+            </div>
+        </div>
+    `);
+
+    document.getElementById('cardViewMomentsBtn').onclick = () => {
+        closeModal();
+        closeChat();
+        G.phoneNav = 'moments';
+        G.momentsFilterNpcId = npcId;
+        renderSocialPanel();
+    };
+
+    document.getElementById('cardEditNpcBtn').onclick = () => {
+        closeModal();
+        openEditNpcModal(npcId);
+    };
+}
+
 async function checkNpcMemorySummarize(npcId) {
     const npc = G.npcs[npcId];
     if (!npc) return;
     const history = G.chatHistory[npcId] || [];
-    const threshold = npc.summaryThreshold || 12; // 默认满12轮自动总结
+    const threshold = npc.summaryThreshold || 12;
 
     if (history.length >= threshold && !npc._summarizing) {
         npc._summarizing = true;
         try {
-            const toSummarize = history.slice(0, history.length - 4); // 保留最后4条
+            const toSummarize = history.slice(0, history.length - 4);
             const textToSummarize = toSummarize.map(m => `${m.from === 'player' ? '玩家' : npc.name}: ${stripThought(m.text)}`).join('\n');
             const prior = npc.memorySummary ? `此前已有记忆：\n${npc.memorySummary}\n\n` : '';
             const sys = `你是角色记忆归纳助手。请将角色「${npc.name}」与玩家的对话提炼为一段不超过150字的专属记忆总结，保留双方关系变化、聊过的关键话题和承诺。只输出精炼总结内容。`;
@@ -750,7 +874,6 @@ async function checkNpcMemorySummarize(npcId) {
             ], { maxTokens: 400, temperature: 0.5 });
 
             npc.memorySummary = stripThought(summary.trim());
-            // 归档更早的历史，释放上下文
             G.chatHistory[npcId] = history.slice(history.length - 4);
             autoSaveGame();
         } catch (e) {
@@ -772,16 +895,13 @@ async function triggerAIReplyForSingle(npcId) {
         return `${m.from === 'player' ? '玩家' : npc.name}: ${stripThought(m.text)}`;
     }).join('\n');
 
-    // 融入群聊与专属私聊记忆
     const npcMemoryContext = npc.memorySummary ? `【与玩家的历史记忆】\n${npc.memorySummary}\n` : '';
-    const groupMemoryContext = npc.groupMemorySummary ? `【在群聊中的记忆印象】\n${npc.groupMemorySummary}\n` : '';
 
     const sysPrompt = `
     你正在扮演角色「${npc.name}」。
     设定：${npc.persona || '普通朋友'}。
     好感度：${npc.favor || 0}/100。
     ${npcMemoryContext}
-    ${groupMemoryContext}
     【要求】
     1. 自然接住玩家发送的最后内容，使用手机聊天的口吻。
     2. 严禁复读玩家原话，只输出发言正文。
@@ -863,7 +983,7 @@ function renderGroupChatWindow(container) {
             </div>
             <div style="display:flex;gap:8px;align-items:center;">
                 <button id="groupSettingsBtn" style="border:1px solid #ddd;background:#fff;color:#555;padding:4px 8px;border-radius:8px;font-size:12px;cursor:pointer;">⚙️ 管理</button>
-                <button id="triggerGroupAIBtn" style="border:none;background:#ff4757;color:#fff;width:34px;height:34px;border-radius:8px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(255,71,87,0.35);">⚡</button>
+                <button id="triggerGroupAIBtn" title="触发群成员回复" style="border:none;background:#ff4757;color:#fff;width:34px;height:34px;border-radius:8px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(255,71,87,0.35);">⚡</button>
             </div>
         </div>
 
@@ -1048,7 +1168,6 @@ function openAddChatTargetModal() {
     document.getElementById('btnNewGroup').onclick = () => { closeModal(); openEditGroupModal(null); };
 }
 
-// 通过/拒绝好友申请
 function handleFriendRequestAction(reqId, accept) {
     const idx = (G.friendRequests || []).findIndex(r => r._id === reqId);
     if (idx === -1) return;
@@ -1078,7 +1197,6 @@ function handleFriendRequestAction(reqId, accept) {
 }
 window.handleFriendRequestAction = handleFriendRequestAction;
 
-// 编辑/新建角色（支持本地相册图片上传 & 图片 URL & 独立记忆总结轮数）
 function openEditNpcModal(npcId) {
     const isNew = !npcId;
     const npc = !isNew ? G.npcs[npcId] : { name: '', avatarEmoji: '👤', avatarUrl: '', persona: '', favor: 50, isCustom: true, summaryThreshold: 12 };
@@ -1120,7 +1238,6 @@ function openEditNpcModal(npcId) {
 
     let currentAvatarDataUrl = npc.avatarUrl || '';
 
-    // 本地相册图片选择并转为 Base64
     document.getElementById('npcLocalAvatarInput').onchange = function(e) {
         const file = e.target.files[0];
         if (!file) return;
@@ -1178,7 +1295,6 @@ function openEditNpcModal(npcId) {
     }
 }
 
-// 编辑/新建群聊（同样支持本地图片和 URL 头像）
 function openEditGroupModal(gid) {
     const isNew = !gid;
     const grp = !isNew ? G.groups[gid] : { name: '', avatarEmoji: '👥', avatarUrl: '', desc: '', members: Object.keys(G.npcs).slice(0, 3) };
