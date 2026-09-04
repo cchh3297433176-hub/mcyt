@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>🎀 MC YouTube模拟器💕 6.0</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+</head>
+<body>
+    <div id="toast" class="toast"></div>
+    <div id="achievementToast" class="achievement-unlock-toast"></div>
+    <div id="app">
+        <!-- ===== SETUP PAGE ===== -->
+        <div id="setupPage" class="page active">
+            <div class="setup-title">🎀 MC YouTube模拟器💕 6.0</div>
+            <div class="setup-sub">成为我的世界主播，书写你的传奇</div>
+            <div id="resumeBanner" style="display:none;background:#eaf5ea;border:2px solid var(--primary);border-radius:12px;padding:12px;margin:0 0 14px;text-align:center;"></div>
+            <div class="setup-card">
+                <div class="api-key-section">
+                    <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                        <span>🌐 联网与AI模型设置</span>
+                        <span style="background:var(--primary);color:#fff;padding:0 8px;border-radius:12px;font-size:11px;font-weight:700;">OpenAI 兼容接口</span>
+                    </div>
+                    <div id="apiSettingsContainer"></div>
+                </div>
+                <div class="form-group">
+                    <label>📷 头像 <span class="required">*</span></label>
+                    <div class="avatar-upload-wrap">
+                        <div class="avatar-preview" id="avatarPreview">👤</div>
+                        <button class="upload-btn" id="uploadAvatarBtn">选择图片</button>
+                        <input type="file" id="avatarFileInput" accept="image/png,image/jpeg" class="file-input">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>🎭 你的身份 <span class="required">*</span></label>
+                    <div class="radio-group" id="identityGroup">
+                        <input type="radio" name="identity" id="idNew" value="new" checked>
+                        <label for="idNew">🆕 新主播</label>
+                        <input type="radio" name="identity" id="idFans" value="fans">
+                        <label for="idFans">⭐ 已有粉丝</label>
+                        <input type="radio" name="identity" id="idVeteran" value="veteran">
+                        <label for="idVeteran">🏆 老牌主播</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>📅 年龄 <span class="required">*</span></label>
+                    <input type="number" id="ageInput" placeholder="例如 18" min="8" max="99" value="18">
+                </div>
+                <div class="form-group">
+                    <label>📺 YouTube 账号名 <span class="required">*</span></label>
+                    <input type="text" id="ytNameInput" placeholder="例如：MC_CraftMaster" value="MC_CraftMaster">
+                </div>
+                <div class="form-group">
+                    <label>🎭 皮上形象（虚拟人设） <span class="required">*</span></label>
+                    <textarea id="personaInput" placeholder="描述你的网络形象..." style="min-height:40px;">一位充满活力的冒险家，擅长红石科技，偶尔整活，声音富有感染力。</textarea>
+                </div>
+                <div class="form-group">
+                    <label>🧱 MC 皮肤形象 <span class="required">*</span></label>
+                    <textarea id="skinInput" placeholder="描述你的皮肤外观..." style="min-height:40px;">身穿钻石甲，头戴金色头盔，背后有红色披风，左眼有一道伤疤。</textarea>
+                </div>
+                <div class="form-group">
+                    <label>🎯 创作赛道 <span class="required">*</span></label>
+                    <select id="categorySelect">
+                        <option value="追杀">⚔️ 追杀</option>
+                        <option value="剧情" selected>📖 剧情</option>
+                        <option value="生存">🌿 生存</option>
+                        <option value="休闲">🎮 休闲</option>
+                        <option value="建筑教程">🏗️ 建筑教程</option>
+                        <option value="红石">🔴 红石</option>
+                        <option value="整活">🤡 整活</option>
+                        <option value="混合">🌈 混合</option>
+                    </select>
+                </div>
+                <div class="form-group" style="margin-bottom:6px;">
+                    <label style="font-size:12px;">🔧 技术属性 (0-100)</label>
+                    <div class="skill-input-group"><label>🏗️</label><input type="range" id="skillBuilding" min="0" max="100" value="20"><input type="number" id="skillBuildingNum" min="0" max="100" value="20"></div>
+                    <div class="skill-input-group"><label>🔧</label><input type="range" id="skillRedstone" min="0" max="100" value="20"><input type="number" id="skillRedstoneNum" min="0" max="100" value="20"></div>
+                    <div class="skill-input-group"><label>⚔️</label><input type="range" id="skillPvp" min="0" max="100" value="20"><input type="number" id="skillPvpNum" min="0" max="100" value="20"></div>
+                    <div class="skill-input-group"><label>🌲</label><input type="range" id="skillSurvival" min="0" max="100" value="20"><input type="number" id="skillSurvivalNum" min="0" max="100" value="20"></div>
+                    <div class="skill-input-group"><label>🏹</label><input type="range" id="skillHunting" min="0" max="100" value="20"><input type="number" id="skillHuntingNum" min="0" max="100" value="20"></div>
+                    <div style="font-size:11px;color:var(--text2);margin-top:2px;">💡 皮上形象中的关键词会额外加成</div>
+                </div>
+                <button class="btn-primary" id="startGameBtn">🚀 填入Key，开始游戏</button>
+                <button class="btn-secondary" id="setupLoadGameBtn" style="width:100%;margin-top:8px;">📂 读取已有存档</button>
+                <div style="margin-top:8px;font-size:11px;color:#999;text-align:center;">💡 所有剧情由 AI 实时生成，每回合 800+ 字</div>
+            </div>
+        </div>
+        <!-- ===== GAME PAGE ===== -->
+        <div id="gamePage">
+            <!-- 左侧竖排操作栏 -->
+            <div class="action-bar-vertical" id="actionBar">
+                <button class="action-btn primary" data-action="stream"><span class="icon">📹</span><span class="label">直播</span></button>
+                <button class="action-btn gold" data-action="video"><span class="icon">🎬</span><span class="label">视频</span></button>
+                <button class="action-btn" data-action="dm"><span class="icon">💬</span><span class="label">私信</span></button>
+                <button class="action-btn" data-action="friend"><span class="icon">🤝</span><span class="label">交友</span></button>
+                <button class="action-btn" data-action="collab"><span class="icon">🤜</span><span class="label">合作</span></button>
+                <button class="action-btn" data-action="fanclub"><span class="icon">👥</span><span class="label">粉丝群</span></button>
+                <button class="action-btn" data-action="fanart"><span class="icon">🎨</span><span class="label">同人</span></button>
+                <button class="action-btn" data-action="comment"><span class="icon">💭</span><span class="label">评论</span></button>
+                <button class="action-btn" data-action="sub"><span class="icon">🧘</span><span class="label">皮下</span></button>
+                <button class="action-btn" id="webSearchToggleBtn"><span class="icon">🌐</span><span class="label">联网</span></button>
+                <button class="action-btn" id="rerollBtn"><span class="icon">🔄</span><span class="label">重说</span></button>
+                <button class="action-btn" id="editContentBtn"><span class="icon">✏️</span><span class="label">编辑</span></button>
+                <button class="action-btn" id="memorySummaryBtn"><span class="icon">🧠</span><span class="label">记忆</span></button>
+                <button class="action-btn" data-action="next"><span class="icon">⏩</span><span class="label">下一天</span></button>
+            </div>
+            <!-- 右侧主区域 -->
+            <div class="game-main">
+                <div class="game-header">
+                    <div class="left">
+                        <div class="avatar-circle" id="headerAvatar"><img id="headerAvatarImg" src="" alt="avatar"></div>
+                        <span>📆 第 <span class="day" id="dayDisplay">1</span> 天</span>
+                        <span>🕐 <span class="time" id="timeDisplay">早晨</span></span>
+                    </div>
+                    <div class="right">
+                        <span>⚡ 行动点</span>
+                        <span class="ap" id="apDisplay">6</span>
+                        <div class="ap-dots" id="apDots">
+                            <div class="ap-dot filled"></div>
+                            <div class="ap-dot filled"></div>
+                            <div class="ap-dot filled"></div>
+                            <div class="ap-dot filled"></div>
+                            <div class="ap-dot filled"></div>
+                            <div class="ap-dot filled"></div>
+                        </div>
+                        <div class="save-load-btns">
+                            <button class="sl-btn" id="modelSettingsBtn">⚙️ 模型</button>
+                            <button class="sl-btn" id="saveGameBtn">💾 存档</button>
+                            <button class="sl-btn" id="loadGameBtn">📂 读档</button>
+                            <button class="sl-btn" id="exitGameBtn" style="background:#ffe4e1;color:#c0392b;">🚪 退出</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="tab-bar">
+                    <button class="tab-btn active" data-tab="story">📖 剧情</button>
+                    <button class="tab-btn" data-tab="stream">🔴 直播</button>
+                    <button class="tab-btn" data-tab="dashboard">📊 频道</button>
+                    <button class="tab-btn" data-tab="shop">🛒 商店</button>
+                    <button class="tab-btn" data-tab="social">📱 社交</button>
+                    <button class="tab-btn" data-tab="data">📈 数据</button>
+                    <button class="tab-btn" data-tab="memoir">📜 回忆录</button>
+                    <button class="tab-btn" data-tab="feed">📰 动态</button>
+                    <button class="tab-btn" data-tab="achievements">🏆 成就</button>
+                </div>
+                <div class="content-container">
+                    <div class="tab-content story-area active" id="storyTab"><div id="storyArea"></div></div>
+                    <div class="tab-content" id="streamTab"><div id="streamContainer"></div></div>
+                    <div class="tab-content dashboard-area" id="dashboardTab"></div>
+                    <div class="tab-content dashboard-area" id="shopTab"></div>
+                    <div class="tab-content dashboard-area" id="socialTab" style="padding:0;background:var(--bg);"></div>
+                    <div class="tab-content dashboard-area" id="dataTab"></div>
+                    <div class="tab-content dashboard-area" id="memoirTab"></div>
+                    <div class="tab-content dashboard-area" id="feedTab"></div>
+                    <div class="tab-content dashboard-area" id="achievementsTab"></div>
+                </div>
+            </div>
+        </div>
+        <!-- ===== MODAL ===== -->
+        <div class="modal-overlay" id="modal">
+            <div class="modal-box" id="modalContent">
+                <button class="close-btn" id="modalClose">✕</button>
+                <div id="modalBody"></div>
+            </div>
+        </div>
+    </div>
+    <script src="js/01-state-config.js"></script>
+    <script src="js/02-ai-network.js"></script>
+    <script src="js/03-game-core-1.js"></script>
+    <script src="js/04-game-core-2.js"></script>
+    <script src="js/05-streaming.js"></script>
+    <script src="js/06-video-story.js"></script>
+    <script src="js/07-actions-social.js"></script>
+    <script src="js/08-save-load.js"></script>
+    <script src="js/09-events-init.js"></script>
+</body>
+</html>
