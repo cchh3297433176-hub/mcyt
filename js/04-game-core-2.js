@@ -28,7 +28,8 @@ function unlockAchievement(ach) {
 }
 
 function renderAchievements() {
-    const container = dom.achievementsTab;
+    const container = (dom && dom.achievementsTab) || document.getElementById('achievementsTab');
+    if (!container) return;
     let html = `
     <div style="font-weight:700;font-size:17px;margin-bottom:10px;">🏆 成就 (${G.unlockedAchievements ? G.unlockedAchievements.length : 0}/${ACHIEVEMENTS.length})</div>
     <div style="font-size:13px;color:var(--text2);margin-bottom:12px;">完成成就获得金币奖励！</div>
@@ -109,7 +110,8 @@ function acceptSponsor(index) {
 }
 
 function renderShop() {
-    const container = dom.shopTab;
+    const container = (dom && dom.shopTab) || document.getElementById('shopTab');
+    if (!container) return;
     const p = G.player;
     const equipLevel = p.equipmentLevel || 1;
     const equipMax = 5;
@@ -220,7 +222,8 @@ window.acceptSponsor = acceptSponsor;
 // 频道面板
 // ============================================================
 function renderDashboard() {
-    const container = dom.dashboardTab;
+    const container = (dom && dom.dashboardTab) || document.getElementById('dashboardTab');
+    if (!container) return;
     const p = G.player;
     const totalViews = p.videos.reduce((sum, v) => sum + (v.views || 0), 0);
     let html = `
@@ -393,7 +396,8 @@ function sendReply(videoIndex, commentIndex, replyText) {
 // 数据面板
 // ============================================================
 function renderDataPanel() {
-    const container = dom.dataTab;
+    const container = (dom && dom.dataTab) || document.getElementById('dataTab');
+    if (!container) return;
     const p = G.player;
     const s = p.skills;
     const totalViews = p.videos.reduce((sum, v) => sum + (v.views || 0), 0);
@@ -464,8 +468,8 @@ function renderDataPanel() {
 // ============================================================
 // 📱 手机社交中心（模仿微信：消息 / 朋友圈动态 / 名片看动态）
 // ============================================================
-if (!G.phoneNav) G.phoneNav = 'chats'; // 'chats' | 'moments'
-if (!G.chatActiveTab) G.chatActiveTab = 'direct'; // 'direct' | 'group'
+if (!G.phoneNav) G.phoneNav = 'chats';
+if (!G.chatActiveTab) G.chatActiveTab = 'direct';
 if (!G.groups) G.groups = {};
 if (!G.groupChatHistory) G.groupChatHistory = {};
 if (!G.friendRequests) G.friendRequests = [];
@@ -479,7 +483,8 @@ function renderAvatarBadge(obj, size = 44) {
 }
 
 function renderSocialPanel() {
-    const container = dom.socialTab;
+    const container = (dom && dom.socialTab) || document.getElementById('socialTab');
+    if (!container) return;
     if (G.currentChatGroup) {
         renderGroupChatWindow(container);
         return;
@@ -491,7 +496,6 @@ function renderSocialPanel() {
     renderPhoneApp(container);
 }
 
-// 手机App框架（仿微信底部导航：消息 / 朋友圈）
 function renderPhoneApp(container) {
     const isMoments = G.phoneNav === 'moments';
     const pendingCount = (G.friendRequests || []).length;
@@ -508,7 +512,6 @@ function renderPhoneApp(container) {
         <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;">
             ${contentHtml}
         </div>
-        <!-- 微信风格底部栏 -->
         <div style="height:54px;background:#fcfdfc;border-top:1px solid #eef2ee;display:flex;justify-content:space-around;align-items:center;padding:0 10px;">
             <button id="phoneNavChatsBtn" style="border:none;background:none;font-size:12px;font-weight:700;color:${!isMoments ? 'var(--primary)' : '#888'};display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;">
                 <span style="font-size:18px;">💬</span>
@@ -533,7 +536,6 @@ function renderPhoneApp(container) {
     }
 }
 
-// 构造消息列表 HTML
 function buildChatListHTML() {
     const isDirect = G.chatActiveTab !== 'group';
     const pendingCount = (G.friendRequests || []).length;
@@ -618,7 +620,6 @@ function bindChatListEvents(container) {
     });
 }
 
-// 构造朋友圈（动态）HTML
 function buildMomentsHTML() {
     let feedItems = [...(G.feed || [])].reverse();
     let filterTitle = '🌟 动态朋友圈';
@@ -682,27 +683,6 @@ function bindMomentsEvents(container) {
     });
 }
 
-function bindLongPressEvent(element, onLongPress, onClick) {
-    let pressTimer = null;
-    let isLong = false;
-    const start = () => {
-        isLong = false;
-        pressTimer = setTimeout(() => {
-            isLong = true;
-            onLongPress();
-        }, 550);
-    };
-    const cancel = () => { clearTimeout(pressTimer); };
-    element.addEventListener('touchstart', start, { passive: true });
-    element.addEventListener('touchend', () => { cancel(); if (!isLong) onClick(); });
-    element.addEventListener('touchmove', cancel);
-    element.addEventListener('mousedown', start);
-    element.addEventListener('mouseup', () => { cancel(); if (!isLong) onClick(); });
-}
-
-// ============================================================
-// 单人聊天窗口（点击头像弹出名片：支持查看TA的朋友圈）
-// ============================================================
 function renderSingleChatWindow(container) {
     const npcId = G.currentChatNpc;
     const npc = G.npcs[npcId];
@@ -720,7 +700,7 @@ function renderSingleChatWindow(container) {
             const isSelf = msg.from === 'player';
             messagesHtml += `
             <div style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
-                ${!isSelf ? `<div class="chat-npc-avatar-btn" style="margin-right:8px;flex-shrink:0;cursor:pointer;" title="点击查看资料名片与动态">${renderAvatarBadge(npc, 34)}</div>` : ''}
+                ${!isSelf ? `<div class="chat-npc-avatar-btn" style="margin-right:8px;flex-shrink:0;cursor:pointer;" title="点击查看名片与动态">${renderAvatarBadge(npc, 34)}</div>` : ''}
                 <div style="max-width:75%;">
                     <div style="background:${isSelf ? '#95ec69' : '#fff'};color:#111;padding:8px 12px;border-radius:${isSelf ? '10px 0 10px 10px' : '0 10px 10px 10px'};box-shadow:0 1px 3px rgba(0,0,0,0.08);font-size:14px;line-height:1.5;word-break:break-word;">
                         ${isSelf ? escapeHtml(msg.text).replace(/\n/g, '<br>') : renderContentWithThoughts(msg.text)}
@@ -748,7 +728,7 @@ function renderSingleChatWindow(container) {
         </div>
 
         <div id="chatMessageArea" style="flex:1;overflow-y:auto;padding:14px;">
-            ${messagesHtml || '<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">打个招呼吧！发消息不消耗点数，发送完毕后点击右上角 ⚡ 闪电即可触发回复。</div>'}
+            ${messagesHtml || '<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">发消息不消耗点数，发送完毕后点击右上角 ⚡ 闪电即可触发回复。</div>'}
         </div>
 
         <div style="padding:8px 10px;background:#fff;border-top:1px solid #e5ebe5;display:flex;gap:8px;align-items:center;">
@@ -783,7 +763,6 @@ function renderSingleChatWindow(container) {
         }
     };
 
-    // 点击头像或名字弹出专属资料名片（可查看动态）
     const showCard = () => openNpcProfileCardModal(npcId);
     document.getElementById('singleChatHeaderProfileBtn')?.addEventListener('click', showCard);
     container.querySelectorAll('.chat-npc-avatar-btn').forEach(btn => btn.onclick = showCard);
@@ -818,7 +797,6 @@ function renderSingleChatWindow(container) {
     };
 }
 
-// 弹出 NPC 个人名片（支持点击直接进入 TA 的专属朋友圈）
 function openNpcProfileCardModal(npcId) {
     const npc = G.npcs[npcId];
     if (!npc) return;
@@ -1458,7 +1436,8 @@ function closeChat() { G.currentChatNpc = null; renderSocialPanel(); }
 // 回忆录
 // ============================================================
 function renderMemoir() {
-    const container = dom.memoirTab;
+    const container = (dom && dom.memoirTab) || document.getElementById('memoirTab');
+    if (!container) return;
     if (G.memoir.length === 0) {
         container.innerHTML = `<div style="text-align:center;color:var(--text2);padding:30px 0;">还没有记录，开始你的主播生涯吧！</div>`;
         return;
