@@ -6,7 +6,6 @@
     <title>🎀 MC YouTube模拟器💕 6.0</title>
     <link rel="stylesheet" href="style.css" />
 </head>
-</head>
 <body>
     <div id="toast" class="toast"></div>
     <div id="achievementToast" class="achievement-unlock-toast"></div>
@@ -88,14 +87,13 @@
         </div>
         <!-- ===== GAME PAGE ===== -->
         <div id="gamePage">
-            <!-- 左侧竖排操作栏 -->
+            <!-- 左侧竖排操作栏：整合聊天入口 -->
             <div class="action-bar-vertical" id="actionBar">
                 <button class="action-btn primary" data-action="stream"><span class="icon">📹</span><span class="label">直播</span></button>
                 <button class="action-btn gold" data-action="video"><span class="icon">🎬</span><span class="label">视频</span></button>
-                <button class="action-btn" data-action="dm"><span class="icon">💬</span><span class="label">私信</span></button>
-                <button class="action-btn" data-action="friend"><span class="icon">🤝</span><span class="label">交友</span></button>
+                <!-- 唯一的聊天中心入口：集合私聊、群聊、好友申请 -->
+                <button class="action-btn" data-action="chat"><span class="icon">💬</span><span class="label">聊天</span></button>
                 <button class="action-btn" data-action="collab"><span class="icon">🤜</span><span class="label">合作</span></button>
-                <button class="action-btn" data-action="fanclub"><span class="icon">👥</span><span class="label">粉丝群</span></button>
                 <button class="action-btn" data-action="fanart"><span class="icon">🎨</span><span class="label">同人</span></button>
                 <button class="action-btn" data-action="comment"><span class="icon">💭</span><span class="label">评论</span></button>
                 <button class="action-btn" data-action="sub"><span class="icon">🧘</span><span class="label">皮下</span></button>
@@ -132,12 +130,12 @@
                         </div>
                     </div>
                 </div>
+                <!-- 顶部选项卡：已彻底移除多余的社交按钮，仅保留主线业务页面 -->
                 <div class="tab-bar">
                     <button class="tab-btn active" data-tab="story">📖 剧情</button>
                     <button class="tab-btn" data-tab="stream">🔴 直播</button>
                     <button class="tab-btn" data-tab="dashboard">📊 频道</button>
                     <button class="tab-btn" data-tab="shop">🛒 商店</button>
-                    <button class="tab-btn" data-tab="social">📱 社交</button>
                     <button class="tab-btn" data-tab="data">📈 数据</button>
                     <button class="tab-btn" data-tab="memoir">📜 回忆录</button>
                     <button class="tab-btn" data-tab="feed">📰 动态</button>
@@ -148,6 +146,7 @@
                     <div class="tab-content" id="streamTab"><div id="streamContainer"></div></div>
                     <div class="tab-content dashboard-area" id="dashboardTab"></div>
                     <div class="tab-content dashboard-area" id="shopTab"></div>
+                    <!-- 聊天容器保留供左侧栏「💬 聊天」随时唤起 -->
                     <div class="tab-content dashboard-area" id="socialTab" style="padding:0;background:var(--bg);"></div>
                     <div class="tab-content dashboard-area" id="dataTab"></div>
                     <div class="tab-content dashboard-area" id="memoirTab"></div>
