@@ -103,9 +103,15 @@ function switchTab(tab) {
     const targetId = map[tab];
 
     // 切换顶部按钮高亮（若顶部没有该按钮也不报错）
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.tab === tab);
-    });
+    // 修复：'social'（聊天/朋友圈）没有对应的顶部 tab 按钮，之前的写法会把所有
+    // 顶部按钮的高亮都清空，导致之后 renderAllPanels() 找不到"当前激活的 tab"，
+    // 从聊天页返回后频道/数据/成就等页面不会自动刷新。这里改为：只有存在匹配
+    // 的顶部按钮时才更新高亮状态，没有对应按钮（如 social）则保留原高亮不变。
+    if (document.querySelector(`.tab-btn[data-tab="${tab}"]`)) {
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.classList.toggle('active', btn.dataset.tab === tab);
+        });
+    }
 
     // 切换右侧内容区块展示
     document.querySelectorAll('.tab-content').forEach(el => {

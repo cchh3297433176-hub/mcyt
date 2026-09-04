@@ -248,3 +248,6 @@ window.G = G;
 window.showSaveSlotsModal = showSaveSlotsModal;
 window.saveGameToSlot = saveGameToSlot;
 window.loadGameFromSlot = loadGameFromSlot;
+window.showStartChoiceModal = showStartChoiceModal;
+window.bindLongPressEvent = bindLongPressEvent;
+window.receiveFriendRequest = receiveFriendRequest;

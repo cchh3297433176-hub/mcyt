@@ -475,6 +475,66 @@ if (!G.groupChatHistory) G.groupChatHistory = {};
 if (!G.friendRequests) G.friendRequests = [];
 if (!G.momentsFilterNpcId) G.momentsFilterNpcId = null;
 
+// 长按/点击 通用绑定：短按触发 onClick，长按（500ms）触发 onLongPress
+// 修复：原代码调用了本函数但从未定义，导致聊天/群聊列表绑定事件时报错中断，
+// 使得聊天页在渲染后无法正常交互（点击联系人无反应、整块面板后续渲染被中断）。
+function bindLongPressEvent(el, onLongPress, onClick) {
+    if (!el) return;
+    const LONG_PRESS_MS = 500;
+    const MOVE_TOLERANCE = 10;
+    let pressTimer = null;
+    let longPressTriggered = false;
+    let startX = 0, startY = 0;
+
+    const clearTimer = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
+
+    const start = (x, y) => {
+        longPressTriggered = false;
+        startX = x; startY = y;
+        clearTimer();
+        pressTimer = setTimeout(() => {
+            longPressTriggered = true;
+            if (typeof onLongPress === 'function') onLongPress();
+        }, LONG_PRESS_MS);
+    };
+
+    const move = (x, y) => {
+        if (Math.abs(x - startX) > MOVE_TOLERANCE || Math.abs(y - startY) > MOVE_TOLERANCE) {
+            clearTimer();
+        }
+    };
+
+    const end = () => {
+        clearTimer();
+        if (!longPressTriggered) {
+            if (typeof onClick === 'function') onClick();
+        }
+    };
+
+    const cancel = () => { clearTimer(); };
+
+    // 触摸设备
+    el.addEventListener('touchstart', e => {
+        const t = e.touches[0];
+        if (t) start(t.clientX, t.clientY);
+    }, { passive: true });
+    el.addEventListener('touchmove', e => {
+        const t = e.touches[0];
+        if (t) move(t.clientX, t.clientY);
+    }, { passive: true });
+    el.addEventListener('touchend', end);
+    el.addEventListener('touchcancel', cancel);
+
+    // 鼠标设备（桌面端调试用）
+    el.addEventListener('mousedown', e => start(e.clientX, e.clientY));
+    el.addEventListener('mousemove', e => { if (pressTimer) move(e.clientX, e.clientY); });
+    el.addEventListener('mouseup', end);
+    el.addEventListener('mouseleave', cancel);
+
+    // 阻止长按弹出系统右键菜单/文本选择
+    el.addEventListener('contextmenu', e => e.preventDefault());
+}
+
 function renderAvatarBadge(obj, size = 44) {
     if (obj && obj.avatarUrl) {
         return `<img src="${obj.avatarUrl}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;display:block;">`;
@@ -1114,7 +1174,7 @@ function openAddChatTargetModal() {
                 <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
                     ${renderAvatarBadge(r, 34)}
                     <div style="flex:1;min-width:0;">
-                        <div style="font-weight:700;font-size:13px;">${escapeHtml(r.name)} <span style="font-size:10px;color:#999;">(${escapeHtml(r.fromReason||'申请')])</span></div>
+                        <div style="font-weight:700;font-size:13px;">${escapeHtml(r.name)} <span style="font-size:10px;color:#999;">(${escapeHtml(r.fromReason||'申请')})</span></div>
                         <div style="font-size:11px;color:#777;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(r.persona||'')}</div>
                     </div>
                 </div>
@@ -1144,6 +1204,22 @@ function openAddChatTargetModal() {
 
     document.getElementById('btnNewCustomNPC').onclick = () => { closeModal(); openEditNpcModal(null); };
     document.getElementById('btnNewGroup').onclick = () => { closeModal(); openEditGroupModal(null); };
+}
+
+// 接收一条好友申请并存入待处理列表（原代码调用此函数但从未定义）
+function receiveFriendRequest(req) {
+    if (!G.friendRequests) G.friendRequests = [];
+    const entry = {
+        _id: 'freq_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+        name: req.name,
+        fromReason: req.fromReason || '',
+        persona: req.persona || '',
+        avatarEmoji: req.avatarEmoji || '👤',
+        avatarUrl: req.avatarUrl || null,
+        day: req.day || G.day,
+    };
+    G.friendRequests.push(entry);
+    showToast(`📬 收到来自 ${entry.name} 的好友申请！`, 'success', 2500);
 }
 
 function handleFriendRequestAction(reqId, accept) {

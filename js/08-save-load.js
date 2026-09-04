@@ -240,6 +240,41 @@ function hasAnySaveData() {
     return false;
 }
 
+// 修复：原代码在点击"开始游戏"且检测到已有存档时会调用本函数，
+// 但该函数从未被定义，导致点击按钮时直接报错、游戏无法开始。
+// 这里补上一个"新开一局 / 继续上次进度 / 查看全部存档"的选择弹窗。
+function showStartChoiceModal(silentAutoResume) {
+    const autoInfo = getAutoSaveInfo();
+    const autoText = autoInfo && autoInfo.data
+        ? `第 ${autoInfo.data.day} 天 · ${autoInfo.data.player?.ytName || ''} · 粉丝 ${autoInfo.data.player?.followers || 0}`
+        : '';
+    openModal(`
+        <h3 style="margin-bottom:10px;">🎮 检测到已有游戏进度</h3>
+        <p style="font-size:13px;color:#666;line-height:1.6;margin-bottom:14px;">
+            ${autoText ? `上次进度：${escapeHtml(autoText)}<br>` : ''}
+            你可以继续上次的冒险，或者开启一局全新的游戏（不会覆盖已有存档位）。
+        </p>
+        <div class="btn-row" style="flex-direction:column;gap:8px;">
+            ${autoInfo ? `<button class="btn-primary" id="startChoiceResumeBtn" style="width:100%;">▶️ 继续上次进度</button>` : ''}
+            <button class="btn-primary" id="startChoiceNewBtn" style="width:100%;background:#3866c4;">🆕 开始全新游戏</button>
+            <button class="btn-secondary" id="startChoiceLoadBtn" style="width:100%;">📂 查看全部存档</button>
+            <button class="btn-secondary" onclick="closeModal()" style="width:100%;">取消</button>
+        </div>
+    `);
+    document.getElementById('startChoiceResumeBtn')?.addEventListener('click', () => {
+        closeModal();
+        resumeAutoSave();
+    });
+    document.getElementById('startChoiceNewBtn')?.addEventListener('click', () => {
+        closeModal();
+        initGame();
+    });
+    document.getElementById('startChoiceLoadBtn')?.addEventListener('click', () => {
+        closeModal();
+        showSaveSlotsModal('load');
+    });
+}
+
 function showSaveSlotsModal(mode) {
     const isSave = mode === 'save';
     const title = isSave ? '💾 存档管理' : '📂 读取存档';
