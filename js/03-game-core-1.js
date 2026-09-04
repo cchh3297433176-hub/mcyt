@@ -13,7 +13,8 @@
             block.appendChild(meta);
             const content = document.createElement('div');
             content.className = 'story-content';
-            content.textContent = text;
+            // 采用思维链折叠渲染函数
+            content.innerHTML = renderContentWithThoughts(text);
             block.appendChild(content);
             if (opts.onRegenerate) {
                 const btnRow = document.createElement('div');
@@ -29,7 +30,7 @@
             dom.storyArea.scrollTop = dom.storyArea.scrollHeight;
             const historyEntry = { text, tag, day: G.day, time: G.timeSlot, truncated: !!opts.truncated, archived: false, _id: id, ...extra };
             G.storyHistory.push(historyEntry);
-            extractThemes(text);
+            extractThemes(stripThought(text));
             return { block, historyEntry };
         }
 
@@ -334,7 +335,7 @@
             if (!npc) return;
             const history = G.chatHistory[npcId] || [];
             const recent = history.slice(-6).map(m =>
-                `${m.from === 'player' ? '玩家' : npc.name}: ${m.text}`
+                `${m.from === 'player' ? '玩家' : npc.name}: ${stripThought(m.text)}`
             ).join('\n');
             const favor = npc.favor || 0;
             let tone = '';
@@ -362,12 +363,12 @@
                 if (!G.chatHistory[npcId]) G.chatHistory[npcId] = [];
                 pushChat(npcId, { from: 'npc', text: reply, time: timeStr });
                 showToast(`💬 ${npc.name} 给你发了消息！`, 'success', 3000);
-                addMemoir('NPC消息', `${npc.name} 发送了: ${reply.slice(0, 30)}...`);
+                addMemoir('NPC消息', `${npc.name} 发送了: ${stripThought(reply).slice(0, 30)}...`);
                 if (document.querySelector('.tab-btn.active')?.dataset.tab === 'social') renderSocialPanel();
                 addFeedItem({
                     author: npc.name,
                     avatar: npc.avatarEmoji || '👤',
-                    body: reply,
+                    body: stripThought(reply),
                     type: 'private',
                     npcId: npcId,
                     time: new Date().toLocaleString()
@@ -419,7 +420,7 @@
             if (G.player.lovers.includes(npc.name)) return;
             if (npc.favor < 80) return;
             const history = G.chatHistory[npcId] || [];
-            const recent = history.slice(-8).map(m => `${m.from === 'player' ? '玩家' : npc.name}: ${m.text}`).join('\n');
+            const recent = history.slice(-8).map(m => `${m.from === 'player' ? '玩家' : npc.name}: ${stripThought(m.text)}`).join('\n');
             const sysPrompt = `
             你正在扮演MC主播 ${npc.name}，你的人设是：${npc.persona}。
             当前好感度：${npc.favor}/100。
@@ -531,7 +532,7 @@
             if (!npc) return;
             if (G.player.lovers.includes(npc.name)) { showToast('你们已经是恋人了！', 'error', 2000); return; }
             const history = G.chatHistory[npcId] || [];
-            const recent = history.slice(-6).map(m => `${m.from === 'player' ? '玩家' : npc.name}: ${m.text}`).join('\n');
+            const recent = history.slice(-6).map(m => `${m.from === 'player' ? '玩家' : npc.name}: ${stripThought(m.text)}`).join('\n');
             const favor = npc.favor || 0;
             const sysPrompt = `
             你正在扮演MC主播 ${npc.name}，你的人设是：${npc.persona}。
@@ -554,9 +555,10 @@
                 const timeStr = now.toLocaleTimeString();
                 if (!G.chatHistory[npcId]) G.chatHistory[npcId] = [];
                 pushChat(npcId, { from: 'npc', text: reply, time: timeStr });
-                const accepted = reply.includes('接受') || reply.includes('愿意') || reply.includes('好') ||
-                    reply.includes('可以') || reply.includes('答应') || reply.includes('我也喜欢你') ||
-                    reply.includes('在一起') || reply.includes('I do') || reply.includes('yes') ||
+                const pureReply = stripThought(reply);
+                const accepted = pureReply.includes('接受') || pureReply.includes('愿意') || pureReply.includes('好') ||
+                    pureReply.includes('可以') || pureReply.includes('答应') || pureReply.includes('我也喜欢你') ||
+                    pureReply.includes('在一起') || pureReply.includes('I do') || pureReply.includes('yes') ||
                     (favor >= 80 && Math.random() < 0.8);
                 if (accepted) {
                     if (!G.player.lovers.includes(npc.name)) {

@@ -5,17 +5,53 @@
                 '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
             }[c]));
         }
+
+        // ============================================================
+        // 💭 酒馆式思维链解析与清洗工具
+        // ============================================================
+        // 1. 发送给 AI、记忆总结或编辑时：剔除思考过程，只保留正文
+        function stripThought(text) {
+            if (!text) return '';
+            return text
+                .replace(/')) processed += '</think>';
+            if (processed.includes('<thought>') && !processed.includes('</thought>')) processed += '</thought>';
+            if (processed.includes('<reasoning>') && !processed.includes('</reasoning>')) processed += '</reasoning>';
+
+            const thinkRegex = /<(think|thought|reasoning)>([\s\S]*?)<\/\1>/gi;
+            let lastIndex = 0;
+            let htmlResult = '';
+            let match;
+
+            while ((match = thinkRegex.exec(processed)) !== null) {
+                // 思考标签前的普通文本
+                const beforeText = processed.slice(lastIndex, match.index);
+                htmlResult += escapeHtml(beforeText).replace(/\n/g, '<br>');
+
+                // 思考过程内容
+                const thoughtText = escapeHtml(match[2].trim()).replace(/\n/g, '<br>');
+                htmlResult += `
+                    <details class="thought-box" style="margin:8px 0;padding:6px 10px;background:rgba(0,0,0,0.03);border:1px dashed #bbb;border-radius:8px;font-size:12px;color:#666;">
+                        <summary style="cursor:pointer;user-select:none;font-weight:600;color:#777;outline:none;">💭 思考过程 (点击展开/折叠)</summary>
+                        <div class="thought-content" style="margin-top:6px;line-height:1.6;color:#555;padding:4px 0;border-top:1px dashed rgba(0,0,0,0.06);">${thoughtText}</div>
+                    </details>
+                `;
+                lastIndex = thinkRegex.lastIndex;
+            }
+            htmlResult += escapeHtml(processed.slice(lastIndex)).replace(/\n/g, '<br>');
+            return htmlResult;
+        }
+
         // 纯规则判断（非AI）：文本是否疑似被截断/格式不完整
         function isLikelyTruncated(text) {
             if (!text) return false;
-            const t = String(text).trim();
+            const pure = stripThought(text);
+            const t = String(pure).trim();
             if (t.length < 10) return false;
             const last = t[t.length - 1];
             const properEnd = '。！？…」』"”）)~♪☆★.!?》】';
             if (properEnd.includes(last)) return false;
             const dangling = '，,、：:；;（(「『“—-～的了在和与就都也而但因所';
             if (dangling.includes(last)) return true;
-            // 结尾既非正常标点也非常见连接字，且内容较长，大概率是被截断
             return t.length > 30;
         }
         function normalizeBaseUrl(url) {
@@ -59,7 +95,6 @@
                 if (raw) { const c = JSON.parse(raw); if (c && typeof c === 'object') Object.assign(G.memorySummarySettings, c); }
             } catch (_) {}
         }
-        // 渲染面板（prefix 区分「初始设置页」与「游戏内弹窗」两处实例，数据统一来自 G.ai / G.savedModels）
         function buildModelSettingsHTML(prefix) {
             return `
                 <div class="model-settings">
@@ -88,7 +123,7 @@
                         <label style="font-size:13px;">💾 保存为模型档案</label>
                         <div style="display:flex;gap:6px;">
                             <input type="text" id="${prefix}ProfileNameInput" placeholder="备注名，例如「主力DeepSeek」「备用GPT」" style="flex:1;">
-                            <button type="button" class="upload-btn" id="${prefix}SaveProfileBtn" style="white-space:nowrap;padding:0 12px;">💾 保存</button>
+                            <button type="button" class="upload-btn" id="${prefixSaveProfileBtn" style="white-space:nowrap;padding:0 12px;">💾 保存</button>
                         </div>
                     </div>
                     <div class="form-group" style="margin-bottom:0;">
@@ -237,7 +272,7 @@
             renderProfileListBox(prefix);
         }
         // ============================================================
-        // 联网搜索模块（Tavily —— 为剧情生成提供真实的模组/主播等最新资料）
+        // 联网搜索模块（Tavily）
         // ============================================================
         function persistSearchConfig() {
             try { localStorage.setItem('mc_yt_search_config', JSON.stringify(G.search)); } catch (_) {}
@@ -326,35 +361,8 @@
             if (testBtn) testBtn.addEventListener('click', () => testWebSearch(prefix));
         }
         // ============================================================
-        // API 调用
-        // ============================================================
-        async function callAI(messages, options = {}) {
-            const key = (options.apiKey || G.ai.apiKey || '').trim();
-            const baseUrl = (options.baseUrl || G.ai.baseUrl || '').trim();
-            const model = (options.model || G.ai.model || '').trim();
-            if (!key) { showToast('⚠️ 请先在「⚙️ 模型」设置中填写 API Key'); throw new Error('未配置 API Key'); }
-            if (!baseUrl) { showToast('⚠️ 请先在「⚙️ 模型」设置中填写 API Base URL'); throw new Error('未配置 Base URL'); }
-            if (!model) { showToast('⚠️ 请先在「⚙️ 模型」设置中选择或填写模型'); throw new Error('未配置模型'); }
-            const resp = await fetch(chatCompletionsUrl(baseUrl), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-                body: JSON.stringify({
-                    model: model,
-                    messages: messages,
-                    max_tokens: options.maxTokens || CONFIG.MAX_TOKENS,
-                    temperature: options.temperature || CONFIG.TEMPERATURE,
-                    stream: false,
-                }),
-            });
-            if (!resp.ok) {
-                const err = await resp.text();
-                let msg = `API 错误 (${resp.status})`;
-                try { const j = JSON.parse(err); if (j.error && j.error.message) msg = j.error.message; } catch (_) {}
-                showToast('❌ ' + msg);
-                throw new Error(msg);
+        // API 调用（酒馆式集成：自动提取 reasoning_content 并规整为 \n\n` + content;
             }
-            const data = await resp.json();
-            if (!data.choices || !data.choices.length) throw new Error('API 返回异常');
-            return data.choices[0].message.content;
+            return content;
         }
         // ============================================================
