@@ -220,16 +220,16 @@ function openVersionNoticeModal(version) {
                 <div class="notice-card-box">
                     <h4>📜 关于本项目与正版声明</h4>
                     <p style="margin-bottom:8px;">
-                        本软件为抖音：<b>@鸢尾黎明</b> 老师的 MCYT 模拟器二改版本，为代入向乙女 AI-RP 网页/单机文字养成游戏。
+                        本软件为抖音：<b>@鸢尾黎明</b> 老师的 mcyt 模拟器二改，为代入向乙女 Airp 游戏。
                     </p>
                     <p style="margin-bottom:8px;color:#c62828;font-weight:600;">
-                        ⚠️ 严禁任何形式的二次倒卖、付费打包与二传！
+                        ⚠️ 禁止二传，本游戏纯免无收费！
                     </p>
                     <p style="margin-bottom:8px;">
-                        本游戏<b>纯免费无收费</b>。目前正规获取渠道为进入<b>鸢尾黎明</b>老师的粉丝群聊。如果你是通过付费购买获得了本软件，代表<b>你被骗了</b>！
+                        目前获取渠道为进鸢尾黎明老师的群聊。如果你需要付费获得了本软件代表<b>你被骗了</b>！
                     </p>
                     <p style="margin-bottom:4px;">
-                        请前往抖音搜索 <b>@鸢尾黎明</b> 老师主页加入官方群聊，群里有很多优质乙女香香饭与最新版本更新，欢迎小伙伴们加入大家庭！💕
+                        前往抖音搜索 <b>@鸢尾黎明</b> 老师那边即可进群获得本软件，群里有很多乙女香香饭，欢迎加入！💕
                     </p>
                 </div>
             </div>
@@ -238,23 +238,9 @@ function openVersionNoticeModal(version) {
             <div class="notice-slide-page">
                 <div class="notice-card-box">
                     <h4>🚀 本次更新优化方面</h4>
-                    <ul style="padding-left:18px;margin-bottom:10px;font-size:12px;color:#444;">
-                        <li>1. 优化滑动卡顿，页面切换与列表滚动更加轻量顺滑。</li>
-                        <li>2. 优化编辑功能，现在可以正常编辑 AI 发送的全部剧情与文本。</li>
-                        <li>3. API 设置面板支持智能折叠，更便于配置管理。</li>
-                        <li>4. 剧情实时自动保存，防止误触退出导致进度丢失。</li>
-                        <li>5. 兼容原有应用架构，可在原有数据基础上直接热更新。</li>
-                        <li>6. 社交中心重构：私信、粉丝群、动态统一合并为手机聊天功能。</li>
-                        <li>7. 直播弹幕 AI 化：实时扮演现场观众发送紧贴画面的弹幕与深度评论。</li>
-                        <li>8. 原“评论”按钮升级为独立仿油管 YouTube 平台功能。</li>
-                        <li>9. 游戏中可直接点击左上角头像修改名字与头像，并自动注入长期认知记忆。</li>
-                    </ul>
-
-                    <h4>✨ 重磅新功能上线</h4>
-                    <ul style="padding-left:18px;margin-bottom:4px;font-size:12px;color:#444;">
-                        <li><b>1. 同人群聊系统</b>：支持建立多个专属群聊，自由添加自定义 NPC 联系人、导入本地头像，支持被申请好友与查看朋友圈动态。</li>
-                        <li><b>2. AO3 同人中心</b>：内置同人小说库，可使用主播大号或小号创作发文、催更续写下一章，并与读者在评论区互动。</li>
-                        <li><b>3. 油管 YouTube 平台</b>：高仿油管 UI，浏览同行与路人视频、发布个人视频（支持文字描绘封面与 AI 识图 Token 预警），可无限生成观众热评与回复接话。</li>
+                    <ul style="padding-left:18px;margin-bottom:10px;font-size:13px;color:#444;line-height:1.6;">
+                        <li style="margin-bottom:8px;">1. 优化记忆总结功能，可以自动总结内容，并且设置多少轮一总结，不同角色的记忆会分开放置。</li>
+                        <li>2. 合作选项合并入聊天功能，可发送给联系人合作邀请，在油管发共创视频。</li>
                     </ul>
                 </div>
             </div>
