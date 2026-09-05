@@ -109,33 +109,36 @@
             </div>
             <!-- 右侧主区域 -->
             <div class="game-main">
+                <!-- 头部栏：采用自适应双行平衡布局 -->
                 <div class="game-header">
-                    <div class="left">
-                        <div class="avatar-circle" id="headerAvatar" style="cursor:pointer;position:relative;" title="点击修改头像与名字">
-                            <img id="headerAvatarImg" src="" alt="avatar">
+                    <div class="game-header-top">
+                        <div class="left">
+                            <div class="avatar-circle" id="headerAvatar" style="cursor:pointer;position:relative;" title="点击修改头像与名字">
+                                <img id="headerAvatarImg" src="" alt="avatar">
+                            </div>
+                            <span>📆 第 <span class="day" id="dayDisplay">1</span> 天</span>
+                            <span>🕐 <span class="time" id="timeDisplay">早晨</span></span>
                         </div>
-                        <span>📆 第 <span class="day" id="dayDisplay">1</span> 天</span>
-                        <span>🕐 <span class="time" id="timeDisplay">早晨</span></span>
+                        <div class="right-ap">
+                            <span>⚡</span>
+                            <span class="ap" id="apDisplay">6</span>
+                            <div class="ap-dots" id="apDots">
+                                <div class="ap-dot filled"></div>
+                                <div class="ap-dot filled"></div>
+                                <div class="ap-dot filled"></div>
+                                <div class="ap-dot filled"></div>
+                                <div class="ap-dot filled"></div>
+                                <div class="ap-dot filled"></div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="right">
-                        <span>⚡</span>
-                        <span class="ap" id="apDisplay">6</span>
-                        <div class="ap-dots" id="apDots">
-                            <div class="ap-dot filled"></div>
-                            <div class="ap-dot filled"></div>
-                            <div class="ap-dot filled"></div>
-                            <div class="ap-dot filled"></div>
-                            <div class="ap-dot filled"></div>
-                            <div class="ap-dot filled"></div>
-                        </div>
-                        <div class="save-load-btns">
-                            <button class="sl-btn" id="modelSettingsBtn">⚙️ 模型</button>
-                            <button class="sl-btn" id="saveGameBtn">💾 存档</button>
-                            <button class="sl-btn" id="loadGameBtn">📂 读档</button>
-                            <button class="sl-btn" id="exportSaveBtn">📤 备份</button>
-                            <button class="sl-btn" id="importSaveBtn">📥 恢复</button>
-                            <button class="sl-btn" id="exitGameBtn" style="background:#ffe4e1;color:#c0392b;">🚪 退出</button>
-                        </div>
+                    <div class="save-load-btns">
+                        <button class="sl-btn" id="modelSettingsBtn">⚙️ 模型</button>
+                        <button class="sl-btn" id="saveGameBtn">💾 存档</button>
+                        <button class="sl-btn" id="loadGameBtn">📂 读档</button>
+                        <button class="sl-btn" id="exportSaveBtn">📤 备份</button>
+                        <button class="sl-btn" id="importSaveBtn">📥 恢复</button>
+                        <button class="sl-btn" id="exitGameBtn" style="background:#ffe4e1;color:#c0392b;">🚪 退出</button>
                     </div>
                 </div>
                 <!-- 顶部选项卡 -->
@@ -171,7 +174,7 @@
         </div>
     </div>
     
-    <!-- 🛡️ 安全 DOM 代理：仅对查询做可选返回，绝不在 body 注入假节点干扰事件 -->
+    <!-- 🛡️ 安全 DOM 代理 -->
     <script>
         (function(){
             window.$ = function(id) {
