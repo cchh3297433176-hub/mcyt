@@ -1,4 +1,4 @@
-name: 构建纯净版 MCYT 模拟器 APK
+name: Build APK
 
 on:
   workflow_dispatch:
@@ -11,31 +11,25 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: 检出仓库代码
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: 配置 Java 17 环境
+      - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: 'temurin'
           java-version: '17'
 
-      - name: 配置 Android SDK
+      - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: 生成极简全屏 Android WebView 壳工程
+      - name: Create Android Project
         run: |
-          mkdir -p android-project/app/src/main/assets
-          mkdir -p android-project/app/src/main/res/values
-          mkdir -p android-project/app/src/main/res/xml
-          mkdir -p android-project/app/src/main/java/com/mcyt/simulator
+          mkdir -p proj/app/src/main/assets proj/app/src/main/res/values proj/app/src/main/res/xml proj/app/src/main/java/com/mcyt/simulator
+          cp -r index.html style.css js proj/app/src/main/assets/ 2>/dev/null || cp -r * proj/app/src/main/assets/
+          echo "include ':app'" > proj/settings.gradle
 
-          # 1. 拷贝仓库文件到 assets 离线目录
-          cp -r index.html style.css js android-project/app/src/main/assets/ 2>/dev/null || cp -r * android-project/app/src/main/assets/
-
-          # 2. 根目录 settings.gradle 与 build.gradle
-          echo "include ':app'" > android-project/settings.gradle
-          cat << 'EOF' > android-project/build.gradle
+          cat << 'EOF' > proj/build.gradle
           buildscript {
               repositories { google(); mavenCentral() }
               dependencies { classpath 'com.android.tools.build:gradle:8.1.1' }
@@ -45,8 +39,7 @@ jobs:
           }
           EOF
 
-          # 3. app/build.gradle 配置
-          cat << 'EOF' > android-project/app/build.gradle
+          cat << 'EOF' > proj/app/build.gradle
           apply plugin: 'com.android.application'
           android {
               namespace 'com.mcyt.simulator'
@@ -58,134 +51,118 @@ jobs:
                   versionCode 1494
                   versionName "1.494"
               }
-              buildTypes {
-                  release {
-                      minifyEnabled false
-                  }
+              buildTypes { release { minifyEnabled false } }
+          }
+          EOF
+
+          cat << 'EOF' > proj/app/src/main/res/values/styles.xml
+          <resources>
+              <style name="Theme.FullScreen" parent="android:Theme.NoTitleBar.Fullscreen">
+                  <item name="android:windowNoTitle">true</item>
+                  <item name="android:windowFullscreen">true</item>
+              </style>
+          </resources>
+          EOF
+
+          cat << 'EOF' > proj/app/src/main/res/xml/network_security_config.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <network-security-config>
+              <base-config cleartextTrafficPermitted="true" />
+          </network-security-config>
+          EOF
+
+          cat << 'EOF' > proj/app/src/main/AndroidManifest.xml
+          <?xml version="1.0" encoding="utf-8"?>
+          <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+              <application
+                  android:label="Mcyt模拟器"
+                  android:theme="@style/Theme.FullScreen"
+                  android:networkSecurityConfig="@xml/network_security_config"
+                  android:usesCleartextTraffic="true">
+                  <activity
+                      android:name=".MainActivity"
+                      android:exported="true"
+                      android:configChanges="orientation|screenSize|keyboardHidden">
+                      <intent-filter>
+                          <action android:name="android.intent.action.MAIN" />
+                          <category android:name="android.intent.category.LAUNCHER" />
+                      </intent-filter>
+                  </activity>
+              </application>
+          </manifest>
+          EOF
+
+          cat << 'EOF' > proj/app/src/main/java/com/mcyt/simulator/MainActivity.java
+          package com.mcyt.simulator;
+          import android.app.Activity;
+          import android.app.DownloadManager;
+          import android.net.Uri;
+          import android.os.Bundle;
+          import android.os.Environment;
+          import android.util.Base64;
+          import android.webkit.*;
+          import android.widget.Toast;
+          import java.io.File;
+          import java.io.FileOutputStream;
+
+          public class MainActivity extends Activity {
+              private WebView webView;
+              @Override
+              protected void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  webView = new WebView(this);
+                  setContentView(webView);
+                  WebSettings s = webView.getSettings();
+                  s.setJavaScriptEnabled(true);
+                  s.setDomStorageEnabled(true);
+                  s.setDatabaseEnabled(true);
+                  s.setAllowFileAccess(true);
+                  s.setAllowContentAccess(true);
+                  s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+                  webView.setWebViewClient(new WebViewClient());
+                  webView.setWebChromeClient(new WebChromeClient());
+
+                  webView.setDownloadListener((url, ua, cd, mime, len) -> {
+                      try {
+                          if (url.startsWith("data:")) {
+                              byte[] b = Base64.decode(url.split(",")[1], Base64.DEFAULT);
+                              File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                              File f = new File(dir, "mcyt_backup_" + System.currentTimeMillis() + ".json");
+                              FileOutputStream os = new FileOutputStream(f);
+                              os.write(b);
+                              os.close();
+                              Toast.makeText(this, "✅ 存档已保存至系统 Download 文件夹", Toast.LENGTH_LONG).show();
+                          } else {
+                              DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
+                              req.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
+                              req.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "mcyt_save.json");
+                              ((DownloadManager) getSystemService(DOWNLOAD_SERVICE)).enqueue(req);
+                              Toast.makeText(this, "📥 正在下载...", Toast.LENGTH_SHORT).show();
+                          }
+                      } catch (Exception e) {
+                          Toast.makeText(this, "下载异常: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+                      }
+                  });
+                  webView.loadUrl("file:///android_asset/index.html");
+              }
+              @Override
+              public void onBackPressed() {
+                  if (webView.canGoBack()) webView.goBack();
+                  else super.onBackPressed();
               }
           }
-          EOF# 4. 样式与安全配置（彻底全屏沉浸、放行 http 接口）
-cat << 'EOF' > android-project/app/src/main/res/values/styles.xml
-<resources>
-    <style name="Theme.FullScreen" parent="android:Theme.NoTitleBar.Fullscreen">
-        <item name="android:windowNoTitle">true</item>
-        <item name="android:windowFullscreen">true</item>
-    </style>
-</resources>
-EOF
+          EOF
 
-cat << 'EOF' > android-project/app/src/main/res/xml/network_security_config.xml
-<?xml version="1.0" encoding="utf-8"?>
-<network-security-config>
-    <base-config cleartextTrafficPermitted="true" />
-</network-security-config>
-EOF
+      - name: Build APK
+        run: |
+          cd proj
+          gradle wrapper
+          ./gradlew assembleDebug
 
-# 5. AndroidManifest.xml
-cat << 'EOF' > android-project/app/src/main/AndroidManifest.xml
-<?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
-    <application
-        android:label="Mcyt模拟器"
-        android:theme="@style/Theme.FullScreen"
-        android:networkSecurityConfig="@xml/network_security_config"
-        android:usesCleartextTraffic="true">
-        <activity
-            android:name=".MainActivity"
-            android:exported="true"
-            android:configChanges="orientation|screenSize|keyboardHidden">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
-    </application>
-</manifest>
-EOF    # 6. MainActivity.java（彻底放行 DownloadListener 与 blob/data/http）
-    cat << 'EOF' > android-project/app/src/main/java/com/mcyt/simulator/MainActivity.java
-    package com.mcyt.simulator;
-
-    import android.app.Activity;
-    import android.app.DownloadManager;
-    import android.net.Uri;
-    import android.os.Bundle;
-    import android.os.Environment;
-    import android.util.Base64;
-    import android.webkit.*;
-    import android.widget.Toast;
-    import java.io.File;
-    import java.io.FileOutputStream;
-
-    public class MainActivity extends Activity {
-        private WebView webView;
-
-        @Override
-        protected void onCreate(Bundle savedInstanceState) {
-            super.onCreate(savedInstanceState);
-            webView = new WebView(this);
-            setContentView(webView);
-
-            WebSettings s = webView.getSettings();
-            s.setJavaScriptEnabled(true);
-            s.setDomStorageEnabled(true);
-            s.setDatabaseEnabled(true);
-            s.setAllowFileAccess(true);
-            s.setAllowContentAccess(true);
-            s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-
-            webView.setWebViewClient(new WebViewClient());
-            webView.setWebChromeClient(new WebChromeClient());
-
-            webView.setDownloadListener((url, userAgent, contentDisposition, mimetype, contentLength) -> {
-                try {
-                    if (url.startsWith("data:")) {
-                        String[] parts = url.split(",");
-                        String base64Data = parts[1];
-                        byte[] decodedBytes = Base64.decode(base64Data, Base64.DEFAULT);
-                        File path = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-                        File file = new File(path, "mcyt_backup_" + System.currentTimeMillis() + ".json");
-                        FileOutputStream os = new FileOutputStream(file, false);
-                        os.write(decodedBytes);
-                        os.flush();
-                        os.close();
-                        Toast.makeText(MainActivity.this, "✅ 存档已下载至 Download 目录", Toast.LENGTH_LONG).show();
-                    } else {
-                        DownloadManager.Request request = new DownloadManager.Request(Uri.parse(url));
-                        request.setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED);
-                        request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, "mcyt_backup.json");
-                        DownloadManager dm = (DownloadManager) getSystemService(DOWNLOAD_SERVICE);
-                        dm.enqueue(request);
-                        Toast.makeText(MainActivity.this, "📥 正在下载存档...", Toast.LENGTH_SHORT).show();
-                    }
-                } catch (Exception e) {
-                    Toast.makeText(MainActivity.this, "下载失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-                }
-            });
-
-            webView.loadUrl("file:///android_asset/index.html");
-        }
-
-        @Override
-        public void onBackPressed() {
-            if (webView.canGoBack()) {
-                webView.goBack();
-            } else {
-                super.onBackPressed();
-            }
-        }
-    }
-    EOF
-
-- name: 编译构建 APK
-  run: |
-    cd android-project
-    gradle wrapper
-    ./gradlew assembleDebug
-
-- name: 上传构建好的纯净 APK 供手机下载
-  uses: actions/upload-artifact@v4
-  with:
-    name: McytSimulator-Pure-v1.494
-    path: android-project/app/build/outputs/apk/debug/app-debug.apk
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: McytSimulator-v1.494
+          path: proj/app/build/outputs/apk/debug/app-debug.apk
