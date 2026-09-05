@@ -475,9 +475,7 @@ if (!G.groupChatHistory) G.groupChatHistory = {};
 if (!G.friendRequests) G.friendRequests = [];
 if (!G.momentsFilterNpcId) G.momentsFilterNpcId = null;
 
-// 长按/点击 通用绑定：短按触发 onClick，长按（500ms）触发 onLongPress
-// 修复：原代码调用了本函数但从未定义，导致聊天/群聊列表绑定事件时报错中断，
-// 使得聊天页在渲染后无法正常交互（点击联系人无反应、整块面板后续渲染被中断）。
+// 长按/点击 通用绑定
 function bindLongPressEvent(el, onLongPress, onClick) {
     if (!el) return;
     const LONG_PRESS_MS = 500;
@@ -513,7 +511,6 @@ function bindLongPressEvent(el, onLongPress, onClick) {
 
     const cancel = () => { clearTimer(); };
 
-    // 触摸设备
     el.addEventListener('touchstart', e => {
         const t = e.touches[0];
         if (t) start(t.clientX, t.clientY);
@@ -525,21 +522,22 @@ function bindLongPressEvent(el, onLongPress, onClick) {
     el.addEventListener('touchend', end);
     el.addEventListener('touchcancel', cancel);
 
-    // 鼠标设备（桌面端调试用）
     el.addEventListener('mousedown', e => start(e.clientX, e.clientY));
     el.addEventListener('mousemove', e => { if (pressTimer) move(e.clientX, e.clientY); });
     el.addEventListener('mouseup', end);
     el.addEventListener('mouseleave', cancel);
-
-    // 阻止长按弹出系统右键菜单/文本选择
     el.addEventListener('contextmenu', e => e.preventDefault());
 }
 
+// 头像渲染助手：若为玩家自身，自动使用最新 G.player.avatar
 function renderAvatarBadge(obj, size = 44) {
-    if (obj && obj.avatarUrl) {
-        return `<img src="${obj.avatarUrl}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;display:block;">`;
+    const avatarUrl = (obj && obj.isPlayer) ? G.player.avatar : (obj && obj.avatarUrl);
+    const emoji = (obj && obj.isPlayer) ? '🧑' : ((obj && obj.avatarEmoji) || '👤');
+
+    if (avatarUrl) {
+        return `<img src="${avatarUrl}" style="width:${size}px;height:${size}px;border-radius:50%;object-fit:cover;display:block;">`;
     }
-    return `<div style="width:${size}px;height:${size}px;border-radius:50%;background:#eaf2ea;display:flex;align-items:center;justify-content:center;font-size:${Math.floor(size*0.45)}px;flex-shrink:0;">${(obj && obj.avatarEmoji) || '👤'}</div>`;
+    return `<div style="width:${size}px;height:${size}px;border-radius:50%;background:#eaf2ea;display:flex;align-items:center;justify-content:center;font-size:${Math.floor(size*0.45)}px;flex-shrink:0;">${emoji}</div>`;
 }
 
 function renderSocialPanel() {
@@ -558,21 +556,14 @@ function renderSocialPanel() {
 
 function renderPhoneApp(container) {
     const isMoments = G.phoneNav === 'moments';
-    const pendingCount = (G.friendRequests || []).length;
-
-    let contentHtml = '';
-    if (isMoments) {
-        contentHtml = buildMomentsHTML();
-    } else {
-        contentHtml = buildChatListHTML();
-    }
+    let contentHtml = isMoments ? buildMomentsHTML() : buildChatListHTML();
 
     const html = `
-    <div class="phone-app-wrap" style="background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.06);min-height:580px;display:flex;flex-direction:column;">
+    <div class="phone-app-wrap" style="background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.06);height:82vh;max-height:850px;display:flex;flex-direction:column;">
         <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;">
             ${contentHtml}
         </div>
-        <div style="height:54px;background:#fcfdfc;border-top:1px solid #eef2ee;display:flex;justify-content:space-around;align-items:center;padding:0 10px;">
+        <div style="height:54px;background:#fcfdfc;border-top:1px solid #eef2ee;display:flex;justify-content:space-around;align-items:center;padding:0 10px;flex-shrink:0;">
             <button id="phoneNavChatsBtn" style="border:none;background:none;font-size:12px;font-weight:700;color:${!isMoments ? 'var(--primary)' : '#888'};display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;">
                 <span style="font-size:18px;">💬</span>
                 <span>消息</span>
@@ -697,10 +688,13 @@ function buildMomentsHTML() {
     } else {
         for (const item of feedItems) {
             const isLiked = item.liked ? '❤️ 已赞' : '🤍 赞';
+            const isSelfPost = item.author === G.player.ytName;
+            const displayAvatar = isSelfPost && G.player.avatar ? `<img src="${G.player.avatar}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;">` : (item.avatar || '👤');
+
             listHtml += `
             <div style="padding:12px;background:#fff;border-radius:10px;margin-bottom:8px;border:1px solid #f0f4f0;">
                 <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-                    <div style="font-size:20px;">${item.avatar || '👤'}</div>
+                    <div style="font-size:20px;display:flex;align-items:center;">${displayAvatar}</div>
                     <div style="flex:1;">
                         <div style="font-weight:700;font-size:13px;color:var(--text);">${escapeHtml(item.author)}</div>
                         <div style="font-size:10px;color:#bbb;">${item.time || ''}</div>
@@ -767,7 +761,7 @@ function renderSingleChatWindow(container) {
                     </div>
                     <div style="font-size:10px;color:#bbb;margin-top:2px;text-align:${isSelf ? 'right' : 'left'};">${msg.time || ''}</div>
                 </div>
-                ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${renderAvatarBadge({ avatarUrl: G.player.avatar, avatarEmoji: '🧑' }, 34)}</div>` : ''}
+                ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${renderAvatarBadge({ isPlayer: true }, 34)}</div>` : ''}
             </div>`;
         }
     }
@@ -1004,7 +998,7 @@ function renderGroupChatWindow(container) {
                     </div>
                     <div style="font-size:10px;color:#bbb;margin-top:2px;text-align:${isSelf ? 'right' : 'left'};">${msg.time || ''}</div>
                 </div>
-                ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${renderAvatarBadge({ avatarUrl: G.player.avatar, avatarEmoji: '🧑' }, 34)}</div>` : ''}
+                ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${renderAvatarBadge({ isPlayer: true }, 34)}</div>` : ''}
             </div>`;
         }
     }
@@ -1206,7 +1200,6 @@ function openAddChatTargetModal() {
     document.getElementById('btnNewGroup').onclick = () => { closeModal(); openEditGroupModal(null); };
 }
 
-// 接收一条好友申请并存入待处理列表（原代码调用此函数但从未定义）
 function receiveFriendRequest(req) {
     if (!G.friendRequests) G.friendRequests = [];
     const entry = {

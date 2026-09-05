@@ -26,13 +26,19 @@ document.addEventListener('DOMContentLoaded', () => {
             const action = this.dataset.action;
             if (!action) return;
 
-            // 核心修复：聊天中心 0 消耗直接进入，绝不弹窗扣除行动点！
+            // 核心支持：聊天中心 0 消耗直接进入
             if (action === 'chat') {
                 switchTab('social');
                 return;
             }
 
-            const actionsWithModal = ['stream', 'video', 'collab', 'fanart', 'comment', 'sub'];
+            // 核心支持：同人浏览器 0 消耗直接进入
+            if (action === 'fanart') {
+                switchTab('browser');
+                return;
+            }
+
+            const actionsWithModal = ['stream', 'video', 'collab', 'comment', 'sub'];
             if (actionsWithModal.includes(action)) {
                 if (action === 'video') { 
                     await performAction(action); 
@@ -43,6 +49,11 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             await performAction(action);
         });
+    });
+
+    // 左上角头像点击弹窗：更改名字与头像，并将更名记忆注明进长期档案
+    $('headerAvatar')?.addEventListener('click', () => {
+        openEditPlayerProfileModal();
     });
 
     // 联网切换
@@ -171,6 +182,88 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
+// 弹出修改玩家头像与名字弹窗，并更新记忆
+function openEditPlayerProfileModal() {
+    const currentName = G.player.ytName || '主播';
+    const currentAvatar = G.player.avatar || '';
+
+    openModal(`
+        <h3>🧑 编辑个人资料</h3>
+        <p style="font-size:12px;color:#666;">修改频道名称与个人头像，更名信息将自动归纳进剧情记忆中。</p>
+        <div class="form-group">
+            <label>YouTube 频道账号名</label>
+            <input type="text" id="editPlayerNameInput" value="${escapeHtml(currentName)}" placeholder="输入新的频道名...">
+        </div>
+        <div class="form-group">
+            <label>更换头像</label>
+            <div class="avatar-upload-wrap">
+                <div class="avatar-preview" id="editAvatarPreview" style="width:56px;height:56px;border-radius:50%;overflow:hidden;border:2px solid var(--primary);display:flex;align-items:center;justify-content:center;background:#dce8dc;font-size:24px;">
+                    ${currentAvatar ? `<img src="${currentAvatar}" style="width:100%;height:100%;object-fit:cover;">` : '👤'}
+                </div>
+                <button class="upload-btn" id="editUploadAvatarBtn">从相册选择</button>
+                <input type="file" id="editAvatarFileInput" accept="image/png,image/jpeg" class="file-input" style="display:none;">
+            </div>
+        </div>
+        <div class="btn-row" style="margin-top:14px;">
+            <button class="btn-secondary" onclick="closeModal()">取消</button>
+            <button class="btn-primary" id="savePlayerProfileBtn">💾 保存更改</button>
+        </div>
+    `);
+
+    let newAvatarData = currentAvatar;
+
+    document.getElementById('editUploadAvatarBtn')?.addEventListener('click', () => {
+        document.getElementById('editAvatarFileInput')?.click();
+    });
+
+    document.getElementById('editAvatarFileInput')?.addEventListener('change', function() {
+        const file = this.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(ev) {
+            const img = new Image();
+            img.onload = function() {
+                const size = Math.min(img.width, img.height);
+                const canvas = document.createElement('canvas');
+                canvas.width = 200; canvas.height = 200;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(img, (img.width-size)/2, (img.height-size)/2, size, size, 0, 0, 200, 200);
+                newAvatarData = canvas.toDataURL('image/jpeg');
+                document.getElementById('editAvatarPreview').innerHTML = `<img src="${newAvatarData}" style="width:100%;height:100%;object-fit:cover;">`;
+                showToast('✅ 头像已选择', 'success', 1200);
+            };
+            img.src = ev.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+
+    document.getElementById('savePlayerProfileBtn')?.addEventListener('click', () => {
+        const newName = document.getElementById('editPlayerNameInput')?.value.trim();
+        if (!newName) { showToast('⚠️ 名字不能为空', 'error'); return; }
+
+        const oldName = G.player.ytName;
+        const nameChanged = oldName !== newName;
+
+        G.player.ytName = newName;
+        G.player.avatar = newAvatarData;
+
+        // 如果修改了名字，在长期记忆中明确注明，确保 AI 生成后续剧情认知连贯
+        if (nameChanged) {
+            if (!G.memorySummaries) G.memorySummaries = [];
+            const memoText = `【更名记录】：第 ${G.day} 天，主角将频道名称由「${oldName}」正式更改为「${newName}」。所有NPC、粉丝与AI剧情中，「${oldName}」与「${newName}」均为同一人，人际关系与历史成就完全继承。`;
+            G.memorySummaries.push(memoText);
+            addMemoir('更名启事', `频道名由「${oldName}」更改为「${newName}」`);
+            appendStory(`📢 你的频道正式更名为「${newName}」，粉丝与好友们都在为你庆祝新起点！`, '📢 频道更名');
+        }
+
+        updateUI();
+        renderAllPanels();
+        closeModal();
+        showToast('✅ 资料修改成功！', 'success');
+        autoSaveGame();
+    });
+}
+
 function updateWebSearchToggleUI() {
     const btn = $('webSearchToggleBtn');
     if (!btn) return;
@@ -182,7 +275,6 @@ function openActionModal(action) {
         stream: '📹 直播',
         video: '🎬 制作视频',
         collab: '🤜 合作视频',
-        fanart: '🎨 看同人作品',
         comment: '💭 评论互动',
         sub: '🧘 皮下活动',
     };
@@ -190,7 +282,6 @@ function openActionModal(action) {
         stream: '例如：挑战末地龙...',
         video: '例如：生存日记...',
         collab: '例如：与好友合拍生存...',
-        fanart: '例如：浏览粉丝同人...',
         comment: '例如：在热门视频下留言...',
         sub: '例如：健身、探索...',
     };
@@ -251,3 +342,4 @@ window.loadGameFromSlot = loadGameFromSlot;
 window.showStartChoiceModal = showStartChoiceModal;
 window.bindLongPressEvent = bindLongPressEvent;
 window.receiveFriendRequest = receiveFriendRequest;
+window.openEditPlayerProfileModal = openEditPlayerProfileModal;

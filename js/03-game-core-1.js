@@ -83,11 +83,19 @@ function updateUI() {
         document.querySelector('.game-header .right')?.appendChild(followerEl);
     }
     if (followerEl) followerEl.textContent = `❤️ ${G.player.followers}`;
-    if (G.player.avatar && dom.headerAvatarImg) dom.headerAvatarImg.src = G.player.avatar;
+    
+    // 头部头像展示更新：如果上传了头像则显示，否则保留默认
+    if (G.player.avatar && dom.headerAvatarImg) {
+        dom.headerAvatarImg.src = G.player.avatar;
+        dom.headerAvatarImg.style.display = 'block';
+    } else if (dom.headerAvatarImg) {
+        dom.headerAvatarImg.style.display = 'none';
+        if (dom.headerAvatar) dom.headerAvatar.textContent = '👤';
+    }
     autoSaveGame();
 }
 
-// 核心修复：switchTab 健壮识别 socialTab，且支持安全挂载
+// 核心修复：switchTab 健壮识别 socialTab 与 browserTab
 function switchTab(tab) {
     const map = {
         story: 'storyTab',
@@ -95,6 +103,7 @@ function switchTab(tab) {
         dashboard: 'dashboardTab',
         shop: 'shopTab',
         social: 'socialTab',
+        browser: 'browserTab',
         data: 'dataTab',
         memoir: 'memoirTab',
         feed: 'feedTab',
@@ -102,11 +111,7 @@ function switchTab(tab) {
     };
     const targetId = map[tab];
 
-    // 切换顶部按钮高亮（若顶部没有该按钮也不报错）
-    // 修复：'social'（聊天/朋友圈）没有对应的顶部 tab 按钮，之前的写法会把所有
-    // 顶部按钮的高亮都清空，导致之后 renderAllPanels() 找不到"当前激活的 tab"，
-    // 从聊天页返回后频道/数据/成就等页面不会自动刷新。这里改为：只有存在匹配
-    // 的顶部按钮时才更新高亮状态，没有对应按钮（如 social）则保留原高亮不变。
+    // 切换顶部按钮高亮（若顶部没有该按钮则保留原高亮）
     if (document.querySelector(`.tab-btn[data-tab="${tab}"]`)) {
         document.querySelectorAll('.tab-btn').forEach(btn => {
             btn.classList.toggle('active', btn.dataset.tab === tab);
@@ -116,7 +121,6 @@ function switchTab(tab) {
     // 切换右侧内容区块展示
     document.querySelectorAll('.tab-content').forEach(el => {
         el.classList.toggle('active', el.id === targetId);
-        // 强制修正 display，确保手机端绝对不出现空白
         if (el.id === targetId) {
             el.style.display = 'block';
         } else {
@@ -131,6 +135,9 @@ function switchTab(tab) {
     if (tab === 'social') {
         if (!dom.socialTab) dom.socialTab = document.getElementById('socialTab');
         renderSocialPanel();
+    }
+    if (tab === 'browser') {
+        if (typeof renderBrowserPanel === 'function') renderBrowserPanel();
     }
     if (tab === 'shop') renderShop();
     if (tab === 'memoir') renderMemoir();
@@ -233,6 +240,7 @@ function renderAllPanels() {
     if (activeTab === 'data') renderDataPanel();
     if (activeTab === 'dashboard') renderDashboard();
     if (activeTab === 'social' || document.getElementById('socialTab')?.style.display === 'block') renderSocialPanel();
+    if (document.getElementById('browserTab')?.style.display === 'block' && typeof renderBrowserPanel === 'function') renderBrowserPanel();
     if (activeTab === 'shop') renderShop();
     if (activeTab === 'memoir') renderMemoir();
     if (activeTab === 'stream') renderStreamPanel();
