@@ -1,6 +1,6 @@
-// 存档/读档/初始化模块（v6.4.0 纯图片备份防丢与平滑迁移版）
+// 存档/读档/初始化模块（v6.4.0 原生文件下载与极简恢复版）
 // ============================================================
-const CURRENT_APP_VERSION = '6.4.0'; // 递增版本号，确保更新后 100% 弹出全新更新公告
+const CURRENT_APP_VERSION = '6.4.0';
 
 let _gameInitialized = false;
 let _skipStartChoiceOnce = false;
@@ -35,7 +35,7 @@ function initGame() {
         G.player.skills[k.toLowerCase()] = val;
     });
 
-    // 视图平滑流转：隐藏开局页，展示游戏主界面
+    // 视图平滑流转
     const setup = $('setupPage');
     const game = $('gamePage');
     if (setup) {
@@ -54,7 +54,6 @@ function initGame() {
     switchTab('story');
     autoSaveGame();
 
-    // 唤起版本更新公告弹窗
     setTimeout(() => {
         if (typeof checkAndShowVersionNoticeModal === 'function') {
             checkAndShowVersionNoticeModal();
@@ -86,18 +85,11 @@ function autoSaveGame() {
         }));
     } catch(e) {
         console.warn('自动存档写入失败', e);
-        const isQuota = e && (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014);
-        showToast(
-            isQuota
-                ? '⚠️ 本地存储空间已满！请立刻点击「📤 备份」导出图片备份到相册，避免数据丢失'
-                : '⚠️ 自动保存失败，建议立刻点击「📤 备份」保存到相册',
-            'error',
-            5000
-        );
+        showToast('⚠️ 自动保存失败，建议立刻点击「📤 备份」下载存档文件', 'error', 5000);
     }
 }
 
-// 📤 打开备份流程：直接呼起分片带进度条的生成弹窗，秒点秒开
+// 📤 打开备份流程：直接呼起导出弹窗
 function openBackupModal() {
     let payload, day, ytName;
     if (G.phase === 'playing') {
@@ -125,67 +117,89 @@ function openBackupModal() {
     if (window.ImageBackup && typeof window.ImageBackup.startGenerateBackupWithModal === 'function') {
         window.ImageBackup.startGenerateBackupWithModal(exportPayload);
     } else {
-        showToast('⚠️ 图片备份模块未就绪，请刷新重试', 'error');
+        showToast('⚠️ 备份模块未就绪，请刷新重试', 'error');
     }
 }
 
-// 📥 打开恢复流程：直接呼起相册选择器
+// 📥 打开恢复流程：直接呼起文件选择器（同时支持 .json 文件与图片恢复）
 function openRestoreModal() {
-    let fileInput = document.getElementById('restoreImageFileInputDynamic');
+    let fileInput = document.getElementById('restoreJsonFileInputDynamic');
     if (!fileInput) {
         fileInput = document.createElement('input');
-        fileInput.id = 'restoreImageFileInputDynamic';
+        fileInput.id = 'restoreJsonFileInputDynamic';
         fileInput.type = 'file';
-        fileInput.accept = 'image/*';
+        fileInput.accept = '.json,image/*,text/plain';
         fileInput.style.display = 'none';
         document.body.appendChild(fileInput);
 
         fileInput.addEventListener('change', function() {
             const file = this.files && this.files[0];
             if (!file) return;
-            _restoreFromImageFile(file);
+            _restoreFromSelectedFile(file);
             this.value = '';
         });
     }
     fileInput.click();
 }
 
-// 从图片文件恢复存档
-function _restoreFromImageFile(file) {
-    if (!window.ImageBackup) {
-        showToast('⚠️ 图片备份模块未就绪', 'error');
-        return;
-    }
-    showToast('⏳ 正在读取相册图片...', 'info', 2000);
+// 从选中的文件恢复存档（智能识别 JSON 文件或纯文本码）
+function _restoreFromSelectedFile(file) {
+    showToast('⏳ 正在读取存档文件...', 'info', 2000);
     const reader = new FileReader();
-    reader.onload = (e) => {
-        const dataUrl = e.target.result;
-        _decodeAndImportImage(dataUrl);
-    };
-    reader.onerror = () => showToast('❌ 读取相册图片失败', 'error');
-    reader.readAsDataURL(file);
+
+    if (file.type.indexOf('image/') === 0) {
+        reader.onload = (e) => {
+            const dataUrl = e.target.result;
+            _decodeAndImportImage(dataUrl);
+        };
+        reader.readAsDataURL(file);
+    } else {
+        reader.onload = (e) => {
+            try {
+                const text = e.target.result.trim();
+                let parsed = null;
+
+                if (text.startsWith('{')) {
+                    parsed = JSON.parse(text);
+                } else if (text.startsWith('MCYTB64:') && window.ImageBackup) {
+                    parsed = window.ImageBackup.decodeBackupText(text);
+                } else {
+                    throw new Error('无法识别的文件格式');
+                }
+
+                const stateData = (parsed && parsed.data) ? parsed.data : parsed;
+                if (!stateData || (!stateData.player && !stateData.npcs)) {
+                    throw new Error('文件中不包含有效的游戏数据');
+                }
+
+                _applyImportedStateData(stateData);
+            } catch (err) {
+                console.error('导入失败', err);
+                showToast('❌ 导入失败：' + err.message, 'error', 5000);
+            }
+        };
+        reader.onerror = () => showToast('❌ 文件读取失败', 'error');
+        reader.readAsText(file, 'utf-8');
+    }
 }
 
-// 解码图片并导入存档
+// 兼容旧版图片解码
 async function _decodeAndImportImage(dataUrl) {
-    showToast('⏳ 正在解码还原存档...', 'info', 2000);
+    showToast('⏳ 正在解码还原图片存档...', 'info', 2000);
     try {
         let stateObj = null;
-        if (typeof window.ImageBackup.decodeDataUrlToSave === 'function') {
+        if (window.ImageBackup && typeof window.ImageBackup.decodeDataUrlToSave === 'function') {
             stateObj = await new Promise((resolve, reject) => {
                 window.ImageBackup.decodeDataUrlToSave(dataUrl, (err, res) => err ? reject(err) : resolve(res));
             });
         }
-
         const stateData = (stateObj && stateObj.data) ? stateObj.data : stateObj;
         if (!stateData || (!stateData.player && !stateData.npcs)) {
-            throw new Error('图片中不包含有效的游戏数据');
+            throw new Error('图片中不包含有效游戏数据');
         }
-
         _applyImportedStateData(stateData);
     } catch (e) {
-        console.error('图片解码失败', e);
-        showToast('❌ 解码失败：' + e.message + '（请确认使用的是相册原图）', 'error', 5000);
+        showToast('❌ 解码失败：' + e.message, 'error', 5000);
     }
 }
 
@@ -212,7 +226,7 @@ function _applyImportedStateData(stateData) {
     updateUI();
     switchTab('story');
     autoSaveGame();
-    showToast('✅ 存档导入成功！自建角色与群聊已完整找回', 'success', 3000);
+    showToast('✅ 存档导入成功！所有进度已找回', 'success', 3000);
 }
 
 function getAutoSaveInfo() {
