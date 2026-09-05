@@ -9,8 +9,8 @@
 </head>
 <body>
     <div id="appContainer">
-        <!-- 🎮 游戏初始开局身份设定页 -->
-        <div id="setupPage" style="display:none;">
+        <!-- 🎮 游戏初始开局身份设定页（默认就绪，由启动器自适应判断） -->
+        <div id="setupPage" style="display:block;">
             <div class="setup-card">
                 <h2>🎮 设定你的 Minecraft YouTube 主播</h2>
                 <div class="form-group">
@@ -83,7 +83,7 @@
 
             <!-- 核心布局：左侧竖排操作栏 + 右侧主内容视口 -->
             <div class="game-layout">
-                <!-- 左侧竖排操作栏（已彻底删除旧合作按钮） -->
+                <!-- 左侧竖排操作栏 -->
                 <aside class="action-bar-vertical" id="actionBar">
                     <!-- 常规行动 -->
                     <button class="action-btn live" onclick="performAction('stream')">
@@ -207,7 +207,7 @@
         <div id="toast" class="toast-item" style="display:none;"></div>
     </div>
 
-    <!-- 🛡️ 安全防崩溃保底补丁：防止历史遗留缺失 ID 引起脚本异常中断 -->
+    <!-- 🛡️ 安全防崩溃与基础选择器兜底 -->
     <script>
         window.$ = id => document.getElementById(id);
         window.addEventListener('error', function(e) {
@@ -225,5 +225,52 @@
     <script src="js/07-actions-social.js"></script>
     <script src="js/08-save-load.js"></script>
     <script src="js/09-events-init.js"></script>
+
+    <!-- 🚀 自愈式加载与生命周期防绿屏保底调度器 -->
+    <script>
+        (function() {
+            function bootstrapView() {
+                var setup = document.getElementById('setupPage');
+                var game = document.getElementById('gamePage');
+                if (!setup || !game) return;
+
+                // 检查是否存在自动存档或正在进行的游戏状态
+                var hasSave = false;
+                try {
+                    hasSave = !!localStorage.getItem('mcyt_autosave');
+                } catch(e) {}
+
+                var isPlaying = (typeof window.G !== 'undefined' && window.G && window.G.phase === 'playing');
+
+                if (isPlaying || (hasSave && typeof resumeAutoSave === 'function')) {
+                    // 若有存档或已在进行中，由核心存档函数调度或展示主界面
+                    setup.style.display = 'none';
+                    game.style.display = 'block';
+                } else {
+                    // 默认首次进入或无有效存档，确保显示开局创角页，绝不留白
+                    setup.style.display = 'block';
+                    game.style.display = 'none';
+                }
+            }
+
+            // 页面加载就绪时执行
+            if (document.readyState === 'loading') {
+                document.addEventListener('DOMContentLoaded', bootstrapView);
+            } else {
+                bootstrapView();
+            }
+
+            // 500ms 二次防御：若发生任何异常导致两个界面均被隐藏，强制唤醒可见界面
+            setTimeout(function() {
+                var setup = document.getElementById('setupPage');
+                var game = document.getElementById('gamePage');
+                if (setup && game) {
+                    if (setup.style.display === 'none' && game.style.display === 'none') {
+                        setup.style.display = 'block';
+                    }
+                }
+            }, 500);
+        })();
+    </script>
 </body>
 </html>
