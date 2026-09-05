@@ -1,4 +1,7 @@
 // js/04-game-core-2.js
+// 成就系统、商店、数据面板、手机社交与多层级记忆归纳系统
+// ============================================================
+
 // 成就系统
 // ============================================================
 function checkAchievements() {
@@ -24,6 +27,10 @@ function unlockAchievement(ach) {
     appendStory(`🏆 解锁成就「${ach.name}」！获得 ${ach.reward} 金币奖励。`, '🏆 成就');
     addMemoir('成就解锁', `${ach.name} (${ach.desc})`);
     showToast(`🏆 解锁成就：${ach.name}！`, 'success', 4000);
+    
+    // 统一记忆联动：记录重大成就事件
+    addGlobalMemoryRecord(`【成就达成】：主角成功解锁成就「${ach.name}」（${ach.desc}），获得 ${ach.reward} 金币。`);
+
     updateUI();
     if (document.querySelector('.tab-btn.active')?.dataset.tab === 'achievements') renderAchievements();
 }
@@ -95,11 +102,13 @@ function acceptSponsor(index) {
         G.player.followers = Math.max(0, G.player.followers - loss);
         appendStory(`⚠️ 你接受了 ${offer.name} 的赞助，但部分粉丝觉得推广太多，流失了 ${loss} 人。`, '📢 赞助风险');
         showToast(`⚠️ 赞助推广导致 ${loss} 粉丝流失`, 'error', 3000);
+        addGlobalMemoryRecord(`【商业赞助】：接受 ${offer.name} 商业推广获得 ${reward} 金币，但引起部分粉丝反弹掉粉 ${loss} 人。`);
     } else {
         const gain = rand(20, 100);
         G.player.followers += gain;
         appendStory(`✅ 你接受了 ${offer.name} 的赞助，获得 ${reward} 金币，粉丝增长了 ${gain} 人！`, '📢 赞助成功');
         showToast(`✅ 赞助合作成功！获得 ${reward} 金币`, 'success', 3000);
+        addGlobalMemoryRecord(`【商业赞助】：成功与 ${offer.name} 达成广告合作，收益 ${reward} 金币且口碑良好涨粉 ${gain} 人。`);
     }
     G.sponsorCooldown = 5;
     G.sponsorOffers = [];
@@ -467,6 +476,95 @@ function renderDataPanel() {
 }
 
 // ============================================================
+// 🧠 记忆系统核心配置与独立便宜总结 API 调度
+// ============================================================
+if (!G.memoryConfig) {
+    G.memoryConfig = {
+        enabled: true,              // 是否开启后台自动总结
+        defaultThreshold: 12,       // 默认触发总结轮数
+        defaultKeepRecent: 4,       // 总结后保留最近多少轮对话
+        useCustomApi: false,        // 是否使用单独的便宜备用 API
+        api: {
+            baseUrl: '',
+            apiKey: '',
+            model: ''
+        }
+    };
+}
+if (!G.memorySummaries) G.memorySummaries = [];
+if (!G.groupMemories) G.groupMemories = {};
+
+// 独立低成本记忆 AI 调用引擎
+async function callMemoryAI(messages, options = {}) {
+    const cfg = G.memoryConfig || {};
+    // 如果配置了独立 API，则走专门的便宜小模型
+    if (cfg.useCustomApi && cfg.api && cfg.api.apiKey && cfg.api.baseUrl) {
+        const baseUrl = cfg.api.baseUrl.replace(/\/+$/, '');
+        const model = cfg.api.model || 'gpt-4o-mini';
+        const apiKey = cfg.api.apiKey;
+        const url = `${baseUrl}/chat/completions`;
+
+        const resp = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${apiKey}`
+            },
+            body: JSON.stringify({
+                model,
+                messages,
+                temperature: options.temperature !== undefined ? options.temperature : 0.4,
+                max_tokens: options.maxTokens || 600
+            })
+        });
+
+        if (!resp.ok) {
+            const errText = await resp.text();
+            throw new Error(`记忆专用 API 报错 [${resp.status}]: ${errText.slice(0, 120)}`);
+        }
+
+        const data = await resp.json();
+        return (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
+    }
+
+    // 否则回退使用全局主模型 callAI()
+    return await callAI(messages, {
+        temperature: options.temperature !== undefined ? options.temperature : 0.4,
+        maxTokens: options.maxTokens || 600
+    });
+}
+
+// 记忆总结失败时友好的可快速关闭弹窗
+function showMemoryFailNoticeModal(moduleName, errorMsg) {
+    openModal(`
+        <div style="text-align:center;padding:10px 0;">
+            <div style="font-size:36px;margin-bottom:8px;">⚠️</div>
+            <h3 style="color:#d32f2f;margin-bottom:6px;">自动记忆总结未完成</h3>
+            <div style="font-size:13px;color:#555;line-height:1.6;margin:10px 0;background:#fff8f8;padding:10px 12px;border-radius:8px;border:1px solid #ffd8d8;text-align:left;">
+                <div><b>失败模块：</b>${escapeHtml(moduleName)}</div>
+                <div style="font-size:11px;color:#888;margin-top:4px;"><b>原因提示：</b>${escapeHtml(errorMsg || '网络超时或接口异常')}</div>
+            </div>
+            <p style="font-size:12px;color:#777;">这不会影响当前正常游玩与消息发送。您可以点击下方按钮直接关闭，或在左侧「🧠 记忆中心」检查独立 API 设置。</p>
+            <div class="btn-row" style="margin-top:14px;">
+                <button class="btn-primary" onclick="closeModal()" style="width:100%;">我知道了，关闭提示</button>
+            </div>
+        </div>
+    `);
+}
+
+// 🌐 统一全局记忆追加
+function addGlobalMemoryRecord(text) {
+    if (!text) return;
+    if (!G.memorySummaries) G.memorySummaries = [];
+    G.memorySummaries.push({
+        id: 'gm_' + Date.now() + '_' + rand(100, 999),
+        day: G.day,
+        text: text.trim(),
+        time: new Date().toLocaleTimeString().slice(0, 5)
+    });
+}
+
+// ============================================================
 // 📱 手机社交中心（模仿微信：消息 / 朋友圈动态 / 名片看动态）
 // ============================================================
 if (!G.phoneNav) G.phoneNav = 'chats';
@@ -476,7 +574,6 @@ if (!G.groupChatHistory) G.groupChatHistory = {};
 if (!G.friendRequests) G.friendRequests = [];
 if (!G.momentsFilterNpcId) G.momentsFilterNpcId = null;
 
-// 长按/点击 通用绑定
 function bindLongPressEvent(el, onLongPress, onClick) {
     if (!el) return;
     const LONG_PRESS_MS = 500;
@@ -530,7 +627,6 @@ function bindLongPressEvent(el, onLongPress, onClick) {
     el.addEventListener('contextmenu', e => e.preventDefault());
 }
 
-// 头像渲染助手：若为玩家自身，自动使用最新 G.player.avatar
 function renderAvatarBadge(obj, size = 44) {
     const avatarUrl = (obj && obj.isPlayer) ? G.player.avatar : (obj && obj.avatarUrl);
     const emoji = (obj && obj.isPlayer) ? '🧑' : ((obj && obj.avatarEmoji) || '👤');
@@ -864,7 +960,8 @@ function openNpcProfileCardModal(npcId) {
             <div style="font-size:12px;color:#888;margin-top:2px;">好感度：<b>${npc.favor||0}</b> / 100</div>
             <div style="background:#f8faf8;padding:10px 14px;border-radius:10px;margin:12px 0;text-align:left;font-size:13px;color:#555;line-height:1.6;border:1px solid #eee;">
                 <div><b>人设标签：</b>${escapeHtml(npc.persona || '普通朋友')}</div>
-                ${npc.memorySummary ? `<div style="margin-top:6px;padding-top:6px;border-top:1px dashed #ddd;color:#2e7d32;"><b>🧠 记忆摘要：</b>${escapeHtml(npc.memorySummary)}</div>` : ''}
+                ${npc.memorySummary ? `<div style="margin-top:6px;padding-top:6px;border-top:1px dashed #ddd;color:#2e7d32;"><b>🧠 私聊记忆：</b>${escapeHtml(npc.memorySummary)}</div>` : ''}
+                ${npc.knownGroupEvents ? `<div style="margin-top:6px;padding-top:6px;border-top:1px dashed #ddd;color:#1565c0;"><b>👥 群聊认知：</b>${escapeHtml(npc.knownGroupEvents)}</div>` : ''}
             </div>
             <div class="btn-row" style="flex-direction:column;gap:8px;">
                 <button class="btn-primary" id="cardViewMomentsBtn" style="width:100%;background:#3866c4;">📱 查看 TA 的朋友圈动态</button>
@@ -888,29 +985,38 @@ function openNpcProfileCardModal(npcId) {
     };
 }
 
+// 🧠 角色私聊记忆自动总结
 async function checkNpcMemorySummarize(npcId) {
+    const memCfg = G.memoryConfig || {};
+    if (memCfg.enabled === false) return; // 用户关闭了自动总结
+
     const npc = G.npcs[npcId];
     if (!npc) return;
     const history = G.chatHistory[npcId] || [];
-    const threshold = npc.summaryThreshold || 12;
+    const threshold = npc.summaryThreshold || memCfg.defaultThreshold || 12;
+    const keepRecent = npc.keepRecent || memCfg.defaultKeepRecent || 4;
 
     if (history.length >= threshold && !npc._summarizing) {
         npc._summarizing = true;
         try {
-            const toSummarize = history.slice(0, history.length - 4);
-            const textToSummarize = toSummarize.map(m => `${m.from === 'player' ? '玩家' : npc.name}: ${stripThought(m.text)}`).join('\n');
-            const prior = npc.memorySummary ? `此前已有记忆：\n${npc.memorySummary}\n\n` : '';
-            const sys = `你是角色记忆归纳助手。请将角色「${npc.name}」与玩家的对话提炼为一段不超过150字的专属记忆总结，保留双方关系变化、聊过的关键话题和承诺。只输出精炼总结内容。`;
-            const summary = await callAI([
+            const toSummarize = history.slice(0, Math.max(1, history.length - keepRecent));
+            const textToSummarize = toSummarize.map(m => `${m.from === 'player' ? '主角' : npc.name}: ${stripThought(m.text)}`).join('\n');
+            const prior = npc.memorySummary ? `【此前已有记忆】：\n${npc.memorySummary}\n\n` : '';
+            const sys = `你是精炼的角色长期记忆整理助手。请将主角与「${npc.name}」的最新私聊对话与此前记忆进行提炼合并，输出一段不超过180字的精炼记忆摘要。保留两人的关系变化、关键话题、约定承诺与喜好细节。直接输出摘要正文，严禁废话。`;
+
+            const summary = await callMemoryAI([
                 { role: 'system', content: sys },
-                { role: 'user', content: `${prior}需要总结的对话：\n${textToSummarize}` }
-            ], { maxTokens: 400, temperature: 0.5 });
+                { role: 'user', content: `${prior}【需归纳的新对话】：\n${textToSummarize}` }
+            ], { maxTokens: 400, temperature: 0.4 });
 
             npc.memorySummary = stripThought(summary.trim());
-            G.chatHistory[npcId] = history.slice(history.length - 4);
+            // 保留最近设定的轮数交流
+            G.chatHistory[npcId] = history.slice(Math.max(0, history.length - keepRecent));
             autoSaveGame();
+            showToast(`🧠 已自动整理与 ${npc.name} 的私聊记忆！`, 'info', 2000);
         } catch (e) {
             console.warn('NPC 记忆总结失败', e);
+            showMemoryFailNoticeModal(`角色「${npc.name}」私聊记忆`, e.message);
         } finally {
             npc._summarizing = false;
         }
@@ -928,7 +1034,10 @@ async function triggerAIReplyForSingle(npcId) {
         return `${m.from === 'player' ? '玩家' : npc.name}: ${stripThought(m.text)}`;
     }).join('\n');
 
-    const npcMemoryContext = npc.memorySummary ? `【与玩家的历史记忆】\n${npc.memorySummary}\n` : '';
+    // 注入私聊记忆 + 群聊认知记忆
+    let npcMemoryContext = '';
+    if (npc.memorySummary) npcMemoryContext += `【与玩家的私聊记忆】\n${npc.memorySummary}\n`;
+    if (npc.knownGroupEvents) npcMemoryContext += `【TA在群聊里获知的事】\n${npc.knownGroupEvents}\n`;
 
     const sysPrompt = `
     你正在扮演角色「${npc.name}」。
@@ -1071,23 +1180,63 @@ function renderGroupChatWindow(container) {
     };
 }
 
-// 修复群聊回复生成：优化提示词、多格式宽容正则与智能兜底
+// 🧠 群聊记忆自动总结与群成员认知联动
+async function checkGroupMemorySummarize(gid) {
+    const memCfg = G.memoryConfig || {};
+    if (memCfg.enabled === false) return;
+
+    const grp = G.groups[gid];
+    if (!grp) return;
+    const history = G.groupChatHistory[gid] || [];
+    const threshold = grp.summaryThreshold || memCfg.defaultThreshold || 12;
+    const keepRecent = grp.keepRecent || memCfg.defaultKeepRecent || 4;
+
+    if (history.length >= threshold && !grp._summarizing) {
+        grp._summarizing = true;
+        try {
+            const toSummarize = history.slice(0, Math.max(1, history.length - keepRecent));
+            const textToSummarize = toSummarize.map(m => `${m.senderName}: ${stripThought(m.text)}`).join('\n');
+            const prior = G.groupMemories[gid] ? `【群聊已有纪要】：\n${G.groupMemories[gid]}\n\n` : '';
+
+            const sys = `你是群聊记忆纪要整理员。请将群聊「${grp.name}」中的讨论内容提炼为一段150字以内的核心纪要，包含聊过的八卦、共同约定、关键笑点与事件。直接输出纪要正文。`;
+            const summary = await callMemoryAI([
+                { role: 'system', content: sys },
+                { role: 'user', content: `${prior}【最新群聊记录】：\n${textToSummarize}` }
+            ], { maxTokens: 350, temperature: 0.4 });
+
+            const cleanSummary = stripThought(summary.trim());
+            G.groupMemories[gid] = cleanSummary;
+
+            // 角色认知深度联动：群里的每个 NPC 自动同步知晓群聊纪要！
+            (grp.members || []).forEach(mid => {
+                const targetNpc = G.npcs[mid];
+                if (targetNpc) {
+                    targetNpc.knownGroupEvents = `【在群「${grp.name}」获悉】：${cleanSummary}`;
+                }
+            });
+
+            G.groupChatHistory[gid] = history.slice(Math.max(0, history.length - keepRecent));
+            autoSaveGame();
+            showToast(`👥 已同步提炼群聊「${grp.name}」记忆，群成员已共享认知！`, 'info', 2000);
+        } catch (e) {
+            console.warn('群聊记忆总结失败', e);
+            showMemoryFailNoticeModal(`群聊「${grp.name}」记忆`, e.message);
+        } finally {
+            grp._summarizing = false;
+        }
+    }
+}
+
 async function triggerGroupAIReply(gid) {
     const grp = G.groups[gid];
     if (!grp) return;
     const history = G.groupChatHistory[gid] || [];
     if (!history.length) { showToast('请先在群里发一条消息'); return; }
 
-    // 智能筛选出真正存在的可用群成员
     let activeList = (grp.activeMembers && grp.activeMembers.length) ? grp.activeMembers : (grp.members || []);
     activeList = activeList.filter(mid => G.npcs[mid]);
-    if (!activeList.length) {
-        activeList = (grp.members || []).filter(mid => G.npcs[mid]);
-    }
-    if (!activeList.length) {
-        // 如果依然没有有效NPC，自动从全局挑选2个
-        activeList = Object.keys(G.npcs).slice(0, 2);
-    }
+    if (!activeList.length) activeList = (grp.members || []).filter(mid => G.npcs[mid]);
+    if (!activeList.length) activeList = Object.keys(G.npcs).slice(0, 2);
     if (!activeList.length) { showToast('群内暂无可接话的成员'); return; }
 
     const activeStreamers = [];
@@ -1108,12 +1257,11 @@ async function triggerGroupAIReply(gid) {
 
         let generatedCount = 0;
 
-        // 模式 B：主播独立调用
         if (grp.streamerMode === 'separate' && activeStreamers.length) {
             const picked = activeStreamers.sort(() => 0.5 - Math.random()).slice(0, rand(1, 2));
             for (const st of picked) {
                 try {
-                    const sys = `你是主播「${st.name}」，人设：${st.persona}。你正在群聊「${grp.name}」中。请根据最近聊天内容，自然地发一句群聊回复。只输出简明正文，禁止复读玩家的话，不要包含引号或角色名前缀。`;
+                    const sys = `你是主播「${st.name}」，人设：${st.persona}。你正在群聊「${grp.name}」中。请根据最近聊天内容，自然发一句群聊回复。只输出简明正文，禁止复读玩家的话，不要包含引号或角色名前缀。`;
                     const rep = await callAI([{ role: 'system', content: sys }, { role: 'user', content: `群内最近发言：\n${recent}` }], { maxTokens: 200, temperature: 0.9 });
                     const cleanRep = stripThought(rep.replace(/^[^\s:：]{1,12}[:：]\s*/, '').trim());
                     if (cleanRep) {
@@ -1135,7 +1283,6 @@ async function triggerGroupAIReply(gid) {
             }
         }
 
-        // 模式 A 或剩余成员统筹生成
         if (grp.streamerMode !== 'separate' || (activeFans.length && generatedCount === 0)) {
             const memberPoolDesc = activeList.map(mid => {
                 const n = G.npcs[mid];
@@ -1156,7 +1303,6 @@ async function triggerGroupAIReply(gid) {
                 { role: 'user', content: `【群聊最近动态】：\n${recent}\n请成员开始接话：` }
             ], { maxTokens: 600, temperature: 0.95 });
 
-            // 宽容正则：兼容各种有无引号、闭合或未闭合的情况
             const re = /\[MSG(?:\s+name=|\s*:\s*)(["']?)([^\]"'\n]+)\1\]([\s\S]*?)(?:\[\/MSG\]|(?=\[MSG)|$)/gi;
             let m;
             while ((m = re.exec(raw)) !== null) {
@@ -1180,7 +1326,6 @@ async function triggerGroupAIReply(gid) {
                 generatedCount++;
             }
 
-            // 智能兜底：若 AI 未使用标签输出，按行解析或匹配角色名
             if (generatedCount === 0 && raw.trim()) {
                 const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 2);
                 for (const line of lines) {
@@ -1216,6 +1361,7 @@ async function triggerGroupAIReply(gid) {
         hideLoading();
         if (generatedCount > 0) {
             showToast(`⚡ 群内收到 ${generatedCount} 条新回复！`, 'success', 1500);
+            await checkGroupMemorySummarize(gid);
             autoSaveGame();
         } else {
             showToast('⚠️ 本轮成员都在潜水，再试一次吧', 'info', 2000);
@@ -1306,10 +1452,12 @@ function handleFriendRequestAction(reqId, accept) {
             persona: req.persona || '一位热心好友',
             favor: 40,
             isCustom: true,
-            summaryThreshold: 12
+            summaryThreshold: 12,
+            keepRecent: 4
         };
         showToast(`🎉 已同意 ${req.name} 的好友申请！`, 'success', 2500);
         appendStory(`🤝 你通过了「${req.name}」的好友申请，已添加到联系人列表中。`, '🤝 新增好友');
+        addGlobalMemoryRecord(`【结识好友】：添加了新好友「${req.name}」（${req.fromReason || '社交申请'}）。`);
     } else {
         showToast(`已婉拒 ${req.name} 的好友申请`, 'info', 1500);
     }
@@ -1321,7 +1469,7 @@ window.handleFriendRequestAction = handleFriendRequestAction;
 
 function openEditNpcModal(npcId) {
     const isNew = !npcId;
-    const npc = !isNew ? G.npcs[npcId] : { name: '', avatarEmoji: '👤', avatarUrl: '', persona: '', favor: 50, isCustom: true, summaryThreshold: 12 };
+    const npc = !isNew ? G.npcs[npcId] : { name: '', avatarEmoji: '👤', avatarUrl: '', persona: '', favor: 50, isCustom: true, summaryThreshold: 12, keepRecent: 4 };
     
     openModal(`
         <h3>${isNew ? '👤 新建角色 / 粉丝' : `✏️ 编辑角色：${escapeHtml(npc.name)}`}</h3>
@@ -1347,9 +1495,15 @@ function openEditNpcModal(npcId) {
             <label>角色人设设定</label>
             <textarea id="npcPersonaInput" rows="3" placeholder="描述此人的性格、口头禅、与你的渊源...">${escapeHtml(npc.persona || '')}</textarea>
         </div>
-        <div class="form-group">
-            <label>🧠 独立记忆总结轮数（满多少轮自动提炼精炼记忆并归档）</label>
-            <input type="number" id="npcThresholdInput" min="4" max="50" value="${npc.summaryThreshold || 12}" style="width:100%;padding:6px 10px;border-radius:8px;border:1px solid #ccc;font-size:13px;">
+        <div style="display:flex;gap:10px;">
+            <div class="form-group" style="flex:1;">
+                <label>🧠 触发总结轮数</label>
+                <input type="number" id="npcThresholdInput" min="4" max="50" value="${npc.summaryThreshold || 12}">
+            </div>
+            <div class="form-group" style="flex:1;">
+                <label>💬 总结后保留最近轮数</label>
+                <input type="number" id="npcKeepRecentInput" min="2" max="20" value="${npc.keepRecent || 4}">
+            </div>
         </div>
         <div class="btn-row" style="margin-top:12px;">
             ${!isNew && npc.isCustom ? `<button class="btn-secondary" id="delNpcBtn" style="color:#e53935;">🗑️ 删除角色</button>` : ''}
@@ -1385,6 +1539,7 @@ function openEditNpcModal(npcId) {
         const emoji = document.getElementById('npcEmojiInput').value.trim() || '👤';
         const persona = document.getElementById('npcPersonaInput').value.trim() || '普通朋友';
         const threshold = parseInt(document.getElementById('npcThresholdInput').value) || 12;
+        const keepRecent = parseInt(document.getElementById('npcKeepRecentInput').value) || 4;
         if (!name) { showToast('⚠️ 角色姓名不能为空', 'error'); return; }
 
         const id = isNew ? ('custom_npc_' + Date.now()) : npcId;
@@ -1396,6 +1551,7 @@ function openEditNpcModal(npcId) {
             avatarUrl: currentAvatarDataUrl,
             persona,
             summaryThreshold: threshold,
+            keepRecent,
             isCustom: true
         };
         showToast('✅ 角色信息已保存', 'success');
@@ -1476,7 +1632,9 @@ function openEditGroupModal(gid) {
             desc,
             members: grp.members || Object.keys(G.npcs).slice(0, 4),
             activeMembers: grp.activeMembers || grp.members,
-            streamerMode: grp.streamerMode || 'unified'
+            streamerMode: grp.streamerMode || 'unified',
+            summaryThreshold: grp.summaryThreshold || 12,
+            keepRecent: grp.keepRecent || 4
         };
         showToast('✅ 群聊已保存', 'success');
         closeModal();
@@ -1523,8 +1681,19 @@ function openGroupSettingsModal(gid) {
             </label>
         </div>
 
+        <div style="display:flex;gap:10px;margin-bottom:12px;">
+            <div class="form-group" style="flex:1;">
+                <label style="font-size:12px;">🧠 群记忆总结轮数</label>
+                <input type="number" id="grpSummaryThresholdInput" min="4" max="50" value="${grp.summaryThreshold || 12}">
+            </div>
+            <div class="form-group" style="flex:1;">
+                <label style="font-size:12px;">💬 保留最近轮数</label>
+                <input type="number" id="grpKeepRecentInput" min="2" max="20" value="${grp.keepRecent || 4}">
+            </div>
+        </div>
+
         <div style="font-size:13px;font-weight:700;margin-bottom:6px;">👥 成员勾选与接话配置</div>
-        <div style="max-height:220px;overflow-y:auto;border:1px solid #eee;border-radius:8px;padding:4px 10px;">
+        <div style="max-height:180px;overflow-y:auto;border:1px solid #eee;border-radius:8px;padding:4px 10px;">
             ${memberCheckboxes}
         </div>
 
@@ -1552,10 +1721,14 @@ function openGroupSettingsModal(gid) {
         document.querySelectorAll('.grp-mem-check:checked').forEach(c => mems.push(c.dataset.id));
         document.querySelectorAll('.grp-active-check:checked').forEach(c => actives.push(c.dataset.id));
         const mode = document.querySelector('input[name="streamerMode"]:checked').value;
+        const threshold = parseInt(document.getElementById('grpSummaryThresholdInput').value) || 12;
+        const keepRecent = parseInt(document.getElementById('grpKeepRecentInput').value) || 4;
 
         grp.members = mems.length ? mems : Object.keys(G.npcs).slice(0, 3);
         grp.activeMembers = actives.length ? actives : grp.members;
         grp.streamerMode = mode;
+        grp.summaryThreshold = threshold;
+        grp.keepRecent = keepRecent;
 
         showToast('✅ 群设置已保存', 'success');
         closeModal();
@@ -1566,6 +1739,7 @@ function openGroupSettingsModal(gid) {
     document.getElementById('delGroupBtn').onclick = () => {
         delete G.groups[gid];
         delete G.groupChatHistory[gid];
+        delete G.groupMemories[gid];
         showToast('🗑️ 已解散该群聊', 'success');
         closeModal();
         closeGroupChat();
@@ -1575,6 +1749,223 @@ function openGroupSettingsModal(gid) {
 
 function openChat(npcId) { G.currentChatNpc = npcId; renderSocialPanel(); }
 function closeChat() { G.currentChatNpc = null; renderSocialPanel(); }
+
+// ============================================================
+// 🧠 记忆中心控制台（接管左侧“🧠 记忆”按钮）
+// ============================================================
+let currentMemoryCenterTab = 'global'; // 'global' | 'characters' | 'config'
+
+function openMemoryCenterModal() {
+    renderMemoryCenterModal();
+}
+window.openMemoryModal = openMemoryCenterModal; // 兼容覆盖左侧栏原按钮
+
+function renderMemoryCenterModal() {
+    const memCfg = G.memoryConfig || {
+        enabled: true,
+        defaultThreshold: 12,
+        defaultKeepRecent: 4,
+        useCustomApi: false,
+        api: { baseUrl: '', apiKey: '', model: '' }
+    };
+    G.memoryConfig = memCfg;
+
+    const navTabsHtml = `
+    <div style="display:flex;gap:6px;background:#eef3ee;padding:4px;border-radius:10px;margin-bottom:12px;">
+        <button class="tab-pill-btn" onclick="switchMemoryCenterTab('global')" style="flex:1;border:none;padding:6px 0;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:${currentMemoryCenterTab==='global'?'#fff':'transparent'};color:${currentMemoryCenterTab==='global'?'var(--primary)':'#666'};">🌐 统一记忆</button>
+        <button class="tab-pill-btn" onclick="switchMemoryCenterTab('characters')" style="flex:1;border:none;padding:6px 0;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:${currentMemoryCenterTab==='characters'?'#fff':'transparent'};color:${currentMemoryCenterTab==='characters'?'var(--primary)':'#666'};">👤 角色/群聊记忆</button>
+        <button class="tab-pill-btn" onclick="switchMemoryCenterTab('config')" style="flex:1;border:none;padding:6px 0;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:${currentMemoryCenterTab==='config'?'#fff':'transparent'};color:${currentMemoryCenterTab==='config'?'var(--primary)':'#666'};">⚙️ 总结与API设置</button>
+    </div>
+    `;
+
+    let bodyHtml = '';
+
+    if (currentMemoryCenterTab === 'global') {
+        const gmList = G.memorySummaries || [];
+        let itemsHtml = '';
+        if (!gmList.length) {
+            itemsHtml = `<div style="text-align:center;color:#999;font-size:12px;padding:30px 0;">暂无统一全局记忆，重大事件（如更名、大合作、重要视频发布）会自动记录在此。</div>`;
+        } else {
+            itemsHtml = gmList.map((m, idx) => `
+                <div style="background:#fff;border:1px solid #eef2ee;border-radius:8px;padding:8px 10px;margin-bottom:8px;position:relative;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#888;margin-bottom:4px;">
+                        <span>第 ${m.day || 1} 天 ${m.time || ''}</span>
+                        <button onclick="removeGlobalMemory(${idx})" style="border:none;background:none;color:#e53935;cursor:pointer;font-size:11px;">🗑️ 删除</button>
+                    </div>
+                    <div style="font-size:13px;color:#333;line-height:1.5;">${escapeHtml(m.text || m)}</div>
+                </div>
+            `).join('');
+        }
+
+        bodyHtml = `
+        <div style="font-size:12px;color:#666;margin-bottom:8px;">
+            <b>统一记忆说明</b>：记录主角的频道发展履历与重大转折（在编辑与主线剧情生成时全面生效）。
+        </div>
+        <div style="display:flex;gap:6px;margin-bottom:10px;">
+            <input type="text" id="newGlobalMemoryInput" placeholder="手动追加一条全局事件记录..." style="flex:1;padding:6px 10px;border-radius:6px;border:1px solid #ccc;font-size:12px;">
+            <button class="btn-primary small" id="addGlobalMemoryBtn" style="padding:6px 12px;font-size:12px;">➕ 添加</button>
+        </div>
+        <div style="max-height:260px;overflow-y:auto;background:#f9fbf9;border-radius:8px;padding:8px;border:1px solid #eee;">
+            ${itemsHtml}
+        </div>
+        `;
+    } else if (currentMemoryCenterTab === 'characters') {
+        let charCardsHtml = '';
+        for (const [nid, npc] of Object.entries(G.npcs)) {
+            charCardsHtml += `
+            <div style="background:#fff;border:1px solid #eef2ee;border-radius:8px;padding:10px;margin-bottom:8px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                    <div style="display:flex;align-items:center;gap:6px;font-weight:700;font-size:13px;">
+                        ${npc.avatarEmoji || '👤'} ${escapeHtml(npc.name)}
+                    </div>
+                    <span style="font-size:11px;color:#2e7d32;">私聊阈值: ${npc.summaryThreshold || memCfg.defaultThreshold} 轮</span>
+                </div>
+                <div style="font-size:12px;color:#555;background:#fcfdfc;padding:6px 8px;border-radius:6px;border-left:3px solid var(--primary);margin-bottom:4px;">
+                    <b>🧠 私聊记忆：</b>${escapeHtml(npc.memorySummary || '暂无专属私聊记忆（私聊达到轮数后自动提炼）')}
+                </div>
+                ${npc.knownGroupEvents ? `<div style="font-size:12px;color:#1565c0;background:#f5f8ff;padding:6px 8px;border-radius:6px;border-left:3px solid #1976d2;"><b>👥 群聊认知：</b>${escapeHtml(npc.knownGroupEvents)}</div>` : ''}
+            </div>
+            `;
+        }
+
+        let grpCardsHtml = '';
+        for (const [gid, grp] of Object.entries(G.groups)) {
+            const grpMem = G.groupMemories[gid];
+            grpCardsHtml += `
+            <div style="background:#fff;border:1px solid #eef2ee;border-radius:8px;padding:10px;margin-bottom:8px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                    <span style="font-weight:700;font-size:13px;">👥 ${escapeHtml(grp.name)}</span>
+                    <span style="font-size:11px;color:#888;">${(grp.members||[]).length}位群成员共享认知</span>
+                </div>
+                <div style="font-size:12px;color:#555;background:#fcfdfc;padding:6px 8px;border-radius:6px;border-left:3px solid #f57c00;">
+                    ${escapeHtml(grpMem || '暂无群聊纪要（群聊消息达到阈值后自动总结并同步群成员）')}
+                </div>
+            </div>
+            `;
+        }
+
+        bodyHtml = `
+        <div style="font-size:12px;color:#666;margin-bottom:8px;">
+            <b>角色与群聊独立记忆</b>：私聊记忆互不串通；群聊记忆在总结后将由群内角色自动获知。
+        </div>
+        <div style="max-height:300px;overflow-y:auto;padding-right:4px;">
+            <div style="font-weight:700;font-size:12px;color:#333;margin-bottom:6px;">👤 角色独立私聊记忆</div>
+            ${charCardsHtml}
+            <div style="font-weight:700;font-size:12px;color:#333;margin:10px 0 6px;">👥 群聊公共纪要</div>
+            ${grpCardsHtml || '<div style="font-size:12px;color:#999;">暂无群聊</div>'}
+        </div>
+        `;
+    } else if (currentMemoryCenterTab === 'config') {
+        bodyHtml = `
+        <div style="font-size:12px;color:#666;line-height:1.6;margin-bottom:12px;">
+            你可以自定义记忆总结的频率，并配置<b>独立便宜小模型</b>（例如 DeepSeek-Chat、GPT-4o-mini 等）专门用于后台提炼记忆，节省主模型额度。
+        </div>
+
+        <div style="background:#f9fbf9;border:1px solid #e4ede4;padding:10px;border-radius:8px;margin-bottom:12px;">
+            <label style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;cursor:pointer;">
+                <input type="checkbox" id="memCfgAutoEnable" ${memCfg.enabled ? 'checked' : ''} style="width:16px;height:16px;">
+                <span>启用后台自动记忆总结</span>
+            </label>
+            <div style="display:flex;gap:10px;margin-top:10px;">
+                <div style="flex:1;">
+                    <label style="font-size:11px;color:#555;display:block;margin-bottom:3px;">默认触发轮数</label>
+                    <input type="number" id="memCfgThreshold" value="${memCfg.defaultThreshold || 12}" min="4" max="50" style="width:100%;padding:4px 8px;border:1px solid #ccc;border-radius:6px;font-size:12px;">
+                </div>
+                <div style="flex:1;">
+                    <label style="font-size:11px;color:#555;display:block;margin-bottom:3px;">保留最近轮数</label>
+                    <input type="number" id="memCfgKeepRecent" value="${memCfg.defaultKeepRecent || 4}" min="2" max="20" style="width:100%;padding:4px 8px;border:1px solid #ccc;border-radius:6px;font-size:12px;">
+                </div>
+            </div>
+        </div>
+
+        <div style="background:#fcfdfe;border:1px solid #e1e9f0;padding:10px;border-radius:8px;">
+            <label style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#1976d2;cursor:pointer;">
+                <input type="checkbox" id="memCfgCustomApiEnable" ${memCfg.useCustomApi ? 'checked' : ''} style="width:16px;height:16px;">
+                <span>使用独立便宜总结 API（不勾选则使用主模型）</span>
+            </label>
+            <div id="memCustomApiBox" style="display:${memCfg.useCustomApi ? 'block' : 'none'};margin-top:10px;">
+                <div class="form-group" style="margin-bottom:6px;">
+                    <label style="font-size:11px;">Base URL</label>
+                    <input type="text" id="memApiBaseUrl" value="${escapeHtml((memCfg.api && memCfg.api.baseUrl) || '')}" placeholder="如：https://api.deepseek.com/v1" style="font-size:12px;">
+                </div>
+                <div class="form-group" style="margin-bottom:6px;">
+                    <label style="font-size:11px;">API Key</label>
+                    <input type="password" id="memApiKey" value="${escapeHtml((memCfg.api && memCfg.api.apiKey) || '')}" placeholder="sk-..." style="font-size:12px;">
+                </div>
+                <div class="form-group" style="margin-bottom:6px;">
+                    <label style="font-size:11px;">模型名称 (Model)</label>
+                    <input type="text" id="memApiModel" value="${escapeHtml((memCfg.api && memCfg.api.model) || '')}" placeholder="如：deepseek-chat 或 gpt-4o-mini" style="font-size:12px;">
+                </div>
+            </div>
+        </div>
+
+        <div class="btn-row" style="margin-top:14px;">
+            <button class="btn-secondary" onclick="closeModal()">取消</button>
+            <button class="btn-primary" id="saveMemConfigBtn">💾 保存记忆设置</button>
+        </div>
+        `;
+    }
+
+    openModal(`
+        <h3>🧠 记忆中心与自动总结</h3>
+        ${navTabsHtml}
+        ${bodyHtml}
+    `);
+
+    // 绑定事件
+    if (currentMemoryCenterTab === 'global') {
+        document.getElementById('addGlobalMemoryBtn')?.addEventListener('click', () => {
+            const val = document.getElementById('newGlobalMemoryInput').value.trim();
+            if (!val) { showToast('⚠️ 请输入记忆内容', 'error'); return; }
+            addGlobalMemoryRecord(val);
+            document.getElementById('newGlobalMemoryInput').value = '';
+            showToast('✅ 全局记忆已添加', 'success', 1200);
+            renderMemoryCenterModal();
+            autoSaveGame();
+        });
+    } else if (currentMemoryCenterTab === 'config') {
+        const chkApi = document.getElementById('memCfgCustomApiEnable');
+        chkApi.onchange = () => {
+            document.getElementById('memCustomApiBox').style.display = chkApi.checked ? 'block' : 'none';
+        };
+
+        document.getElementById('saveMemConfigBtn').onclick = () => {
+            const enabled = document.getElementById('memCfgAutoEnable').checked;
+            const threshold = parseInt(document.getElementById('memCfgThreshold').value) || 12;
+            const keepRecent = parseInt(document.getElementById('memCfgKeepRecent').value) || 4;
+            const useCustom = document.getElementById('memCfgCustomApiEnable').checked;
+            const baseUrl = document.getElementById('memApiBaseUrl').value.trim();
+            const apiKey = document.getElementById('memApiKey').value.trim();
+            const model = document.getElementById('memApiModel').value.trim();
+
+            G.memoryConfig = {
+                enabled,
+                defaultThreshold: threshold,
+                defaultKeepRecent: keepRecent,
+                useCustomApi: useCustom,
+                api: { baseUrl, apiKey, model }
+            };
+
+            closeModal();
+            showToast('✅ 记忆总结配置已更新！', 'success', 2000);
+            autoSaveGame();
+        };
+    }
+}
+
+window.switchMemoryCenterTab = function(tabName) {
+    currentMemoryCenterTab = tabName;
+    renderMemoryCenterModal();
+};
+
+window.removeGlobalMemory = function(idx) {
+    if (G.memorySummaries && G.memorySummaries[idx]) {
+        G.memorySummaries.splice(idx, 1);
+        showToast('🗑️ 该条记忆已删除', 'info', 1200);
+        renderMemoryCenterModal();
+        autoSaveGame();
+    }
+};
 
 // ============================================================
 // 回忆录
