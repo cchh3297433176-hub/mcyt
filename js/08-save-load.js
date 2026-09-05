@@ -97,7 +97,7 @@ function autoSaveGame() {
     }
 }
 
-// 📤 打开备份弹窗：纯图片导出，彻底告别卡顿与下载失效
+// 📤 打开备份弹窗：带即时进度条与分块处理，杜绝卡死
 function openBackupModal() {
     let payload, day, ytName;
     if (G.phase === 'playing') {
@@ -127,51 +127,22 @@ function openBackupModal() {
         <p style="font-size:12px;color:#666;line-height:1.6;">
             在 APK 运行环境中，文件下载与剪贴板经常失效。本游戏采用<b>像素级图片备份</b>技术，把全部数据无损储存在图片像素中。
         </p>
-        <div style="text-align:center;margin:15px 0;">
-            <button class="btn-primary" id="genImageBackupBtn" style="width:100%;padding:12px;font-size:14px;">🖼️ 生成备份图片</button>
+        <div style="text-align:center;margin:18px 0;">
+            <button class="btn-primary" id="genImageBackupBtn" style="width:100%;padding:13px;font-size:15px;font-weight:bold;">🖼️ 开始生成备份图片 (带进度)</button>
         </div>
-        <div id="imageBackupContainer" style="display:none;margin-top:10px;text-align:center;">
-            <div style="font-size:12px;color:#d32f2f;font-weight:700;margin-bottom:8px;background:#ffebee;padding:6px;border-radius:6px;">
-                👇 请长按下方图片 → 保存到手机相册！
-            </div>
-            <div style="width:200px;height:200px;margin:0 auto;border:2px dashed #90caf9;padding:4px;border-radius:8px;display:flex;align-items:center;justify-content:center;background:#fafafa;">
-                <img id="backupImage" style="max-width:100%;max-height:100%;object-fit:contain;image-rendering:pixelated;-webkit-user-select:auto!important;user-select:auto!important;" alt="备份图片">
-            </div>
-            <div id="imageBackupInfo" style="font-size:11px;color:#666;margin-top:6px;"></div>
-            <p style="font-size:11px;color:#888;margin-top:4px;">⚠️ 注意：保存或发送请使用原图，切勿截图或压缩画质</p>
-        </div>
+        <p style="font-size:11px;color:#888;line-height:1.5;text-align:center;">点击后将弹出实时进度条，生成完成后长按图片存入相册即可！</p>
         <div class="btn-row" style="margin-top:14px;">
             <button class="btn-secondary" onclick="closeModal()" style="width:100%;">关 闭</button>
         </div>
     `);
 
     document.getElementById('genImageBackupBtn')?.addEventListener('click', () => {
-        showToast('⏳ 正在生成备份图片...', 'info', 2000);
-        setTimeout(() => {
-            try {
-                let dataUrl = '';
-                if (window.ImageBackup && typeof window.ImageBackup.encodeBackupToImage === 'function') {
-                    dataUrl = window.ImageBackup.encodeBackupToImage(JSON.stringify(exportPayload));
-                } else if (window.ImageBackup && typeof window.ImageBackup.encodeSaveToImage === 'function') {
-                    dataUrl = window.ImageBackup.encodeSaveToImage(exportPayload);
-                } else {
-                    throw new Error('未加载到图片备份核心');
-                }
-
-                const img = document.getElementById('backupImage');
-                const container = document.getElementById('imageBackupContainer');
-                const infoEl = document.getElementById('imageBackupInfo');
-                if (img) img.src = dataUrl;
-                if (container) container.style.display = 'block';
-                if (infoEl) {
-                    infoEl.textContent = `第 ${day || 1} 天 · 主播：${ytName || '主播'} · 生成完毕`;
-                }
-                showToast('✅ 备份图已就绪！长按图片保存到相册', 'success', 3500);
-            } catch (e) {
-                console.error('生成备份图片失败', e);
-                showToast('❌ 生成失败：' + e.message, 'error', 4000);
-            }
-        }, 50);
+        closeModal();
+        if (window.ImageBackup && typeof window.ImageBackup.startGenerateBackupWithModal === 'function') {
+            window.ImageBackup.startGenerateBackupWithModal(exportPayload);
+        } else {
+            showToast('⚠️ 图片备份模块未就绪，请刷新重试', 'error');
+        }
     });
 }
 
@@ -183,7 +154,7 @@ function openRestoreModal() {
             从手机相册中选取此前保存的备份图片，即可自动解析并恢复全部游戏进度、自建角色与聊天记录：
         </p>
         <div style="text-align:center;margin:18px 0;">
-            <button class="btn-primary" id="restoreImagePickBtn" style="width:100%;padding:12px;font-size:14px;">🖼️ 从相册选择备份图片</button>
+            <button class="btn-primary" id="restoreImagePickBtn" style="width:100%;padding:13px;font-size:15px;font-weight:bold;">🖼️ 从相册选择备份图片</button>
         </div>
         <input type="file" id="restoreImageFileInput" accept="image/*" class="file-input" style="display:none;">
         <div id="restoreImagePreviewContainer" style="display:none;text-align:center;margin-bottom:8px;">
@@ -207,7 +178,6 @@ function openRestoreModal() {
     });
 }
 
-// 从图片文件恢复存档的核心解析逻辑
 function _restoreFromImageFile(file) {
     if (!window.ImageBackup) {
         showToast('⚠️ 图片备份模块未就绪', 'error');
@@ -228,23 +198,14 @@ function _restoreFromImageFile(file) {
     reader.readAsDataURL(file);
 }
 
-// 解码图片并导入存档
 async function _decodeAndImportImage(dataUrl) {
     showToast('⏳ 正在解码相册图片...', 'info', 2000);
     try {
         let stateObj = null;
-        if (typeof window.ImageBackup.decodeImageToBackup === 'function') {
-            const rawStr = await window.ImageBackup.decodeImageToBackup(dataUrl);
-            stateObj = JSON.parse(rawStr);
-        } else if (typeof window.ImageBackup.decodeDataUrlToSave === 'function') {
+        if (typeof window.ImageBackup.decodeDataUrlToSave === 'function') {
             stateObj = await new Promise((resolve, reject) => {
                 window.ImageBackup.decodeDataUrlToSave(dataUrl, (err, res) => err ? reject(err) : resolve(res));
             });
-        } else if (typeof window.ImageBackup.decodeImageToSave === 'function') {
-            const img = new Image();
-            img.src = dataUrl;
-            await new Promise(r => { img.onload = r; });
-            stateObj = window.ImageBackup.decodeImageToSave(img);
         }
 
         const stateData = (stateObj && stateObj.data) ? stateObj.data : stateObj;
@@ -258,11 +219,10 @@ async function _decodeAndImportImage(dataUrl) {
         }, 200);
     } catch (e) {
         console.error('图片解码失败', e);
-        showToast('❌ 解码失败：' + e.message + '（请确认保存的是相册原图）', 'error', 5000);
+        showToast('❌ 解码失败：' + e.message + '（请确认使用的是相册原图）', 'error', 5000);
     }
 }
 
-// 🛡️ 导入落地的深度平滑合并
 function _applyImportedStateData(stateData) {
     if (_gameInitialized && !confirm('导入将与当前游戏进度合并（自建角色/群聊/剧情等以备份为准），确认导入吗？')) {
         return;

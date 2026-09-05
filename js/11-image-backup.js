@@ -1,24 +1,53 @@
 // ==========================================
 // 11-image-backup.js
-// 极简纯净版：纯图片备份与相册恢复中心 (移除文件下载与剪贴板)
+// 异步分片 + 实时进度条的高性能纯图片备份恢复系统
 // ==========================================
 (function () {
   'use strict';
 
   var MAGIC_HEADER = 'MCYTBKP:';
 
-  // 字符串转 UTF-8 字节
-  function stringToBytes(str) {
+  // 确保全局样式注入
+  function ensureProgressBarStyles() {
+    if (document.getElementById('ib-progressbar-styles')) return;
+    var style = document.createElement('style');
+    style.id = 'ib-progressbar-styles';
+    style.innerHTML = '\n' +
+      '.ib-modal-mask { position: fixed; z-index: 999999; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.72); display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; touch-action: manipulation; }\n' +
+      '.ib-modal-card { background: #ffffff; border-radius: 16px; width: 100%; max-width: 340px; padding: 20px; box-sizing: border-box; text-align: center; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; box-shadow: 0 10px 30px rgba(0,0,0,0.35); animation: ibCardPop 0.25s cubic-bezier(0.18, 0.89, 0.32, 1.28); }\n' +
+      '@keyframes ibCardPop { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }\n' +
+      '.ib-modal-title { font-size: 17px; font-weight: bold; color: #1e293b; margin-bottom: 12px; }\n' +
+      '.ib-prog-track { width: 100%; height: 12px; background: #e2e8f0; border-radius: 6px; overflow: hidden; margin: 14px 0 8px; position: relative; }\n' +
+      '.ib-prog-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #38bdf8, #2563eb); border-radius: 6px; transition: width 0.15s ease-out; }\n' +
+      '.ib-prog-text { font-size: 13px; color: #475569; font-weight: 600; display: flex; justify-content: space-between; margin-bottom: 6px; }\n' +
+      '.ib-prog-status { font-size: 12px; color: #64748b; margin-bottom: 10px; min-height: 18px; }\n' +
+      '.ib-red-tip { font-size: 12px; color: #dc2626; font-weight: 600; background: #fef2f2; border: 1px dashed #f87171; border-radius: 8px; padding: 8px; margin-bottom: 12px; line-height: 1.5; }\n' +
+      '.ib-img-wrap { width: 210px; height: 210px; margin: 0 auto 14px; border: 2px dashed #93c5fd; padding: 6px; border-radius: 12px; background: #f8fafc; display: flex; align-items: center; justify-content: center; }\n' +
+      '.ib-img-wrap img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; -webkit-user-select: auto !important; user-select: auto !important; -webkit-touch-callout: default !important; }\n' +
+      '.ib-close-btn { width: 100%; padding: 11px 0; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; background: #f1f5f9; color: #334155; cursor: pointer; }\n' +
+      '.ib-close-btn:active { background: #e2e8f0; }\n';
+    document.head.appendChild(style);
+  }
+
+  // 高效的 UTF-8 编码器（支持 TextEncoder，不支持则降级分块）
+  function encodeStringToUtf8Bytes(str) {
+    if (typeof TextEncoder !== 'undefined') {
+      return new TextEncoder().encode(str);
+    }
     var utf8 = unescape(encodeURIComponent(str));
-    var arr = new Uint8Array(utf8.length);
-    for (var i = 0; i < utf8.length; i++) {
+    var len = utf8.length;
+    var arr = new Uint8Array(len);
+    for (var i = 0; i < len; i++) {
       arr[i] = utf8.charCodeAt(i);
     }
     return arr;
   }
 
-  // UTF-8 字节转字符串
-  function bytesToString(arr) {
+  // 高效的 UTF-8 解码器
+  function decodeUtf8BytesToString(arr) {
+    if (typeof TextDecoder !== 'undefined') {
+      return new TextDecoder().decode(arr);
+    }
     var utf8 = '';
     for (var i = 0; i < arr.length; i++) {
       utf8 += String.fromCharCode(arr[i]);
@@ -26,53 +55,102 @@
     return decodeURIComponent(escape(utf8));
   }
 
-  // 异步生成 Base64 像素图，防止移动端点击卡死
-  function encodeSaveToDataUrlAsync(gameStateObj) {
+  // 异步分片图片编码器（带进度回调）
+  function encodeSaveToImageWithProgress(gameStateObj, onProgress) {
     return new Promise(function (resolve, reject) {
-      setTimeout(function () {
-        try {
+      try {
+        onProgress(5, '正在整理存档数据...');
+
+        setTimeout(function () {
           var cleanState = JSON.parse(JSON.stringify(gameStateObj));
           var jsonStr = MAGIC_HEADER + JSON.stringify(cleanState);
-          var bytes = stringToBytes(jsonStr);
-          var dataLen = bytes.length;
 
-          var totalPayloadLen = 4 + dataLen;
-          var totalPixels = Math.ceil(totalPayloadLen / 3);
-          var width = Math.ceil(Math.sqrt(totalPixels));
-          var height = Math.ceil(totalPixels / width);
+          onProgress(15, '正在转换数据编码...');
+          setTimeout(function () {
+            var bytes = encodeStringToUtf8Bytes(jsonStr);
+            var dataLen = bytes.length;
 
-          var canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          var ctx = canvas.getContext('2d');
-          var imgData = ctx.createImageData(width, height);
-          var pixels = imgData.data;
+            var totalPayloadLen = 4 + dataLen;
+            var totalPixels = Math.ceil(totalPayloadLen / 3);
+            var width = Math.ceil(Math.sqrt(totalPixels));
+            var height = Math.ceil(totalPixels / width);
 
-          var fullBytes = new Uint8Array(totalPixels * 3);
-          fullBytes[0] = (dataLen >> 24) & 0xff;
-          fullBytes[1] = (dataLen >> 16) & 0xff;
-          fullBytes[2] = (dataLen >> 8) & 0xff;
-          fullBytes[3] = dataLen & 0xff;
+            var canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            var ctx = canvas.getContext('2d');
+            var imgData = ctx.createImageData(width, height);
+            var pixels = imgData.data;
 
-          for (var i = 0; i < dataLen; i++) {
-            fullBytes[4 + i] = bytes[i];
-          }
+            var fullBytes = new Uint8Array(totalPixels * 3);
+            fullBytes[0] = (dataLen >> 24) & 0xff;
+            fullBytes[1] = (dataLen >> 16) & 0xff;
+            fullBytes[2] = (dataLen >> 8) & 0xff;
+            fullBytes[3] = dataLen & 0xff;
 
-          var byteIdx = 0;
-          for (var p = 0; p < pixels.length; p += 4) {
-            pixels[p] = fullBytes[byteIdx] || 0;
-            pixels[p + 1] = fullBytes[byteIdx + 1] || 0;
-            pixels[p + 2] = fullBytes[byteIdx + 2] || 0;
-            pixels[p + 3] = 255;
-            byteIdx += 3;
-          }
+            // 分块复制 payload，避免大数组一次性堵塞
+            var CHUNK = 65536;
+            var bytePos = 0;
 
-          ctx.putImageData(imgData, 0, 0);
-          resolve(canvas.toDataURL('image/png'));
-        } catch (err) {
-          reject(err);
-        }
-      }, 50);
+            function copyBytesChunk() {
+              var limit = Math.min(bytePos + CHUNK, dataLen);
+              for (var i = bytePos; i < limit; i++) {
+                fullBytes[4 + i] = bytes[i];
+              }
+              bytePos = limit;
+
+              var percent = Math.floor(15 + (bytePos / dataLen) * 35); // 15% -> 50%
+              onProgress(percent, '正在准备像素结构 (' + Math.round((bytePos / dataLen) * 100) + '%)...');
+
+              if (bytePos < dataLen) {
+                setTimeout(copyBytesChunk, 0);
+              } else {
+                startPixelMapping();
+              }
+            }
+
+            // 分块写入像素
+            function startPixelMapping() {
+              var pLen = pixels.length;
+              var pIdx = 0;
+              var bIdx = 0;
+              var PIXEL_CHUNK = 32768;
+
+              function processPixelsChunk() {
+                var limit = Math.min(pIdx + PIXEL_CHUNK, pLen);
+                for (; pIdx < limit; pIdx += 4) {
+                  pixels[pIdx] = fullBytes[bIdx] || 0;
+                  pixels[pIdx + 1] = fullBytes[bIdx + 1] || 0;
+                  pixels[pIdx + 2] = fullBytes[bIdx + 2] || 0;
+                  pixels[pIdx + 3] = 255; // 必须不透明
+                  bIdx += 3;
+                }
+
+                var percent = Math.floor(50 + (pIdx / pLen) * 45); // 50% -> 95%
+                onProgress(percent, '正在绘制备份画面 (' + Math.round((pIdx / pLen) * 100) + '%)...');
+
+                if (pIdx < pLen) {
+                  setTimeout(processPixelsChunk, 0);
+                } else {
+                  ctx.putImageData(imgData, 0, 0);
+                  onProgress(98, '正在最终渲染图片...');
+                  setTimeout(function () {
+                    var dataUrl = canvas.toDataURL('image/png');
+                    onProgress(100, '生成完成！');
+                    resolve(dataUrl);
+                  }, 20);
+                }
+              }
+
+              processPixelsChunk();
+            }
+
+            copyBytesChunk();
+          }, 20);
+        }, 20);
+      } catch (err) {
+        reject(err);
+      }
     });
   }
 
@@ -111,9 +189,9 @@
           payloadBytes[i] = fullBytes[4 + i];
         }
 
-        var decodedStr = bytesToString(payloadBytes);
+        var decodedStr = decodeUtf8BytesToString(payloadBytes);
         if (decodedStr.indexOf(MAGIC_HEADER) !== 0) {
-          throw new Error('未识别出有效存档标记');
+          throw new Error('未识别到存档特征标记');
         }
 
         var jsonBody = decodedStr.substring(MAGIC_HEADER.length);
@@ -124,100 +202,77 @@
       }
     };
     img.onerror = function () {
-      callback(new Error('图片载入失败'), null);
+      callback(new Error('相册图片载入失败'), null);
     };
     img.src = dataUrl;
   }
 
-  // 注入弹窗 UI 样式
-  function ensureStyles() {
-    if (document.getElementById('mcy-img-backup-styles')) return;
-    var style = document.createElement('style');
-    style.id = 'mcy-img-backup-styles';
-    style.innerHTML = '\n' +
-      '.ib-mask { position: fixed; z-index: 100000; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.65); display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; touch-action: manipulation; }\n' +
-      '.ib-card { background: #ffffff; border-radius: 16px; width: 100%; max-width: 340px; padding: 20px; box-sizing: border-box; text-align: center; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; box-shadow: 0 10px 30px rgba(0,0,0,0.3); animation: ibFadeIn 0.2s ease; }\n' +
-      '@keyframes ibFadeIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }\n' +
-      '.ib-title { font-size: 18px; font-weight: 700; color: #1e293b; margin-bottom: 8px; }\n' +
-      '.ib-desc { font-size: 13px; color: #dc2626; line-height: 1.5; margin-bottom: 14px; background: #fef2f2; border: 1px dashed #f87171; padding: 10px; border-radius: 8px; }\n' +
-      '.ib-preview-box { width: 200px; height: 200px; margin: 0 auto 16px; border: 2px solid #e2e8f0; border-radius: 12px; display: flex; align-items: center; justify-content: center; background: #f8fafc; overflow: hidden; }\n' +
-      '.ib-preview-box img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; -webkit-touch-callout: default !important; -webkit-user-select: auto !important; user-select: auto !important; }\n' +
-      '.ib-btn-group { display: flex; flex-direction: column; gap: 10px; }\n' +
-      '.ib-btn { width: 100%; padding: 12px; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: opacity 0.2s; }\n' +
-      '.ib-btn:active { opacity: 0.8; }\n' +
-      '.ib-btn-primary { background: #3b82f6; color: #fff; }\n' +
-      '.ib-btn-secondary { background: #f1f5f9; color: #475569; }\n' +
-      '.ib-loading { padding: 30px 10px; font-size: 15px; color: #64748b; }\n';
-    document.head.appendChild(style);
-  }
-
   window.ImageBackup = {
-    // 呼出“图片导出备份”弹窗 (带 Loading，秒点即开)
-    openExportModal: function (gameStateObj) {
-      ensureStyles();
+    // 呼出带真实进度条的生成弹窗
+    startGenerateBackupWithModal: function (gameStateObj) {
+      ensureProgressBarStyles();
 
       var mask = document.createElement('div');
-      mask.className = 'ib-mask';
+      mask.className = 'ib-modal-mask';
       mask.innerHTML = '\n' +
-        '<div class="ib-card">\n' +
-        '  <div class="ib-title">💾 导出图片存档</div>\n' +
-        '  <div class="ib-loading">⏳ 正在将存档编码为原画图片...</div>\n' +
+        '<div class="ib-modal-card" id="ibModalCard">\n' +
+        '  <div class="ib-modal-title">⏳ 正在生成图片存档</div>\n' +
+        '  <div class="ib-prog-text">\n' +
+        '    <span>处理进度</span>\n' +
+        '    <span id="ibProgNum">0%</span>\n' +
+        '  </div>\n' +
+        '  <div class="ib-prog-track">\n' +
+        '    <div class="ib-prog-fill" id="ibProgBar"></div>\n' +
+        '  </div>\n' +
+        '  <div class="ib-prog-status" id="ibProgStatus">准备就绪...</div>\n' +
         '</div>';
+
       document.body.appendChild(mask);
 
-      encodeSaveToDataUrlAsync(gameStateObj).then(function (dataUrl) {
-        var card = mask.querySelector('.ib-card');
-        card.innerHTML = '\n' +
-          '<div class="ib-title">💾 备份图已生成</div>\n' +
-          '<div class="ib-desc">👉 <b>长按下方图片</b>，选择【保存到手机相册】或【发送】！<br><small style="color:#64748b;">(切勿截图或被微信画质压缩)</small></div>\n' +
-          '<div class="ib-preview-box">\n' +
-          '  <img src="' + dataUrl + '" alt="长按保存备份图" />\n' +
-          '</div>\n' +
-          '<div class="ib-btn-group">\n' +
-          '  <button class="ib-btn ib-btn-secondary" id="ibCloseBtn">完成并关闭</button>\n' +
-          '</div>';
+      var fillEl = mask.querySelector('#ibProgBar');
+      var numEl = mask.querySelector('#ibProgNum');
+      var statusEl = mask.querySelector('#ibProgStatus');
 
-        card.querySelector('#ibCloseBtn').onclick = function () {
+      function updateProgressUI(pct, text) {
+        if (fillEl) fillEl.style.width = pct + '%';
+        if (numEl) numEl.textContent = pct + '%';
+        if (statusEl) statusEl.textContent = text;
+      }
+
+      encodeSaveToImageWithProgress(gameStateObj, updateProgressUI).then(function (dataUrl) {
+        var card = mask.querySelector('#ibModalCard');
+        card.innerHTML = '\n' +
+          '<div class="ib-modal-title">🎉 备份图片已就绪</div>\n' +
+          '<div class="ib-red-tip">👇 <b>长按下方图片</b>，在弹出菜单中选择【保存到手机相册】或【发送】！<br><small style="color:#64748b;">(更新APP后直接用这张图片恢复，无需任何下载权限)</small></div>\n' +
+          '<div class="ib-img-wrap">\n' +
+          '  <img src="' + dataUrl + '" alt="长按保存图片" />\n' +
+          '</div>\n' +
+          '<button class="ib-close-btn" id="ibFinishBtn">完成并关闭</button>';
+
+        card.querySelector('#ibFinishBtn').onclick = function () {
           document.body.removeChild(mask);
         };
       }).catch(function (err) {
-        alert('导出失败：' + (err && err.message ? err.message : '未知错误'));
+        alert('生成失败: ' + (err && err.message ? err.message : '未知错误'));
         document.body.removeChild(mask);
       });
     },
 
-    // 呼出相册选择图片恢复
-    openImportPicker: function (onSuccess) {
-      var fileInput = document.createElement('input');
-      fileInput.type = 'file';
-      fileInput.accept = 'image/*';
-      fileInput.style.display = 'none';
-      document.body.appendChild(fileInput);
-
-      fileInput.onchange = function (e) {
-        var file = e.target.files && e.target.files[0];
-        if (!file) {
-          if (fileInput.parentNode) document.body.removeChild(fileInput);
-          return;
-        }
-
-        var reader = new FileReader();
-        reader.onload = function (evt) {
-          decodeDataUrlToSave(evt.target.result, function (err, state) {
-            if (fileInput.parentNode) document.body.removeChild(fileInput);
-            if (err || !state) {
-              alert('恢复失败：该图片不是有效的存档图，或图片已被平台压缩损坏！请使用保存到相册的原始原图。');
-              return;
-            }
-            if (typeof onSuccess === 'function') {
-              onSuccess(state);
-            }
-          });
-        };
-        reader.readAsDataURL(file);
-      };
-
-      fileInput.click();
-    }
+    // 兼容原版调用接口
+    encodeBackupToImage: function (jsonStr) {
+      try {
+        var obj = JSON.parse(jsonStr);
+        window.ImageBackup.startGenerateBackupWithModal(obj);
+        return '';
+      } catch (e) {
+        window.ImageBackup.startGenerateBackupWithModal(jsonStr);
+        return '';
+      }
+    },
+    encodeSaveToImage: function (stateObj) {
+      window.ImageBackup.startGenerateBackupWithModal(stateObj);
+      return '';
+    },
+    decodeDataUrlToSave: decodeDataUrlToSave
   };
 })();
