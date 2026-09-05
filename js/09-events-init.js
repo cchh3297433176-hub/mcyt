@@ -105,7 +105,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     $('exitGameBtn')?.addEventListener('click', confirmExitGame);
 
-    // 🖼️ 纯图片存档备份/恢复（游戏内头部按钮）
+    // 📥 导出与恢复（游戏内头部按钮）
     $('exportSaveBtn')?.addEventListener('click', () => {
         if (typeof openBackupModal === 'function') openBackupModal();
     });
@@ -113,7 +113,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof openRestoreModal === 'function') openRestoreModal();
     });
 
-    // 🖼️ 纯图片存档备份/恢复（初始设定页按钮）
+    // 📥 导出与恢复（初始设定页按钮）
     $('setupImportSaveBtn')?.addEventListener('click', () => {
         if (typeof openRestoreModal === 'function') openRestoreModal();
     });
@@ -209,7 +209,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // 📢 双页滑动公告系统（主公告 + 更新优化与新功能）
 // ============================================================
 function checkAndShowVersionNoticeModal(forceOpen = false) {
-    const ver = window.CURRENT_APP_VERSION || '6.4.0';
+    const ver = window.CURRENT_APP_VERSION || '6.4.1';
     const dismissedVersion = localStorage.getItem('mcyt_dismissed_notice_ver');
 
     if (forceOpen || dismissedVersion !== ver) {
@@ -251,8 +251,8 @@ function openVersionNoticeModal(version) {
                     <ul style="padding-left:18px;margin-bottom:10px;font-size:13px;color:#444;line-height:1.6;">
                         <li style="margin-bottom:8px;">1. 优化记忆总结功能，可以自动总结内容，并且设置多少轮一总结，不同角色的记忆会分开放置。</li>
                         <li style="margin-bottom:8px;">2. 合作选项合并入聊天功能，可发送给联系人合作邀请，在油管发共创视频。</li>
-                        <li style="margin-bottom:8px;">3. 🖼️ 全面升级「纯图片备份系统」：彻底去除失效的下载与文本复制，一键生成备份图，长按即可保存到相册！</li>
-                        <li style="margin-bottom:8px;">4. 📥 相册恢复极速读取：全新安装或更新 APP 后，在首页直接点「相册选图片」即可一键找回所有自建角色与群聊。</li>
+                        <li style="margin-bottom:8px;">3. 💾 <b>全新双轨备份与导出：</b>更新前点击下载文件直接存入手机 Download 目录；更支持【酒馆级角色卡 PNG 导出】，精美主播立绘内部无损隐形嵌入全部记忆与剧情！</li>
+                        <li style="margin-bottom:8px;">4. 📥 <b>极速一键还原：</b>全新安装或更新 APP 后，在首页直接选择下载好的 <code>.json</code> 或角色卡 <code>.png</code>，秒级完美找回所有自建角色、群聊与回忆！</li>
                     </ul>
                 </div>
             </div>
