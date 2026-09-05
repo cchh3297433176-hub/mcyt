@@ -1,6 +1,6 @@
 // 存档/读档/初始化模块（v6.2.0 增强防丢与平滑迁移版）
 // ============================================================
-const CURRENT_APP_VERSION = '6.2.0'; // 递增版本号，确保更新后 100% 弹出全新更新公告
+const CURRENT_APP_VERSION = '6.2.1'; // 递增版本号，确保更新后 100% 弹出全新更新公告
 
 let _gameInitialized = false;
 let _skipStartChoiceOnce = false;
@@ -86,7 +86,104 @@ function autoSaveGame() {
         }));
     } catch(e) {
         console.warn('自动存档写入失败', e);
+        // 🛡️ 不再静默失败：浏览器存储写满(QuotaExceededError)等情况必须让玩家立刻知道，
+        // 否则玩家会在下次打开/更新App时才发现自建角色、群聊全部丢失，且已无法挽回。
+        const isQuota = e && (e.name === 'QuotaExceededError' || e.code === 22 || e.code === 1014);
+        showToast(
+            isQuota
+                ? '⚠️ 本地存储空间已满，自动保存失败！请立刻点「📤 备份」导出存档到文件，避免数据丢失'
+                : '⚠️ 自动保存失败，建议立刻点「📤 备份」导出存档到文件',
+            'error',
+            5000
+        );
     }
+}
+
+// 📤 导出存档到本地文件（.json）：更新/重装 App 前的关键保险，
+// 因为部分手机/WebView 壳工程更新后会清空或更换 localStorage 的存储位置，
+// 导致自建角色、群聊等数据"看起来消失"且无法通过代码找回，只有导出的文件是安全的。
+function exportSaveToFile() {
+    try {
+        let payload, day, ytName;
+        if (G.phase === 'playing') {
+            payload = serializeGameState();
+            day = G.day;
+            ytName = G.player?.ytName;
+        } else {
+            const info = getAutoSaveInfo();
+            if (!info || !info.data) {
+                showToast('⚠️ 未找到可导出的存档', 'error');
+                return;
+            }
+            payload = info.data;
+            day = info.day;
+            ytName = info.data.player?.ytName;
+        }
+        const exportPayload = {
+            timestamp: new Date().toLocaleString(),
+            day: day,
+            version: CURRENT_APP_VERSION,
+            data: payload
+        };
+        const blob = new Blob([JSON.stringify(exportPayload)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const safeName = (ytName || 'MC模拟器存档').replace(/[\\/:*?"<>|]/g, '');
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${safeName}_第${day || 1}天_备份.json`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        setTimeout(() => URL.revokeObjectURL(url), 3000);
+        showToast('✅ 存档已导出！更新App前请务必先做这一步', 'success', 3000);
+    } catch(e) {
+        console.error('导出存档失败', e);
+        showToast('❌ 导出失败：' + e.message, 'error');
+    }
+}
+
+// 📥 从备份文件导入存档：更新/重装 App 后，若发现自建角色/群聊丢失，
+// 用之前导出的 .json 文件即可 100% 找回，不依赖本地 localStorage 是否被清空。
+function importSaveFromFile(file) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+        try {
+            const parsed = JSON.parse(ev.target.result);
+            const stateData = (parsed && typeof parsed === 'object' && parsed.data) ? parsed.data : parsed;
+            if (!stateData || typeof stateData !== 'object' || (!stateData.player && !stateData.npcs)) {
+                showToast('❌ 存档文件格式不正确，无法导入', 'error');
+                return;
+            }
+            if (_gameInitialized && !confirm('导入将与当前游戏进度合并（自建角色/群聊/剧情等以备份文件为准），确认导入吗？')) {
+                return;
+            }
+            applyDeserializedGameState(stateData);
+            _gameInitialized = true;
+            G.phase = 'playing';
+
+            const setup = $('setupPage');
+            const game = $('gamePage');
+            if (setup) {
+                setup.classList.remove('active');
+                setup.style.display = 'none';
+            }
+            if (game) {
+                game.classList.add('active');
+                game.style.display = 'flex';
+            }
+
+            updateUI();
+            switchTab('story');
+            autoSaveGame();
+            showToast('✅ 存档导入成功！自建角色与群聊已找回', 'success', 3000);
+        } catch(e) {
+            console.error('导入存档失败', e);
+            showToast('❌ 导入失败，文件可能已损坏：' + e.message, 'error');
+        }
+    };
+    reader.onerror = () => showToast('❌ 文件读取失败', 'error');
+    reader.readAsText(file);
 }
 
 function getAutoSaveInfo() {
@@ -419,3 +516,5 @@ window.confirmExitGame = confirmExitGame;
 window.serializeGameState = serializeGameState;
 window.applyDeserializedGameState = applyDeserializedGameState;
 window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
+window.exportSaveToFile = exportSaveToFile;
+window.importSaveFromFile = importSaveFromFile;

@@ -44,7 +44,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const actionsWithModal = ['stream', 'video', 'collab', 'sub'];
+            const actionsWithModal = ['stream', 'video', 'sub'];
             if (actionsWithModal.includes(action)) {
                 if (action === 'video') { 
                     await performAction(action); 
@@ -109,6 +109,25 @@ document.addEventListener('DOMContentLoaded', () => {
         showSaveSlotsModal('load');
     });
     $('exitGameBtn')?.addEventListener('click', confirmExitGame);
+
+    // 📤📥 存档备份/恢复（游戏内头部按钮）：更新App前导出、更新后导入，防止自建角色/群聊丢失
+    $('exportSaveBtn')?.addEventListener('click', () => {
+        if (typeof exportSaveToFile === 'function') exportSaveToFile();
+    });
+    $('importSaveBtn')?.addEventListener('click', () => $('importSaveFileInput')?.click());
+    $('importSaveFileInput')?.addEventListener('change', function() {
+        const file = this.files[0];
+        if (file && typeof importSaveFromFile === 'function') importSaveFromFile(file);
+        this.value = '';
+    });
+
+    // 📥 存档备份/恢复（初始设定页按钮）：全新安装/更新后无自动存档时，也能直接导入备份文件
+    $('setupImportSaveBtn')?.addEventListener('click', () => $('setupImportSaveFileInput')?.click());
+    $('setupImportSaveFileInput')?.addEventListener('change', function() {
+        const file = this.files[0];
+        if (file && typeof importSaveFromFile === 'function') importSaveFromFile(file);
+        this.value = '';
+    });
     $('modelSettingsBtn')?.addEventListener('click', () => {
         openModal(`<h3 style="margin-bottom:10px;">⚙️ 模型设置</h3>` + buildModelSettingsHTML('modal') + buildSearchSettingsHTML('modal'));
         bindModelSettingsUI('modal');
@@ -240,7 +259,8 @@ function openVersionNoticeModal(version) {
                     <h4>🚀 本次更新优化方面</h4>
                     <ul style="padding-left:18px;margin-bottom:10px;font-size:13px;color:#444;line-height:1.6;">
                         <li style="margin-bottom:8px;">1. 优化记忆总结功能，可以自动总结内容，并且设置多少轮一总结，不同角色的记忆会分开放置。</li>
-                        <li>2. 合作选项合并入聊天功能，可发送给联系人合作邀请，在油管发共创视频。</li>
+                        <li style="margin-bottom:8px;">2. 合作选项合并入聊天功能，可发送给联系人合作邀请，在油管发共创视频。</li>
+                        <li>3. 🆕 新增「📤 备份 / 📥 恢复」存档导出导入功能（顶部与开局页均有入口）：更新App前先点「📤 备份」把存档导出成文件保存好，更新后如遇自建角色/群聊/API配置丢失，用「📥 恢复」导入该文件即可完整找回。</li>
                     </ul>
                 </div>
             </div>
@@ -397,13 +417,11 @@ function openActionModal(action) {
     const actionNames = {
         stream: '📹 直播',
         video: '🎬 制作视频',
-        collab: '🤜 合作视频',
         sub: '🧘 皮下活动',
     };
     const placeholders = {
         stream: '例如：挑战末地龙...',
         video: '例如：生存日记...',
-        collab: '例如：与好友合拍生存...',
         sub: '例如：健身、探索...',
     };
     const title = actionNames[action] || '🎮 行动';
