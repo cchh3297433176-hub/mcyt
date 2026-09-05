@@ -1,39 +1,37 @@
 // ==========================================
 // 11-image-backup.js
-// 异步分片 + 实时进度条 + 外部浏览器跳转与系统分享的多维图片备份系统
+// 消除拖拽冲突 + 原生桥接 + 相册解码恢复系统
 // ==========================================
 (function () {
   'use strict';
 
   var MAGIC_HEADER = 'MCYTBKP:';
 
-  // 确保全局样式注入
-  function ensureProgressBarStyles() {
-    if (document.getElementById('ib-progressbar-styles')) return;
+  // 1. 样式表注入：消除图片拖动干扰，开启 WebView 长按呼出菜单
+  function ensureStyles() {
+    if (document.getElementById('ib-backup-core-styles')) return;
     var style = document.createElement('style');
-    style.id = 'ib-progressbar-styles';
+    style.id = 'ib-backup-core-styles';
     style.innerHTML = '\n' +
-      '.ib-modal-mask { position: fixed; z-index: 999999; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.72); display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; touch-action: manipulation; }\n' +
-      '.ib-modal-card { background: #ffffff; border-radius: 16px; width: 100%; max-width: 340px; padding: 20px; box-sizing: border-box; text-align: center; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; box-shadow: 0 10px 30px rgba(0,0,0,0.35); animation: ibCardPop 0.25s cubic-bezier(0.18, 0.89, 0.32, 1.28); }\n' +
-      '@keyframes ibCardPop { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }\n' +
-      '.ib-modal-title { font-size: 17px; font-weight: bold; color: #1e293b; margin-bottom: 12px; }\n' +
-      '.ib-prog-track { width: 100%; height: 12px; background: #e2e8f0; border-radius: 6px; overflow: hidden; margin: 14px 0 8px; position: relative; }\n' +
-      '.ib-prog-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #38bdf8, #2563eb); border-radius: 6px; transition: width 0.15s ease-out; }\n' +
-      '.ib-prog-text { font-size: 13px; color: #475569; font-weight: 600; display: flex; justify-content: space-between; margin-bottom: 6px; }\n' +
-      '.ib-prog-status { font-size: 12px; color: #64748b; margin-bottom: 10px; min-height: 18px; }\n' +
-      '.ib-red-tip { font-size: 12px; color: #b91c1c; font-weight: 600; background: #fef2f2; border: 1px dashed #f87171; border-radius: 8px; padding: 8px; margin-bottom: 10px; line-height: 1.5; }\n' +
-      '.ib-img-wrap { width: 180px; height: 180px; margin: 0 auto 10px; border: 2px dashed #93c5fd; padding: 6px; border-radius: 12px; background: #f8fafc; display: flex; align-items: center; justify-content: center; position: relative; }\n' +
-      '.ib-img-wrap img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; pointer-events: auto !important; -webkit-user-select: auto !important; user-select: auto !important; -webkit-touch-callout: default !important; }\n' +
-      '.ib-btn-col { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }\n' +
-      '.ib-btn-row { display: flex; gap: 8px; }\n' +
-      '.ib-act-btn { flex: 1; padding: 10px 0; border: none; border-radius: 8px; font-size: 13px; font-weight: bold; cursor: pointer; }\n' +
+      '.ib-mask { position: fixed; z-index: 999999; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.72); display: flex; align-items: center; justify-content: center; padding: 16px; box-sizing: border-box; }\n' +
+      '.ib-card { background: #ffffff; border-radius: 16px; width: 100%; max-width: 340px; padding: 18px; box-sizing: border-box; text-align: center; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; box-shadow: 0 10px 30px rgba(0,0,0,0.35); max-height: 90vh; overflow-y: auto; }\n' +
+      '.ib-title { font-size: 17px; font-weight: bold; color: #1e293b; margin-bottom: 10px; }\n' +
+      '.ib-prog-track { width: 100%; height: 10px; background: #e2e8f0; border-radius: 5px; overflow: hidden; margin: 12px 0 8px; }\n' +
+      '.ib-prog-fill { height: 100%; width: 0%; background: linear-gradient(90deg, #38bdf8, #2563eb); border-radius: 5px; transition: width 0.15s ease-out; }\n' +
+      '.ib-prog-text { font-size: 12px; color: #475569; font-weight: 600; display: flex; justify-content: space-between; }\n' +
+      '.ib-tip-box { font-size: 12px; color: #b91c1c; font-weight: 600; background: #fef2f2; border: 1px dashed #f87171; border-radius: 8px; padding: 8px; margin-bottom: 10px; line-height: 1.5; text-align: left; }\n' +
+      '.ib-img-container { width: 190px; height: 190px; margin: 0 auto 12px; border: 2px dashed #93c5fd; padding: 6px; border-radius: 12px; background: #f8fafc; display: flex; align-items: center; justify-content: center; user-select: auto !important; -webkit-user-select: auto !important; }\n' +
+      '.ib-target-img { width: 100%; height: 100%; object-fit: contain; image-rendering: pixelated; pointer-events: auto !important; -webkit-touch-callout: default !important; -webkit-user-select: auto !important; user-select: auto !important; display: block; }\n' +
+      '.ib-btn-list { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; }\n' +
+      '.ib-btn-main { width: 100%; padding: 10px 0; border: none; border-radius: 8px; font-size: 13px; font-weight: bold; cursor: pointer; }\n' +
       '.ib-btn-blue { background: #2563eb; color: #fff; }\n' +
       '.ib-btn-green { background: #16a34a; color: #fff; }\n' +
-      '.ib-btn-gray { background: #f1f5f9; color: #475569; }\n';
+      '.ib-btn-gray { background: #f1f5f9; color: #475569; }\n' +
+      '.ib-textarea { width: 100%; height: 70px; font-size: 11px; padding: 6px; border-radius: 6px; border: 1px solid #cbd5e1; font-family: monospace; box-sizing: border-box; resize: none; margin-top: 6px; }\n';
     document.head.appendChild(style);
   }
 
-  // 高效 UTF-8 编码器
+  // UTF-8 编码
   function encodeStringToUtf8Bytes(str) {
     if (typeof TextEncoder !== 'undefined') {
       return new TextEncoder().encode(str);
@@ -41,35 +39,30 @@
     var utf8 = unescape(encodeURIComponent(str));
     var len = utf8.length;
     var arr = new Uint8Array(len);
-    for (var i = 0; i < len; i++) {
-      arr[i] = utf8.charCodeAt(i);
-    }
+    for (var i = 0; i < len; i++) arr[i] = utf8.charCodeAt(i);
     return arr;
   }
 
-  // 高效 UTF-8 解码器
+  // UTF-8 解码
   function decodeUtf8BytesToString(arr) {
     if (typeof TextDecoder !== 'undefined') {
       return new TextDecoder().decode(arr);
     }
     var utf8 = '';
-    for (var i = 0; i < arr.length; i++) {
-      utf8 += String.fromCharCode(arr[i]);
-    }
+    for (var i = 0; i < arr.length; i++) utf8 += String.fromCharCode(arr[i]);
     return decodeURIComponent(escape(utf8));
   }
 
-  // 异步分块图片编码
+  // 保持现有被验证完全正确的 PNG 像素生成算法
   function encodeSaveToImageWithProgress(gameStateObj, onProgress) {
     return new Promise(function (resolve, reject) {
       try {
-        onProgress(5, '正在整理存档数据...');
-
+        onProgress(5, '整理存档数据...');
         setTimeout(function () {
           var cleanState = JSON.parse(JSON.stringify(gameStateObj));
           var jsonStr = MAGIC_HEADER + JSON.stringify(cleanState);
 
-          onProgress(15, '正在转换数据编码...');
+          onProgress(15, '转换字节流...');
           setTimeout(function () {
             var bytes = encodeStringToUtf8Bytes(jsonStr);
             var dataLen = bytes.length;
@@ -101,9 +94,8 @@
                 fullBytes[4 + i] = bytes[i];
               }
               bytePos = limit;
-
               var percent = Math.floor(15 + (bytePos / dataLen) * 35);
-              onProgress(percent, '正在准备像素结构 (' + Math.round((bytePos / dataLen) * 100) + '%)...');
+              onProgress(percent, '生成像素结构 (' + Math.round((bytePos / dataLen) * 100) + '%)...');
 
               if (bytePos < dataLen) {
                 setTimeout(copyBytesChunk, 0);
@@ -129,21 +121,20 @@
                 }
 
                 var percent = Math.floor(50 + (pIdx / pLen) * 45);
-                onProgress(percent, '正在绘制备份画面 (' + Math.round((pIdx / pLen) * 100) + '%)...');
+                onProgress(percent, '渲染备份图像 (' + Math.round((pIdx / pLen) * 100) + '%)...');
 
                 if (pIdx < pLen) {
                   setTimeout(processPixelsChunk, 0);
                 } else {
                   ctx.putImageData(imgData, 0, 0);
-                  onProgress(98, '正在完成画面渲染...');
+                  onProgress(98, '完成编码...');
                   setTimeout(function () {
                     var dataUrl = canvas.toDataURL('image/png');
-                    onProgress(100, '生成完成！');
-                    resolve(dataUrl);
+                    onProgress(100, '完成！');
+                    resolve({ dataUrl: dataUrl, jsonStr: jsonStr });
                   }, 20);
                 }
               }
-
               processPixelsChunk();
             }
 
@@ -156,7 +147,7 @@
     });
   }
 
-  // 解码相册图片
+  // 保持现有被验证完全正确的相册图片解码算法
   function decodeDataUrlToSave(dataUrl, callback) {
     var img = new Image();
     img.onload = function () {
@@ -183,7 +174,7 @@
                       fullBytes[3];
 
         if (dataLen <= 0 || dataLen > fullBytes.length - 4) {
-          throw new Error('无效的备份图片格式');
+          throw new Error('无效的备份图片文件');
         }
 
         var payloadBytes = new Uint8Array(dataLen);
@@ -204,90 +195,106 @@
       }
     };
     img.onerror = function () {
-      callback(new Error('相册图片载入失败'), null);
+      callback(new Error('相册图片读取失败'), null);
     };
     img.src = dataUrl;
   }
 
-  // 在系统外部浏览器中打开并保存
-  function openInSystemBrowser(dataUrl) {
-    var htmlContent = '<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1.0"><title>保存存档备份图</title><style>body{margin:0;padding:20px;text-align:center;font-family:sans-serif;background:#f4f4f4;}img{max-width:90%;border:2px solid #2563eb;border-radius:12px;image-rendering:pixelated;margin:20px 0;}p{font-size:14px;color:#333;line-height:1.6;}.tip{background:#fee2e2;color:#b91c1c;padding:10px;border-radius:8px;font-weight:bold;}</style></head><body><h3>📷 存档备份图片已就绪</h3><div class="tip">👉 请长按下方图片，选择【保存到手机相册】！</div><div><img src="' + dataUrl + '" alt="长按保存图片"></div><p>保存完成后，返回游戏或安装新版，在首页点【相册恢复】即可！</p></body></html>';
-    var blob = new Blob([htmlContent], { type: 'text/html' });
-    var blobUrl = URL.createObjectURL(blob);
-    window.open(blobUrl, '_blank');
-  }
-
   window.ImageBackup = {
     startGenerateBackupWithModal: function (gameStateObj) {
-      ensureProgressBarStyles();
+      ensureStyles();
 
       var mask = document.createElement('div');
-      mask.className = 'ib-modal-mask';
+      mask.className = 'ib-mask';
       mask.innerHTML = '\n' +
-        '<div class="ib-modal-card" id="ibModalCard">\n' +
-        '  <div class="ib-modal-title">⏳ 正在生成图片存档</div>\n' +
+        '<div class="ib-card" id="ibCardNode">\n' +
+        '  <div class="ib-title">⏳ 正在编码图片存档</div>\n' +
         '  <div class="ib-prog-text">\n' +
         '    <span>处理进度</span>\n' +
-        '    <span id="ibProgNum">0%</span>\n' +
+        '    <span id="ibProgVal">0%</span>\n' +
         '  </div>\n' +
         '  <div class="ib-prog-track">\n' +
-        '    <div class="ib-prog-fill" id="ibProgBar"></div>\n' +
+        '    <div class="ib-prog-fill" id="ibProgFill"></div>\n' +
         '  </div>\n' +
-        '  <div class="ib-prog-status" id="ibProgStatus">准备就绪...</div>\n' +
+        '  <div id="ibProgMsg" style="font-size:11px;color:#64748b;margin-top:4px;">准备中...</div>\n' +
         '</div>';
-
       document.body.appendChild(mask);
 
-      var fillEl = mask.querySelector('#ibProgBar');
-      var numEl = mask.querySelector('#ibProgNum');
-      var statusEl = mask.querySelector('#ibProgStatus');
+      var fill = mask.querySelector('#ibProgFill');
+      var val = mask.querySelector('#ibProgVal');
+      var msg = mask.querySelector('#ibProgMsg');
 
-      function updateProgressUI(pct, text) {
-        if (fillEl) fillEl.style.width = pct + '%';
-        if (numEl) numEl.textContent = pct + '%';
-        if (statusEl) statusEl.textContent = text;
+      function updateProgress(pct, txt) {
+        if (fill) fill.style.width = pct + '%';
+        if (val) val.textContent = pct + '%';
+        if (msg) msg.textContent = txt;
       }
 
-      encodeSaveToImageWithProgress(gameStateObj, updateProgressUI).then(function (dataUrl) {
-        var card = mask.querySelector('#ibModalCard');
+      encodeSaveToImageWithProgress(gameStateObj, updateProgress).then(function (result) {
+        var dataUrl = result.dataUrl;
+        var card = mask.querySelector('#ibCardNode');
+
+        // 渲染无拖动干扰的图片弹窗
         card.innerHTML = '\n' +
-          '<div class="ib-modal-title">🎉 备份图已就绪</div>\n' +
-          '<div class="ib-red-tip">👉 <b>长按下方图片</b>保存到相册，或点下方按钮调用手机浏览器打开！</div>\n' +
-          '<div class="ib-img-wrap">\n' +
-          '  <img src="' + dataUrl + '" alt="备份图片" ondragstart="return false;" />\n' +
+          '<div class="ib-title">💾 图片存档已就绪</div>\n' +
+          '<div class="ib-tip-box">\n' +
+          '  1. <b>长按下方图片</b>：已关闭拖拽冲突，长按弹出菜单选【保存到手机/发送】。<br>\n' +
+          '  2. 也可以点下方【调用系统分享】直接发送到微信/QQ保存原图。\n' +
           '</div>\n' +
-          '<div class="ib-btn-col">\n' +
-          '  <button class="ib-act-btn ib-btn-blue" id="ibOpenBrowserBtn">🌐 调起浏览器打开并保存</button>\n' +
-          '  <div class="ib-btn-row">\n' +
-          '    <button class="ib-act-btn ib-btn-green" id="ibShareSysBtn">📤 分享原图</button>\n' +
-          '    <button class="ib-act-btn ib-btn-gray" id="ibFinishBtn">完成关闭</button>\n' +
-          '  </div>\n' +
+          '<div class="ib-img-container">\n' +
+          '  <a href="' + dataUrl + '" download="mcyt_backup.png" style="display:block;width:100%;height:100%;" draggable="false">\n' +
+          '    <img src="' + dataUrl + '" class="ib-target-img" alt="备份图" draggable="false" ondragstart="return false;" />\n' +
+          '  </a>\n' +
+          '</div>\n' +
+          '<div class="ib-btn-list">\n' +
+          '  <button class="ib-btn-main ib-btn-blue" id="ibNativeSaveBtn">💾 尝试直接保存到相册/文件</button>\n' +
+          '  <button class="ib-btn-main ib-btn-green" id="ibSysShareBtn">📤 调用系统分享 (微信/QQ)</button>\n' +
+          '  <button class="ib-btn-main ib-btn-gray" id="ibCloseModalBtn">完成关闭</button>\n' +
           '</div>';
 
-        // 绑定外部浏览器打开
-        card.querySelector('#ibOpenBrowserBtn').onclick = function () {
-          openInSystemBrowser(dataUrl);
-        };
+        // 1. 尝试原生注入与模拟下载双轨
+        card.querySelector('#ibNativeSaveBtn').onclick = function () {
+          // 优先看是否有原生桥接
+          if (window.NativeBridge && window.NativeBridge.saveViaNative('mcyt_backup.png', dataUrl)) {
+            alert('✅ 已通过系统底层接口将图片保存到相册/下载目录！');
+            return;
+          }
 
-        // 绑定分享图片
-        card.querySelector('#ibShareSysBtn').onclick = function () {
-          if (navigator.share) {
-            fetch(dataUrl)
-              .then(function (res) { return res.blob(); })
-              .then(function (blob) {
-                var file = new File([blob], 'mcyt_backup.png', { type: 'image/png' });
-                navigator.share({ files: [file], title: '游戏存档备份图' }).catch(function () {});
-              });
-          } else {
-            alert('当前设备环境未开放直接分享接口，请点击上方【调起浏览器打开并保存】！');
+          // 降级：模拟触发 a download
+          try {
+            var a = document.createElement('a');
+            a.href = dataUrl;
+            a.download = 'mcyt_backup.png';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            alert('已触发系统下载通道！如未在相册看到，请长按图片直接存入相册。');
+          } catch (e) {
+            alert('该机型 WebView 禁用了自动下载，请直接长按图片保存到相册。');
           }
         };
 
-        card.querySelector('#ibFinishBtn').onclick = function () {
+        // 2. 调用标准 Web Share
+        card.querySelector('#ibSysShareBtn').onclick = function () {
+          if (window.NativeBridge && typeof window.NativeBridge.shareDataUrlFile === 'function') {
+            window.NativeBridge.shareDataUrlFile(dataUrl, 'mcyt_backup.png')
+              .then(function () {
+                console.log('[NativeBridge] 分享拉起成功');
+              })
+              .catch(function (err) {
+                alert('⚠️ 当前打包环境未放开系统分享权限：' + (err && err.message ? err.message : ''));
+              });
+          } else {
+            alert('当前设备环境不支持系统分享，请直接长按图片选择保存！');
+          }
+        };
+
+        // 3. 关闭
+        card.querySelector('#ibCloseModalBtn').onclick = function () {
           document.body.removeChild(mask);
         };
       }).catch(function (err) {
-        alert('生成失败: ' + (err && err.message ? err.message : '未知错误'));
+        alert('生成失败: ' + (err ? err.message : '未知错误'));
         document.body.removeChild(mask);
       });
     },
