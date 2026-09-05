@@ -97,7 +97,7 @@ function autoSaveGame() {
     }
 }
 
-// 📤 打开备份弹窗：带即时进度条与分块处理，杜绝卡死
+// 📤 打开备份流程：直接呼起分片带进度条的生成弹窗，秒点秒开
 function openBackupModal() {
     let payload, day, ytName;
     if (G.phase === 'playing') {
@@ -107,7 +107,7 @@ function openBackupModal() {
     } else {
         const info = getAutoSaveInfo();
         if (!info || !info.data) {
-            showToast('⚠️ 未找到可导出的存档', 'error');
+            showToast('⚠️ 未找到可导出的存档数据', 'error');
             return;
         }
         payload = info.data;
@@ -122,84 +122,53 @@ function openBackupModal() {
         data: payload
     };
 
-    openModal(`
-        <h3>📤 图片存档导出</h3>
-        <p style="font-size:12px;color:#666;line-height:1.6;">
-            在 APK 运行环境中，文件下载与剪贴板经常失效。本游戏采用<b>像素级图片备份</b>技术，把全部数据无损储存在图片像素中。
-        </p>
-        <div style="text-align:center;margin:18px 0;">
-            <button class="btn-primary" id="genImageBackupBtn" style="width:100%;padding:13px;font-size:15px;font-weight:bold;">🖼️ 开始生成备份图片 (带进度)</button>
-        </div>
-        <p style="font-size:11px;color:#888;line-height:1.5;text-align:center;">点击后将弹出实时进度条，生成完成后长按图片存入相册即可！</p>
-        <div class="btn-row" style="margin-top:14px;">
-            <button class="btn-secondary" onclick="closeModal()" style="width:100%;">关 闭</button>
-        </div>
-    `);
-
-    document.getElementById('genImageBackupBtn')?.addEventListener('click', () => {
-        closeModal();
-        if (window.ImageBackup && typeof window.ImageBackup.startGenerateBackupWithModal === 'function') {
-            window.ImageBackup.startGenerateBackupWithModal(exportPayload);
-        } else {
-            showToast('⚠️ 图片备份模块未就绪，请刷新重试', 'error');
-        }
-    });
+    if (window.ImageBackup && typeof window.ImageBackup.startGenerateBackupWithModal === 'function') {
+        window.ImageBackup.startGenerateBackupWithModal(exportPayload);
+    } else {
+        showToast('⚠️ 图片备份模块未就绪，请刷新重试', 'error');
+    }
 }
 
-// 📥 打开恢复弹窗：纯图片从相册导入恢复
+// 📥 打开恢复流程：直接呼起相册选择器
 function openRestoreModal() {
-    openModal(`
-        <h3>📥 图片存档恢复</h3>
-        <p style="font-size:12px;color:#666;line-height:1.6;">
-            从手机相册中选取此前保存的备份图片，即可自动解析并恢复全部游戏进度、自建角色与聊天记录：
-        </p>
-        <div style="text-align:center;margin:18px 0;">
-            <button class="btn-primary" id="restoreImagePickBtn" style="width:100%;padding:13px;font-size:15px;font-weight:bold;">🖼️ 从相册选择备份图片</button>
-        </div>
-        <input type="file" id="restoreImageFileInput" accept="image/*" class="file-input" style="display:none;">
-        <div id="restoreImagePreviewContainer" style="display:none;text-align:center;margin-bottom:8px;">
-            <img id="restoreImagePreview" style="max-width:160px;max-height:160px;border:2px solid #90caf9;border-radius:8px;" alt="待恢复图片">
-            <div style="font-size:11px;color:#666;margin-top:4px;" id="restoreImageFileName"></div>
-        </div>
-        <div class="btn-row" style="margin-top:14px;">
-            <button class="btn-secondary" onclick="closeModal()" style="width:100%;">关 闭</button>
-        </div>
-    `);
+    let fileInput = document.getElementById('restoreImageFileInputDynamic');
+    if (!fileInput) {
+        fileInput = document.createElement('input');
+        fileInput.id = 'restoreImageFileInputDynamic';
+        fileInput.type = 'file';
+        fileInput.accept = 'image/*';
+        fileInput.style.display = 'none';
+        document.body.appendChild(fileInput);
 
-    document.getElementById('restoreImagePickBtn')?.addEventListener('click', () => {
-        $('restoreImageFileInput')?.click();
-    });
-
-    document.getElementById('restoreImageFileInput')?.addEventListener('change', function() {
-        const file = this.files[0];
-        if (!file) return;
-        _restoreFromImageFile(file);
-        this.value = '';
-    });
+        fileInput.addEventListener('change', function() {
+            const file = this.files && this.files[0];
+            if (!file) return;
+            _restoreFromImageFile(file);
+            this.value = '';
+        });
+    }
+    fileInput.click();
 }
 
+// 从图片文件恢复存档
 function _restoreFromImageFile(file) {
     if (!window.ImageBackup) {
         showToast('⚠️ 图片备份模块未就绪', 'error');
         return;
     }
+    showToast('⏳ 正在读取相册图片...', 'info', 2000);
     const reader = new FileReader();
     reader.onload = (e) => {
         const dataUrl = e.target.result;
-        const preview = document.getElementById('restoreImagePreview');
-        const container = document.getElementById('restoreImagePreviewContainer');
-        const nameEl = document.getElementById('restoreImageFileName');
-        if (preview) preview.src = dataUrl;
-        if (container) container.style.display = 'block';
-        if (nameEl) nameEl.textContent = file.name;
         _decodeAndImportImage(dataUrl);
     };
     reader.onerror = () => showToast('❌ 读取相册图片失败', 'error');
     reader.readAsDataURL(file);
 }
 
+// 解码图片并导入存档
 async function _decodeAndImportImage(dataUrl) {
-    showToast('⏳ 正在解码相册图片...', 'info', 2000);
+    showToast('⏳ 正在解码还原存档...', 'info', 2000);
     try {
         let stateObj = null;
         if (typeof window.ImageBackup.decodeDataUrlToSave === 'function') {
@@ -213,16 +182,14 @@ async function _decodeAndImportImage(dataUrl) {
             throw new Error('图片中不包含有效的游戏数据');
         }
 
-        closeModal();
-        setTimeout(() => {
-            _applyImportedStateData(stateData);
-        }, 200);
+        _applyImportedStateData(stateData);
     } catch (e) {
         console.error('图片解码失败', e);
         showToast('❌ 解码失败：' + e.message + '（请确认使用的是相册原图）', 'error', 5000);
     }
 }
 
+// 🛡️ 导入落地：深度平滑合并
 function _applyImportedStateData(stateData) {
     if (_gameInitialized && !confirm('导入将与当前游戏进度合并（自建角色/群聊/剧情等以备份为准），确认导入吗？')) {
         return;
