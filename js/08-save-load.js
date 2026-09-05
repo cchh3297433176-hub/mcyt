@@ -1,448 +1,305 @@
-// 存档 / 读档 功能
+// 存档/读档/初始化模块
 // ============================================================
-const SAVE_SLOT_COUNT = 3;
-const STORAGE_PREFIX = 'mc_yt_save_';
-const AUTO_SAVE_KEY = 'mc_yt_autosave';
+const CURRENT_APP_VERSION = '6.1.0'; // 软件版本号，每次发布更新修改此值即可重新弹出公告
 
-function getSaveSlotKey(slotIndex) {
-    return STORAGE_PREFIX + slotIndex;
-}
+let _gameInitialized = false;
+let _skipStartChoiceOnce = false;
 
-function getSaveSlotInfo(slotIndex) {
-    const key = getSaveSlotKey(slotIndex);
-    const raw = localStorage.getItem(key);
-    if (!raw) return null;
-    try {
-        const data = JSON.parse(raw);
-        if (data && data.version && data.data) {
-            return data;
-        }
-        return null;
-    } catch (e) { return null; }
-}
+function initGame() {
+    _gameInitialized = true;
+    G.phase = 'playing';
 
-function buildSaveData() {
-    return {
-        version: '6.0',
-        timestamp: Date.now(),
-        data: {
-            player: G.player,
-            day: G.day,
-            timeSlot: G.timeSlot,
-            actionPoints: G.actionPoints,
-            maxActionPoints: G.maxActionPoints,
-            phase: G.phase,
-            storyHistory: G.storyHistory,
-            memorySummaries: G.memorySummaries,
-            memorySummarySettings: G.memorySummarySettings,
-            usedThemes: Array.from(G.usedThemes || []),
-            totalVideos: G.totalVideos,
-            totalStreams: G.totalStreams,
-            totalCollabs: G.totalCollabs,
-            totalDMs: G.totalDMs,
-            npcs: G.npcs,
-            chatHistory: G.chatHistory,
-            _chatMsgId: G._chatMsgId,
-            fanworks: G.fanworks,
-            fanclubMessages: G.fanclubMessages,
-            _fanworkId: G._fanworkId,
-            _fanclubMsgId: G._fanclubMsgId,
-            currentChatNpc: G.currentChatNpc,
-            currentChatGroup: G.currentChatGroup,
-            chatActiveTab: G.chatActiveTab,
-            phoneNav: G.phoneNav,
-            groups: G.groups,
-            groupChatHistory: G.groupChatHistory,
-            friendRequests: G.friendRequests,
-            momentsFilterNpcId: G.momentsFilterNpcId,
-            confessionState: G.confessionState,
-            _lastBriefing: G._lastBriefing,
-            collections: G.collections,
-            memoir: G.memoir,
-            _logId: G._logId,
-            _npcDailyConfession: G._npcDailyConfession,
-            feed: G.feed,
-            feedIdCounter: G.feedIdCounter,
-            unlockedAchievements: G.unlockedAchievements,
-            sponsorOffers: G.sponsorOffers,
-            sponsorCooldown: G.sponsorCooldown,
-            milestoneReached: G.milestoneReached,
-            _npcInitiatedToday: G._npcInitiatedToday,
-            ai: G.ai,
-        }
-    };
-}
+    // 表单数据绑定回填
+    G.player.ytName = $('ytNameInput')?.value.trim() || 'MC_CraftMaster';
+    G.player.age = parseInt($('ageInput')?.value) || 18;
+    G.player.persona = $('personaInput')?.value.trim() || '';
+    G.player.skin = $('skinInput')?.value.trim() || '';
+    G.player.category = $('categorySelect')?.value || '剧情';
 
-function applySaveData(d) {
-    G.player = d.player;
-    G.day = d.day;
-    G.timeSlot = d.timeSlot;
-    G.actionPoints = d.actionPoints;
-    G.maxActionPoints = d.maxActionPoints;
-    G.phase = d.phase || 'playing';
-    G.storyHistory = d.storyHistory || [];
-    G.memorySummaries = d.memorySummaries || [];
-    if (d.memorySummarySettings) Object.assign(G.memorySummarySettings, d.memorySummarySettings);
-    G.usedThemes = new Set(d.usedThemes || []);
-    G.totalVideos = d.totalVideos || 0;
-    G.totalStreams = d.totalStreams || 0;
-    G.totalCollabs = d.totalCollabs || 0;
-    G.totalDMs = d.totalDMs || 0;
-    G.npcs = d.npcs || {};
-    G.chatHistory = d.chatHistory || {};
-    G._chatMsgId = d._chatMsgId || 0;
-    G.fanworks = d.fanworks || [];
-    G.fanclubMessages = d.fanclubMessages || [];
-    G._fanworkId = d._fanworkId || 0;
-    G._fanclubMsgId = d._fanclubMsgId || 0;
-    G.currentChatNpc = d.currentChatNpc || null;
-    G.currentChatGroup = d.currentChatGroup || null;
-    G.chatActiveTab = d.chatActiveTab || 'direct';
-    G.phoneNav = d.phoneNav || 'chats';
-    G.groups = d.groups || {};
-    G.groupChatHistory = d.groupChatHistory || {};
-    G.friendRequests = d.friendRequests || [];
-    G.momentsFilterNpcId = d.momentsFilterNpcId || null;
-    G.confessionState = d.confessionState || null;
-    G._lastBriefing = d._lastBriefing || null;
-    G.collections = d.collections || {};
-    G.memoir = d.memoir || [];
-    G._logId = d._logId || 0;
-    G._npcDailyConfession = d._npcDailyConfession || {};
-    G.feed = d.feed || [];
-    G.feedIdCounter = d.feedIdCounter || 0;
-    G.unlockedAchievements = d.unlockedAchievements || [];
-    G.sponsorOffers = d.sponsorOffers || [];
-    G.sponsorCooldown = d.sponsorCooldown || 0;
-    G.milestoneReached = d.milestoneReached || [];
-    G._npcInitiatedToday = d._npcInitiatedToday || {};
-    if (d.ai) { Object.assign(G.ai, d.ai); persistAIConfig(); }
-    G.currentStream = null;
-    G.isGenerating = false;
-}
+    const idVal = document.querySelector('input[name="identity"]:checked')?.value || 'new';
+    G.player.identity = idVal;
+    if (idVal === 'fans') {
+        G.player.followers = 5000;
+        G.player.money = 200;
+    } else if (idVal === 'veteran') {
+        G.player.followers = 50000;
+        G.player.money = 1000;
+    } else {
+        G.player.followers = 0;
+        G.player.money = 50;
+    }
 
-function rebuildStoryDOM() {
-    const area = $('storyArea');
-    if (!area) return;
-    area.innerHTML = '';
-    if (!G.storyHistory || !G.storyHistory.length) return;
-
-    G.storyHistory.forEach(h => {
-        const block = document.createElement('div');
-        block.className = 'story-block';
-        block.dataset.storyId = h._id || ('sb_' + Math.random());
-
-        const meta = document.createElement('div');
-        meta.className = 'meta';
-        const timeStr = `第${h.day || G.day}天 · ${getTimeSlotName(h.time !== undefined ? h.time : G.timeSlot)}`;
-        meta.innerHTML = `<span>${timeStr}</span><span class="tag">${escapeHtml(h.tag || '📖 剧情')}</span>` +
-            (h.archived ? `<span class="tag archived-badge" style="background:#eee;color:#888;">🗄 已归档</span>` : '') +
-            (h.truncated ? `<span class="tag" style="background:#fff3e0;color:#e65100;">⚠️ 可能被截断</span>` : '');
-        block.appendChild(meta);
-
-        const content = document.createElement('div');
-        content.className = 'story-content';
-        content.innerHTML = renderContentWithThoughts(h.text || '');
-        block.appendChild(content);
-
-        area.appendChild(block);
+    // 技能初值
+    ['Building', 'Redstone', 'Pvp', 'Survival', 'Hunting'].forEach(k => {
+        const val = parseInt($('skill' + k)?.value) || 20;
+        G.player.skills[k.toLowerCase()] = val;
     });
-    area.scrollTop = area.scrollHeight;
+
+    $('setupPage')?.classList.remove('active');
+    $('gamePage')?.classList.add('active');
+
+    updateUI();
+    appendInitialWelcomeStory();
+    autoSaveGame();
+
+    // 尝试检测并展示版本更新双页公告
+    setTimeout(() => {
+        if (typeof checkAndShowVersionNoticeModal === 'function') {
+            checkAndShowVersionNoticeModal();
+        }
+    }, 400);
 }
 
+function appendInitialWelcomeStory() {
+    const p = G.player;
+    const text = `🎮 欢迎，${p.ytName}！\n\n` +
+        `你是一位新晋 MC 主播，擅长 ${p.category} 赛道。\n` +
+        `你的皮上形象是：${p.persona}，皮肤是：${p.skin}。\n\n` +
+        `今天是你在 MC 油管世界的第 1 天，你是一名学生，正值暑假。\n` +
+        `你有 6 个行动点（每2点推进一个时段），规划你的主播生涯吧！\n\n` +
+        `💡 点击左侧功能图标开启日常活动，或进入聊天/同人/油管体验丰富互动！`;
+    appendStory(text, '🎮 游戏开始');
+}
+
+// 自动存档与槽位读写
 function autoSaveGame() {
-    if (G.phase === 'setup' || !G.player || !G.player.ytName) return;
+    if (G.phase !== 'playing') return;
     try {
-        localStorage.setItem(AUTO_SAVE_KEY, JSON.stringify(buildSaveData()));
-    } catch (e) { console.warn('自动存档失败', e); }
+        const payload = serializeGameState();
+        localStorage.setItem('mcyt_autosave', JSON.stringify({
+            timestamp: new Date().toLocaleString(),
+            day: G.day,
+            version: CURRENT_APP_VERSION,
+            data: payload
+        }));
+    } catch(e) {
+        console.warn('自动存档写入失败', e);
+    }
 }
-
-window.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'hidden') autoSaveGame();
-});
-window.addEventListener('pagehide', () => autoSaveGame());
-window.addEventListener('beforeunload', () => autoSaveGame());
 
 function getAutoSaveInfo() {
     try {
-        const raw = localStorage.getItem(AUTO_SAVE_KEY);
-        if (!raw) return null;
-        const data = JSON.parse(raw);
-        if (data && data.version && data.data) return data;
+        const raw = localStorage.getItem('mcyt_autosave');
+        return raw ? JSON.parse(raw) : null;
+    } catch(e) {
         return null;
-    } catch (e) { return null; }
-}
-
-function resumeAutoSave(silent = false) {
-    const saveData = getAutoSaveInfo();
-    if (!saveData) {
-        if (!silent) showToast('❌ 没有可继续的进度', 'error');
-        return false;
-    }
-    try {
-        applySaveData(saveData.data);
-        $('setupPage')?.classList.remove('active');
-        $('gamePage')?.classList.add('active');
-        rebuildStoryDOM();
-        updateUI();
-        switchTab('story');
-        renderAllPanels();
-        if (!silent) showToast(`▶️ 已继续上次进度！第 ${G.day} 天`, 'success', 2500);
-        checkAchievements();
-        checkMilestones();
-        return true;
-    } catch (e) {
-        console.error('继续进度失败', e);
-        if (!silent) showToast('❌ 数据损坏', 'error');
-        return false;
-    }
-}
-
-function saveGameToSlot(slotIndex) {
-    if (slotIndex < 1 || slotIndex > SAVE_SLOT_COUNT) { showToast('无效的存档位', 'error'); return false; }
-    try {
-        const saveData = buildSaveData();
-        localStorage.setItem(getSaveSlotKey(slotIndex), JSON.stringify(saveData));
-        showToast(`✅ 已保存到存档位 ${slotIndex}`, 'success', 2000);
-        return true;
-    } catch (e) {
-        showToast('❌ 存档失败', 'error');
-        return false;
-    }
-}
-
-function loadGameFromSlot(slotIndex) {
-    if (slotIndex < 1 || slotIndex > SAVE_SLOT_COUNT) { showToast('无效的存档位', 'error'); return false; }
-    const saveData = getSaveSlotInfo(slotIndex);
-    if (!saveData) { showToast(`❌ 存档位 ${slotIndex} 为空`, 'error'); return false; }
-    try {
-        applySaveData(saveData.data);
-        $('setupPage')?.classList.remove('active');
-        $('gamePage')?.classList.add('active');
-        rebuildStoryDOM();
-        addMemoir('读档', `从存档位 ${slotIndex} 读取`);
-        updateUI();
-        switchTab('story');
-        renderAllPanels();
-        showToast(`📂 读档成功！第 ${G.day} 天`, 'success', 3000);
-        checkAchievements();
-        checkMilestones();
-        return true;
-    } catch (e) {
-        showToast('❌ 读档失败', 'error');
-        return false;
     }
 }
 
 function hasAnySaveData() {
-    if (getAutoSaveInfo()) return true;
-    for (let i = 1; i <= SAVE_SLOT_COUNT; i++) { if (getSaveSlotInfo(i)) return true; }
-    return false;
-}
-
-// 修复：原代码在点击"开始游戏"且检测到已有存档时会调用本函数，
-// 但该函数从未被定义，导致点击按钮时直接报错、游戏无法开始。
-// 这里补上一个"新开一局 / 继续上次进度 / 查看全部存档"的选择弹窗。
-function showStartChoiceModal(silentAutoResume) {
-    const autoInfo = getAutoSaveInfo();
-    const autoText = autoInfo && autoInfo.data
-        ? `第 ${autoInfo.data.day} 天 · ${autoInfo.data.player?.ytName || ''} · 粉丝 ${autoInfo.data.player?.followers || 0}`
-        : '';
-    openModal(`
-        <h3 style="margin-bottom:10px;">🎮 检测到已有游戏进度</h3>
-        <p style="font-size:13px;color:#666;line-height:1.6;margin-bottom:14px;">
-            ${autoText ? `上次进度：${escapeHtml(autoText)}<br>` : ''}
-            你可以继续上次的冒险，或者开启一局全新的游戏（不会覆盖已有存档位）。
-        </p>
-        <div class="btn-row" style="flex-direction:column;gap:8px;">
-            ${autoInfo ? `<button class="btn-primary" id="startChoiceResumeBtn" style="width:100%;">▶️ 继续上次进度</button>` : ''}
-            <button class="btn-primary" id="startChoiceNewBtn" style="width:100%;background:#3866c4;">🆕 开始全新游戏</button>
-            <button class="btn-secondary" id="startChoiceLoadBtn" style="width:100%;">📂 查看全部存档</button>
-            <button class="btn-secondary" onclick="closeModal()" style="width:100%;">取消</button>
-        </div>
-    `);
-    document.getElementById('startChoiceResumeBtn')?.addEventListener('click', () => {
-        closeModal();
-        resumeAutoSave();
-    });
-    document.getElementById('startChoiceNewBtn')?.addEventListener('click', () => {
-        closeModal();
-        initGame();
-    });
-    document.getElementById('startChoiceLoadBtn')?.addEventListener('click', () => {
-        closeModal();
-        showSaveSlotsModal('load');
-    });
-}
-
-function showSaveSlotsModal(mode) {
-    const isSave = mode === 'save';
-    const title = isSave ? '💾 存档管理' : '📂 读取存档';
-    const autoInfo = !isSave ? getAutoSaveInfo() : null;
-    let autoHtml = '';
-    if (autoInfo) {
-        const d = autoInfo.data;
-        autoHtml = `
-        <div class="save-slot-item" id="autoSaveLoadItem" style="border-color:var(--primary);">
-            <div class="slot-info">
-                <div class="slot-label">⏱️ 自动存档（断点续玩）</div>
-                <div class="slot-detail">第${d.day}天 · 粉丝 ${d.player?.followers || 0} · ${d.player?.ytName || ''}</div>
-                <div style="font-size:10px;color:var(--text2);">${new Date(autoInfo.timestamp).toLocaleString()}</div>
-            </div>
-            <button class="slot-action-btn" id="autoSaveLoadBtn">继续</button>
-        </div>`;
-    }
-    let slotsHtml = '';
-    for (let i = 1; i <= SAVE_SLOT_COUNT; i++) {
-        const info = getSaveSlotInfo(i);
-        const hasSave = info !== null;
-        const timeStr = hasSave ? new Date(info.timestamp).toLocaleString() : '空存档位';
-        const detail = hasSave ? `第${info.data.day}天 · 粉丝 ${info.data.player.followers} · ${info.data.player.ytName}` : '暂无存档';
-        const actionLabel = isSave ? (hasSave ? '覆盖' : '存档') : (hasSave ? '读档' : '空');
-        const disabled = !isSave && !hasSave;
-        slotsHtml += `
-        <div class="save-slot-item" data-slot="${i}">
-            <div class="slot-info">
-                <div class="slot-label">📁 存档位 ${i}</div>
-                <div class="slot-detail">${detail}</div>
-                <div style="font-size:10px;color:var(--text2);">${timeStr}</div>
-            </div>
-            <button class="slot-action-btn ${disabled ? 'secondary' : ''}" data-slot="${i}" ${disabled ? 'disabled' : ''}>${actionLabel}</button>
-        </div>`;
-    }
-    openModal(`
-        <h3>${title}</h3>
-        <div style="margin: 12px 0;">${autoHtml}${slotsHtml}</div>
-        <div class="btn-row"><button class="btn-secondary" onclick="closeModal()">取消</button></div>
-    `);
-    document.getElementById('autoSaveLoadBtn')?.addEventListener('click', () => {
-        closeModal();
-        resumeAutoSave();
-    });
-    document.querySelectorAll('.save-slot-item .slot-action-btn').forEach(btn => {
-        btn.addEventListener('click', function(e) {
-            e.stopPropagation();
-            const slot = parseInt(this.dataset.slot);
-            if (!slot) return;
-            if (isSave) {
-                saveGameToSlot(slot);
-                closeModal();
-            } else {
-                loadGameFromSlot(slot);
-                closeModal();
-            }
-        });
-    });
-}
-
-// ============================================================
-// 核心改造：退出游戏直接静默保存，并立刻返回初始创建人设页面
-// ============================================================
-function confirmExitGame() {
-    autoSaveGame(); // 离开前静默把当前进度存好，下次可在初始页一键恢复
-    G.phase = 'setup';
-    closeModal();
-    // 切换回 setup 初始开局页
-    $('gamePage')?.classList.remove('active');
-    $('setupPage')?.classList.add('active');
-    // 重新刷新初始页的自动存档横幅
-    const autoInfo = getAutoSaveInfo();
-    const banner = $('resumeBanner');
-    if (banner && autoInfo && autoInfo.data) {
-        const d = autoInfo.data;
-        banner.style.display = 'block';
-        banner.innerHTML = `
-            <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:6px;">▶️ 检测到上次未完成的生涯</div>
-            <div style="font-size:12px;color:#666;margin-bottom:10px;">第 ${d.day} 天 · ${d.player?.ytName || ''} · 粉丝 ${d.player?.followers || 0}</div>
-            <button type="button" id="resumeAutoSaveBtn" style="padding:8px 18px;font-size:13px;font-weight:700;border:none;border-radius:10px;background:var(--primary);color:#fff;cursor:pointer;">▶️ 继续上次进度</button>
-        `;
-        $('resumeAutoSaveBtn')?.addEventListener('click', resumeAutoSave);
-    }
-    showToast('🚪 已退出并返回初始创建界面', 'success', 2000);
-}
-
-function checkAutoResumeOnBoot() {
-    const autoInfo = getAutoSaveInfo();
-    if (autoInfo && autoInfo.data && autoInfo.data.player && autoInfo.data.player.ytName && autoInfo.data.phase === 'playing') {
-        setTimeout(() => {
-            resumeAutoSave(true);
-            showToast(`🎮 欢迎回来，${G.player.ytName}！已自动恢复进度`, 'success', 2500);
-        }, 100);
-        return true;
+    if (localStorage.getItem('mcyt_autosave')) return true;
+    for (let i = 1; i <= 3; i++) {
+        if (localStorage.getItem('mcyt_slot_' + i)) return true;
     }
     return false;
 }
 
-let _skipStartChoiceOnce = false;
-let _gameInitialized = false;
-
-function initGame() {
-    applyAIConfigFromUI('setup');
-    if (!G.ai.apiKey) { showToast('⚠️ 请先填入 API Key'); $('setupApiKeyInput')?.focus(); return; }
-    if (!G.ai.baseUrl) { showToast('⚠️ 请先填入 API Base URL'); $('setupBaseUrlInput')?.focus(); return; }
-    if (!G.ai.model) { showToast('⚠️ 请先选择或填写模型'); $('setupModelInput')?.focus(); return; }
-
-    const identity = getRadioValue('identityGroup') || 'new';
-    const age = parseInt($('ageInput')?.value) || 18;
-    const ytName = $('ytNameInput')?.value.trim() || 'MC_CraftMaster';
-    const persona = $('personaInput')?.value.trim() || '一位充满活力的冒险家';
-    const skin = $('skinInput')?.value.trim() || '钻石甲，金色头盔';
-    const category = $('categorySelect')?.value || '剧情';
-
-    const skillBuilding = parseInt($('skillBuildingNum')?.value) || 20;
-    const skillRedstone = parseInt($('skillRedstoneNum')?.value) || 20;
-    const skillPvp = parseInt($('skillPvpNum')?.value) || 20;
-    const skillSurvival = parseInt($('skillSurvivalNum')?.value) || 20;
-    const skillHunting = parseInt($('skillHuntingNum')?.value) || 20;
-
-    const p = G.player;
-    p.identity = identity;
-    p.age = age;
-    p.gender = '女';
-    p.ytName = ytName;
-    p.persona = persona;
-    p.skin = skin;
-    p.category = category;
-    p.skills = { building: skillBuilding, redstone: skillRedstone, pvp: skillPvp, survival: skillSurvival, hunting: skillHunting };
-    p.followers = identity === 'new' ? 10 : (identity === 'fans' ? 3000 : 500000);
-    p.money = identity === 'new' ? 20 : (identity === 'fans' ? 200 : 8000);
-    p.likes = 0;
-    p.videos = [];
-    p.streams = [];
-    p.streamHistory = [];
-    p.friends = [];
-    p.lovers = [];
-
-    G.day = 1;
-    G.timeSlot = 0;
-    G.actionPoints = 6;
-    G.storyHistory = [];
-    G.memorySummaries = [];
-    G.usedThemes = new Set();
-    G.chatHistory = {};
-    G.groups = {};
-    G.groupChatHistory = {};
-    G.friendRequests = [];
-    G.memoir = [];
+function resumeAutoSave() {
+    const info = getAutoSaveInfo();
+    if (!info || !info.data) {
+        showToast('⚠️ 未找到有效自动存档', 'error');
+        return;
+    }
+    applyDeserializedGameState(info.data);
+    _gameInitialized = true;
     G.phase = 'playing';
 
     $('setupPage')?.classList.remove('active');
     $('gamePage')?.classList.add('active');
-    
-    const area = $('storyArea');
-    if (area) area.innerHTML = '';
-    appendStory(`🎬 欢迎，${p.ytName}！\n\n你开启了全新的主播生涯。作为一名 ${p.category} 赛道的创作者，今天是你探索 MC 油管世界的第一天！`, '🎮 游戏开始');
-    addMemoir('游戏开始', `${p.ytName} 开启了主播生涯`);
+
     updateUI();
     switchTab('story');
-    showToast('🎉 新冒险已开启！', 'success', 2000);
-    _gameInitialized = true;
-    autoSaveGame();
+    showToast('✅ 进度已成功载入！', 'success');
+
+    setTimeout(() => {
+        if (typeof checkAndShowVersionNoticeModal === 'function') {
+            checkAndShowVersionNoticeModal();
+        }
+    }, 400);
 }
 
-window.addEventListener('DOMContentLoaded', () => {
-    setTimeout(() => {
-        checkAutoResumeOnBoot();
-    }, 150);
-});
-// ============================================================
+function showStartChoiceModal(skipCheck = false) {
+    const autoInfo = getAutoSaveInfo();
+    openModal(`
+        <h3>🎮 欢迎来到 MC YouTube 模拟器</h3>
+        <p style="font-size:13px;color:#666;">检测到你此前拥有保存的进度，请选择进入方式：</p>
+        <div class="start-choice-grid">
+            <div class="choice-card" id="choiceResumeGame">
+                <span class="big-icon">▶️</span>
+                <div class="choice-label">继续上次进度</div>
+                <div class="choice-desc">${autoInfo ? `第 ${autoInfo.day} 天 · ${autoInfo.data?.player?.ytName || ''}` : '自动存档'}</div>
+            </div>
+            <div class="choice-card" id="choiceStartNewGame">
+                <span class="big-icon">✨</span>
+                <div class="choice-label">全新开局</div>
+                <div class="choice-desc">重新塑造你的专属主播</div>
+            </div>
+        </div>
+        <div class="btn-row" style="margin-top:10px;">
+            <button class="btn-secondary" id="choiceOpenSlotList" style="width:100%;">📂 查看全部存档槽位</button>
+        </div>
+    `);
+
+    document.getElementById('choiceResumeGame').onclick = () => {
+        closeModal();
+        resumeAutoSave();
+    };
+
+    document.getElementById('choiceStartNewGame').onclick = () => {
+        closeModal();
+        _skipStartChoiceOnce = true;
+        initGame();
+    };
+
+    document.getElementById('choiceOpenSlotList').onclick = () => {
+        closeModal();
+        showSaveSlotsModal('load');
+    };
+}
+
+function showSaveSlotsModal(mode = 'save') {
+    const isSave = mode === 'save';
+    let slotsHtml = '';
+
+    for (let i = 1; i <= 3; i++) {
+        let slotData = null;
+        try {
+            const raw = localStorage.getItem('mcyt_slot_' + i);
+            if (raw) slotData = JSON.parse(raw);
+        } catch(e) {}
+
+        slotsHtml += `
+        <div class="save-slot-item" data-slot="${i}">
+            <div class="slot-info">
+                <div class="slot-label">📁 存档槽位 ${i}</div>
+                ${slotData ? `
+                    <div class="slot-detail">第 ${slotData.day} 天 · ${escapeHtml(slotData.data?.player?.ytName || '')} · 粉丝 ${slotData.data?.player?.followers || 0}</div>
+                    <div style="font-size:10px;color:#888;">保存时间：${slotData.timestamp}</div>
+                ` : '<div class="slot-empty">（空存档位）</div>'}
+            </div>
+            <div style="display:flex;gap:6px;">
+                ${isSave ? `
+                    <button class="slot-action-btn" onclick="saveGameToSlot(${i})">写入保存</button>
+                ` : `
+                    <button class="slot-action-btn" ${slotData ? '' : 'disabled'} onclick="loadGameFromSlot(${i})">读取</button>
+                `}
+                ${slotData ? `<button class="slot-action-btn secondary" onclick="deleteSaveSlot(${i}, '${mode}')" style="padding:4px 8px;color:#c62828;">✕</button>` : ''}
+            </div>
+        </div>
+        `;
+    }
+
+    openModal(`
+        <h3>${isSave ? '💾 保存游戏存档' : '📂 读取已有存档'}</h3>
+        <div style="max-height:60vh;overflow-y:auto;margin:10px 0;">
+            ${slotsHtml}
+        </div>
+        <div class="btn-row">
+            <button class="btn-secondary" onclick="closeModal()">关闭</button>
+        </div>
+    `);
+}
+
+function saveGameToSlot(slotIndex) {
+    if (G.phase !== 'playing') { showToast('⚠️ 游戏尚未开始', 'error'); return; }
+    try {
+        const payload = serializeGameState();
+        localStorage.setItem('mcyt_slot_' + slotIndex, JSON.stringify({
+            timestamp: new Date().toLocaleString(),
+            day: G.day,
+            version: CURRENT_APP_VERSION,
+            data: payload
+        }));
+        showToast(`✅ 成功保存到槽位 ${slotIndex}！`, 'success');
+        closeModal();
+    } catch(e) {
+        showToast('❌ 保存失败', 'error');
+    }
+}
+
+function loadGameFromSlot(slotIndex) {
+    try {
+        const raw = localStorage.getItem('mcyt_slot_' + slotIndex);
+        if (!raw) return;
+        const parsed = JSON.parse(raw);
+        applyDeserializedGameState(parsed.data);
+        _gameInitialized = true;
+        G.phase = 'playing';
+
+        $('setupPage')?.classList.remove('active');
+        $('gamePage')?.classList.add('active');
+
+        updateUI();
+        switchTab('story');
+        closeModal();
+        showToast(`✅ 槽位 ${slotIndex} 载入成功！`, 'success');
+
+        setTimeout(() => {
+            if (typeof checkAndShowVersionNoticeModal === 'function') {
+                checkAndShowVersionNoticeModal();
+            }
+        }, 400);
+    } catch(e) {
+        showToast('❌ 读档失败', 'error');
+    }
+}
+
+function deleteSaveSlot(slotIndex, mode) {
+    if (confirm(`确定要清空槽位 ${slotIndex} 吗？`)) {
+        localStorage.removeItem('mcyt_slot_' + slotIndex);
+        showToast('🗑️ 槽位已清空', 'info');
+        showSaveSlotsModal(mode);
+    }
+}
+
+function confirmExitGame() {
+    if (confirm('确认保存并退出当前游戏回到标题？')) {
+        autoSaveGame();
+        location.reload();
+    }
+}
+
+function serializeGameState() {
+    return {
+        player: G.player,
+        day: G.day,
+        timeSlot: G.timeSlot,
+        actionPoints: G.actionPoints,
+        maxActionPoints: G.maxActionPoints,
+        storyHistory: G.storyHistory,
+        memorySummaries: G.memorySummaries,
+        npcs: G.npcs,
+        chatHistory: G.chatHistory,
+        groups: G.groups,
+        groupChatHistory: G.groupChatHistory,
+        friendRequests: G.friendRequests,
+        feed: G.feed,
+        fanworks: G.fanworks,
+        ao3User: G.ao3User,
+        ytUser: G.ytUser,
+        ytExternalVideos: G.ytExternalVideos,
+        ytCustomChannels: G.ytCustomChannels,
+        collections: G.collections,
+        memoir: G.memoir,
+        unlockedAchievements: G.unlockedAchievements,
+        milestoneReached: G.milestoneReached,
+        ai: G.ai,
+        search: G.search
+    };
+}
+
+function applyDeserializedGameState(data) {
+    if (!data) return;
+    Object.assign(G, data);
+}
+
+// 暴露全局
+window.initGame = initGame;
+window.resumeAutoSave = resumeAutoSave;
+window.showStartChoiceModal = showStartChoiceModal;
+window.showSaveSlotsModal = showSaveSlotsModal;
+window.saveGameToSlot = saveGameToSlot;
+window.loadGameFromSlot = loadGameFromSlot;
+window.deleteSaveSlot = deleteSaveSlot;
+window.confirmExitGame = confirmExitGame;
+window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;

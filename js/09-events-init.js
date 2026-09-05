@@ -1,4 +1,4 @@
-// 事件绑定
+// 事件绑定与公告系统
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
     // 开始游戏按钮
@@ -186,7 +186,139 @@ document.addEventListener('DOMContentLoaded', () => {
             $('resumeAutoSaveBtn')?.addEventListener('click', resumeAutoSave);
         }
     }
+
+    // 启动初始检测是否需要弹出双页公告
+    setTimeout(() => {
+        checkAndShowVersionNoticeModal();
+    }, 600);
 });
+
+// ============================================================
+// 📢 双页滑动公告系统（主公告 + 更新优化与新功能）
+// ============================================================
+function checkAndShowVersionNoticeModal(forceOpen = false) {
+    const ver = window.CURRENT_APP_VERSION || '6.1.0';
+    const dismissedVersion = localStorage.getItem('mcyt_dismissed_notice_ver');
+
+    // 如果未被静音或属于版本更新后的全新启动或被强制打开
+    if (forceOpen || dismissedVersion !== ver) {
+        openVersionNoticeModal(ver);
+    }
+}
+
+function openVersionNoticeModal(version) {
+    const html = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <h3 style="margin:0;display:flex;align-items:center;gap:6px;">📢 系统公告 <span style="font-size:11px;background:rgba(46,125,50,0.12);color:var(--primary);padding:2px 8px;border-radius:10px;font-weight:700;">v${version}</span></h3>
+    </div>
+
+    <!-- 双页滑动视口容器 -->
+    <div class="notice-slider-wrap">
+        <div class="notice-slider-track" id="noticeSliderTrack">
+            <!-- 第 1 页：主公告 -->
+            <div class="notice-slide-page">
+                <div class="notice-card-box">
+                    <h4>📜 关于本项目与正版声明</h4>
+                    <p style="margin-bottom:8px;">
+                        本软件为抖音：<b>@鸢尾黎明</b> 老师的 MCYT 模拟器二改版本，为代入向乙女 AI-RP 网页/单机文字养成游戏。
+                    </p>
+                    <p style="margin-bottom:8px;color:#c62828;font-weight:600;">
+                        ⚠️ 严禁任何形式的二次倒卖、付费打包与二传！
+                    </p>
+                    <p style="margin-bottom:8px;">
+                        本游戏<b>纯免费无收费</b>。目前正规获取渠道为进入<b>鸢尾黎明</b>老师的粉丝群聊。如果你是通过付费购买获得了本软件，代表<b>你被骗了</b>！
+                    </p>
+                    <p style="margin-bottom:4px;">
+                        请前往抖音搜索 <b>@鸢尾黎明</b> 老师主页加入官方群聊，群里有很多优质乙女香香饭与最新版本更新，欢迎小伙伴们加入大家庭！💕
+                    </p>
+                </div>
+            </div>
+
+            <!-- 第 2 页：更新优化与新功能 -->
+            <div class="notice-slide-page">
+                <div class="notice-card-box">
+                    <h4>🚀 本次更新优化方面</h4>
+                    <ul style="padding-left:18px;margin-bottom:10px;font-size:12px;color:#444;">
+                        <li>1. 优化滑动卡顿，页面切换与列表滚动更加轻量顺滑。</li>
+                        <li>2. 优化编辑功能，现在可以正常编辑 AI 发送的全部剧情与文本。</li>
+                        <li>3. API 设置面板支持智能折叠，更便于配置管理。</li>
+                        <li>4. 剧情实时自动保存，防止误触退出导致进度丢失。</li>
+                        <li>5. 兼容原有应用架构，可在原有数据基础上直接热更新。</li>
+                        <li>6. 社交中心重构：私信、粉丝群、动态统一合并为手机聊天功能。</li>
+                        <li>7. 直播弹幕 AI 化：实时扮演现场观众发送紧贴画面的弹幕与深度评论。</li>
+                        <li>8. 原“评论”按钮升级为独立仿油管 YouTube 平台功能。</li>
+                        <li>9. 游戏中可直接点击左上角头像修改名字与头像，并自动注入长期认知记忆。</li>
+                    </ul>
+
+                    <h4>✨ 重磅新功能上线</h4>
+                    <ul style="padding-left:18px;margin-bottom:4px;font-size:12px;color:#444;">
+                        <li><b>1. 同人群聊系统</b>：支持建立多个专属群聊，自由添加自定义 NPC 联系人、导入本地头像，支持被申请好友与查看朋友圈动态。</li>
+                        <li><b>2. AO3 同人中心</b>：内置同人小说库，可使用主播大号或小号创作发文、催更续写下一章，并与读者在评论区互动。</li>
+                        <li><b>3. 油管 YouTube 平台</b>：高仿油管 UI，浏览同行与路人视频、发布个人视频（支持文字描绘封面与 AI 识图 Token 预警），可无限生成观众热评与回复接话。</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 翻页圆点指示器 -->
+    <div class="notice-dots-wrap">
+        <div class="notice-dot active" id="noticeDot0"></div>
+        <div class="notice-dot" id="noticeDot1"></div>
+    </div>
+
+    <!-- 底部翻页按键与静音选项 -->
+    <div class="notice-footer-opt">
+        <label class="notice-checkbox-label">
+            <input type="checkbox" id="dismissVersionNoticeCheck" style="accent-color:var(--primary);width:15px;height:15px;">
+            <span>本次版本不再提示</span>
+        </label>
+        <div style="display:flex;gap:6px;">
+            <button class="btn-secondary small" id="noticeNavSlideBtn" style="padding:5px 12px;font-weight:700;">下一页：更新公告 ➡️</button>
+            <button class="btn-primary small" id="noticeCloseBtn" style="margin:0;padding:5px 14px;">关 闭</button>
+        </div>
+    </div>
+    `;
+
+    openModal(html);
+
+    let currentPage = 0;
+    const track = document.getElementById('noticeSliderTrack');
+    const dot0 = document.getElementById('noticeDot0');
+    const dot1 = document.getElementById('noticeDot1');
+    const navBtn = document.getElementById('noticeNavSlideBtn');
+
+    const updateSliderUI = (page) => {
+        currentPage = page;
+        if (track) {
+            track.style.transform = `translateX(-${currentPage * 50}%)`;
+        }
+        if (dot0 && dot1) {
+            dot0.classList.toggle('active', currentPage === 0);
+            dot1.classList.toggle('active', currentPage === 1);
+        }
+        if (navBtn) {
+            navBtn.textContent = currentPage === 0 ? '下一页：更新公告 ➡️' : '⬅️ 返回主公告';
+        }
+    };
+
+    dot0?.addEventListener('click', () => updateSliderUI(0));
+    dot1?.addEventListener('click', () => updateSliderUI(1));
+
+    navBtn?.addEventListener('click', () => {
+        updateSliderUI(currentPage === 0 ? 1 : 0);
+    });
+
+    document.getElementById('noticeCloseBtn')?.addEventListener('click', () => {
+        const isDismissChecked = document.getElementById('dismissVersionNoticeCheck')?.checked;
+        if (isDismissChecked) {
+            localStorage.setItem('mcyt_dismissed_notice_ver', version);
+        } else {
+            localStorage.removeItem('mcyt_dismissed_notice_ver');
+        }
+        closeModal();
+    });
+}
 
 // 弹出修改玩家头像与名字弹窗，并更新长期记忆
 function openEditPlayerProfileModal() {
@@ -346,3 +478,5 @@ window.showStartChoiceModal = showStartChoiceModal;
 window.bindLongPressEvent = bindLongPressEvent;
 window.receiveFriendRequest = receiveFriendRequest;
 window.openEditPlayerProfileModal = openEditPlayerProfileModal;
+window.checkAndShowVersionNoticeModal = checkAndShowVersionNoticeModal;
+window.openVersionNoticeModal = openVersionNoticeModal;
