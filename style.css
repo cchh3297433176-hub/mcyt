@@ -2179,9 +2179,21 @@ body {
     align-items: center;
 }
 .ao3-logo-title {
-    font-size: 16px;
+    font-size: 15px;
     font-weight: 700;
-    letter-spacing: 1px;
+    letter-spacing: 0.5px;
+}
+.ao3-user-badge {
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    padding: 3px 8px;
+    border-radius: 14px;
+    font-size: 11px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 4px;
 }
 .ao3-sub-nav {
     background: #f3f3f3;
@@ -2200,12 +2212,18 @@ body {
 .ao3-work-entry {
     background: #fff;
     border: 1px solid #ddd;
-    border-radius: 6px;
+    border-radius: 8px;
     padding: 12px;
     margin-bottom: 12px;
     box-shadow: 0 1px 4px rgba(0,0,0,0.04);
     display: flex;
     gap: 12px;
+    position: relative;
+    user-select: none;
+    transition: background 0.2s;
+}
+.ao3-work-entry:active {
+    background: #fbfbfb;
 }
 .ao3-work-cover {
     width: 68px;
@@ -2219,6 +2237,7 @@ body {
     justify-content: center;
     font-size: 26px;
     border: 1px solid #ccc;
+    cursor: pointer;
 }
 .ao3-work-cover img {
     width: 100%;
@@ -2267,6 +2286,98 @@ body {
     gap: 8px;
     flex-wrap: wrap;
     align-items: center;
+}
+.ao3-manage-book-btn {
+    border: 1px solid #ccc;
+    background: #f9f9f9;
+    color: #666;
+    font-size: 11px;
+    padding: 2px 8px;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-left: auto;
+}
+
+/* 章节导航条 */
+.ao3-chapter-nav-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 6px;
+    background: #f0e9dc;
+    padding: 8px 10px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+}
+.ao3-nav-step-btn {
+    background: #900;
+    color: #fff;
+    border: none;
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+}
+.ao3-nav-step-btn:disabled {
+    background: #d8c8c8;
+    color: #fff;
+    cursor: not-allowed;
+}
+
+/* AO3 评论系统 */
+.ao3-comments-section {
+    margin-top: 24px;
+    border-top: 2px solid #900;
+    padding-top: 14px;
+}
+.ao3-comment-item {
+    background: #fff;
+    border: 1px solid #e0d8c8;
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+}
+.ao3-comment-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 4px;
+}
+.ao3-comment-user {
+    font-weight: 700;
+    font-size: 12px;
+    color: #900;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+.ao3-comment-text {
+    font-size: 13px;
+    color: #222;
+    line-height: 1.5;
+    margin: 4px 0 6px;
+    word-break: break-word;
+}
+.ao3-comment-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+.ao3-replies-list {
+    margin-top: 8px;
+    padding-left: 12px;
+    border-left: 2px solid #900;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.ao3-reply-entry {
+    background: #faf7f2;
+    padding: 6px 10px;
+    border-radius: 6px;
+    font-size: 12px;
 }
 
 /* 适配小屏 */
