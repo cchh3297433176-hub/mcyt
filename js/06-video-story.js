@@ -1,4 +1,5 @@
-// 视频制作（评论由 AI 实时生成）
+// js/06-video-story.js
+// 视频制作（评论由 AI 实时生成）与多层级记忆联动的核心叙事引擎
 // ============================================================
 function openVideoModal() {
     const availableAP = G.actionPoints;
@@ -215,7 +216,6 @@ async function createVideo(title, style, duration, collectionName, collectionInd
     baseViews = Math.floor(baseRandom * multiplier * styleMod * seriesBonus) + extraViews;
     baseLikes += Math.floor(baseViews * 0.05);
 
-    // 🌟 实时由 AI 生成完全契合本次视频内容的评论
     const comments = await generateVideoCommentsAI(title, style, description);
 
     const videoObj = {
@@ -259,7 +259,7 @@ async function createVideo(title, style, duration, collectionName, collectionInd
 }
 
 // ============================================================
-// 通用剧情生成
+// 通用剧情生成与深度多层级记忆构建
 // ============================================================
 function buildSystemPrompt() {
     const p = G.player;
@@ -267,36 +267,59 @@ function buildSystemPrompt() {
     const historySummary = activeStoryHistory.slice(-8).map(h =>
         h.truncated
             ? `[第${h.day}天 ${getTimeSlotName(h.time)}] （内容不完整已忽略）`
-            : `[第${h.day}天 ${getTimeSlotName(h.time)}] ${stripThought(h.text).slice(0, 100)}...`
+            : `[第${h.day}天 ${getTimeSlotName(h.time)}] ${stripThought(h.text).slice(0, 120)}...`
     ).join('\n');
-    const memorySummaryText = (G.memorySummaries || []).map(m =>
-        `[记忆总结 · 截至第${m.day}天] ${stripThought(m.text)}`
+
+    // 🌐 读取统一全局记忆
+    const globalMemories = (G.memorySummaries || []).map(m =>
+        `[统一全局记忆 · 第${m.day || 1}天] ${stripThought(m.text || m)}`
     ).join('\n');
-    const usedThemesList = Array.from(G.usedThemes).slice(-40).join('、');
-    const npcInfo = Object.values(G.npcs).map(n =>
-        `${n.name}: 好感度 ${n.favor||0}${n._relationship === 'dating' ? ' 💕恋人' : ''}`
-    ).join('\n');
-    const memoirRecent = G.memoir.slice(-15).map(m =>
+
+    // 👤 读取各个 NPC 专属记忆与群聊所知事件
+    const npcDetailedMemories = Object.values(G.npcs).map(n => {
+        let mem = `${n.name}: 好感度 ${n.favor||0}${n._relationship === 'dating' ? ' 💕恋人' : ''}`;
+        if (n.memorySummary) mem += ` | 私聊记忆: ${stripThought(n.memorySummary)}`;
+        if (n.knownGroupEvents) mem += ` | 群聊知晓: ${stripThought(n.knownGroupEvents)}`;
+        return mem;
+    }).join('\n');
+
+    // 👥 群聊公共事件纪要汇总
+    const groupMemoriesList = Object.entries(G.groupMemories || {}).map(([gid, text]) => {
+        const grp = G.groups[gid];
+        return `[群聊「${grp ? grp.name : gid}」纪要]: ${stripThought(text)}`;
+    }).join('\n');
+
+    const memoirRecent = G.memoir.slice(-12).map(m =>
         `第${m.day}天: ${m.event} ${m.details}`
     ).join('\n');
 
     return `
-    你是一个专业且富有创意的 MC YouTube 模拟器叙事 AI。
-    根据玩家行动生成生动、连贯的剧情。注意：玩家为女性，所有称呼使用"你"或"她"，不得使用"兄弟"、"哥们"。
-    【玩家设定】
-    - 身份：${p.identity === 'new' ? '新主播' : p.identity === 'fans' ? '小有名气主播' : '老牌主播'} | 赛道：${p.category} | 形象：${p.persona}
-    - 粉丝：${p.followers} | 金币：${p.money} | 点赞：${p.likes}
-    【NPC关系】
-    ${npcInfo || '暂无NPC'}
-    【记忆总结】
-    ${memorySummaryText || '暂无'}
-    【最近剧情回顾】
-    ${historySummary || '暂无'}
-    【重要事件回忆】
-    ${memoirRecent || '暂无'}
-    【核心要求】
-    每次生成剧情不少于800字，皮上与皮下生活交织，语言生动写实。只输出纯文本。
-    `;
+你是一个专业且富有创意的 MC YouTube 模拟器叙事 AI。
+根据玩家行动生成生动、连贯的剧情。注意：玩家为女性，所有称呼使用"你"或"她"，不得使用"兄弟"、"哥们"。
+【玩家设定】
+- 主播频道：${p.ytName} | 身份：${p.identity === 'new' ? '新主播' : p.identity === 'fans' ? '小有名气主播' : '老牌主播'} | 赛道：${p.category} | 人设形象：${p.persona}
+- 数据统计：粉丝 ${p.followers} | 金币 ${p.money} | 点赞 ${p.likes}
+
+【🌐 统一全局记忆库（主角的核心履历与转折）】
+${globalMemories || '暂无全局历史摘要'}
+
+【👥 群聊公开话题与纪要】
+${groupMemoriesList || '暂无群聊大事件'}
+
+【👤 NPC 关系与专属记忆】
+${npcDetailedMemories || '暂无NPC'}
+
+【最近剧情回顾】
+${historySummary || '暂无'}
+
+【重要事件回忆】
+${memoirRecent || '暂无'}
+
+【核心要求】
+1. 必须精准继承【统一全局记忆】与【NPC关系与专属记忆】中的所有设定、承诺与更名记录。
+2. 每次生成剧情不少于 800 字，皮上游戏实况（走位、红石、追杀博弈、反杀高光）与皮下生活（日常互动、微信消息联动、主播八卦）巧妙交织。
+3. 行文生动写实，代入感强烈。只输出剧情正文，禁止角色扮演外的额外说明。
+`;
 }
 
 function buildUserPrompt(action, detail = '') {
@@ -442,23 +465,23 @@ function openEditContentModal(defaultTab = 'allAI') {
     <h3 style="margin-bottom:10px;">✏️ 编辑与管理</h3>
     <div class="btn-row" style="margin-bottom:12px;">
         <button class="btn-secondary small" id="editTabAIBtn" style="flex:1;">🤖 AI 发送的内容（${allAIItems.length}）</button>
-        <button class="btn-secondary small" id="editTabSummaryBtn" style="flex:1;">🧠 记忆总结（${summaryEntries.length}）</button>
+        <button class="btn-secondary small" id="editTabSummaryBtn" style="flex:1;">🧠 统一记忆总结（${summaryEntries.length}）</button>
     </div>
     <div id="editTabAI" style="max-height:58vh;overflow-y:auto;">
         ${allAIItems.length ? allAIItems.map(item => buildUnifiedAIEntryHTML(item)).join('') : '<p style="font-size:12px;color:#999;text-align:center;padding:20px;">暂无生成记录</p>'}
     </div>
     <div id="editTabSummary" style="max-height:58vh;overflow-y:auto;display:none;">
         ${summaryEntries.length ? summaryEntries.map(e => `
-            <div class="edit-entry" data-id="${e._id}" data-type="summary" style="margin-bottom:8px;border:1px solid rgba(30,60,30,.10);border-radius:10px;background:#fff;overflow:hidden;">
+            <div class="edit-entry" data-id="${e.id || e._id}" data-type="summary" style="margin-bottom:8px;border:1px solid rgba(30,60,30,.10);border-radius:10px;background:#fff;overflow:hidden;">
                 <div class="edit-entry-header" style="cursor:pointer;padding:10px 12px;background:#f5faf5;display:flex;justify-content:space-between;align-items:center;">
                     <div>
-                        <div style="font-size:12px;font-weight:700;">🧠 记忆总结 · 截至第${e.day}天</div>
-                        <div class="edit-entry-preview" style="font-size:12px;color:#777;margin-top:2px;">${escapeHtml(stripThought(e.text).slice(0, 60))}...</div>
+                        <div style="font-size:12px;font-weight:700;">🧠 全局记忆 · 截至第${e.day || 1}天</div>
+                        <div class="edit-entry-preview" style="font-size:12px;color:#777;margin-top:2px;">${escapeHtml(stripThought(e.text || e).slice(0, 60))}...</div>
                     </div>
                     <span class="chevron" style="color:#999;">▼</span>
                 </div>
                 <div class="edit-entry-body" style="display:none;padding:10px 12px;border-top:1px solid rgba(30,60,30,.06);">
-                    <textarea class="edit-textarea" style="width:100%;min-height:100px;padding:8px;border-radius:8px;border:2px solid rgba(30,60,30,.10);background:#f9fcf9;color:var(--text);font-size:13px;font-family:inherit;resize:vertical;">${escapeHtml(stripThought(e.text))}</textarea>
+                    <textarea class="edit-textarea" style="width:100%;min-height:100px;padding:8px;border-radius:8px;border:2px solid rgba(30,60,30,.10);background:#f9fcf9;color:var(--text);font-size:13px;font-family:inherit;resize:vertical;">${escapeHtml(stripThought(e.text || e))}</textarea>
                     <div class="btn-row" style="margin-top:8px;">
                         <button class="btn-secondary edit-cancel-btn">取消</button>
                         <button class="btn-primary edit-save-btn">💾 保存修改</button>
@@ -520,8 +543,15 @@ function openEditContentModal(defaultTab = 'allAI') {
                     if (G.currentChatNpc === npcId) renderSocialPanel();
                 }
             } else if (type === 'summary') {
-                const sm = (G.memorySummaries || []).find(m => m._id === id);
-                if (sm) sm.text = newText;
+                const sm = (G.memorySummaries || []).find(m => (m.id || m._id) === id);
+                if (sm) {
+                    if (typeof sm === 'string') {
+                        const sIdx = G.memorySummaries.indexOf(sm);
+                        G.memorySummaries[sIdx] = newText;
+                    } else {
+                        sm.text = newText;
+                    }
+                }
             }
             el.querySelector('.edit-entry-preview').textContent = newText.slice(0, 70) + (newText.length > 70 ? '...' : '');
             body.style.display = 'none';
@@ -534,78 +564,52 @@ function openEditContentModal(defaultTab = 'allAI') {
 $('editContentBtn')?.addEventListener('click', () => openEditContentModal('allAI'));
 
 // ============================================================
-// 🧠 记忆总结
+// 🧠 剧情自动归档与检测
 // ============================================================
-async function generateMemorySummary(keepRecentCount, opts = {}) {
-    const active = G.storyHistory.filter(h => !h.archived);
-    const toSummarize = active.slice(0, Math.max(0, active.length - keepRecentCount));
-    if (!toSummarize.length) { showToast('⚠️ 没有可总结的内容', 'error', 1800); return null; }
-    const priorSummaries = (G.memorySummaries || []).map(m => stripThought(m.text)).join('\n');
-    let summaryText;
-    if (opts.manualText) {
-        summaryText = opts.manualText.trim();
-    } else {
-        const combinedText = toSummarize.map(h => `[第${h.day}天 ${getTimeSlotName(h.time)}] ${stripThought(h.text)}`).join('\n\n');
-        const sys = `你是剧情记忆总结助手。请将以下主播模拟游戏剧情浓缩为精炼总结（300字以内），保留关键事件，去除口水话。只输出正文。`;
-        const userMsg = `${priorSummaries ? `【已有总结】\n${priorSummaries}\n\n` : ''}【需要总结的记录】\n${combinedText}`;
-        summaryText = await callAI([
-            { role: 'system', content: sys },
-            { role: 'user', content: userMsg },
-        ], { maxTokens: 800, temperature: 0.5 });
-        summaryText = stripThought(summaryText.trim());
-    }
-    const lastEntry = toSummarize[toSummarize.length - 1];
-    const summaryEntry = {
-        _id: 'sum_' + (G._summaryId = (G._summaryId || 0) + 1),
-        text: summaryText,
-        day: lastEntry.day,
-        createdAt: Date.now(),
-        coveredCount: toSummarize.length,
-        manual: !!opts.manualText,
-    };
-    G.memorySummaries.push(summaryEntry);
-    const idsToArchive = new Set(toSummarize.map(h => h._id));
-    G.storyHistory.forEach(h => {
-        if (idsToArchive.has(h._id)) {
-            h.archived = true;
-            refreshStoryBlockDOM(h);
-        }
-    });
-    autoSaveGame();
-    return summaryEntry;
-}
-
 async function maybeAutoSummarize() {
-    const s = G.memorySummarySettings;
-    if (!s.enabled || G._autoSummarizing) return;
+    const s = G.memoryConfig || {};
+    if (!s.enabled) return;
     const active = G.storyHistory.filter(h => !h.archived);
-    if (active.length < s.threshold) return;
+    const threshold = s.defaultThreshold || 10;
+    const keepRecent = s.defaultKeepRecent || 5;
+
+    if (active.length < threshold || G._autoSummarizing) return;
     G._autoSummarizing = true;
     try {
-        const entry = await generateMemorySummary(s.keepRecent);
-        if (entry) showToast('🧠 已自动生成记忆总结', 'success', 2200);
+        const toSummarize = active.slice(0, Math.max(0, active.length - keepRecent));
+        if (!toSummarize.length) return;
+        const priorSummaries = (G.memorySummaries || []).map(m => stripThought(m.text || m)).join('\n');
+        const combinedText = toSummarize.map(h => `[第${h.day}天 ${getTimeSlotName(h.time)}] ${stripThought(h.text)}`).join('\n\n');
+
+        const sys = `你是剧情记忆总结助手。请将以下主播模拟游戏剧情浓缩为精炼总结（250字以内），保留关键成长事件与人际关系，去除废话。直接输出正文。`;
+        const userMsg = `${priorSummaries ? `【已有总结】\n${priorSummaries}\n\n` : ''}【需要归纳的新剧情】\n${combinedText}`;
+
+        const summaryText = await callMemoryAI([
+            { role: 'system', content: sys },
+            { role: 'user', content: userMsg },
+        ], { maxTokens: 600, temperature: 0.35 });
+
+        const lastEntry = toSummarize[toSummarize.length - 1];
+        addGlobalMemoryRecord(summaryText.trim());
+
+        const idsToArchive = new Set(toSummarize.map(h => h._id));
+        G.storyHistory.forEach(h => {
+            if (idsToArchive.has(h._id)) {
+                h.archived = true;
+                refreshStoryBlockDOM(h);
+            }
+        });
+        showToast('🧠 已在后台自动整理并归档剧情记忆', 'info', 2200);
+        autoSaveGame();
     } catch (e) {
-        console.error(e);
+        console.warn('剧情后台自动总结跳过:', e);
     } finally {
         G._autoSummarizing = false;
     }
 }
 
+// 左侧“🧠 记忆”按钮总入口绑定到全新记忆模态框
 $('memorySummaryBtn')?.addEventListener('click', () => {
-    if (G.isGenerating) { showToast('⏳ 正在生成中，请稍候'); return; }
-    openModal(`
-        <h3 style="margin-bottom:10px;">🧠 记忆总结</h3>
-        <p style="font-size:12px;color:#666;line-height:1.6;">总结更早前的剧情，精炼为记忆背景。被总结的内容不再全量发给 AI，极大节省 Token 并防止串剧情。</p>
-        <div class="btn-row" style="margin-top:14px;">
-            <button class="btn-secondary" onclick="closeModal()">取消</button>
-            <button class="btn-primary" id="startMemorySummaryBtn">🧠 立即生成总结</button>
-        </div>
-    `);
-    document.getElementById('startMemorySummaryBtn')?.addEventListener('click', async () => {
-        closeModal();
-        showLoading();
-        await generateMemorySummary(5);
-        hideLoading();
-    });
+    openMemoryModal();
 });
 // ============================================================

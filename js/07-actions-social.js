@@ -30,9 +30,6 @@ async function performAction(action, detail = '', useSearch = false) {
         case 'video':
             openVideoModal();
             return;
-        case 'collab':
-            await handleCollab(detail, useSearch);
-            break;
         case 'sub':
             await handleSubAction(detail, useSearch);
             break;
@@ -65,28 +62,6 @@ function triggerRandomFriendRequest() {
         avatarEmoji: pick(['🎮', '⛏️', '🏹', '🎨', '🌟', '👒', '🎧', '👾']),
         day: G.day
     });
-}
-
-async function handleCollab(detail, useSearch = false) {
-    const availableNPCs = Object.values(G.npcs).filter(n => (n.favor || 0) >= 40);
-    let npc = null;
-    if (availableNPCs.length > 0) npc = pick(availableNPCs);
-    let extra = 0;
-    if (npc) {
-        const skills = npc.skills || { building: 0, redstone: 0, pvp: 0, survival: 0, hunting: 0 };
-        const avg = (skills.building + skills.redstone + skills.pvp + skills.survival + skills.hunting) / 5;
-        extra = Math.floor(avg * 10);
-        for (const sk of ['building', 'redstone', 'pvp', 'survival', 'hunting']) {
-            G.player.skills[sk] = Math.min(100, (G.player.skills[sk] || 0) + rand(1, 2));
-        }
-        addMemoir('合作视频', `与 ${npc.name} 合作，收益加成 ${extra}`);
-    }
-    await generateStory('🤜 合作视频', `玩家与${npc ? npc.name : '好友'}合作拍摄了一期视频，${detail || '强强联合，效果炸裂'}`, useSearch);
-    G.totalCollabs++;
-    G.player.followers += rand(200, 800) + extra;
-    G.player.money += rand(20, 60) + extra;
-    G.player.likes += rand(30, 100) + extra;
-    updateUI();
 }
 
 async function handleSubAction(detail, useSearch = false) {
@@ -1158,7 +1133,6 @@ function renderYouTubePanel() {
     const currentYtName = (G.ytUser && G.ytUser.username) || G.player.ytName;
     const isMain = getIsPlayerYtMainAccount();
     
-    // 头像优先读取用户自己上传的真实头像
     const avatarSrc = (isMain && G.player.avatar) ? G.player.avatar : (G.ytUser.avatarUrl || G.player.avatar || '');
 
     container.innerHTML = `
@@ -1395,7 +1369,6 @@ function buildYtChannelHTML() {
     `;
 }
 
-// 清理评论用户名的辅助函数
 function cleanYtUsername(rawUser) {
     if (!rawUser) return getRandomRealisticNetName();
     let name = rawUser.replace(/\[\/?COMMENT[^\]]*\]/gi, '')
@@ -1409,7 +1382,6 @@ function cleanYtUsername(rawUser) {
     return name;
 }
 
-// 清理评论文本残留的辅助函数
 function cleanYtCommentText(rawText) {
     if (!rawText) return '';
     return rawText.replace(/\[\/?COMMENT[^\]]*\]/gi, '')
@@ -1938,7 +1910,6 @@ function openPublishVideoModal() {
     };
 }
 
-// 💬 评论生成深度修复：彻底杜绝 user= 代码残留，生成极拟真的真实网友昵称
 async function generateMoreYtCommentsByAI(videoId) {
     let video = (G.ytExternalVideos || []).find(v => v._id === videoId);
     if (!video) {
@@ -1977,7 +1948,6 @@ async function generateMoreYtCommentsByAI(videoId) {
 
         if (!video.comments) video.comments = [];
         
-        // 宽容多模态正则解析
         const re = /\[COMMENT(?:\s+user=|\s*:\s*)(["']?)([^\]"'\n]+)\1\]([\s\S]*?)(?:\[\/COMMENT\]|(?=\[COMMENT)|$)/gi;
         let m;
         let cCount = 0;
@@ -1996,7 +1966,6 @@ async function generateMoreYtCommentsByAI(videoId) {
             }
         }
 
-        // 强力兜底：按行智能清洗提取，保证绝不把 user= 残留推给用户
         if (cCount === 0 && raw.trim()) {
             const lines = raw.split('\n').filter(l => l.trim().length > 3);
             lines.forEach((l) => {
@@ -2094,7 +2063,6 @@ function openYtWriteCommentModal(videoId) {
     };
 }
 
-// 修复油管楼中楼回复：确保可靠找到目标评论并实现拟真互动
 function openYtReplyCommentModal(videoId, commentIdx) {
     let video = (G.ytExternalVideos || []).find(v => v._id === videoId);
     if (!video) {
@@ -2146,7 +2114,6 @@ function openYtReplyCommentModal(videoId, commentIdx) {
         renderYouTubePanel();
         autoSaveGame();
 
-        // 网友/主播拟真互动跟评接话
         if (Math.random() < 0.7) {
             setTimeout(async () => {
                 try {

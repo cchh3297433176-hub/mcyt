@@ -1,5 +1,5 @@
 // js/04-game-core-2.js
-// 成就系统、商店、数据面板、手机社交与多层级记忆归纳系统
+// 成就系统、商店、数据面板、手机社交(含聊天加号合作联动)与复刻级记忆总结系统
 // ============================================================
 
 // 成就系统
@@ -476,32 +476,53 @@ function renderDataPanel() {
 }
 
 // ============================================================
-// 🧠 记忆系统核心配置与独立便宜总结 API 调度
+// 🧠 记忆系统核心配置与独立便宜总结模型调度
 // ============================================================
 if (!G.memoryConfig) {
     G.memoryConfig = {
         enabled: true,              // 是否开启后台自动总结
-        defaultThreshold: 12,       // 默认触发总结轮数
-        defaultKeepRecent: 4,       // 总结后保留最近多少轮对话
-        useCustomApi: false,        // 是否使用单独的便宜备用 API
-        api: {
-            baseUrl: '',
-            apiKey: '',
-            model: ''
-        }
+        defaultThreshold: 10,       // 默认触发总结轮数
+        defaultKeepRecent: 5,       // 总结后保留最近多少轮对话
+        selectedModelKey: ''        // 选中的专门总结模型
     };
 }
 if (!G.memorySummaries) G.memorySummaries = [];
 if (!G.groupMemories) G.groupMemories = {};
 
-// 独立低成本记忆 AI 调用引擎
+// 获取全部可用模型列表供用户选择（包含低成本模型档案）
+function getAvailableMemoryModels() {
+    const list = [];
+    if (G.aiProfiles && Array.isArray(G.aiProfiles) && G.aiProfiles.length) {
+        G.aiProfiles.forEach(p => {
+            list.push({ key: 'profile_' + p.id, name: p.name || p.model, model: p.model, profile: p });
+        });
+    }
+    if (G.ai && G.ai.model) {
+        list.push({ key: 'current_ai', name: `主模型 (${G.ai.model})`, model: G.ai.model, profile: G.ai });
+    }
+    if (!list.length) {
+        list.push({ key: 'default_cheap', name: '便宜模型 (deepseek-chat)', model: 'deepseek-chat', profile: null });
+    }
+    return list;
+}
+
+// 调度记忆总结的专属模型，节省主模型额度
 async function callMemoryAI(messages, options = {}) {
     const cfg = G.memoryConfig || {};
-    // 如果配置了独立 API，则走专门的便宜小模型
-    if (cfg.useCustomApi && cfg.api && cfg.api.apiKey && cfg.api.baseUrl) {
-        const baseUrl = cfg.api.baseUrl.replace(/\/+$/, '');
-        const model = cfg.api.model || 'gpt-4o-mini';
-        const apiKey = cfg.api.apiKey;
+    let targetProfile = null;
+
+    if (cfg.selectedModelKey) {
+        const models = getAvailableMemoryModels();
+        const found = models.find(m => m.key === cfg.selectedModelKey);
+        if (found && found.profile && found.profile.apiKey) {
+            targetProfile = found.profile;
+        }
+    }
+
+    if (targetProfile && targetProfile.baseUrl && targetProfile.apiKey) {
+        const baseUrl = targetProfile.baseUrl.replace(/\/+$/, '');
+        const model = targetProfile.model || 'deepseek-chat';
+        const apiKey = targetProfile.apiKey;
         const url = `${baseUrl}/chat/completions`;
 
         const resp = await fetch(url, {
@@ -513,28 +534,25 @@ async function callMemoryAI(messages, options = {}) {
             body: JSON.stringify({
                 model,
                 messages,
-                temperature: options.temperature !== undefined ? options.temperature : 0.4,
-                max_tokens: options.maxTokens || 600
+                temperature: options.temperature !== undefined ? options.temperature : 0.35,
+                max_tokens: options.maxTokens || 650
             })
         });
 
         if (!resp.ok) {
             const errText = await resp.text();
-            throw new Error(`记忆专用 API 报错 [${resp.status}]: ${errText.slice(0, 120)}`);
+            throw new Error(`记忆专用 API [${resp.status}]: ${errText.slice(0, 100)}`);
         }
-
         const data = await resp.json();
         return (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
     }
 
-    // 否则回退使用全局主模型 callAI()
     return await callAI(messages, {
-        temperature: options.temperature !== undefined ? options.temperature : 0.4,
-        maxTokens: options.maxTokens || 600
+        temperature: options.temperature !== undefined ? options.temperature : 0.35,
+        maxTokens: options.maxTokens || 650
     });
 }
 
-// 记忆总结失败时友好的可快速关闭弹窗
 function showMemoryFailNoticeModal(moduleName, errorMsg) {
     openModal(`
         <div style="text-align:center;padding:10px 0;">
@@ -544,7 +562,7 @@ function showMemoryFailNoticeModal(moduleName, errorMsg) {
                 <div><b>失败模块：</b>${escapeHtml(moduleName)}</div>
                 <div style="font-size:11px;color:#888;margin-top:4px;"><b>原因提示：</b>${escapeHtml(errorMsg || '网络超时或接口异常')}</div>
             </div>
-            <p style="font-size:12px;color:#777;">这不会影响当前正常游玩与消息发送。您可以点击下方按钮直接关闭，或在左侧「🧠 记忆中心」检查独立 API 设置。</p>
+            <p style="font-size:12px;color:#777;">已保留原文继续游玩，不会影响正常剧情。点击下方即可关闭提示。</p>
             <div class="btn-row" style="margin-top:14px;">
                 <button class="btn-primary" onclick="closeModal()" style="width:100%;">我知道了，关闭提示</button>
             </div>
@@ -552,7 +570,6 @@ function showMemoryFailNoticeModal(moduleName, errorMsg) {
     `);
 }
 
-// 🌐 统一全局记忆追加
 function addGlobalMemoryRecord(text) {
     if (!text) return;
     if (!G.memorySummaries) G.memorySummaries = [];
@@ -565,7 +582,7 @@ function addGlobalMemoryRecord(text) {
 }
 
 // ============================================================
-// 📱 手机社交中心（模仿微信：消息 / 朋友圈动态 / 名片看动态）
+// 📱 手机社交中心
 // ============================================================
 if (!G.phoneNav) G.phoneNav = 'chats';
 if (!G.chatActiveTab) G.chatActiveTab = 'direct';
@@ -745,7 +762,7 @@ function buildChatListHTML() {
         </div>
     </div>
     <div style="font-size:11px;color:#888;padding:6px 16px;background:#fcfdfc;border-bottom:1px dashed #eee;">
-        💡 提示：长按联系人或群聊可编辑人设、头像与独立记忆总结
+        💡 提示：长按联系人或群聊可编辑人设、头像与独立记忆设置
     </div>
     <div class="chat-list" style="flex:1;overflow-y:auto;padding:8px;">
         ${itemsHtml}
@@ -834,6 +851,226 @@ function bindMomentsEvents(container) {
     });
 }
 
+// 💬 聊天加号弹窗：整合拍共创视频、联动直播与旁白
+function openChatActionMenuModal(targetType, targetId) {
+    const isGroup = targetType === 'group';
+    const title = isGroup ? '👥 群聊互动与共创' : `🤝 与 ${escapeHtml(G.npcs[targetId]?.name || '好友')} 的互动`;
+
+    openModal(`
+        <h3>${title}</h3>
+        <p style="font-size:12px;color:#666;line-height:1.5;">选择与对方展开的合作联动形式：</p>
+        <div class="btn-row" style="flex-direction:column;gap:8px;margin-top:10px;">
+            <button class="btn-primary" id="actCollabVideoBtn" style="width:100%;background:#e53935;">🎬 邀请一起录制拍视频 (油管共创)</button>
+            <button class="btn-primary" id="actCollabStreamBtn" style="width:100%;background:#388e3c;">🔴 邀请一起联机开播 (连麦涨粉)</button>
+            <button class="btn-secondary" id="actInsertNarrativeBtn" style="width:100%;">📝 插入旁白/动作描写</button>
+            <button class="btn-secondary" onclick="closeModal()" style="width:100%;">取消</button>
+        </div>
+    `);
+
+    document.getElementById('actCollabVideoBtn').onclick = () => {
+        closeModal();
+        openCollabVideoPublishModal(targetType, targetId);
+    };
+
+    document.getElementById('actCollabStreamBtn').onclick = () => {
+        closeModal();
+        handleInviteCollabStream(targetType, targetId);
+    };
+
+    document.getElementById('actInsertNarrativeBtn').onclick = () => {
+        closeModal();
+        openInsertNarrativeModal(targetType, targetId);
+    };
+}
+
+function openInsertNarrativeModal(targetType, targetId) {
+    openModal(`
+        <h3>📝 插入场景/动作描写</h3>
+        <p style="font-size:12px;color:#666;">以旁白视角描写此时的环境或动作（如：*端起咖啡喝了一口*）</p>
+        <div class="form-group">
+            <textarea id="actionNarrativeInput" rows="3" placeholder="例如：转过头看向窗外，微笑着说道..." style="width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;font-size:13px;"></textarea>
+        </div>
+        <div class="btn-row">
+            <button class="btn-secondary" onclick="closeModal()">取消</button>
+            <button class="btn-primary" id="confirmInsertAction">发送旁白</button>
+        </div>
+    `);
+
+    document.getElementById('confirmInsertAction').onclick = () => {
+        const act = document.getElementById('actionNarrativeInput').value.trim();
+        if (!act) return;
+        const msgObj = { from: 'action', text: `* ${act} *`, time: new Date().toLocaleTimeString().slice(0, 5) };
+        if (targetType === 'single') {
+            pushChat(targetId, msgObj);
+            renderSingleChatWindow(document.getElementById('socialTab'));
+        } else {
+            if (!G.groupChatHistory[targetId]) G.groupChatHistory[targetId] = [];
+            G.groupChatHistory[targetId].push(msgObj);
+            renderGroupChatWindow(document.getElementById('socialTab'));
+        }
+        closeModal();
+        autoSaveGame();
+    };
+}
+
+// 🎬 拍共创视频模态框：支持输入灵感一键AI扩写
+function openCollabVideoPublishModal(targetType, targetId) {
+    const isGroup = targetType === 'group';
+    let participants = [];
+
+    if (isGroup) {
+        const grp = G.groups[targetId];
+        participants = (grp.members || []).map(mid => G.npcs[mid]).filter(Boolean);
+    } else {
+        const npc = G.npcs[targetId];
+        if (npc) participants.push(npc);
+    }
+
+    const partnerCheckboxes = participants.map((p, i) => `
+        <label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;background:#f4f6f4;padding:4px 8px;border-radius:12px;margin:2px;">
+            <input type="checkbox" class="collab-partner-check" value="${p.id}" checked>
+            <span>${p.avatarEmoji || '👤'} ${escapeHtml(p.name)}</span>
+        </label>
+    `).join('');
+
+    openModal(`
+        <h3>🎬 发起共创视频拍摄</h3>
+        <div style="font-size:12px;color:#666;margin-bottom:8px;">
+            共创搭档：<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">${partnerCheckboxes}</div>
+        </div>
+        <div class="form-group">
+            <label>视频标题 <span class="required">*</span></label>
+            <input type="text" id="collabVideoTitle" placeholder="起一个吸睛的爆款标题...">
+        </div>
+        <div class="form-group">
+            <label>剪辑灵感 (简短点子)</label>
+            <div style="display:flex;gap:6px;">
+                <input type="text" id="collabVideoIdea" placeholder="如：下界连环整蛊陷阱、双人速通抢龙、红石机关大整蛊..." style="flex:1;">
+                <button type="button" class="btn-secondary small" id="btnAiDraftVideo">🤖 AI生成内容</button>
+            </div>
+        </div>
+        <div class="form-group">
+            <label>视频脚本剧情 / 简介 <span class="required">*</span></label>
+            <textarea id="collabVideoSummary" rows="3" placeholder="描述这期视频的核心高光击杀、互坑搞笑反转等..."></textarea>
+        </div>
+        <div class="btn-row">
+            <button class="btn-secondary" onclick="closeModal()">取消</button>
+            <button class="btn-primary" id="btnPublishCollabVideo">🚀 发布共创视频并推进时段</button>
+        </div>
+    `);
+
+    document.getElementById('btnAiDraftVideo').onclick = async () => {
+        const idea = document.getElementById('collabVideoIdea').value.trim();
+        const checkedBoxes = document.querySelectorAll('.collab-partner-check:checked');
+        const partnerNames = Array.from(checkedBoxes).map(cb => G.npcs[cb.value]?.name).filter(Boolean);
+        const partnerNamesStr = partnerNames.join('、') || '好友';
+
+        showToast('🤖 AI 正在构思爆款标题与内容...', 'info', 1500);
+        try {
+            const sys = `你是一名顶级 YouTube 游戏主播。玩家「${G.player.ytName}」正与搭档「${partnerNamesStr}」共同录制一期 Minecraft 合作视频。灵感线索为：${idea || '趣味竞技与互坑挑战'}。请生成一个极其吸睛的视频标题，以及一段80字以内的精彩剧情高光简介。
+格式规范：
+[TITLE]标题[/TITLE]
+[CONTENT]高光简介[/CONTENT]`;
+            const raw = await callAI([{ role: 'system', content: sys }, { role: 'user', content: '请编写共创视频设定。' }], { maxTokens: 300, temperature: 0.9 });
+            const tMatch = raw.match(/\[TITLE\]([\s\S]*?)\[\/TITLE\]/);
+            const cMatch = raw.match(/\[CONTENT\]([\s\S]*?)\[\/CONTENT\]/);
+            if (tMatch) document.getElementById('collabVideoTitle').value = tMatch[1].trim();
+            if (cMatch) document.getElementById('collabVideoSummary').value = cMatch[1].trim();
+            showToast('✅ 视频文案已生成！', 'success', 1200);
+        } catch(e) {
+            showToast('❌ AI 生成失败，请手动填写', 'error');
+        }
+    };
+
+    document.getElementById('btnPublishCollabVideo').onclick = async () => {
+        const title = document.getElementById('collabVideoTitle').value.trim();
+        const summary = document.getElementById('collabVideoSummary').value.trim();
+        const checkedBoxes = document.querySelectorAll('.collab-partner-check:checked');
+        const partnerIds = Array.from(checkedBoxes).map(cb => cb.value);
+
+        if (!title) { showToast('⚠️ 请输入视频标题', 'error'); return; }
+        if (!summary) { showToast('⚠️ 请填写视频剧情高光', 'error'); return; }
+        if (!partnerIds.length) { showToast('⚠️ 至少需要勾选一位合作搭档', 'error'); return; }
+
+        if (G.actionPoints < 2) { showToast('⚠️ 行动点不足，录制视频需要 2 点推进时段', 'error'); return; }
+        G.actionPoints -= 2;
+
+        const partnerNames = partnerIds.map(id => G.npcs[id]?.name).filter(Boolean);
+        const fullTitle = `【共创】${title} (ft. ${partnerNames.join(' & ')})`;
+
+        const videoObj = {
+            title: fullTitle,
+            desc: summary,
+            isCollab: true,
+            partners: partnerNames,
+            views: rand(800, 3500) + partnerNames.length * 500,
+            likes: rand(100, 800) + partnerNames.length * 80,
+            day: G.day,
+            comments: []
+        };
+
+        if (!G.player.videos) G.player.videos = [];
+        G.player.videos.push(videoObj);
+
+        // 同步推送一条到油管外部推荐池，让玩家在油管流里能刷到
+        if (!G.ytExternalVideos) G.ytExternalVideos = [];
+        G.ytExternalVideos.unshift({
+            _id: 'yt_collab_' + Date.now(),
+            channelId: 'all',
+            title: fullTitle,
+            author: `${G.player.ytName} × ${partnerNames.join(' × ')}`,
+            authorId: partnerIds[0] || null,
+            views: `${videoObj.views}次观看`,
+            time: '刚刚',
+            duration: `${rand(10, 25)}:${rand(10, 59)}`,
+            thumbnailEmoji: pick(['⚔️', '🎬', '💥', '🏆', '🔥']),
+            summary: summary,
+            comments: []
+        });
+
+        // 增加好感度与属性
+        partnerIds.forEach(id => {
+            const n = G.npcs[id];
+            if (n) {
+                n.favor = Math.min(100, (n.favor || 0) + rand(3, 7));
+                n.memorySummary = (n.memorySummary || '') + `\n【合作拍摄】：与主角合拍了视频《${fullTitle}》，反响热烈。`;
+            }
+        });
+
+        G.player.followers += rand(250, 900) + partnerNames.length * 150;
+        G.player.money += rand(60, 180);
+
+        closeModal();
+        appendStory(`🎬 你与 ${partnerNames.join('、')} 联合拍摄发布了爆款共创视频《${fullTitle}》！好感度与播放量大涨！`, '🤜 合作共创');
+        addGlobalMemoryRecord(`【共创发布】：主角与 ${partnerNames.join('、')} 合作发布了油管共创视频《${fullTitle}》，收获 ${videoObj.views} 播放。`);
+        
+        showToast(`🎉 共创视频发布成功！`, 'success', 2500);
+        advanceTimeSlot();
+        updateUI();
+        autoSaveGame();
+        renderSocialPanel();
+    };
+}
+
+// 🔴 邀请联动直播处理
+function handleInviteCollabStream(targetType, targetId) {
+    const isGroup = targetType === 'group';
+    let partnerNames = [];
+    if (isGroup) {
+        partnerNames = (G.groups[targetId]?.members || []).map(mid => G.npcs[mid]?.name).filter(Boolean);
+    } else {
+        const npc = G.npcs[targetId];
+        if (npc) partnerNames.push(npc.name);
+    }
+
+    if (!partnerNames.length) { showToast('找不到联动搭档', 'error'); return; }
+
+    // 存储联动标记，进入直播面板后结算获得额外加成
+    G.pendingCollabPartners = partnerNames;
+    showToast(`📺 已向 ${partnerNames.join('、')} 发出连麦邀请！切换至直播面板开启直播`, 'success', 2500);
+    switchTab('stream');
+}
+
 function renderSingleChatWindow(container) {
     const npcId = G.currentChatNpc;
     const npc = G.npcs[npcId];
@@ -879,11 +1116,11 @@ function renderSingleChatWindow(container) {
         </div>
 
         <div id="chatMessageArea" style="flex:1;overflow-y:auto;padding:14px;">
-            ${messagesHtml || '<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">发消息不消耗点数，发送完毕后点击右上角 ⚡ 闪电即可触发回复。</div>'}
+            ${messagesHtml || '<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">发消息不消耗点数，点击 ➕ 可发起拍视频共创或联动直播！</div>'}
         </div>
 
         <div style="padding:8px 10px;background:#fff;border-top:1px solid #e5ebe5;display:flex;gap:8px;align-items:center;">
-            <button id="chatActionInsertBtn" title="插入动作或环境叙事" style="border:1px solid #ccc;background:#f8f9f8;color:#555;width:36px;height:36px;border-radius:50%;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;">➕</button>
+            <button id="chatActionInsertBtn" title="合作/拍视频/旁白" style="border:1px solid #ccc;background:#f8f9f8;color:#555;width:36px;height:36px;border-radius:50%;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;">➕</button>
             <textarea id="singleChatInput" rows="1" placeholder="输入消息（可连续发多条）..." style="flex:1;padding:8px 12px;border-radius:18px;border:1px solid #ddd;background:#f8faf8;font-size:14px;resize:none;outline:none;font-family:inherit;"></textarea>
             <button id="singleSendBtn" style="border:none;background:var(--primary);color:#fff;padding:8px 16px;border-radius:18px;font-size:13px;font-weight:700;cursor:pointer;">发送</button>
         </div>
@@ -918,26 +1155,9 @@ function renderSingleChatWindow(container) {
     document.getElementById('singleChatHeaderProfileBtn')?.addEventListener('click', showCard);
     container.querySelectorAll('.chat-npc-avatar-btn').forEach(btn => btn.onclick = showCard);
 
+    // 点击 ➕ 弹出合作菜单
     document.getElementById('chatActionInsertBtn').onclick = () => {
-        openModal(`
-            <h3>📝 插入场景/动作描写</h3>
-            <p style="font-size:12px;color:#666;">以旁白视角描写此时的环境或动作（如：*端起咖啡喝了一口*）</p>
-            <div class="form-group">
-                <textarea id="actionNarrativeInput" rows="3" placeholder="例如：转过头看向窗外，微笑着说道..." style="width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;font-size:13px;"></textarea>
-            </div>
-            <div class="btn-row">
-                <button class="btn-secondary" onclick="closeModal()">取消</button>
-                <button class="btn-primary" id="confirmInsertAction">发送旁白</button>
-            </div>
-        `);
-        document.getElementById('confirmInsertAction').onclick = () => {
-            const act = document.getElementById('actionNarrativeInput').value.trim();
-            if (!act) return;
-            pushChat(npcId, { from: 'action', text: `* ${act} *`, time: new Date().toLocaleTimeString().slice(0, 5) });
-            closeModal();
-            renderSingleChatWindow(container);
-            autoSaveGame();
-        };
+        openChatActionMenuModal('single', npcId);
     };
 
     document.getElementById('triggerAIReplyBtn').onclick = async () => {
@@ -985,16 +1205,15 @@ function openNpcProfileCardModal(npcId) {
     };
 }
 
-// 🧠 角色私聊记忆自动总结
 async function checkNpcMemorySummarize(npcId) {
     const memCfg = G.memoryConfig || {};
-    if (memCfg.enabled === false) return; // 用户关闭了自动总结
+    if (memCfg.enabled === false) return;
 
     const npc = G.npcs[npcId];
     if (!npc) return;
     const history = G.chatHistory[npcId] || [];
-    const threshold = npc.summaryThreshold || memCfg.defaultThreshold || 12;
-    const keepRecent = npc.keepRecent || memCfg.defaultKeepRecent || 4;
+    const threshold = npc.summaryThreshold || memCfg.defaultThreshold || 10;
+    const keepRecent = npc.keepRecent || memCfg.defaultKeepRecent || 5;
 
     if (history.length >= threshold && !npc._summarizing) {
         npc._summarizing = true;
@@ -1007,10 +1226,9 @@ async function checkNpcMemorySummarize(npcId) {
             const summary = await callMemoryAI([
                 { role: 'system', content: sys },
                 { role: 'user', content: `${prior}【需归纳的新对话】：\n${textToSummarize}` }
-            ], { maxTokens: 400, temperature: 0.4 });
+            ], { maxTokens: 400, temperature: 0.35 });
 
             npc.memorySummary = stripThought(summary.trim());
-            // 保留最近设定的轮数交流
             G.chatHistory[npcId] = history.slice(Math.max(0, history.length - keepRecent));
             autoSaveGame();
             showToast(`🧠 已自动整理与 ${npc.name} 的私聊记忆！`, 'info', 2000);
@@ -1034,7 +1252,6 @@ async function triggerAIReplyForSingle(npcId) {
         return `${m.from === 'player' ? '玩家' : npc.name}: ${stripThought(m.text)}`;
     }).join('\n');
 
-    // 注入私聊记忆 + 群聊认知记忆
     let npcMemoryContext = '';
     if (npc.memorySummary) npcMemoryContext += `【与玩家的私聊记忆】\n${npc.memorySummary}\n`;
     if (npc.knownGroupEvents) npcMemoryContext += `【TA在群聊里获知的事】\n${npc.knownGroupEvents}\n`;
@@ -1130,10 +1347,11 @@ function renderGroupChatWindow(container) {
         </div>
 
         <div id="groupMessageArea" style="flex:1;overflow-y:auto;padding:14px;">
-            ${messagesHtml || '<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">群里静悄悄的，发送消息并点击右上角 ⚡ 闪电激起群聊讨论吧！</div>'}
+            ${messagesHtml || '<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">群里静悄悄的，点击 ➕ 可发起群成员拍视频或多人开播！</div>'}
         </div>
 
         <div style="padding:8px 10px;background:#fff;border-top:1px solid #e5ebe5;display:flex;gap:8px;align-items:center;">
+            <button id="groupActionInsertBtn" title="群合作/共创视频/旁白" style="border:1px solid #ccc;background:#f8f9f8;color:#555;width:36px;height:36px;border-radius:50%;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;">➕</button>
             <textarea id="groupChatInput" rows="1" placeholder="在群里发言..." style="flex:1;padding:8px 12px;border-radius:18px;border:1px solid #ddd;background:#f8faf8;font-size:14px;resize:none;outline:none;font-family:inherit;"></textarea>
             <button id="groupSendBtn" style="border:none;background:var(--primary);color:#fff;padding:8px 16px;border-radius:18px;font-size:13px;font-weight:700;cursor:pointer;">发送</button>
         </div>
@@ -1171,6 +1389,11 @@ function renderGroupChatWindow(container) {
         }
     };
 
+    // 群聊点击 ➕ 呼出群合作菜单
+    document.getElementById('groupActionInsertBtn').onclick = () => {
+        openChatActionMenuModal('group', gid);
+    };
+
     document.getElementById('groupSettingsBtn').onclick = () => openGroupSettingsModal(gid);
     document.getElementById('triggerGroupAIBtn').onclick = async () => {
         if (G.isGenerating) { showToast('⏳ AI 正在组织群聊中...'); return; }
@@ -1180,7 +1403,6 @@ function renderGroupChatWindow(container) {
     };
 }
 
-// 🧠 群聊记忆自动总结与群成员认知联动
 async function checkGroupMemorySummarize(gid) {
     const memCfg = G.memoryConfig || {};
     if (memCfg.enabled === false) return;
@@ -1188,8 +1410,8 @@ async function checkGroupMemorySummarize(gid) {
     const grp = G.groups[gid];
     if (!grp) return;
     const history = G.groupChatHistory[gid] || [];
-    const threshold = grp.summaryThreshold || memCfg.defaultThreshold || 12;
-    const keepRecent = grp.keepRecent || memCfg.defaultKeepRecent || 4;
+    const threshold = grp.summaryThreshold || memCfg.defaultThreshold || 10;
+    const keepRecent = grp.keepRecent || memCfg.defaultKeepRecent || 5;
 
     if (history.length >= threshold && !grp._summarizing) {
         grp._summarizing = true;
@@ -1202,12 +1424,11 @@ async function checkGroupMemorySummarize(gid) {
             const summary = await callMemoryAI([
                 { role: 'system', content: sys },
                 { role: 'user', content: `${prior}【最新群聊记录】：\n${textToSummarize}` }
-            ], { maxTokens: 350, temperature: 0.4 });
+            ], { maxTokens: 350, temperature: 0.35 });
 
             const cleanSummary = stripThought(summary.trim());
             G.groupMemories[gid] = cleanSummary;
 
-            // 角色认知深度联动：群里的每个 NPC 自动同步知晓群聊纪要！
             (grp.members || []).forEach(mid => {
                 const targetNpc = G.npcs[mid];
                 if (targetNpc) {
@@ -1452,8 +1673,8 @@ function handleFriendRequestAction(reqId, accept) {
             persona: req.persona || '一位热心好友',
             favor: 40,
             isCustom: true,
-            summaryThreshold: 12,
-            keepRecent: 4
+            summaryThreshold: 10,
+            keepRecent: 5
         };
         showToast(`🎉 已同意 ${req.name} 的好友申请！`, 'success', 2500);
         appendStory(`🤝 你通过了「${req.name}」的好友申请，已添加到联系人列表中。`, '🤝 新增好友');
@@ -1469,7 +1690,7 @@ window.handleFriendRequestAction = handleFriendRequestAction;
 
 function openEditNpcModal(npcId) {
     const isNew = !npcId;
-    const npc = !isNew ? G.npcs[npcId] : { name: '', avatarEmoji: '👤', avatarUrl: '', persona: '', favor: 50, isCustom: true, summaryThreshold: 12, keepRecent: 4 };
+    const npc = !isNew ? G.npcs[npcId] : { name: '', avatarEmoji: '👤', avatarUrl: '', persona: '', favor: 50, isCustom: true, summaryThreshold: 10, keepRecent: 5 };
     
     openModal(`
         <h3>${isNew ? '👤 新建角色 / 粉丝' : `✏️ 编辑角色：${escapeHtml(npc.name)}`}</h3>
@@ -1498,11 +1719,11 @@ function openEditNpcModal(npcId) {
         <div style="display:flex;gap:10px;">
             <div class="form-group" style="flex:1;">
                 <label>🧠 触发总结轮数</label>
-                <input type="number" id="npcThresholdInput" min="4" max="50" value="${npc.summaryThreshold || 12}">
+                <input type="number" id="npcThresholdInput" min="4" max="50" value="${npc.summaryThreshold || 10}">
             </div>
             <div class="form-group" style="flex:1;">
                 <label>💬 总结后保留最近轮数</label>
-                <input type="number" id="npcKeepRecentInput" min="2" max="20" value="${npc.keepRecent || 4}">
+                <input type="number" id="npcKeepRecentInput" min="2" max="20" value="${npc.keepRecent || 5}">
             </div>
         </div>
         <div class="btn-row" style="margin-top:12px;">
@@ -1538,8 +1759,8 @@ function openEditNpcModal(npcId) {
         const name = document.getElementById('npcNameInput').value.trim();
         const emoji = document.getElementById('npcEmojiInput').value.trim() || '👤';
         const persona = document.getElementById('npcPersonaInput').value.trim() || '普通朋友';
-        const threshold = parseInt(document.getElementById('npcThresholdInput').value) || 12;
-        const keepRecent = parseInt(document.getElementById('npcKeepRecentInput').value) || 4;
+        const threshold = parseInt(document.getElementById('npcThresholdInput').value) || 10;
+        const keepRecent = parseInt(document.getElementById('npcKeepRecentInput').value) || 5;
         if (!name) { showToast('⚠️ 角色姓名不能为空', 'error'); return; }
 
         const id = isNew ? ('custom_npc_' + Date.now()) : npcId;
@@ -1633,8 +1854,8 @@ function openEditGroupModal(gid) {
             members: grp.members || Object.keys(G.npcs).slice(0, 4),
             activeMembers: grp.activeMembers || grp.members,
             streamerMode: grp.streamerMode || 'unified',
-            summaryThreshold: grp.summaryThreshold || 12,
-            keepRecent: grp.keepRecent || 4
+            summaryThreshold: grp.summaryThreshold || 10,
+            keepRecent: grp.keepRecent || 5
         };
         showToast('✅ 群聊已保存', 'success');
         closeModal();
@@ -1684,11 +1905,11 @@ function openGroupSettingsModal(gid) {
         <div style="display:flex;gap:10px;margin-bottom:12px;">
             <div class="form-group" style="flex:1;">
                 <label style="font-size:12px;">🧠 群记忆总结轮数</label>
-                <input type="number" id="grpSummaryThresholdInput" min="4" max="50" value="${grp.summaryThreshold || 12}">
+                <input type="number" id="grpSummaryThresholdInput" min="4" max="50" value="${grp.summaryThreshold || 10}">
             </div>
             <div class="form-group" style="flex:1;">
                 <label style="font-size:12px;">💬 保留最近轮数</label>
-                <input type="number" id="grpKeepRecentInput" min="2" max="20" value="${grp.keepRecent || 4}">
+                <input type="number" id="grpKeepRecentInput" min="2" max="20" value="${grp.keepRecent || 5}">
             </div>
         </div>
 
@@ -1721,8 +1942,8 @@ function openGroupSettingsModal(gid) {
         document.querySelectorAll('.grp-mem-check:checked').forEach(c => mems.push(c.dataset.id));
         document.querySelectorAll('.grp-active-check:checked').forEach(c => actives.push(c.dataset.id));
         const mode = document.querySelector('input[name="streamerMode"]:checked').value;
-        const threshold = parseInt(document.getElementById('grpSummaryThresholdInput').value) || 12;
-        const keepRecent = parseInt(document.getElementById('grpKeepRecentInput').value) || 4;
+        const threshold = parseInt(document.getElementById('grpSummaryThresholdInput').value) || 10;
+        const keepRecent = parseInt(document.getElementById('grpKeepRecentInput').value) || 5;
 
         grp.members = mems.length ? mems : Object.keys(G.npcs).slice(0, 3);
         grp.activeMembers = actives.length ? actives : grp.members;
@@ -1751,221 +1972,327 @@ function openChat(npcId) { G.currentChatNpc = npcId; renderSocialPanel(); }
 function closeChat() { G.currentChatNpc = null; renderSocialPanel(); }
 
 // ============================================================
-// 🧠 记忆中心控制台（接管左侧“🧠 记忆”按钮）
+// 🧠 经典复刻级记忆总结模态框（结合截图 UI 与多层级支持）
 // ============================================================
-let currentMemoryCenterTab = 'global'; // 'global' | 'characters' | 'config'
+let activeMemoryScope = 'story'; // 'story' | 'character' | 'group'
+let selectedScopeTargetId = null;
 
-function openMemoryCenterModal() {
-    renderMemoryCenterModal();
+function openMemoryModal() {
+    renderMemoryModalView();
 }
-window.openMemoryModal = openMemoryCenterModal; // 兼容覆盖左侧栏原按钮
+window.openMemoryModal = openMemoryModal;
 
-function renderMemoryCenterModal() {
+function renderMemoryModalView() {
     const memCfg = G.memoryConfig || {
         enabled: true,
-        defaultThreshold: 12,
-        defaultKeepRecent: 4,
-        useCustomApi: false,
-        api: { baseUrl: '', apiKey: '', model: '' }
+        defaultThreshold: 10,
+        defaultKeepRecent: 5,
+        selectedModelKey: ''
     };
     G.memoryConfig = memCfg;
 
-    const navTabsHtml = `
-    <div style="display:flex;gap:6px;background:#eef3ee;padding:4px;border-radius:10px;margin-bottom:12px;">
-        <button class="tab-pill-btn" onclick="switchMemoryCenterTab('global')" style="flex:1;border:none;padding:6px 0;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:${currentMemoryCenterTab==='global'?'#fff':'transparent'};color:${currentMemoryCenterTab==='global'?'var(--primary)':'#666'};">🌐 统一记忆</button>
-        <button class="tab-pill-btn" onclick="switchMemoryCenterTab('characters')" style="flex:1;border:none;padding:6px 0;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:${currentMemoryCenterTab==='characters'?'#fff':'transparent'};color:${currentMemoryCenterTab==='characters'?'var(--primary)':'#666'};">👤 角色/群聊记忆</button>
-        <button class="tab-pill-btn" onclick="switchMemoryCenterTab('config')" style="flex:1;border:none;padding:6px 0;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:${currentMemoryCenterTab==='config'?'#fff':'transparent'};color:${currentMemoryCenterTab==='config'?'var(--primary)':'#666'};">⚙️ 总结与API设置</button>
+    // 统计当前选定范围的未归档轮数
+    let unarchivedCount = 0;
+    let existingSummaries = [];
+
+    if (activeMemoryScope === 'story') {
+        unarchivedCount = (G.storyHistory || []).length;
+        existingSummaries = G.memorySummaries || [];
+    } else if (activeMemoryScope === 'character') {
+        const npcId = selectedScopeTargetId || Object.keys(G.npcs)[0];
+        selectedScopeTargetId = npcId;
+        unarchivedCount = (G.chatHistory[npcId] || []).length;
+        existingSummaries = G.npcs[npcId]?.memorySummary ? [{ text: G.npcs[npcId].memorySummary, day: G.day }] : [];
+    } else if (activeMemoryScope === 'group') {
+        const gid = selectedScopeTargetId || Object.keys(G.groups)[0];
+        selectedScopeTargetId = gid;
+        unarchivedCount = (G.groupChatHistory[gid] || []).length;
+        existingSummaries = G.groupMemories[gid] ? [{ text: G.groupMemories[gid], day: G.day }] : [];
+    }
+
+    // 动态生成模型下拉列表（含便宜模型档案）
+    const modelOptions = getAvailableMemoryModels().map(m => `
+        <option value="${m.key}" ${m.key === memCfg.selectedModelKey ? 'selected' : ''}>${escapeHtml(m.name)}</option>
+    `).join('');
+
+    // 已有记忆总结列表
+    let summariesListHtml = '<div style="color:#888;font-size:12px;padding:4px 0;">暂无</div>';
+    if (existingSummaries.length > 0) {
+        summariesListHtml = existingSummaries.map((s, idx) => `
+            <div style="background:#f9fcf9;border:1px solid #e2ebe2;border-radius:8px;padding:8px 10px;margin-bottom:6px;font-size:12px;line-height:1.5;position:relative;">
+                <div style="display:flex;justify-content:space-between;color:#777;font-size:11px;margin-bottom:3px;">
+                    <span>📌 总结存档 #${idx + 1}</span>
+                    <button onclick="handleDeleteSummaryItem(${idx})" style="border:none;background:none;color:#e53935;cursor:pointer;font-size:11px;">🗑️ 删除</button>
+                </div>
+                <div style="color:#333;">${escapeHtml(s.text || s)}</div>
+            </div>
+        `).join('');
+    }
+
+    // 范围选择选择器
+    let scopeSelectorHtml = `
+    <div style="display:flex;gap:6px;margin-bottom:12px;background:#f0f4f0;padding:4px;border-radius:10px;">
+        <button onclick="switchMemoryScope('story')" style="flex:1;border:none;padding:5px 0;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:${activeMemoryScope==='story'?'#fff':'transparent'};color:${activeMemoryScope==='story'?'var(--primary)':'#666'};">📖 主线剧情</button>
+        <button onclick="switchMemoryScope('character')" style="flex:1;border:none;padding:5px 0;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:${activeMemoryScope==='character'?'#fff':'transparent'};color:${activeMemoryScope==='character'?'var(--primary)':'#666'};">👤 角色私聊</button>
+        <button onclick="switchMemoryScope('group')" style="flex:1;border:none;padding:5px 0;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:${activeMemoryScope==='group'?'#fff':'transparent'};color:${activeMemoryScope==='group'?'var(--primary)':'#666'};">👥 群聊公共</button>
     </div>
     `;
 
-    let bodyHtml = '';
-
-    if (currentMemoryCenterTab === 'global') {
-        const gmList = G.memorySummaries || [];
-        let itemsHtml = '';
-        if (!gmList.length) {
-            itemsHtml = `<div style="text-align:center;color:#999;font-size:12px;padding:30px 0;">暂无统一全局记忆，重大事件（如更名、大合作、重要视频发布）会自动记录在此。</div>`;
-        } else {
-            itemsHtml = gmList.map((m, idx) => `
-                <div style="background:#fff;border:1px solid #eef2ee;border-radius:8px;padding:8px 10px;margin-bottom:8px;position:relative;">
-                    <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;color:#888;margin-bottom:4px;">
-                        <span>第 ${m.day || 1} 天 ${m.time || ''}</span>
-                        <button onclick="removeGlobalMemory(${idx})" style="border:none;background:none;color:#e53935;cursor:pointer;font-size:11px;">🗑️ 删除</button>
-                    </div>
-                    <div style="font-size:13px;color:#333;line-height:1.5;">${escapeHtml(m.text || m)}</div>
-                </div>
-            `).join('');
-        }
-
-        bodyHtml = `
-        <div style="font-size:12px;color:#666;margin-bottom:8px;">
-            <b>统一记忆说明</b>：记录主角的频道发展履历与重大转折（在编辑与主线剧情生成时全面生效）。
-        </div>
-        <div style="display:flex;gap:6px;margin-bottom:10px;">
-            <input type="text" id="newGlobalMemoryInput" placeholder="手动追加一条全局事件记录..." style="flex:1;padding:6px 10px;border-radius:6px;border:1px solid #ccc;font-size:12px;">
-            <button class="btn-primary small" id="addGlobalMemoryBtn" style="padding:6px 12px;font-size:12px;">➕ 添加</button>
-        </div>
-        <div style="max-height:260px;overflow-y:auto;background:#f9fbf9;border-radius:8px;padding:8px;border:1px solid #eee;">
-            ${itemsHtml}
-        </div>
-        `;
-    } else if (currentMemoryCenterTab === 'characters') {
-        let charCardsHtml = '';
-        for (const [nid, npc] of Object.entries(G.npcs)) {
-            charCardsHtml += `
-            <div style="background:#fff;border:1px solid #eef2ee;border-radius:8px;padding:10px;margin-bottom:8px;">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-                    <div style="display:flex;align-items:center;gap:6px;font-weight:700;font-size:13px;">
-                        ${npc.avatarEmoji || '👤'} ${escapeHtml(npc.name)}
-                    </div>
-                    <span style="font-size:11px;color:#2e7d32;">私聊阈值: ${npc.summaryThreshold || memCfg.defaultThreshold} 轮</span>
-                </div>
-                <div style="font-size:12px;color:#555;background:#fcfdfc;padding:6px 8px;border-radius:6px;border-left:3px solid var(--primary);margin-bottom:4px;">
-                    <b>🧠 私聊记忆：</b>${escapeHtml(npc.memorySummary || '暂无专属私聊记忆（私聊达到轮数后自动提炼）')}
-                </div>
-                ${npc.knownGroupEvents ? `<div style="font-size:12px;color:#1565c0;background:#f5f8ff;padding:6px 8px;border-radius:6px;border-left:3px solid #1976d2;"><b>👥 群聊认知：</b>${escapeHtml(npc.knownGroupEvents)}</div>` : ''}
-            </div>
-            `;
-        }
-
-        let grpCardsHtml = '';
-        for (const [gid, grp] of Object.entries(G.groups)) {
-            const grpMem = G.groupMemories[gid];
-            grpCardsHtml += `
-            <div style="background:#fff;border:1px solid #eef2ee;border-radius:8px;padding:10px;margin-bottom:8px;">
-                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-                    <span style="font-weight:700;font-size:13px;">👥 ${escapeHtml(grp.name)}</span>
-                    <span style="font-size:11px;color:#888;">${(grp.members||[]).length}位群成员共享认知</span>
-                </div>
-                <div style="font-size:12px;color:#555;background:#fcfdfc;padding:6px 8px;border-radius:6px;border-left:3px solid #f57c00;">
-                    ${escapeHtml(grpMem || '暂无群聊纪要（群聊消息达到阈值后自动总结并同步群成员）')}
-                </div>
-            </div>
-            `;
-        }
-
-        bodyHtml = `
-        <div style="font-size:12px;color:#666;margin-bottom:8px;">
-            <b>角色与群聊独立记忆</b>：私聊记忆互不串通；群聊记忆在总结后将由群内角色自动获知。
-        </div>
-        <div style="max-height:300px;overflow-y:auto;padding-right:4px;">
-            <div style="font-weight:700;font-size:12px;color:#333;margin-bottom:6px;">👤 角色独立私聊记忆</div>
-            ${charCardsHtml}
-            <div style="font-weight:700;font-size:12px;color:#333;margin:10px 0 6px;">👥 群聊公共纪要</div>
-            ${grpCardsHtml || '<div style="font-size:12px;color:#999;">暂无群聊</div>'}
-        </div>
-        `;
-    } else if (currentMemoryCenterTab === 'config') {
-        bodyHtml = `
-        <div style="font-size:12px;color:#666;line-height:1.6;margin-bottom:12px;">
-            你可以自定义记忆总结的频率，并配置<b>独立便宜小模型</b>（例如 DeepSeek-Chat、GPT-4o-mini 等）专门用于后台提炼记忆，节省主模型额度。
-        </div>
-
-        <div style="background:#f9fbf9;border:1px solid #e4ede4;padding:10px;border-radius:8px;margin-bottom:12px;">
-            <label style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;cursor:pointer;">
-                <input type="checkbox" id="memCfgAutoEnable" ${memCfg.enabled ? 'checked' : ''} style="width:16px;height:16px;">
-                <span>启用后台自动记忆总结</span>
-            </label>
-            <div style="display:flex;gap:10px;margin-top:10px;">
-                <div style="flex:1;">
-                    <label style="font-size:11px;color:#555;display:block;margin-bottom:3px;">默认触发轮数</label>
-                    <input type="number" id="memCfgThreshold" value="${memCfg.defaultThreshold || 12}" min="4" max="50" style="width:100%;padding:4px 8px;border:1px solid #ccc;border-radius:6px;font-size:12px;">
-                </div>
-                <div style="flex:1;">
-                    <label style="font-size:11px;color:#555;display:block;margin-bottom:3px;">保留最近轮数</label>
-                    <input type="number" id="memCfgKeepRecent" value="${memCfg.defaultKeepRecent || 4}" min="2" max="20" style="width:100%;padding:4px 8px;border:1px solid #ccc;border-radius:6px;font-size:12px;">
-                </div>
-            </div>
-        </div>
-
-        <div style="background:#fcfdfe;border:1px solid #e1e9f0;padding:10px;border-radius:8px;">
-            <label style="display:flex;align-items:center;gap:8px;font-weight:700;font-size:13px;color:#1976d2;cursor:pointer;">
-                <input type="checkbox" id="memCfgCustomApiEnable" ${memCfg.useCustomApi ? 'checked' : ''} style="width:16px;height:16px;">
-                <span>使用独立便宜总结 API（不勾选则使用主模型）</span>
-            </label>
-            <div id="memCustomApiBox" style="display:${memCfg.useCustomApi ? 'block' : 'none'};margin-top:10px;">
-                <div class="form-group" style="margin-bottom:6px;">
-                    <label style="font-size:11px;">Base URL</label>
-                    <input type="text" id="memApiBaseUrl" value="${escapeHtml((memCfg.api && memCfg.api.baseUrl) || '')}" placeholder="如：https://api.deepseek.com/v1" style="font-size:12px;">
-                </div>
-                <div class="form-group" style="margin-bottom:6px;">
-                    <label style="font-size:11px;">API Key</label>
-                    <input type="password" id="memApiKey" value="${escapeHtml((memCfg.api && memCfg.api.apiKey) || '')}" placeholder="sk-..." style="font-size:12px;">
-                </div>
-                <div class="form-group" style="margin-bottom:6px;">
-                    <label style="font-size:11px;">模型名称 (Model)</label>
-                    <input type="text" id="memApiModel" value="${escapeHtml((memCfg.api && memCfg.api.model) || '')}" placeholder="如：deepseek-chat 或 gpt-4o-mini" style="font-size:12px;">
-                </div>
-            </div>
-        </div>
-
-        <div class="btn-row" style="margin-top:14px;">
-            <button class="btn-secondary" onclick="closeModal()">取消</button>
-            <button class="btn-primary" id="saveMemConfigBtn">💾 保存记忆设置</button>
-        </div>
-        `;
+    if (activeMemoryScope === 'character') {
+        const npcOpts = Object.values(G.npcs).map(n => `
+            <option value="${n.id}" ${n.id === selectedScopeTargetId ? 'selected' : ''}>${escapeHtml(n.name)}</option>
+        `).join('');
+        scopeSelectorHtml += `
+        <div style="margin-bottom:10px;display:flex;align-items:center;gap:8px;font-size:12px;">
+            <span>选择角色：</span>
+            <select id="scopeTargetSelect" style="flex:1;padding:4px 8px;border-radius:6px;border:1px solid #ccc;font-size:12px;">${npcOpts}</select>
+        </div>`;
+    } else if (activeMemoryScope === 'group') {
+        const grpOpts = Object.values(G.groups).map(g => `
+            <option value="${g.id}" ${g.id === selectedScopeTargetId ? 'selected' : ''}>${escapeHtml(g.name)}</option>
+        `).join('');
+        scopeSelectorHtml += `
+        <div style="margin-bottom:10px;display:flex;align-items:center;gap:8px;font-size:12px;">
+            <span>选择群聊：</span>
+            <select id="scopeTargetSelect" style="flex:1;padding:4px 8px;border-radius:6px;border:1px solid #ccc;font-size:12px;">${grpOpts || '<option>暂无群聊</option>'}</select>
+        </div>`;
     }
 
     openModal(`
-        <h3>🧠 记忆中心与自动总结</h3>
-        ${navTabsHtml}
-        ${bodyHtml}
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+            <div style="display:flex;align-items:center;gap:6px;font-weight:800;font-size:18px;color:#2e7d32;">
+                <span>🧠 记忆总结</span>
+            </div>
+        </div>
+
+        ${scopeSelectorHtml}
+
+        <p style="font-size:12.5px;color:#555;line-height:1.6;margin-bottom:12px;">
+            当前共有 <b>${unarchivedCount}</b> 轮未归档的记录，AI 会读取这些内容。你可以让 AI 将较早的内容总结为一段精炼记忆，之后 AI 将只读取「记忆总结 + 最近若干轮」，不再读取被总结掉的原文。
+        </p>
+
+        <div class="form-group" style="margin-bottom:10px;">
+            <label style="font-size:12px;color:#333;font-weight:600;">保留最近几轮不总结（其余更早的内容会被总结并归档）</label>
+            <input type="number" id="memKeepRecentInput" min="1" max="30" value="${memCfg.defaultKeepRecent || 5}" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #ccc;font-size:13px;">
+        </div>
+
+        <div class="form-group" style="margin-bottom:12px;">
+            <label style="font-size:12px;color:#333;font-weight:600;">🧩 用于总结的模型（可与主对话模型不同）</label>
+            <select id="memModelSelect" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #ccc;font-size:13px;background:#fff;">
+                ${modelOptions}
+            </select>
+        </div>
+
+        <div style="display:flex;gap:10px;margin-bottom:10px;">
+            <button class="btn-secondary" onclick="closeModal()" style="flex:1;border-radius:10px;font-size:13px;padding:8px 0;">取消</button>
+            <button class="btn-primary" id="btnRunAiSummary" style="flex:1.4;border-radius:10px;background:#2e7d32;font-size:13px;padding:8px 0;">🧠 AI 生成总结</button>
+        </div>
+
+        <button class="btn-secondary" id="btnManualWriteSummary" style="width:100%;padding:7px 0;font-size:12px;border-radius:8px;margin-bottom:14px;background:#fdfcf9;border:1px solid #eedec8;color:#7a5223;">
+            ✍️ 改为手动填写总结
+        </button>
+
+        <div style="border-top:1px solid #eee;padding-top:10px;margin-top:8px;">
+            <div style="font-weight:700;font-size:13px;color:#333;margin-bottom:6px;">⚙️ 自动总结</div>
+            <label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:#444;line-height:1.5;cursor:pointer;margin-bottom:8px;">
+                <input type="checkbox" id="memAutoSummaryCheck" ${memCfg.enabled ? 'checked' : ''} style="width:16px;height:16px;margin-top:2px;">
+                <span>开启自动总结（未归档轮数达到阈值时，剧情生成后后台自动触发总结）</span>
+            </label>
+            <div class="form-group" style="margin-bottom:12px;">
+                <label style="font-size:12px;color:#666;">达到多少轮未归档时自动触发</label>
+                <input type="number" id="memAutoThresholdInput" min="4" max="60" value="${memCfg.defaultThreshold || 10}" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #ccc;font-size:13px;">
+            </div>
+        </div>
+
+        <div style="border-top:1px solid #eee;padding-top:10px;">
+            <div style="font-weight:700;font-size:13px;color:#333;margin-bottom:6px;">已有记忆总结 (${existingSummaries.length})</div>
+            <div style="max-height:150px;overflow-y:auto;">
+                ${summariesListHtml}
+            </div>
+        </div>
     `);
 
-    // 绑定事件
-    if (currentMemoryCenterTab === 'global') {
-        document.getElementById('addGlobalMemoryBtn')?.addEventListener('click', () => {
-            const val = document.getElementById('newGlobalMemoryInput').value.trim();
-            if (!val) { showToast('⚠️ 请输入记忆内容', 'error'); return; }
-            addGlobalMemoryRecord(val);
-            document.getElementById('newGlobalMemoryInput').value = '';
-            showToast('✅ 全局记忆已添加', 'success', 1200);
-            renderMemoryCenterModal();
-            autoSaveGame();
-        });
-    } else if (currentMemoryCenterTab === 'config') {
-        const chkApi = document.getElementById('memCfgCustomApiEnable');
-        chkApi.onchange = () => {
-            document.getElementById('memCustomApiBox').style.display = chkApi.checked ? 'block' : 'none';
+    // 绑定下拉切换角色或群聊
+    const stSelect = document.getElementById('scopeTargetSelect');
+    if (stSelect) {
+        stSelect.onchange = () => {
+            selectedScopeTargetId = stSelect.value;
+            renderMemoryModalView();
         };
+    }
 
-        document.getElementById('saveMemConfigBtn').onclick = () => {
-            const enabled = document.getElementById('memCfgAutoEnable').checked;
-            const threshold = parseInt(document.getElementById('memCfgThreshold').value) || 12;
-            const keepRecent = parseInt(document.getElementById('memCfgKeepRecent').value) || 4;
-            const useCustom = document.getElementById('memCfgCustomApiEnable').checked;
-            const baseUrl = document.getElementById('memApiBaseUrl').value.trim();
-            const apiKey = document.getElementById('memApiKey').value.trim();
-            const model = document.getElementById('memApiModel').value.trim();
+    // AI 生成总结
+    document.getElementById('btnRunAiSummary').onclick = async () => {
+        await executeManualAiSummary();
+    };
 
-            G.memoryConfig = {
-                enabled,
-                defaultThreshold: threshold,
-                defaultKeepRecent: keepRecent,
-                useCustomApi: useCustom,
-                api: { baseUrl, apiKey, model }
-            };
+    // 改为手动填写总结
+    document.getElementById('btnManualWriteSummary').onclick = () => {
+        openManualMemoryInputModal();
+    };
 
-            closeModal();
-            showToast('✅ 记忆总结配置已更新！', 'success', 2000);
-            autoSaveGame();
-        };
+    // 配置实时同步
+    document.getElementById('memAutoSummaryCheck').onchange = (e) => {
+        G.memoryConfig.enabled = e.target.checked;
+        autoSaveGame();
+    };
+    document.getElementById('memAutoThresholdInput').onchange = (e) => {
+        G.memoryConfig.defaultThreshold = parseInt(e.target.value) || 10;
+        autoSaveGame();
+    };
+    document.getElementById('memKeepRecentInput').onchange = (e) => {
+        G.memoryConfig.defaultKeepRecent = parseInt(e.target.value) || 5;
+        autoSaveGame();
+    };
+    document.getElementById('memModelSelect').onchange = (e) => {
+        G.memoryConfig.selectedModelKey = e.target.value;
+        autoSaveGame();
+    };
+}
+
+window.switchMemoryScope = function(scope) {
+    activeMemoryScope = scope;
+    if (scope === 'character') selectedScopeTargetId = Object.keys(G.npcs)[0];
+    if (scope === 'group') selectedScopeTargetId = Object.keys(G.groups)[0];
+    renderMemoryModalView();
+};
+
+window.handleDeleteSummaryItem = function(idx) {
+    if (activeMemoryScope === 'story') {
+        if (G.memorySummaries && G.memorySummaries[idx]) {
+            G.memorySummaries.splice(idx, 1);
+        }
+    } else if (activeMemoryScope === 'character') {
+        const npc = G.npcs[selectedScopeTargetId];
+        if (npc) npc.memorySummary = '';
+    } else if (activeMemoryScope === 'group') {
+        delete G.groupMemories[selectedScopeTargetId];
+    }
+    showToast('🗑️ 记忆总结项已删除', 'info', 1200);
+    renderMemoryModalView();
+    autoSaveGame();
+};
+
+// 执行手动触发 AI 总结
+async function executeManualAiSummary() {
+    const keepRecent = parseInt(document.getElementById('memKeepRecentInput').value) || 5;
+    const selectedModel = document.getElementById('memModelSelect').value;
+    G.memoryConfig.selectedModelKey = selectedModel;
+    G.memoryConfig.defaultKeepRecent = keepRecent;
+
+    let textToSummarize = '';
+    let prior = '';
+
+    if (activeMemoryScope === 'story') {
+        const list = G.storyHistory || [];
+        if (list.length <= keepRecent) {
+            showToast(`当前未归档记录数 (${list.length}) 小于等于保留轮数 (${keepRecent})，无需总结`, 'info', 2000);
+            return;
+        }
+        const sliceItems = list.slice(0, list.length - keepRecent);
+        textToSummarize = sliceItems.map(item => `[第${item.day}天]: ${item.text}`).join('\n');
+        prior = (G.memorySummaries || []).map(s => s.text || s).join('\n');
+    } else if (activeMemoryScope === 'character') {
+        const npc = G.npcs[selectedScopeTargetId];
+        const list = G.chatHistory[selectedScopeTargetId] || [];
+        if (list.length <= keepRecent) {
+            showToast(`当前私聊记录数 (${list.length}) 小于等于保留轮数，无需总结`, 'info', 2000);
+            return;
+        }
+        const sliceItems = list.slice(0, list.length - keepRecent);
+        textToSummarize = sliceItems.map(m => `${m.from === 'player' ? '主角' : npc.name}: ${stripThought(m.text)}`).join('\n');
+        prior = npc.memorySummary || '';
+    } else if (activeMemoryScope === 'group') {
+        const grp = G.groups[selectedScopeTargetId];
+        const list = G.groupChatHistory[selectedScopeTargetId] || [];
+        if (list.length <= keepRecent) {
+            showToast(`当前群聊记录数 (${list.length}) 小于等于保留轮数，无需总结`, 'info', 2000);
+            return;
+        }
+        const sliceItems = list.slice(0, list.length - keepRecent);
+        textToSummarize = sliceItems.map(m => `${m.senderName}: ${stripThought(m.text)}`).join('\n');
+        prior = G.groupMemories[selectedScopeTargetId] || '';
+    }
+
+    closeModal();
+    showLoading();
+    G.isGenerating = true;
+
+    try {
+        const sys = `你是资深的剧情记忆提炼专家。请将以下需要归档的事件对话内容压缩总结为一段精炼的记忆（150-250字内）。要求保留重大发展、角色关系变动、约定、数据成就等核心要素。直接输出精炼记忆文本。`;
+        const userPrompt = `${prior ? '【已有历史记忆摘要】：\n' + prior + '\n\n' : ''}【本次需归档的新内容】：\n${textToSummarize}`;
+
+        const summary = await callMemoryAI([
+            { role: 'system', content: sys },
+            { role: 'user', content: userPrompt }
+        ], { maxTokens: 500, temperature: 0.35 });
+
+        const cleanSummary = stripThought(summary.trim());
+
+        if (activeMemoryScope === 'story') {
+            addGlobalMemoryRecord(cleanSummary);
+            G.storyHistory = (G.storyHistory || []).slice(G.storyHistory.length - keepRecent);
+        } else if (activeMemoryScope === 'character') {
+            const npc = G.npcs[selectedScopeTargetId];
+            npc.memorySummary = cleanSummary;
+            G.chatHistory[selectedScopeTargetId] = (G.chatHistory[selectedScopeTargetId] || []).slice(G.chatHistory[selectedScopeTargetId].length - keepRecent);
+        } else if (activeMemoryScope === 'group') {
+            G.groupMemories[selectedScopeTargetId] = cleanSummary;
+            const grp = G.groups[selectedScopeTargetId];
+            (grp.members || []).forEach(mid => {
+                if (G.npcs[mid]) G.npcs[mid].knownGroupEvents = `【在群「${grp.name}」获悉】：${cleanSummary}`;
+            });
+            G.groupChatHistory[selectedScopeTargetId] = (G.groupChatHistory[selectedScopeTargetId] || []).slice(G.groupChatHistory[selectedScopeTargetId].length - keepRecent);
+        }
+
+        hideLoading();
+        showToast('🎉 AI 记忆总结生成完毕！已成功归档。', 'success', 2500);
+        autoSaveGame();
+        openMemoryModal();
+    } catch(e) {
+        hideLoading();
+        showMemoryFailNoticeModal('AI 记忆总结', e.message);
+    } finally {
+        G.isGenerating = false;
     }
 }
 
-window.switchMemoryCenterTab = function(tabName) {
-    currentMemoryCenterTab = tabName;
-    renderMemoryCenterModal();
-};
+function openManualMemoryInputModal() {
+    openModal(`
+        <h3>✍️ 手动填写记忆总结</h3>
+        <p style="font-size:12px;color:#666;">直接输入你希望保留并归档给 AI 读取的核心记忆：</p>
+        <div class="form-group">
+            <textarea id="manualMemoryText" rows="4" placeholder="写下关键事件、人际关系或者剧情转折..."></textarea>
+        </div>
+        <div class="btn-row">
+            <button class="btn-secondary" onclick="openMemoryModal()">返回</button>
+            <button class="btn-primary" id="btnSaveManualMemory">💾 保存记忆</button>
+        </div>
+    `);
 
-window.removeGlobalMemory = function(idx) {
-    if (G.memorySummaries && G.memorySummaries[idx]) {
-        G.memorySummaries.splice(idx, 1);
-        showToast('🗑️ 该条记忆已删除', 'info', 1200);
-        renderMemoryCenterModal();
+    document.getElementById('btnSaveManualMemory').onclick = () => {
+        const val = document.getElementById('manualMemoryText').value.trim();
+        if (!val) { showToast('⚠️ 记忆内容不能为空', 'error'); return; }
+
+        if (activeMemoryScope === 'story') {
+            addGlobalMemoryRecord(val);
+        } else if (activeMemoryScope === 'character') {
+            if (G.npcs[selectedScopeTargetId]) G.npcs[selectedScopeTargetId].memorySummary = val;
+        } else if (activeMemoryScope === 'group') {
+            G.groupMemories[selectedScopeTargetId] = val;
+            const grp = G.groups[selectedScopeTargetId];
+            if (grp) {
+                (grp.members || []).forEach(mid => {
+                    if (G.npcs[mid]) G.npcs[mid].knownGroupEvents = `【在群「${grp.name}」获悉】：${val}`;
+                });
+            }
+        }
+
+        showToast('✅ 记忆总结已保存', 'success');
         autoSaveGame();
-    }
-};
+        openMemoryModal();
+    };
+}
 
 // ============================================================
 // 回忆录
