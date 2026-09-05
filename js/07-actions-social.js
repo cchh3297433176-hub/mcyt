@@ -13,7 +13,7 @@ async function performAction(action, detail = '', useSearch = false) {
         switchTab('browser');
         return;
     }
-    if (action === 'youtube' || action === 'yt') {
+    if (action === 'youtube' || action === 'yt' || action === 'comment') {
         switchTab('youtube');
         return;
     }
@@ -377,7 +377,6 @@ function buildAo3ReadHTML(id) {
             ${work.summary ? `<div style="font-size:12px;color:#555;font-style:italic;background:#f5eee1;padding:8px 10px;border-left:3px solid #900;margin-top:10px;">${escapeHtml(work.summary)}</div>` : ''}
         </div>
 
-        <!-- 章节上一章/下一章导航栏 -->
         <div class="ao3-chapter-nav-bar">
             <button class="ao3-nav-step-btn" id="ao3PrevChapterBtn" ${isFirstChapter ? 'disabled' : ''}>⬅️ 上一章</button>
             <select id="ao3ChapterSelect" style="font-size:12px;border-radius:6px;border:1px solid #ccc;padding:4px;background:#fff;max-width:48%;">
@@ -399,7 +398,6 @@ function buildAo3ReadHTML(id) {
             <button id="ao3GiveKudosBtn" style="background:#fff;border:1px solid #900;color:#900;padding:7px 16px;border-radius:18px;font-size:12px;font-weight:700;cursor:pointer;">💚 投喂 Kudos (${work.kudos || 0})</button>
         </div>
 
-        <!-- 评论互动区 -->
         <div class="ao3-comments-section">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
                 <span style="font-size:15px;font-weight:700;color:#900;">💬 读者评论区 (${work.reviews.length})</span>
@@ -965,8 +963,8 @@ async function generateAo3ReviewsByAI(workId) {
         const sysPrompt = `
         你正在模拟 AO3 网站《${work.title}》（CP: ${work.pairing || '无'}）评论区下的真实读者书评。
         ${accountReactionsPrompt}
-        请生成 2 至 3 条读者长短不一的真实评论。
-        格式要求（每条占一行）：
+        请生成 3 至 4 条读者长短不一的真实评论。表情只能使用标准 Emoji（如 😭、🔥、❤️、🤣 等）。
+        格式要求（每行一条）：
         [REVIEW name=读者昵称]评论正文内容[/REVIEW]
         `;
 
@@ -978,25 +976,29 @@ async function generateAo3ReviewsByAI(workId) {
         hideLoading();
 
         if (!work.reviews) work.reviews = [];
-        const re = /\[REVIEW\s+name=([^\]]+?)\]([\s\S]*?)\[\/REVIEW\]/g;
+        const re = /\[REVIEW\s+name=([^\]]+?)\]([\s\S]*?)(?:\[\/REVIEW\]|$)/gi;
         let m;
         let count = 0;
         while ((m = re.exec(raw)) !== null) {
-            work.reviews.unshift({
-                id: 'rev_' + Date.now() + '_' + rand(100, 999),
-                author: m[1].trim(),
-                text: m[2].trim(),
-                time: `第${G.day}天 ${new Date().toLocaleTimeString().slice(0, 5)}`,
-                replies: []
-            });
-            count++;
+            const cleanText = m[2].replace(/\[\/?REVIEW[^\]]*\]/gi, '').trim();
+            if (cleanText) {
+                work.reviews.unshift({
+                    id: 'rev_' + Date.now() + '_' + rand(100, 999),
+                    author: m[1].trim(),
+                    text: cleanText,
+                    time: `第${G.day}天 ${new Date().toLocaleTimeString().slice(0, 5)}`,
+                    replies: []
+                });
+                count++;
+            }
         }
 
         if (count === 0 && raw.trim()) {
+            const fallback = raw.replace(/\[\/?REVIEW[^\]]*\]/gi, '').trim();
             work.reviews.unshift({
                 id: 'rev_' + Date.now(),
                 author: 'AO3_Reader_' + rand(10, 99),
-                text: raw.trim().slice(0, 150),
+                text: fallback.slice(0, 150) || '太好看了，作者大大快催更！🔥',
                 time: `第${G.day}天`,
                 replies: []
             });
@@ -1096,7 +1098,7 @@ if (!G.ytState) {
     G.ytState = {
         view: 'feed', // 'feed' | 'channel' | 'watch'
         activeVideoId: null,
-        tabFilter: 'all' // 'all' | 'mc' | 'trending' | 'live'
+        activeChannelId: 'all' // 'all' 或自定义 channelId
     };
 }
 if (!G.ytUser) {
@@ -1106,6 +1108,12 @@ if (!G.ytUser) {
     };
 }
 if (!G.ytExternalVideos) G.ytExternalVideos = [];
+if (!G.ytCustomChannels) {
+    G.ytCustomChannels = [
+        { id: 'ch_funny', name: '日常搞笑', prompt: '搞笑整活、沙雕操作、MC日常互怼' },
+        { id: 'ch_tech', name: '红石黑科技', prompt: '高深红石电脑、自动化农场、黑科技机关' }
+    ];
+}
 
 function getIsPlayerYtMainAccount() {
     return G.ytUser && G.player && (G.ytUser.username.trim() === G.player.ytName.trim());
@@ -1116,7 +1124,6 @@ function renderYouTubePanel() {
     if (!container) return;
     const st = G.ytState;
 
-    // 首次进入自动推荐一批外部视频
     if (!G.ytExternalVideos.length) {
         initDefaultYtFeed();
     }
@@ -1132,7 +1139,9 @@ function renderYouTubePanel() {
 
     const currentYtName = (G.ytUser && G.ytUser.username) || G.player.ytName;
     const isMain = getIsPlayerYtMainAccount();
-    const avatarSrc = (isMain && G.player.avatar) ? G.player.avatar : (G.ytUser.avatarUrl || '');
+    
+    // 头像优先读取用户自己上传的真实头像
+    const avatarSrc = (isMain && G.player.avatar) ? G.player.avatar : (G.ytUser.avatarUrl || G.player.avatar || '');
 
     container.innerHTML = `
     <div class="yt-app-wrap">
@@ -1142,9 +1151,13 @@ function renderYouTubePanel() {
                 <span>YouTube</span>
             </div>
             <div class="yt-topbar-actions">
-                <button class="upload-btn" id="ytRefreshFeedBtn" style="padding:4px 8px;font-size:11px;" title="刷新首页推荐视频">🔄 换一批</button>
-                <div class="yt-user-pill" id="ytUserAccountBtn" title="点击切换大号/小号/进入个人频道">
-                    ${avatarSrc ? `<img src="${avatarSrc}">` : '<span>👤</span>'}
+                <!-- 精简无冗余文字的刷新小按钮 -->
+                <button class="yt-icon-btn" id="ytRefreshFeedBtn" title="刷新视频推荐">🔄</button>
+                <!-- 用户头像Pill，直达个人主页与功能菜单 -->
+                <div class="yt-user-pill" id="ytUserAccountBtn" title="点击进入个人中心/发视频/切换账号">
+                    <div class="yt-user-avatar-wrap">
+                        ${avatarSrc ? `<img src="${avatarSrc}">` : '<span>🧑</span>'}
+                    </div>
                     <span>${escapeHtml(currentYtName)}</span>
                     <span style="font-size:9px;color:${isMain ? '#2e7d32' : '#888'};">(${isMain ? '主号' : '小号'})</span>
                 </div>
@@ -1202,10 +1215,18 @@ function initDefaultYtFeed() {
 }
 
 function buildYtFeedHTML() {
-    const isMain = getIsPlayerYtMainAccount();
-    const currentYtName = (G.ytUser && G.ytUser.username) || G.player.ytName;
+    const activeChId = G.ytState.activeChannelId || 'all';
 
-    // 整合外部视频与玩家自己发布的视频
+    // 渲染顶部频道标签栏（全部推荐 + 自定义频道 + ➕号）
+    let chipsHtml = `
+    <button class="yt-chip-btn ${activeChId === 'all' ? 'active' : ''}" data-chid="all">全部推荐</button>
+    `;
+    (G.ytCustomChannels || []).forEach(ch => {
+        chipsHtml += `<button class="yt-chip-btn ${activeChId === ch.id ? 'active' : ''}" data-chid="${ch.id}">${escapeHtml(ch.name)}</button>`;
+    });
+    chipsHtml += `<button class="yt-add-chip-btn" id="ytAddNewChannelBtn" title="创建新频道分区">➕</button>`;
+
+    // 视频卡片整合
     const myPublishedVideos = (G.player.videos || []).map(v => ({
         _id: 'yt_my_' + (v.title || v.day),
         isPlayer: true,
@@ -1216,54 +1237,73 @@ function buildYtFeedHTML() {
         duration: '12:30',
         thumbnailEmoji: '🎬',
         thumbnailUrl: v.coverUrl || null,
-        summary: v.desc || '精彩MC实况分享！',
+        summary: v.desc || '精彩实况分享！',
         rawVideoRef: v
     }));
 
-    const allCards = [...myPublishedVideos, ...(G.ytExternalVideos || [])];
+    let allCards = [...myPublishedVideos, ...(G.ytExternalVideos || [])];
+
+    // 如果选了特定自定义频道分类，筛选带有该标签的或显示该频道的专属内容
+    if (activeChId !== 'all') {
+        const curCh = (G.ytCustomChannels || []).find(c => c.id === activeChId);
+        if (curCh) {
+            allCards = allCards.filter(c => c.channelId === activeChId || (c.title && c.title.includes(curCh.name)) || (c.summary && c.summary.includes(curCh.name)));
+            if (!allCards.length) {
+                allCards = (G.ytExternalVideos || []).filter(c => c.channelId === activeChId);
+            }
+        }
+    }
 
     let feedHtml = '';
-    allCards.forEach(v => {
-        const npcObj = v.authorId ? G.npcs[v.authorId] : null;
-        let avatarHtml = '<span>👤</span>';
-        if (v.isPlayer) {
-            avatarHtml = G.player.avatar ? `<img src="${G.player.avatar}">` : '<span>🧑</span>';
-        } else if (npcObj && npcObj.avatarUrl) {
-            avatarHtml = `<img src="${npcObj.avatarUrl}">`;
-        } else if (npcObj && npcObj.avatarEmoji) {
-            avatarHtml = `<span>${npcObj.avatarEmoji}</span>`;
-        }
+    if (!allCards.length) {
+        feedHtml = `
+        <div style="text-align:center;padding:50px 20px;color:#888;">
+            <div style="font-size:32px;margin-bottom:8px;">📺</div>
+            <div style="font-weight:700;font-size:14px;">该频道暂无推送视频</div>
+            <div style="font-size:12px;margin-top:4px;">点击右上角 🔄 图标，AI 将根据该频道设定为你立刻生成专属视频流！</div>
+        </div>
+        `;
+    } else {
+        allCards.forEach(v => {
+            const npcObj = v.authorId ? G.npcs[v.authorId] : null;
+            let avatarHtml = '<span>👤</span>';
+            if (v.isPlayer) {
+                avatarHtml = G.player.avatar ? `<img src="${G.player.avatar}">` : '<span>🧑</span>';
+            } else if (npcObj && npcObj.avatarUrl) {
+                avatarHtml = `<img src="${npcObj.avatarUrl}">`;
+            } else if (npcObj && npcObj.avatarEmoji) {
+                avatarHtml = `<span>${npcObj.avatarEmoji}</span>`;
+            }
 
-        const thumbContent = v.thumbnailUrl 
-            ? `<img src="${v.thumbnailUrl}">` 
-            : `<span>${v.thumbnailEmoji || '🎮'}</span>`;
+            const thumbContent = v.thumbnailUrl 
+                ? `<img src="${v.thumbnailUrl}">` 
+                : `<span>${v.thumbnailEmoji || '🎮'}</span>`;
 
-        feedHtml += `
-        <div class="yt-feed-card" data-vid="${v._id}">
-            <div class="yt-feed-thumbnail">
-                ${thumbContent}
-                <span class="yt-duration-badge">${v.duration || '10:00'}</span>
-            </div>
-            <div class="yt-feed-info">
-                <div class="yt-feed-avatar">${avatarHtml}</div>
-                <div class="yt-feed-meta">
-                    <div class="yt-feed-title">${escapeHtml(v.title)}</div>
-                    <div class="yt-feed-submeta">
-                        <span>${escapeHtml(v.author)}</span>
-                        ${v.isPlayer ? '<b style="color:#2e7d32;margin-left:4px;">● 你的频道</b>' : ''}
-                        · <span>${v.views}</span> · <span>${v.time}</span>
+            feedHtml += `
+            <div class="yt-feed-card" data-vid="${v._id}">
+                <div class="yt-feed-thumbnail">
+                    ${thumbContent}
+                    <span class="yt-duration-badge">${v.duration || '10:00'}</span>
+                </div>
+                <div class="yt-feed-info">
+                    <div class="yt-feed-avatar">${avatarHtml}</div>
+                    <div class="yt-feed-meta">
+                        <div class="yt-feed-title">${escapeHtml(v.title)}</div>
+                        <div class="yt-feed-submeta">
+                            <span>${escapeHtml(v.author)}</span>
+                            ${v.isPlayer ? '<b style="color:#2e7d32;margin-left:4px;">● 你的频道</b>' : ''}
+                            · <span>${v.views}</span> · <span>${v.time}</span>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-        `;
-    });
+            `;
+        });
+    }
 
     return `
     <div class="yt-subnav">
-        <button class="yt-chip-btn active" id="ytFilterAll">全部推荐</button>
-        <button class="yt-chip-btn" id="ytGoMyChannelBtn">📺 我的主页 & 历史直播</button>
-        <button class="yt-chip-btn" id="ytPublishVideoBtn">➕ 发布新视频</button>
+        ${chipsHtml}
     </div>
     <div class="yt-video-feed">
         ${feedHtml}
@@ -1275,13 +1315,12 @@ function buildYtChannelHTML() {
     const isMain = getIsPlayerYtMainAccount();
     const p = G.player;
     const currentName = (G.ytUser && G.ytUser.username) || p.ytName;
-    const avatar = (isMain && p.avatar) ? p.avatar : (G.ytUser.avatarUrl || '');
+    const avatar = (isMain && p.avatar) ? p.avatar : (G.ytUser.avatarUrl || p.avatar || '');
 
-    // 我的历史视频
     const myVideos = (p.videos || []).slice().reverse();
     let videoListHtml = '';
     if (!myVideos.length) {
-        videoListHtml = `<div style="text-align:center;color:#888;padding:20px 0;font-size:12px;">频道暂无视频，点击上方「➕发布新视频」上传吧！</div>`;
+        videoListHtml = `<div style="text-align:center;color:#888;padding:20px 0;font-size:12px;">频道暂无视频，点击下方按钮上传吧！</div>`;
     } else {
         videoListHtml = myVideos.map((v, i) => `
             <div class="yt-feed-card" data-vid="yt_my_${v.title||i}" style="margin-bottom:10px;">
@@ -1297,7 +1336,6 @@ function buildYtChannelHTML() {
         `).join('');
     }
 
-    // 我的历史直播回放
     const liveHistory = (p.streamHistory || []).slice().reverse();
     let liveListHtml = '';
     if (!liveHistory.length) {
@@ -1311,7 +1349,7 @@ function buildYtChannelHTML() {
                         <div class="yt-feed-title">${escapeHtml(lh.title || `第${lh.day}天精彩实况直播`)}</div>
                         <div class="yt-feed-submeta">第${lh.day}天 · 👥 巅峰观众 ${lh.maxViewers||lh.viewers||0} · 收益 💰${lh.moneyEarned||0}</div>
                     </div>
-                    <button class="btn-secondary small" style="margin-left:auto;">录播文字</button>
+                    <button class="btn-secondary small" style="margin-left:auto;">回放文字</button>
                 </div>
             </div>
         `).join('');
@@ -1325,17 +1363,20 @@ function buildYtChannelHTML() {
         <div style="flex:1;">
             <div style="font-size:16px;font-weight:800;color:#0f0f0f;">${escapeHtml(currentName)}</div>
             <div style="font-size:11px;color:#606060;margin-top:2px;">
-                ${isMain ? `粉丝数：<b>${p.followers}</b> · 累计点赞：${p.likes}` : '披皮小号 · 仅用于潜水与路人评论'}
+                ${isMain ? `粉丝数：<b>${p.followers}</b> · 累计点赞：${p.likes}` : '披皮小号 · 用于潜水围观'}
             </div>
         </div>
-        <button class="btn-primary small" onclick="openPublishVideoModal()" style="margin:0;padding:6px 12px;">➕ 发视频</button>
+        <button class="btn-secondary small" onclick="G.ytState.view='feed';renderYouTubePanel();">返回首页</button>
     </div>
 
     <div style="padding:10px 14px;">
-        <div style="font-size:14px;font-weight:700;color:#0f0f0f;margin:10px 0 6px;">📹 频道已发视频 (${myVideos.length})</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0 6px;">
+            <span style="font-size:14px;font-weight:700;color:#0f0f0f;">📹 频道已发视频 (${myVideos.length})</span>
+            <button class="btn-primary small" onclick="openPublishVideoModal()" style="margin:0;padding:4px 10px;">➕ 发布新视频</button>
+        </div>
         ${videoListHtml}
 
-        <div style="font-size:14px;font-weight:700;color:#0f0f0f;margin:16px 0 6px;">🔴 历史直播录播回放 (${liveHistory.length})</div>
+        <div style="font-size:14px;font-weight:700;color:#0f0f0f;margin:18px 0 6px;">🔴 历史直播录播回放 (${liveHistory.length})</div>
         ${liveListHtml}
     </div>
     `;
@@ -1356,7 +1397,7 @@ function buildYtWatchHTML(videoId) {
             author: G.player.ytName,
             views: (liveData ? (liveData.maxViewers || 500) : 1000) + '次观看',
             time: `第${liveData ? liveData.day : G.day}天直播`,
-            summary: liveData ? `【直播文本实况记录】：本场直播累计获得金币 ${liveData.moneyEarned||0}，涨粉 ${liveData.fansGained||0}！${liveData.summaryText || '全程互动火爆，观众刷屏热烈！'}` : '精彩直播内容。',
+            summary: liveData ? `【直播实况记录】：本场直播累计获得金币 ${liveData.moneyEarned||0}，涨粉 ${liveData.fansGained||0}！${liveData.summaryText || '全程互动火爆，观众刷屏热烈！'}` : '精彩直播内容。',
             comments: liveData ? (liveData.danmakuList || []) : []
         };
     } else {
@@ -1383,10 +1424,10 @@ function buildYtWatchHTML(videoId) {
 
     if (!video.comments) video.comments = [];
 
-    // 格式化评论
+    // 格式化评论，并清洗任何残留标记
     let commentsHtml = '';
     if (!video.comments.length) {
-        commentsHtml = `<div style="text-align:center;color:#999;font-size:12px;padding:20px 0;">视频刚刚发布，快来抢首评！</div>`;
+        commentsHtml = `<div style="text-align:center;color:#999;font-size:12px;padding:20px 0;">视频刚发布，快点击下方「🎲 生成更多AI评论」或抢沙发！</div>`;
     } else {
         commentsHtml = video.comments.map((c, cIdx) => {
             let repliesHtml = '';
@@ -1400,13 +1441,16 @@ function buildYtWatchHTML(videoId) {
                 `).join('') + `</div>`;
             }
 
+            const cleanAuthor = escapeHtml(c.user || c.author || '观众').replace(/\[COMMENT[^\]]*\]/gi, '');
+            const cleanText = escapeHtml(c.content || c.text || '').replace(/\[COMMENT[^\]]*\]/gi, '').replace(/\[\/COMMENT\]/gi, '');
+
             return `
             <div class="ao3-comment-item" style="border-color:#eee;">
                 <div class="ao3-comment-header">
-                    <span style="font-weight:700;font-size:12px;color:#0f0f0f;">@${escapeHtml(c.user || c.author || '观众')}</span>
+                    <span style="font-weight:700;font-size:12px;color:#0f0f0f;">@${cleanAuthor}</span>
                     <span style="font-size:10px;color:#aaa;">${c.time || ''}</span>
                 </div>
-                <div class="ao3-comment-text">${escapeHtml(c.content || c.text || '')}</div>
+                <div class="ao3-comment-text">${cleanText}</div>
                 <div class="ao3-comment-actions">
                     <button class="btn-secondary small" onclick="openYtReplyCommentModal('${video._id}', ${cIdx})">💬 回复</button>
                 </div>
@@ -1420,7 +1464,6 @@ function buildYtWatchHTML(videoId) {
 
     return `
     <div class="yt-player-container">
-        <!-- 视频画面模拟黑屏区 -->
         <div class="yt-screen-mock">
             ${isLivePlayback ? '<span class="yt-live-tag">● 录播回放</span>' : ''}
             <div style="font-size:11px;color:#aaa;">▶ 正在播放模拟视频流</div>
@@ -1438,12 +1481,12 @@ function buildYtWatchHTML(videoId) {
             <div class="yt-player-stats">
                 <span>${video.views}</span>
                 <span>${video.time}</span>
-                <span>#Minecraft #游戏实况</span>
+                <span>#YouTube #游戏频道</span>
             </div>
 
             <div class="yt-author-bar">
-                <div style="width:36px;height:36px;border-radius:50%;background:#ddd;display:flex;align-items:center;justify-content:center;font-size:18px;">
-                    ${video.author === G.player.ytName && G.player.avatar ? `<img src="${G.player.avatar}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;">` : '🎮'}
+                <div style="width:36px;height:36px;border-radius:50%;background:#ddd;display:flex;align-items:center;justify-content:center;font-size:18px;overflow:hidden;">
+                    ${video.author === G.player.ytName && G.player.avatar ? `<img src="${G.player.avatar}" style="width:100%;height:100%;object-fit:cover;">` : '🎮'}
                 </div>
                 <div>
                     <div style="font-weight:700;font-size:13px;color:#0f0f0f;">${escapeHtml(video.author)}</div>
@@ -1459,7 +1502,6 @@ function buildYtWatchHTML(videoId) {
             </div>
         </div>
 
-        <!-- 评论互动区 -->
         <div style="padding:12px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
                 <span style="font-weight:700;font-size:14px;color:#0f0f0f;">评论 (${video.comments.length})</span>
@@ -1482,21 +1524,21 @@ function bindYtPanelEvents(container) {
     });
 
     document.getElementById('ytUserAccountBtn')?.addEventListener('click', () => {
-        openYtAccountModal();
+        openYtUserQuickMenuModal();
     });
 
-    document.getElementById('ytFilterAll')?.addEventListener('click', () => {
-        G.ytState.view = 'feed';
-        renderYouTubePanel();
+    // 绑定分类 Chip 切换
+    container.querySelectorAll('.yt-chip-btn').forEach(btn => {
+        btn.onclick = () => {
+            const chid = btn.dataset.chid;
+            G.ytState.activeChannelId = chid;
+            renderYouTubePanel();
+        };
     });
 
-    document.getElementById('ytGoMyChannelBtn')?.addEventListener('click', () => {
-        G.ytState.view = 'channel';
-        renderYouTubePanel();
-    });
-
-    document.getElementById('ytPublishVideoBtn')?.addEventListener('click', () => {
-        openPublishVideoModal();
+    // ➕ 新增频道分类
+    document.getElementById('ytAddNewChannelBtn')?.addEventListener('click', () => {
+        openCreateCustomChannelModal();
     });
 
     // 点击视频卡片进入播放页
@@ -1531,6 +1573,82 @@ function bindYtPanelEvents(container) {
     });
 }
 
+// 👤 点击头像展开快捷功能菜单（整合主页、直播回放、发视频与大号/小号）
+function openYtUserQuickMenuModal() {
+    const isMain = getIsPlayerYtMainAccount();
+    const currentName = (G.ytUser && G.ytUser.username) || G.player.ytName;
+
+    openModal(`
+        <h3>👤 个人中心与快捷操作</h3>
+        <p style="font-size:12px;color:#666;">当前登录身份：<b style="color:${isMain ? '#2e7d32' : '#b26a00'};">${escapeHtml(currentName)}</b> ${isMain ? '（认证主号）' : '（小号）'}</p>
+        <div class="btn-row" style="flex-direction:column;gap:8px;margin:12px 0;">
+            <button class="btn-primary" id="menuGoChannelBtn" style="width:100%;">📺 我的主页与频道作品</button>
+            <button class="btn-primary" id="menuPublishVideoBtn" style="width:100%;background:#e53935;">➕ 发布新视频</button>
+            <button class="btn-secondary" id="menuSwitchAccountBtn" style="width:100%;">🎭 切换大号 / 小号模式</button>
+            <button class="btn-secondary" onclick="closeModal()" style="width:100%;">返回</button>
+        </div>
+    `);
+
+    document.getElementById('menuGoChannelBtn').onclick = () => {
+        closeModal();
+        G.ytState.view = 'channel';
+        renderYouTubePanel();
+    };
+
+    document.getElementById('menuPublishVideoBtn').onclick = () => {
+        closeModal();
+        openPublishVideoModal();
+    };
+
+    document.getElementById('menuSwitchAccountBtn').onclick = () => {
+        closeModal();
+        openYtAccountModal();
+    };
+}
+
+// ➕ 创建自定义频道/分类弹窗
+function openCreateCustomChannelModal() {
+    openModal(`
+        <h3>➕ 创建新频道分区</h3>
+        <p style="font-size:12px;color:#666;">设定你感兴趣的专属分区，AI 将为你精准推送对应赛道的视频！</p>
+        <div class="form-group">
+            <label>频道分类名称 <span class="required">*</span></label>
+            <input type="text" id="newChannelName" placeholder="如：日常搞笑 / 美食探店 / 恐怖实况 / 科技数码">
+        </div>
+        <div class="form-group">
+            <label>频道推送内容设定 (Prompt 线索) <span class="required">*</span></label>
+            <textarea id="newChannelPrompt" rows="3" placeholder="描述该频道应推送什么样的视频（如：整蛊挑战、沙雕搞笑日常、探店试吃、数码评测等，无需拘泥于MC）"></textarea>
+        </div>
+        <div class="btn-row">
+            <button class="btn-secondary" onclick="closeModal()">取消</button>
+            <button class="btn-primary" id="confirmCreateChannelBtn">创建并刷新推送</button>
+        </div>
+    `);
+
+    document.getElementById('confirmCreateChannelBtn').onclick = async () => {
+        const name = document.getElementById('newChannelName').value.trim();
+        const promptText = document.getElementById('newChannelPrompt').value.trim();
+
+        if (!name) { showToast('⚠️ 频道名称不能为空', 'error'); return; }
+        if (!promptText) { showToast('⚠️ 请填写频道内容设定', 'error'); return; }
+
+        const newId = 'ch_' + Date.now();
+        if (!G.ytCustomChannels) G.ytCustomChannels = [];
+        G.ytCustomChannels.push({
+            id: newId,
+            name,
+            prompt: promptText
+        });
+
+        G.ytState.activeChannelId = newId;
+        closeModal();
+        showToast(`🎉 频道「${name}」已创建！正在生成专属推送...`, 'success', 2000);
+        
+        // 针对该分类自动刷新一波匹配的视频
+        await refreshYtExternalFeedByAI();
+    };
+}
+
 // 👤 油管大号与小号切换管理
 function openYtAccountModal() {
     const currentName = (G.ytUser && G.ytUser.username) || G.player.ytName;
@@ -1549,12 +1667,11 @@ function openYtAccountModal() {
             <div><b>身份状态：</b></div>
             <div id="ytAccountDesc" style="margin-top:4px;color:${isMain ? '#2e7d32' : '#b26a00'};">
                 ${isMain 
-                    ? '🌟 <b>主播大号模式</b>：发布视频将直接累积到你的频道粉丝与收益！评论会被路人瞬间围观神评置顶！' 
-                    : '🕶️ <b>披皮小号模式</b>：以普通观众身份评论其他主播视频，不会轻易被发现身份。'}
+                    ? '🌟 <b>主播大号模式</b>：发布视频直接计入你的官方频道！' 
+                    : '🕶️ <b>披皮小号模式</b>：以路人普通观众身份潜水与评论。'}
             </div>
         </div>
         <div class="btn-row" style="margin-top:14px;">
-            <button class="btn-secondary" id="ytAccountGoChannel">进入主页</button>
             <button class="btn-secondary" id="ytResetMainAccount">还原主号</button>
             <button class="btn-primary" id="ytSaveAccountBtn">保存设置</button>
         </div>
@@ -1569,13 +1686,7 @@ function openYtAccountModal() {
         desc.style.color = eq ? '#2e7d32' : '#b26a00';
         desc.innerHTML = eq 
             ? '🌟 <b>主播大号模式</b>：发布视频直接计入你的官方频道！' 
-            : '🕶️ <b>披皮小号模式</b>：普通观众身份潜水。';
-    };
-
-    document.getElementById('ytAccountGoChannel').onclick = () => {
-        closeModal();
-        G.ytState.view = 'channel';
-        renderYouTubePanel();
+            : '🕶️ <b>披皮小号模式</b>：以路人普通观众身份潜水与评论。';
     };
 
     document.getElementById('ytResetMainAccount').onclick = () => {
@@ -1595,32 +1706,51 @@ function openYtAccountModal() {
     };
 }
 
-// 🔄 AI 随机刷新油管推荐视频（路人、知名同行）
+// 🔄 AI 随机刷新油管推荐视频（结合通讯录所有 NPC 好友与当前选中分类）
 async function refreshYtExternalFeedByAI() {
     if (G.isGenerating) { showToast('⏳ 正在搜索刷新中...'); return; }
     G.isGenerating = true;
     showLoading();
 
     try {
-        const npcList = Object.values(G.npcs).map(n => n.name).join('、');
+        const activeChId = G.ytState.activeChannelId || 'all';
+        const curCh = (G.ytCustomChannels || []).find(c => c.id === activeChId);
+
+        // 获取通讯录中所有可用的主播与NPC好友名单
+        const contactsList = Object.values(G.npcs).map(n => `【${n.name}】(${n.persona || 'MC主播'})`).join('、');
+
+        let categoryPrompt = '';
+        if (curCh) {
+            categoryPrompt = `
+            【当前专区限定】：该专区为「${curCh.name}」，内容设定要求为：${curCh.prompt}。
+            所有推荐视频必须紧密贴合该专区的主题（不仅限于MC，根据设定自由呈现）！
+            `;
+        } else {
+            categoryPrompt = `
+            【内容主题】：Minecraft 我的世界实况专区，兼顾趣味娱乐与大神操作。
+            `;
+        }
+
         const sysPrompt = `
-        你正在模拟 YouTube 游戏专区（我的世界 Minecraft）的热门视频推荐信息流。
-        已知知名MC主播包括：${npcList}。
-        请随机生成 3 条热门视频卡片，涵盖同行主播和普通路人高手的整活/技巧视频。
-        输出格式严格如下（每条3行）：
+        你正在模拟 YouTube 游戏与生活视频推荐流。
+        ${categoryPrompt}
+        玩家通讯录中的主播与NPC好友包括：${contactsList}。
+        【要求】：
+        1. 随机挑选 1 到 2 位上述通讯录中的好友主播发布的新视频，同时搭配 1 到 2 位路人高手的视频。
+        2. 总共输出 3 条热门推荐视频，格式必须严格如下（每条以 [VIDEO] 开头，[/VIDEO] 结尾）：
         [VIDEO]
         TITLE: 视频爆款吸睛标题
-        AUTHOR: 主播名字或路人玩家昵称
+        AUTHOR: 主播名字或路人昵称
         VIEWS: 播放量（如：85万次观看）
-        TIME: 发布时间（如：4小时前）
-        SUMMARY: 视频核心看点与内容文字速览（80字左右）
+        TIME: 发布时间（如：2小时前）
+        SUMMARY: 视频核心内容与高光描述（80字左右）
         [/VIDEO]
         `;
 
         const raw = await callAI([
             { role: 'system', content: sysPrompt },
-            { role: 'user', content: '请刷新3条热门MC油管视频。' }
-        ], { maxTokens: 800, temperature: 0.95 });
+            { role: 'user', content: '请刷新3条热门推荐视频。' }
+        ], { maxTokens: 900, temperature: 0.95 });
 
         hideLoading();
 
@@ -1628,31 +1758,36 @@ async function refreshYtExternalFeedByAI() {
         const blocks = raw.split('[VIDEO]').slice(1);
         blocks.forEach((b, idx) => {
             const clean = b.replace('[/VIDEO]', '');
-            const title = (clean.match(/TITLE:\s*(.+)/i) || [])[1] || 'MC趣味实况大盘点';
-            const author = (clean.match(/AUTHOR:\s*(.+)/i) || [])[1] || 'MinecraftFan';
-            const views = (clean.match(/VIEWS:\s*(.+)/i) || [])[1] || '24万次观看';
+            const title = (clean.match(/TITLE:\s*(.+)/i) || [])[1] || '精彩热门实况分享';
+            const author = (clean.match(/AUTHOR:\s*(.+)/i) || [])[1] || 'YouTuber_' + rand(10, 99);
+            const views = (clean.match(/VIEWS:\s*(.+)/i) || [])[1] || '32万次观看';
             const time = (clean.match(/TIME:\s*(.+)/i) || [])[1] || '刚刚';
-            const summary = (clean.match(/SUMMARY:\s*([\s\S]+)/i) || [])[1] || '精彩的红石科技与建筑大冒险！';
+            const summary = (clean.match(/SUMMARY:\s*([\s\S]+)/i) || [])[1] || '全程高能精彩绝伦！';
 
             const matchedNpc = Object.values(G.npcs).find(n => n.name.trim() === author.trim());
 
             newCards.push({
                 _id: 'yt_ai_' + Date.now() + '_' + idx,
+                channelId: activeChId,
                 title: title.trim(),
                 author: author.trim(),
                 authorId: matchedNpc ? matchedNpc.id : null,
                 views: views.trim(),
                 time: time.trim(),
                 duration: `${rand(8, 25)}:${rand(10, 59)}`,
-                thumbnailEmoji: pick(['🎮', '🏹', '🏰', '🔴', '💣', '🌲', '💎']),
+                thumbnailEmoji: pick(['🎮', '🏹', '🏰', '🔴', '💣', '🌲', '💎', '🔥', '✨']),
                 summary: summary.trim(),
                 comments: []
             });
         });
 
         if (newCards.length) {
-            G.ytExternalVideos = newCards;
-            showToast('✅ 首页推荐视频已刷新！', 'success', 1500);
+            if (activeChId === 'all') {
+                G.ytExternalVideos = newCards;
+            } else {
+                G.ytExternalVideos = [...newCards, ...(G.ytExternalVideos || []).filter(v => v.channelId !== activeChId)];
+            }
+            showToast('✅ 视频推荐已刷新！', 'success', 1500);
             renderYouTubePanel();
             autoSaveGame();
         }
@@ -1665,7 +1800,6 @@ async function refreshYtExternalFeedByAI() {
     }
 }
 
-// ➕ 油管发布新视频弹窗（含封面图片描述 / AI 识图 Token 消耗弹窗警告）
 function openPublishVideoModal() {
     const isMain = getIsPlayerYtMainAccount();
     const currentName = (G.ytUser && G.ytUser.username) || G.player.ytName;
@@ -1726,7 +1860,6 @@ function openPublishVideoModal() {
         reader.readAsDataURL(file);
     };
 
-    // 核心要求：选择直接 AI 识别图片时，弹窗警示 Token 消耗与接口能力
     document.getElementById('ytVisionAiCheckBtn').onclick = () => {
         openModal(`
             <h3 style="color:#e65100;">⚠️ AI 识图功能提示</h3>
@@ -1775,7 +1908,7 @@ function openPublishVideoModal() {
     };
 }
 
-// 💬 评论互动：AI 生成更多观众神评（包含主播记忆与互动反应）
+// 💬 评论生成修复：彻底清洗代码残留，表情统一为 Emoji，一次生成 4~6 条真实热评
 async function generateMoreYtCommentsByAI(videoId) {
     let video = (G.ytExternalVideos || []).find(v => v._id === videoId);
     if (!video) {
@@ -1795,66 +1928,77 @@ async function generateMoreYtCommentsByAI(videoId) {
     showLoading();
 
     try {
-        const isMyVideo = (video.author === G.player.ytName);
         const sysPrompt = `
-        你正在模拟 YouTube 我的世界实况视频《${video.title}》的真实评论区。
-        该视频作者：${video.author || '知名主播'}。
-        主角主播为：「${G.player.ytName}」（粉丝数：${G.player.followers}）。
-        请生成 2 至 3 条地道风趣的油管热门评论（包括热梗、吐槽、技术膜拜或提问）。
-        格式要求（每条占一行）：
-        [COMMENT user=网友昵称]评论内容[/COMMENT]
+        你正在模拟 YouTube 热门视频《${video.title}》（作者：${video.author}）的真实观众评论区。
+        【要求】：
+        1. 模拟 4 到 6 位不同性格的真实油管网友（有考据党、热梗达人、技术膜拜、吐槽搞笑等）。
+        2. 表情只允许使用 Emoji（如 😂、🔥、👏、💀、😱 等），严禁任何文字表情或 Markdown 格式。
+        3. 每条评论格式必须严格为（一行一条）：
+        [COMMENT user=用户名]评论正文内容[/COMMENT]
         `;
 
         const raw = await callAI([
             { role: 'system', content: sysPrompt },
-            { role: 'user', content: '请为该视频生成2~3条热评。' }
-        ], { maxTokens: 600, temperature: 0.95 });
+            { role: 'user', content: '请生成4~6条生动热评。' }
+        ], { maxTokens: 900, temperature: 0.95 });
 
         hideLoading();
 
         if (!video.comments) video.comments = [];
-        const re = /\[COMMENT\s+user=([^\]]+?)\]([\s\S]*?)\[\/COMMENT\]/g;
+        const re = /\[COMMENT\s+user=([^\]]+?)\]([\s\S]*?)(?:\[\/COMMENT\]|$)/gi;
         let m;
         let cCount = 0;
         while ((m = re.exec(raw)) !== null) {
-            video.comments.unshift({
-                user: m[1].trim(),
-                content: m[2].trim(),
-                time: `第${G.day}天`,
-                replies: []
-            });
-            cCount++;
+            const userName = m[1].replace(/\[\/?COMMENT[^\]]*\]/gi, '').trim();
+            const commentBody = m[2].replace(/\[\/?COMMENT[^\]]*\]/gi, '').trim();
+
+            if (commentBody) {
+                video.comments.unshift({
+                    user: userName || 'MC_Viewer_' + rand(10, 99),
+                    content: commentBody,
+                    time: `第${G.day}天`,
+                    replies: []
+                });
+                cCount++;
+            }
         }
 
+        // 兜底强健处理：若正则未闭合则通过按行拆分彻底提取
         if (!cCount && raw.trim()) {
-            video.comments.unshift({
-                user: 'MC_Viewer_' + rand(10, 99),
-                content: raw.trim().slice(0, 120),
-                time: `第${G.day}天`,
-                replies: []
+            const lines = raw.split('\n').filter(l => l.trim().length > 3);
+            lines.forEach((l, i) => {
+                const clean = l.replace(/\[\/?COMMENT[^\]]*\]/gi, '').replace(/[\[\]]/g, '').trim();
+                if (clean) {
+                    video.comments.unshift({
+                        user: 'YouTuber_' + rand(10, 99),
+                        content: clean,
+                        time: `第${G.day}天`,
+                        replies: []
+                    });
+                    cCount++;
+                }
             });
         }
 
-        showToast('✅ 评论区已刷新！', 'success', 1500);
+        showToast(`✅ 评论区已生成 ${cCount} 条新评论！`, 'success', 1500);
         renderYouTubePanel();
         autoSaveGame();
 
     } catch (e) {
         hideLoading();
-        showToast('❌ 评论刷新失败', 'error');
+        showToast('❌ 评论生成失败', 'error');
     } finally {
         G.isGenerating = false;
     }
 }
 
-// ✍️ 在油管视频下写评论
 function openYtWriteCommentModal(videoId) {
     const currentName = (G.ytUser && G.ytUser.username) || G.player.ytName;
     const isMain = getIsPlayerYtMainAccount();
 
     openModal(`
         <h3>✍️ 发布 YouTube 评论</h3>
-        <p style="font-size:12px;color:#666;">以 <b>${escapeHtml(currentName)}</b> ${isMain ? '(官方蓝标)' : '(小号)'} 的身份留言：</p>
+        <p style="font-size:12px;color:#666;">以 <b>${escapeHtml(currentName)}</b> ${isMain ? '(官方认证大号)' : '(小号)'} 的身份留言：</p>
         <div class="form-group">
             <textarea id="myYtCommentInput" rows="3" placeholder="添加公开评论..."></textarea>
         </div>
@@ -1890,12 +2034,12 @@ function openYtWriteCommentModal(videoId) {
                 replies: []
             });
 
-            // 核心功能：主播记忆联动！若在大号状态下评论知名主播，将直接记入该主播的专属记忆
+            // 主播记忆深度联动：大号留言会被该主播在私聊记忆中注明
             if (isMain && video.authorId && G.npcs[video.authorId]) {
                 const targetNpc = G.npcs[video.authorId];
-                const note = `【油管评论互动】：玩家在你的视频《${video.title}》下方实名留言：“${text}”。`;
+                const note = `【油管评论互动】：玩家在你的视频《${video.title}》下方实名留言：“${text}”。在后续私聊中有可能以此开话题。`;
                 targetNpc.memorySummary = (targetNpc.memorySummary || '') + `\n${note}`;
-                showToast(`🌟 主播 ${targetNpc.name} 关注到了你的评论！`, 'success', 2500);
+                showToast(`🌟 主播 ${targetNpc.name} 注意到了你的留言！`, 'success', 2500);
             }
 
             closeModal();
@@ -1906,7 +2050,6 @@ function openYtWriteCommentModal(videoId) {
     };
 }
 
-// 💬 回复油管评论，并触发路人/主播智能反向接话
 function openYtReplyCommentModal(videoId, commentIdx) {
     let video = (G.ytExternalVideos || []).find(v => v._id === videoId);
     if (!video) {
@@ -1951,19 +2094,21 @@ function openYtReplyCommentModal(videoId, commentIdx) {
         closeModal();
         renderYouTubePanel();
 
-        // 核心要求：有部分账号会对用户回复什么，让社区生动起来
-        if (Math.random() < 0.65) {
+        // 真实读者/主播接话逻辑
+        if (Math.random() < 0.7) {
             setTimeout(async () => {
                 try {
-                    const sys = `你正在模拟油管评论区网友「${targetComment.user || '热心网友'}」。根据主角的回复“${replyText}”，给出简短口语化的一句接话回应（30字以内）。`;
+                    const responder = targetComment.user || '热心网友';
+                    const sys = `你正在模拟油管网友「${responder}」。主角回复了你：“${replyText}”。请给出风趣简短的接话，只使用Emoji表情，字数在30字以内。`;
                     const res = await callAI([{ role: 'system', content: sys }, { role: 'user', content: '请接话。' }], { maxTokens: 80, temperature: 0.9 });
+                    const cleanReply = res.replace(/\[\/?COMMENT[^\]]*\]/gi, '').trim();
                     targetComment.replies.push({
-                        author: targetComment.user || '热心网友',
-                        text: res.trim(),
+                        author: responder,
+                        text: cleanReply,
                         isSelf: false,
                         time: '片刻后'
                     });
-                    showToast(`💬 @${targetComment.user || '网友'} 回复了你！`, 'info', 2000);
+                    showToast(`💬 @${responder} 回复了你！`, 'info', 2000);
                     renderYouTubePanel();
                     autoSaveGame();
                 } catch(e) {}
@@ -1978,6 +2123,8 @@ function openYtReplyCommentModal(videoId, commentIdx) {
 window.renderYouTubePanel = renderYouTubePanel;
 window.refreshYtExternalFeedByAI = refreshYtExternalFeedByAI;
 window.openYtAccountModal = openYtAccountModal;
+window.openYtUserQuickMenuModal = openYtUserQuickMenuModal;
+window.openCreateCustomChannelModal = openCreateCustomChannelModal;
 window.openPublishVideoModal = openPublishVideoModal;
 window.generateMoreYtCommentsByAI = generateMoreYtCommentsByAI;
 window.openYtWriteCommentModal = openYtWriteCommentModal;
