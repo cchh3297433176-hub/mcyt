@@ -1,3 +1,4 @@
+// js/07-actions-social.js
 // 行动处理与外部社区（AO3 同人中心 & YouTube 油管中心）
 // ============================================================
 async function performAction(action, detail = '', useSearch = false) {
@@ -980,11 +981,12 @@ async function generateAo3ReviewsByAI(workId) {
         let m;
         let count = 0;
         while ((m = re.exec(raw)) !== null) {
+            const cleanAuthor = m[1].replace(/\[\/?REVIEW[^\]]*\]/gi, '').replace(/^name=/i, '').trim();
             const cleanText = m[2].replace(/\[\/?REVIEW[^\]]*\]/gi, '').trim();
             if (cleanText) {
                 work.reviews.unshift({
                     id: 'rev_' + Date.now() + '_' + rand(100, 999),
-                    author: m[1].trim(),
+                    author: cleanAuthor || getRandomRealisticNetName(),
                     text: cleanText,
                     time: `第${G.day}天 ${new Date().toLocaleTimeString().slice(0, 5)}`,
                     replies: []
@@ -997,7 +999,7 @@ async function generateAo3ReviewsByAI(workId) {
             const fallback = raw.replace(/\[\/?REVIEW[^\]]*\]/gi, '').trim();
             work.reviews.unshift({
                 id: 'rev_' + Date.now(),
-                author: 'AO3_Reader_' + rand(10, 99),
+                author: getRandomRealisticNetName(),
                 text: fallback.slice(0, 150) || '太好看了，作者大大快催更！🔥',
                 time: `第${G.day}天`,
                 replies: []
@@ -1092,13 +1094,29 @@ function openAo3ReplyModal(workId, reviewIdx) {
 }
 
 // ============================================================
+// 真实的 MC 游戏圈网友昵称生成池（中英文地道网友）
+// ============================================================
+function getRandomRealisticNetName() {
+    const realisticNames = [
+        'DreamWasTakenFan', 'George_Goggles', 'Techno_NeverDies', 'Enderman_007',
+        'Redstone_Wired', 'DiamondPickaxe99', 'Speedrun_Hunter', 'Creeper_AwMan',
+        'Minecrafter_Alex', 'Blocky_Surfer', 'NetheriteGod_X', 'PixelKnight_22',
+        '末影猫猫', '红石研究所长', '纯路人被封面吸引', '吃瓜第一线烤肉人',
+        'MC十年老萌新', 'TNT炸穿地壳', '我的肝在隐隐作痛', '今晚下界不见不散',
+        '全自动烤鸡机', '下界合金骨灰粉', '建筑党绝不认输', '速通查成分现场',
+        '看直播笑到打鸣', '小狗还在原地等我', '盾牌时灵时不灵', '带善人小骷髅'
+    ];
+    return pick(realisticNames);
+}
+
+// ============================================================
 // ▶️ 油管 (YouTube) App 独立平台系统
 // ============================================================
 if (!G.ytState) {
     G.ytState = {
-        view: 'feed', // 'feed' | 'channel' | 'watch'
+        view: 'feed',
         activeVideoId: null,
-        activeChannelId: 'all' // 'all' 或自定义 channelId
+        activeChannelId: 'all'
     };
 }
 if (!G.ytUser) {
@@ -1151,9 +1169,7 @@ function renderYouTubePanel() {
                 <span>YouTube</span>
             </div>
             <div class="yt-topbar-actions">
-                <!-- 精简无冗余文字的刷新小按钮 -->
                 <button class="yt-icon-btn" id="ytRefreshFeedBtn" title="刷新视频推荐">🔄</button>
-                <!-- 用户头像Pill，直达个人主页与功能菜单 -->
                 <div class="yt-user-pill" id="ytUserAccountBtn" title="点击进入个人中心/发视频/切换账号">
                     <div class="yt-user-avatar-wrap">
                         ${avatarSrc ? `<img src="${avatarSrc}">` : '<span>🧑</span>'}
@@ -1217,7 +1233,6 @@ function initDefaultYtFeed() {
 function buildYtFeedHTML() {
     const activeChId = G.ytState.activeChannelId || 'all';
 
-    // 渲染顶部频道标签栏（全部推荐 + 自定义频道 + ➕号）
     let chipsHtml = `
     <button class="yt-chip-btn ${activeChId === 'all' ? 'active' : ''}" data-chid="all">全部推荐</button>
     `;
@@ -1226,7 +1241,6 @@ function buildYtFeedHTML() {
     });
     chipsHtml += `<button class="yt-add-chip-btn" id="ytAddNewChannelBtn" title="创建新频道分区">➕</button>`;
 
-    // 视频卡片整合
     const myPublishedVideos = (G.player.videos || []).map(v => ({
         _id: 'yt_my_' + (v.title || v.day),
         isPlayer: true,
@@ -1243,7 +1257,6 @@ function buildYtFeedHTML() {
 
     let allCards = [...myPublishedVideos, ...(G.ytExternalVideos || [])];
 
-    // 如果选了特定自定义频道分类，筛选带有该标签的或显示该频道的专属内容
     if (activeChId !== 'all') {
         const curCh = (G.ytCustomChannels || []).find(c => c.id === activeChId);
         if (curCh) {
@@ -1382,6 +1395,30 @@ function buildYtChannelHTML() {
     `;
 }
 
+// 清理评论用户名的辅助函数
+function cleanYtUsername(rawUser) {
+    if (!rawUser) return getRandomRealisticNetName();
+    let name = rawUser.replace(/\[\/?COMMENT[^\]]*\]/gi, '')
+                      .replace(/^user\s*=\s*/i, '')
+                      .replace(/['"]/g, '')
+                      .replace(/[@#]/g, '')
+                      .trim();
+    if (!name || name.startsWith('YouTuber_') || name.startsWith('MC_Viewer_')) {
+        return getRandomRealisticNetName();
+    }
+    return name;
+}
+
+// 清理评论文本残留的辅助函数
+function cleanYtCommentText(rawText) {
+    if (!rawText) return '';
+    return rawText.replace(/\[\/?COMMENT[^\]]*\]/gi, '')
+                  .replace(/\[\/?user[^\]]*\]/gi, '')
+                  .replace(/^user\s*=\s*[^\s\n]+[:：\s]*/i, '')
+                  .replace(/user\s*=\s*[a-zA-Z0-9_\u4e00-\u9fa5]+/gi, '')
+                  .trim();
+}
+
 function buildYtWatchHTML(videoId) {
     let video = null;
     let isLivePlayback = false;
@@ -1424,7 +1461,6 @@ function buildYtWatchHTML(videoId) {
 
     if (!video.comments) video.comments = [];
 
-    // 格式化评论，并清洗任何残留标记
     let commentsHtml = '';
     if (!video.comments.length) {
         commentsHtml = `<div style="text-align:center;color:#999;font-size:12px;padding:20px 0;">视频刚发布，快点击下方「🎲 生成更多AI评论」或抢沙发！</div>`;
@@ -1432,25 +1468,28 @@ function buildYtWatchHTML(videoId) {
         commentsHtml = video.comments.map((c, cIdx) => {
             let repliesHtml = '';
             if (c.replies && c.replies.length) {
-                repliesHtml = `<div class="ao3-replies-list" style="border-left-color:#cc0000;">` + c.replies.map(rep => `
+                repliesHtml = `<div class="ao3-replies-list" style="border-left-color:#cc0000;">` + c.replies.map(rep => {
+                    const cleanRepAuthor = cleanYtUsername(rep.author);
+                    const cleanRepText = cleanYtCommentText(rep.text);
+                    return `
                     <div class="ao3-reply-entry" style="background:#f4f4f4;">
-                        <span style="font-weight:700;color:${rep.isSelf ? '#2e7d32' : '#0f0f0f'};">${escapeHtml(rep.author)}</span>：
-                        <span>${escapeHtml(rep.text)}</span>
+                        <span style="font-weight:700;color:${rep.isSelf ? '#2e7d32' : '#0f0f0f'};">@${escapeHtml(cleanRepAuthor)}</span>：
+                        <span>${escapeHtml(cleanRepText)}</span>
                         <div style="font-size:9px;color:#aaa;text-align:right;">${rep.time || ''}</div>
-                    </div>
-                `).join('') + `</div>`;
+                    </div>`;
+                }).join('') + `</div>`;
             }
 
-            const cleanAuthor = escapeHtml(c.user || c.author || '观众').replace(/\[COMMENT[^\]]*\]/gi, '');
-            const cleanText = escapeHtml(c.content || c.text || '').replace(/\[COMMENT[^\]]*\]/gi, '').replace(/\[\/COMMENT\]/gi, '');
+            const cleanAuthor = cleanYtUsername(c.user || c.author);
+            const cleanText = cleanYtCommentText(c.content || c.text || '');
 
             return `
             <div class="ao3-comment-item" style="border-color:#eee;">
                 <div class="ao3-comment-header">
-                    <span style="font-weight:700;font-size:12px;color:#0f0f0f;">@${cleanAuthor}</span>
+                    <span style="font-weight:700;font-size:12px;color:#0f0f0f;">@${escapeHtml(cleanAuthor)}</span>
                     <span style="font-size:10px;color:#aaa;">${c.time || ''}</span>
                 </div>
-                <div class="ao3-comment-text">${cleanText}</div>
+                <div class="ao3-comment-text">${escapeHtml(cleanText)}</div>
                 <div class="ao3-comment-actions">
                     <button class="btn-secondary small" onclick="openYtReplyCommentModal('${video._id}', ${cIdx})">💬 回复</button>
                 </div>
@@ -1527,7 +1566,6 @@ function bindYtPanelEvents(container) {
         openYtUserQuickMenuModal();
     });
 
-    // 绑定分类 Chip 切换
     container.querySelectorAll('.yt-chip-btn').forEach(btn => {
         btn.onclick = () => {
             const chid = btn.dataset.chid;
@@ -1536,12 +1574,10 @@ function bindYtPanelEvents(container) {
         };
     });
 
-    // ➕ 新增频道分类
     document.getElementById('ytAddNewChannelBtn')?.addEventListener('click', () => {
         openCreateCustomChannelModal();
     });
 
-    // 点击视频卡片进入播放页
     container.querySelectorAll('.yt-feed-card[data-vid]').forEach(card => {
         card.onclick = () => {
             G.ytState.view = 'watch';
@@ -1550,7 +1586,6 @@ function bindYtPanelEvents(container) {
         };
     });
 
-    // 点击历史直播录播卡片
     container.querySelectorAll('.yt-feed-card[data-live-idx]').forEach(card => {
         card.onclick = () => {
             G.ytState.view = 'watch';
@@ -1573,7 +1608,6 @@ function bindYtPanelEvents(container) {
     });
 }
 
-// 👤 点击头像展开快捷功能菜单（整合主页、直播回放、发视频与大号/小号）
 function openYtUserQuickMenuModal() {
     const isMain = getIsPlayerYtMainAccount();
     const currentName = (G.ytUser && G.ytUser.username) || G.player.ytName;
@@ -1606,7 +1640,6 @@ function openYtUserQuickMenuModal() {
     };
 }
 
-// ➕ 创建自定义频道/分类弹窗
 function openCreateCustomChannelModal() {
     openModal(`
         <h3>➕ 创建新频道分区</h3>
@@ -1644,12 +1677,10 @@ function openCreateCustomChannelModal() {
         closeModal();
         showToast(`🎉 频道「${name}」已创建！正在生成专属推送...`, 'success', 2000);
         
-        // 针对该分类自动刷新一波匹配的视频
         await refreshYtExternalFeedByAI();
     };
 }
 
-// 👤 油管大号与小号切换管理
 function openYtAccountModal() {
     const currentName = (G.ytUser && G.ytUser.username) || G.player.ytName;
     const isMain = currentName.trim() === G.player.ytName.trim();
@@ -1706,7 +1737,6 @@ function openYtAccountModal() {
     };
 }
 
-// 🔄 AI 随机刷新油管推荐视频（结合通讯录所有 NPC 好友与当前选中分类）
 async function refreshYtExternalFeedByAI() {
     if (G.isGenerating) { showToast('⏳ 正在搜索刷新中...'); return; }
     G.isGenerating = true;
@@ -1716,7 +1746,6 @@ async function refreshYtExternalFeedByAI() {
         const activeChId = G.ytState.activeChannelId || 'all';
         const curCh = (G.ytCustomChannels || []).find(c => c.id === activeChId);
 
-        // 获取通讯录中所有可用的主播与NPC好友名单
         const contactsList = Object.values(G.npcs).map(n => `【${n.name}】(${n.persona || 'MC主播'})`).join('、');
 
         let categoryPrompt = '';
@@ -1740,7 +1769,7 @@ async function refreshYtExternalFeedByAI() {
         2. 总共输出 3 条热门推荐视频，格式必须严格如下（每条以 [VIDEO] 开头，[/VIDEO] 结尾）：
         [VIDEO]
         TITLE: 视频爆款吸睛标题
-        AUTHOR: 主播名字或路人昵称
+        AUTHOR: 主播名字或地道网名
         VIEWS: 播放量（如：85万次观看）
         TIME: 发布时间（如：2小时前）
         SUMMARY: 视频核心内容与高光描述（80字左右）
@@ -1759,7 +1788,8 @@ async function refreshYtExternalFeedByAI() {
         blocks.forEach((b, idx) => {
             const clean = b.replace('[/VIDEO]', '');
             const title = (clean.match(/TITLE:\s*(.+)/i) || [])[1] || '精彩热门实况分享';
-            const author = (clean.match(/AUTHOR:\s*(.+)/i) || [])[1] || 'YouTuber_' + rand(10, 99);
+            let author = (clean.match(/AUTHOR:\s*(.+)/i) || [])[1] || getRandomRealisticNetName();
+            author = cleanYtUsername(author);
             const views = (clean.match(/VIEWS:\s*(.+)/i) || [])[1] || '32万次观看';
             const time = (clean.match(/TIME:\s*(.+)/i) || [])[1] || '刚刚';
             const summary = (clean.match(/SUMMARY:\s*([\s\S]+)/i) || [])[1] || '全程高能精彩绝伦！';
@@ -1908,7 +1938,7 @@ function openPublishVideoModal() {
     };
 }
 
-// 💬 评论生成修复：彻底清洗代码残留，表情统一为 Emoji，一次生成 4~6 条真实热评
+// 💬 评论生成深度修复：彻底杜绝 user= 代码残留，生成极拟真的真实网友昵称
 async function generateMoreYtCommentsByAI(videoId) {
     let video = (G.ytExternalVideos || []).find(v => v._id === videoId);
     if (!video) {
@@ -1929,33 +1959,36 @@ async function generateMoreYtCommentsByAI(videoId) {
 
     try {
         const sysPrompt = `
-        你正在模拟 YouTube 热门视频《${video.title}》（作者：${video.author}）的真实观众评论区。
-        【要求】：
-        1. 模拟 4 到 6 位不同性格的真实油管网友（有考据党、热梗达人、技术膜拜、吐槽搞笑等）。
-        2. 表情只允许使用 Emoji（如 😂、🔥、👏、💀、😱 等），严禁任何文字表情或 Markdown 格式。
-        3. 每条评论格式必须严格为（一行一条）：
-        [COMMENT user=用户名]评论正文内容[/COMMENT]
+你正在模拟 YouTube 游戏视频《${video.title}》（作者：${video.author}）下方的海外及本土真实观众评论区。
+【核心要求】：
+1. 构思 4 到 6 位生动的网友，名字必须像真实的 YouTube/Minecraft 活跃玩家（例如：末影猫猫、DreamWasTakenFan、Redstone_Pro、吃瓜第一线烤肉人、PixelKnight99 等真实网名），严禁使用 YouTuber_数字 或系统编号！
+2. 表情只允许使用标准 Emoji（如 😂、🔥、👏、💀、😱、❤️ 等），严禁任何未闭合字符颜文字。
+3. 严格遵循以下输出格式（每行一条）：
+[COMMENT user=网友昵称]评论正文[/COMMENT]
+4. 绝对不要在正文里包含“user=”或者角色前缀！
         `;
 
         const raw = await callAI([
             { role: 'system', content: sysPrompt },
-            { role: 'user', content: '请生成4~6条生动热评。' }
+            { role: 'user', content: '请生成4~6条生动真实的油管网友评论。' }
         ], { maxTokens: 900, temperature: 0.95 });
 
         hideLoading();
 
         if (!video.comments) video.comments = [];
-        const re = /\[COMMENT\s+user=([^\]]+?)\]([\s\S]*?)(?:\[\/COMMENT\]|$)/gi;
+        
+        // 宽容多模态正则解析
+        const re = /\[COMMENT(?:\s+user=|\s*:\s*)(["']?)([^\]"'\n]+)\1\]([\s\S]*?)(?:\[\/COMMENT\]|(?=\[COMMENT)|$)/gi;
         let m;
         let cCount = 0;
         while ((m = re.exec(raw)) !== null) {
-            const userName = m[1].replace(/\[\/?COMMENT[^\]]*\]/gi, '').trim();
-            const commentBody = m[2].replace(/\[\/?COMMENT[^\]]*\]/gi, '').trim();
+            let uName = cleanYtUsername(m[2]);
+            let cBody = cleanYtCommentText(m[3]);
 
-            if (commentBody) {
+            if (cBody) {
                 video.comments.unshift({
-                    user: userName || 'MC_Viewer_' + rand(10, 99),
-                    content: commentBody,
+                    user: uName,
+                    content: cBody,
                     time: `第${G.day}天`,
                     replies: []
                 });
@@ -1963,15 +1996,26 @@ async function generateMoreYtCommentsByAI(videoId) {
             }
         }
 
-        // 兜底强健处理：若正则未闭合则通过按行拆分彻底提取
-        if (!cCount && raw.trim()) {
+        // 强力兜底：按行智能清洗提取，保证绝不把 user= 残留推给用户
+        if (cCount === 0 && raw.trim()) {
             const lines = raw.split('\n').filter(l => l.trim().length > 3);
-            lines.forEach((l, i) => {
-                const clean = l.replace(/\[\/?COMMENT[^\]]*\]/gi, '').replace(/[\[\]]/g, '').trim();
-                if (clean) {
+            lines.forEach((l) => {
+                let parsedUser = null;
+                let parsedContent = l;
+
+                const nameMatch = l.match(/\[COMMENT\s+user=([^\]]+)\]/i) || l.match(/^([^:：]{2,16})[:：]\s*(.+)$/);
+                if (nameMatch) {
+                    parsedUser = nameMatch[1];
+                    parsedContent = nameMatch[2] || l;
+                }
+
+                parsedUser = cleanYtUsername(parsedUser);
+                parsedContent = cleanYtCommentText(parsedContent);
+
+                if (parsedContent) {
                     video.comments.unshift({
-                        user: 'YouTuber_' + rand(10, 99),
-                        content: clean,
+                        user: parsedUser,
+                        content: parsedContent,
                         time: `第${G.day}天`,
                         replies: []
                     });
@@ -1980,13 +2024,14 @@ async function generateMoreYtCommentsByAI(videoId) {
             });
         }
 
-        showToast(`✅ 评论区已生成 ${cCount} 条新评论！`, 'success', 1500);
+        showToast(`✅ 评论区已生成 ${cCount} 条真实网友热评！`, 'success', 1500);
         renderYouTubePanel();
         autoSaveGame();
 
     } catch (e) {
         hideLoading();
-        showToast('❌ 评论生成失败', 'error');
+        console.error('评论生成失败', e);
+        showToast('❌ 评论生成失败，请检查网络', 'error');
     } finally {
         G.isGenerating = false;
     }
@@ -2034,7 +2079,6 @@ function openYtWriteCommentModal(videoId) {
                 replies: []
             });
 
-            // 主播记忆深度联动：大号留言会被该主播在私聊记忆中注明
             if (isMain && video.authorId && G.npcs[video.authorId]) {
                 const targetNpc = G.npcs[video.authorId];
                 const note = `【油管评论互动】：玩家在你的视频《${video.title}》下方实名留言：“${text}”。在后续私聊中有可能以此开话题。`;
@@ -2050,6 +2094,7 @@ function openYtWriteCommentModal(videoId) {
     };
 }
 
+// 修复油管楼中楼回复：确保可靠找到目标评论并实现拟真互动
 function openYtReplyCommentModal(videoId, commentIdx) {
     let video = (G.ytExternalVideos || []).find(v => v._id === videoId);
     if (!video) {
@@ -2060,18 +2105,23 @@ function openYtReplyCommentModal(videoId, commentIdx) {
         const ld = (G.player.streamHistory || []).slice().reverse()[lIdx];
         if (ld) video = { comments: (ld.danmakuList = ld.danmakuList || []) };
     }
-    if (!video || !video.comments || !video.comments[commentIdx]) return;
+    if (!video || !video.comments || !video.comments[commentIdx]) {
+        showToast('⚠️ 找不到该评论或已被删除', 'error');
+        return;
+    }
 
     const targetComment = video.comments[commentIdx];
+    const displayTargetUser = cleanYtUsername(targetComment.user || targetComment.author);
+    const displayTargetText = cleanYtCommentText(targetComment.content || targetComment.text || '');
     const currentName = (G.ytUser && G.ytUser.username) || G.player.ytName;
 
     openModal(`
-        <h3>💬 回复 @${escapeHtml(targetComment.user || targetComment.author || '观众')}</h3>
+        <h3>💬 回复 @${escapeHtml(displayTargetUser)}</h3>
         <div style="font-size:12px;color:#555;background:#f5f5f5;padding:8px;border-radius:6px;margin-bottom:10px;">
-            原评：“${escapeHtml(targetComment.content || targetComment.text || '')}”
+            原评：“${escapeHtml(displayTargetText)}”
         </div>
         <div class="form-group">
-            <textarea id="myYtReplyInput" rows="2" placeholder="输入回复..."></textarea>
+            <textarea id="myYtReplyInput" rows="2" placeholder="输入你的公开回复..."></textarea>
         </div>
         <div class="btn-row">
             <button class="btn-secondary" onclick="closeModal()">取消</button>
@@ -2092,30 +2142,34 @@ function openYtReplyCommentModal(videoId, commentIdx) {
         });
 
         closeModal();
+        showToast('✅ 回复发表成功！', 'success', 1200);
         renderYouTubePanel();
+        autoSaveGame();
 
-        // 真实读者/主播接话逻辑
+        // 网友/主播拟真互动跟评接话
         if (Math.random() < 0.7) {
             setTimeout(async () => {
                 try {
-                    const responder = targetComment.user || '热心网友';
-                    const sys = `你正在模拟油管网友「${responder}」。主角回复了你：“${replyText}”。请给出风趣简短的接话，只使用Emoji表情，字数在30字以内。`;
+                    const responder = displayTargetUser;
+                    const sys = `你正在模拟油管网友「${responder}」。主角回复了你的评论：“${replyText}”。请给出风趣简短的接话，只使用Emoji表情，字数在30字以内，禁止输出任何标记代码。`;
                     const res = await callAI([{ role: 'system', content: sys }, { role: 'user', content: '请接话。' }], { maxTokens: 80, temperature: 0.9 });
-                    const cleanReply = res.replace(/\[\/?COMMENT[^\]]*\]/gi, '').trim();
-                    targetComment.replies.push({
-                        author: responder,
-                        text: cleanReply,
-                        isSelf: false,
-                        time: '片刻后'
-                    });
-                    showToast(`💬 @${responder} 回复了你！`, 'info', 2000);
-                    renderYouTubePanel();
-                    autoSaveGame();
-                } catch(e) {}
-            }, 1200);
+                    const cleanReply = cleanYtCommentText(res);
+                    if (cleanReply) {
+                        targetComment.replies.push({
+                            author: responder,
+                            text: cleanReply,
+                            isSelf: false,
+                            time: '片刻后'
+                        });
+                        showToast(`💬 @${responder} 回复了你！`, 'info', 2000);
+                        renderYouTubePanel();
+                        autoSaveGame();
+                    }
+                } catch(e) {
+                    console.warn('接话失败', e);
+                }
+            }, 1500);
         }
-
-        autoSaveGame();
     };
 }
 

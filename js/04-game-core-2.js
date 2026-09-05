@@ -1,3 +1,4 @@
+// js/04-game-core-2.js
 // 成就系统
 // ============================================================
 function checkAchievements() {
@@ -1070,13 +1071,23 @@ function renderGroupChatWindow(container) {
     };
 }
 
+// 修复群聊回复生成：优化提示词、多格式宽容正则与智能兜底
 async function triggerGroupAIReply(gid) {
     const grp = G.groups[gid];
     if (!grp) return;
     const history = G.groupChatHistory[gid] || [];
     if (!history.length) { showToast('请先在群里发一条消息'); return; }
 
-    const activeList = grp.activeMembers && grp.activeMembers.length ? grp.activeMembers : grp.members;
+    // 智能筛选出真正存在的可用群成员
+    let activeList = (grp.activeMembers && grp.activeMembers.length) ? grp.activeMembers : (grp.members || []);
+    activeList = activeList.filter(mid => G.npcs[mid]);
+    if (!activeList.length) {
+        activeList = (grp.members || []).filter(mid => G.npcs[mid]);
+    }
+    if (!activeList.length) {
+        // 如果依然没有有效NPC，自动从全局挑选2个
+        activeList = Object.keys(G.npcs).slice(0, 2);
+    }
     if (!activeList.length) { showToast('群内暂无可接话的成员'); return; }
 
     const activeStreamers = [];
@@ -1095,60 +1106,124 @@ async function triggerGroupAIReply(gid) {
         G.isGenerating = true;
         showLoading();
 
+        let generatedCount = 0;
+
+        // 模式 B：主播独立调用
         if (grp.streamerMode === 'separate' && activeStreamers.length) {
             const picked = activeStreamers.sort(() => 0.5 - Math.random()).slice(0, rand(1, 2));
             for (const st of picked) {
-                const sys = `你是主播「${st.name}」，人设：${st.persona}。你正在群聊「${grp.name}」中。根据最近聊天直接给出你在群里的一句简短回复，只输出对话正文。`;
-                const rep = await callAI([{ role: 'system', content: sys }, { role: 'user', content: `最近聊天：\n${recent}` }], { maxTokens: 200, temperature: 0.9 });
-                if (!G.groupChatHistory[gid]) G.groupChatHistory[gid] = [];
-                G.groupChatHistory[gid].push({
-                    _id: 'gmsg_' + Date.now() + '_' + rand(100, 999),
-                    from: 'npc',
-                    senderName: st.name,
-                    senderAvatar: st.avatarEmoji || '👤',
-                    senderAvatarUrl: st.avatarUrl || null,
-                    text: rep.trim(),
-                    time: new Date().toLocaleTimeString().slice(0, 5)
-                });
+                try {
+                    const sys = `你是主播「${st.name}」，人设：${st.persona}。你正在群聊「${grp.name}」中。请根据最近聊天内容，自然地发一句群聊回复。只输出简明正文，禁止复读玩家的话，不要包含引号或角色名前缀。`;
+                    const rep = await callAI([{ role: 'system', content: sys }, { role: 'user', content: `群内最近发言：\n${recent}` }], { maxTokens: 200, temperature: 0.9 });
+                    const cleanRep = stripThought(rep.replace(/^[^\s:：]{1,12}[:：]\s*/, '').trim());
+                    if (cleanRep) {
+                        if (!G.groupChatHistory[gid]) G.groupChatHistory[gid] = [];
+                        G.groupChatHistory[gid].push({
+                            _id: 'gmsg_' + Date.now() + '_' + rand(100, 999),
+                            from: 'npc',
+                            senderName: st.name,
+                            senderAvatar: st.avatarEmoji || '👤',
+                            senderAvatarUrl: st.avatarUrl || null,
+                            text: cleanRep,
+                            time: new Date().toLocaleTimeString().slice(0, 5)
+                        });
+                        generatedCount++;
+                    }
+                } catch(err) {
+                    console.warn(`主播 ${st.name} 单独回复失败:`, err);
+                }
             }
         }
 
-        if (grp.streamerMode !== 'separate' || activeFans.length) {
+        // 模式 A 或剩余成员统筹生成
+        if (grp.streamerMode !== 'separate' || (activeFans.length && generatedCount === 0)) {
             const memberPoolDesc = activeList.map(mid => {
                 const n = G.npcs[mid];
                 return n ? `【${n.name}】(${n.persona || '群友'})` : null;
             }).filter(Boolean).join('、');
 
             const sys = `
-            你正在模拟群聊「${grp.name}」（简介：${grp.desc || '自由讨论'}）。
-            参与成员有：${memberPoolDesc}。
-            请根据最近群聊，随机选择 1 到 3 位成员进行生动接话，格式必须如下（每行一条）：
-            [MSG name=角色名]回复正文[/MSG]
+你正在模拟 Minecraft 主播/粉丝群聊「${grp.name}」（群简介：${grp.desc || '自由讨论'}）。
+群内可发言成员有：${memberPoolDesc}。
+请结合上下文，挑选 1 到 3 位成员进行真实自然的接话或吐槽互动。
+【格式规范】每行一条，必须且仅能使用以下格式：
+[MSG name=成员名字]发言内容[/MSG]
+严禁添加开场白、问候语或解释。
             `;
-            const raw = await callAI([{ role: 'system', content: sys }, { role: 'user', content: `最近群聊记录：\n${recent}` }], { maxTokens: 600, temperature: 0.95 });
-            const re = /\[MSG\s+name=([^\]]+?)\]([\s\S]*?)\[\/MSG\]/g;
+
+            const raw = await callAI([
+                { role: 'system', content: sys },
+                { role: 'user', content: `【群聊最近动态】：\n${recent}\n请成员开始接话：` }
+            ], { maxTokens: 600, temperature: 0.95 });
+
+            // 宽容正则：兼容各种有无引号、闭合或未闭合的情况
+            const re = /\[MSG(?:\s+name=|\s*:\s*)(["']?)([^\]"'\n]+)\1\]([\s\S]*?)(?:\[\/MSG\]|(?=\[MSG)|$)/gi;
             let m;
             while ((m = re.exec(raw)) !== null) {
-                const sName = m[1].trim();
-                const matchedNpc = Object.values(G.npcs).find(n => n.name === sName);
+                const sName = m[2].trim();
+                const body = stripThought(m[3].replace(/\[\/?MSG[^\]]*\]/gi, '').trim());
+                if (!body) continue;
+
+                const matchedNpc = Object.values(G.npcs).find(n => n.name.trim() === sName || sName.includes(n.name));
+                const finalName = matchedNpc ? matchedNpc.name : sName;
+
                 if (!G.groupChatHistory[gid]) G.groupChatHistory[gid] = [];
                 G.groupChatHistory[gid].push({
                     _id: 'gmsg_' + Date.now() + '_' + rand(100, 999),
                     from: 'npc',
-                    senderName: sName,
+                    senderName: finalName,
                     senderAvatar: matchedNpc ? (matchedNpc.avatarEmoji || '👤') : '💬',
                     senderAvatarUrl: matchedNpc ? (matchedNpc.avatarUrl || null) : null,
-                    text: m[2].trim(),
+                    text: body,
                     time: new Date().toLocaleTimeString().slice(0, 5)
                 });
+                generatedCount++;
+            }
+
+            // 智能兜底：若 AI 未使用标签输出，按行解析或匹配角色名
+            if (generatedCount === 0 && raw.trim()) {
+                const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 2);
+                for (const line of lines) {
+                    const lineMatch = line.match(/^([^:：]{1,12})[:：]\s*(.+)$/);
+                    let speaker = null;
+                    let text = line;
+                    if (lineMatch) {
+                        speaker = lineMatch[1].trim();
+                        text = lineMatch[2].trim();
+                    } else {
+                        const randomNpcId = pick(activeList);
+                        speaker = G.npcs[randomNpcId] ? G.npcs[randomNpcId].name : '群友';
+                    }
+                    const cleanBody = stripThought(text.replace(/\[\/?MSG[^\]]*\]/gi, '').trim());
+                    if (cleanBody) {
+                        const matchedNpc = Object.values(G.npcs).find(n => n.name === speaker);
+                        if (!G.groupChatHistory[gid]) G.groupChatHistory[gid] = [];
+                        G.groupChatHistory[gid].push({
+                            _id: 'gmsg_' + Date.now() + '_' + rand(100, 999),
+                            from: 'npc',
+                            senderName: matchedNpc ? matchedNpc.name : speaker,
+                            senderAvatar: matchedNpc ? (matchedNpc.avatarEmoji || '👤') : '💬',
+                            senderAvatarUrl: matchedNpc ? (matchedNpc.avatarUrl || null) : null,
+                            text: cleanBody,
+                            time: new Date().toLocaleTimeString().slice(0, 5)
+                        });
+                        generatedCount++;
+                    }
+                }
             }
         }
 
         hideLoading();
-        autoSaveGame();
+        if (generatedCount > 0) {
+            showToast(`⚡ 群内收到 ${generatedCount} 条新回复！`, 'success', 1500);
+            autoSaveGame();
+        } else {
+            showToast('⚠️ 本轮成员都在潜水，再试一次吧', 'info', 2000);
+        }
     } catch (e) {
         hideLoading();
-        showToast('❌ 群聊生成失败', 'error');
+        console.error('群聊生成失败', e);
+        showToast('❌ 群聊生成失败，请检查网络设置', 'error');
     } finally {
         G.isGenerating = false;
     }
@@ -1419,8 +1494,8 @@ function openGroupSettingsModal(gid) {
 
     allNpcIds.forEach(nid => {
         const n = G.npcs[nid];
-        const isMember = grp.members.includes(nid);
-        const isActive = (grp.activeMembers || grp.members).includes(nid);
+        const isMember = (grp.members || []).includes(nid);
+        const isActive = (grp.activeMembers || grp.members || []).includes(nid);
         memberCheckboxes += `
         <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid #f0f0f0;">
             <label style="font-size:13px;display:flex;align-items:center;gap:6px;cursor:pointer;">
@@ -1478,8 +1553,8 @@ function openGroupSettingsModal(gid) {
         document.querySelectorAll('.grp-active-check:checked').forEach(c => actives.push(c.dataset.id));
         const mode = document.querySelector('input[name="streamerMode"]:checked').value;
 
-        grp.members = mems;
-        grp.activeMembers = actives;
+        grp.members = mems.length ? mems : Object.keys(G.npcs).slice(0, 3);
+        grp.activeMembers = actives.length ? actives : grp.members;
         grp.streamerMode = mode;
 
         showToast('✅ 群设置已保存', 'success');
