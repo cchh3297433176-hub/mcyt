@@ -94,6 +94,7 @@
                 <!-- 0消耗秒进聊天与动态中心 -->
                 <button class="action-btn" data-action="chat"><span class="icon">💬</span><span class="label">聊天</span></button>
                 <button class="action-btn" data-action="collab"><span class="icon">🤜</span><span class="label">合作</span></button>
+                <!-- 0消耗秒进同人浏览器/AO3中心 -->
                 <button class="action-btn" data-action="fanart"><span class="icon">🎨</span><span class="label">同人</span></button>
                 <button class="action-btn" data-action="comment"><span class="icon">💭</span><span class="label">评论</span></button>
                 <button class="action-btn" data-action="sub"><span class="icon">🧘</span><span class="label">皮下</span></button>
@@ -107,7 +108,10 @@
             <div class="game-main">
                 <div class="game-header">
                     <div class="left">
-                        <div class="avatar-circle" id="headerAvatar"><img id="headerAvatarImg" src="" alt="avatar"></div>
+                        <!-- 点击头像更换昵称与头像 -->
+                        <div class="avatar-circle" id="headerAvatar" style="cursor:pointer;position:relative;" title="点击修改头像与名字">
+                            <img id="headerAvatarImg" src="" alt="avatar">
+                        </div>
                         <span>📆 第 <span class="day" id="dayDisplay">1</span> 天</span>
                         <span>🕐 <span class="time" id="timeDisplay">早晨</span></span>
                     </div>
@@ -130,7 +134,7 @@
                         </div>
                     </div>
                 </div>
-                <!-- 顶部选项卡：已移除社交与动态，整合入左侧「聊天」手机中心 -->
+                <!-- 顶部选项卡 -->
                 <div class="tab-bar">
                     <button class="tab-btn active" data-tab="story">📖 剧情</button>
                     <button class="tab-btn" data-tab="stream">🔴 直播</button>
@@ -147,6 +151,8 @@
                     <div class="tab-content dashboard-area" id="shopTab"></div>
                     <!-- 聊天与朋友圈容器 -->
                     <div class="tab-content dashboard-area" id="socialTab" style="padding:0;background:var(--bg);"></div>
+                    <!-- 浏览器与同人AO3容器 -->
+                    <div class="tab-content dashboard-area" id="browserTab" style="padding:0;background:var(--bg);"></div>
                     <div class="tab-content dashboard-area" id="dataTab"></div>
                     <div class="tab-content dashboard-area" id="memoirTab"></div>
                     <div class="tab-content dashboard-area" id="achievementsTab"></div>
