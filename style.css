@@ -2425,7 +2425,6 @@ body {
     align-items: center;
     gap: 8px;
 }
-/* 刷新图标按钮：去除拥挤文字 */
 .yt-icon-btn {
     width: 32px;
     height: 32px;
@@ -2444,7 +2443,6 @@ body {
     transform: rotate(180deg) scale(0.9);
     background: #e5e5e5;
 }
-/* 右上角用户头像Pill：使用玩家真实头像 */
 .yt-user-pill {
     display: flex;
     align-items: center;
@@ -2479,7 +2477,6 @@ body {
     overflow-y: auto;
     background: #f9f9f9;
 }
-/* 分类 Chips 栏：支持横向滑动与添加按钮 */
 .yt-subnav {
     display: flex;
     align-items: center;
@@ -2609,7 +2606,6 @@ body {
     color: #606060;
 }
 
-/* 模拟播放页 */
 .yt-player-container {
     background: #fff;
     min-height: 100%;
@@ -2698,6 +2694,85 @@ body {
 .yt-pill-btn.liked {
     background: #e8f5e9;
     color: #2e7d32;
+}
+
+/* ============================================================ */
+/* 📢 公告弹窗专属样式（双页平滑横向滑动切换） */
+/* ============================================================ */
+.notice-slider-wrap {
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+    margin: 4px 0 10px;
+}
+.notice-slider-track {
+    display: flex;
+    width: 200%;
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.notice-slide-page {
+    width: 50%;
+    flex-shrink: 0;
+    padding: 4px 2px;
+    box-sizing: border-box;
+}
+.notice-card-box {
+    background: #f7faf7;
+    border: 1px solid #dce8dc;
+    border-radius: 12px;
+    padding: 12px 14px;
+    max-height: 48vh;
+    overflow-y: auto;
+    font-size: 13px;
+    line-height: 1.65;
+    color: #2d3748;
+}
+.notice-card-box h4 {
+    color: var(--primary);
+    margin-bottom: 8px;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.notice-dots-wrap {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    margin: 8px 0 6px;
+}
+.notice-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #c8d8c8;
+    transition: all 0.25s;
+    cursor: pointer;
+}
+.notice-dot.active {
+    width: 20px;
+    border-radius: 10px;
+    background: var(--primary);
+}
+.notice-footer-opt {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #eef2ee;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+.notice-checkbox-label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    color: #555;
+    cursor: pointer;
+    user-select: none;
 }
 
 /* 适配小屏 */
