@@ -112,21 +112,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // 📤📥 存档备份/恢复（游戏内头部按钮）：更新App前导出、更新后导入，防止自建角色/群聊丢失
     $('exportSaveBtn')?.addEventListener('click', () => {
-        if (typeof exportSaveToFile === 'function') exportSaveToFile();
+        if (typeof openBackupModal === 'function') openBackupModal();
     });
-    $('importSaveBtn')?.addEventListener('click', () => $('importSaveFileInput')?.click());
+    $('importSaveBtn')?.addEventListener('click', () => {
+        if (typeof openRestoreModal === 'function') openRestoreModal();
+    });
     $('importSaveFileInput')?.addEventListener('change', function() {
         const file = this.files[0];
         if (file && typeof importSaveFromFile === 'function') importSaveFromFile(file);
         this.value = '';
     });
 
-    // 📥 存档备份/恢复（初始设定页按钮）：全新安装/更新后无自动存档时，也能直接导入备份文件
-    $('setupImportSaveBtn')?.addEventListener('click', () => $('setupImportSaveFileInput')?.click());
-    $('setupImportSaveFileInput')?.addEventListener('change', function() {
-        const file = this.files[0];
-        if (file && typeof importSaveFromFile === 'function') importSaveFromFile(file);
-        this.value = '';
+    // 📥 存档恢复（初始设定页按钮）：全新安装/更新后无自动存档时，也能直接导入备份
+    $('setupImportSaveBtn')?.addEventListener('click', () => {
+        if (typeof openRestoreModal === 'function') openRestoreModal();
     });
     $('modelSettingsBtn')?.addEventListener('click', () => {
         openModal(`<h3 style="margin-bottom:10px;">⚙️ 模型设置</h3>` + buildModelSettingsHTML('modal') + buildSearchSettingsHTML('modal'));
@@ -260,7 +259,7 @@ function openVersionNoticeModal(version) {
                     <ul style="padding-left:18px;margin-bottom:10px;font-size:13px;color:#444;line-height:1.6;">
                         <li style="margin-bottom:8px;">1. 优化记忆总结功能，可以自动总结内容，并且设置多少轮一总结，不同角色的记忆会分开放置。</li>
                         <li style="margin-bottom:8px;">2. 合作选项合并入聊天功能，可发送给联系人合作邀请，在油管发共创视频。</li>
-                        <li>3. 🆕 新增「📤 备份 / 📥 恢复」存档导出导入功能（顶部与开局页均有入口）：更新App前先点「📤 备份」把存档导出成文件保存好，更新后如遇自建角色/群聊/API配置丢失，用「📥 恢复」导入该文件即可完整找回。</li>
+                        <li>3. 🆕 新增「📤 备份 / 📥 恢复」存档备份功能（顶部与开局页均有入口）：更新App前先点「📤 备份」→「📲 分享备份」发送到网盘/微信保存（或复制文本），更新后如遇自建角色/群聊/API配置丢失，用「📥 恢复」选择该文件或粘贴文本即可完整找回。</li>
                     </ul>
                 </div>
             </div>

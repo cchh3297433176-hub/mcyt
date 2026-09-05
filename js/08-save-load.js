@@ -1,6 +1,6 @@
 // 存档/读档/初始化模块（v6.2.0 增强防丢与平滑迁移版）
 // ============================================================
-const CURRENT_APP_VERSION = '6.2.1'; // 递增版本号，确保更新后 100% 弹出全新更新公告
+const CURRENT_APP_VERSION = '6.2.3'; // 递增版本号，确保更新后 100% 弹出全新更新公告
 
 let _gameInitialized = false;
 let _skipStartChoiceOnce = false;
@@ -99,47 +99,181 @@ function autoSaveGame() {
     }
 }
 
-// 📤 导出存档到本地文件（.json）：更新/重装 App 前的关键保险，
-// 因为部分手机/WebView 壳工程更新后会清空或更换 localStorage 的存储位置，
-// 导致自建角色、群聊等数据"看起来消失"且无法通过代码找回，只有导出的文件是安全的。
-function exportSaveToFile() {
+// 📤 打开备份弹窗：优先提供"复制文本"方式，因为部分安卓 WebView 壳工程的
+// 原生下载拦截器只支持 http/https 链接，无法处理网页生成的 blob 文件下载，
+// 点击会报"Download failed: Can only download HTTP/HTTPS URIs"。
+// 复制文本粘贴保存不依赖系统下载功能，在任何壳工程里都能用。
+function openBackupModal() {
+    let payload, day, ytName;
+    if (G.phase === 'playing') {
+        payload = serializeGameState();
+        day = G.day;
+        ytName = G.player?.ytName;
+    } else {
+        const info = getAutoSaveInfo();
+        if (!info || !info.data) {
+            showToast('⚠️ 未找到可导出的存档', 'error');
+            return;
+        }
+        payload = info.data;
+        day = info.day;
+        ytName = info.data.player?.ytName;
+    }
+    const exportPayload = {
+        timestamp: new Date().toLocaleString(),
+        day: day,
+        version: CURRENT_APP_VERSION,
+        data: payload
+    };
+    const jsonStr = JSON.stringify(exportPayload);
+    const safeName = (ytName || 'MC模拟器存档').replace(/[\\/:*?"<>|]/g, '');
+    const fileName = `${safeName}_第${day || 1}天_备份.json`;
+
+    openModal(`
+        <h3>📤 存档备份</h3>
+        <p style="font-size:12px;color:#666;line-height:1.6;">
+            推荐点「📲 分享备份」，直接把文件发送到网盘App（百度网盘/阿里云盘等）、微信文件传输助手等保存。<br>
+            也可以点「复制备份内容」粘贴到备忘录里保存。恢复时打开「📥 恢复」即可。
+        </p>
+        <div style="text-align:center;margin-bottom:10px;">
+            <button class="btn-primary" id="shareBackupBtn" style="width:100%;">📲 分享备份到网盘 / 微信 / 其他App</button>
+        </div>
+        <textarea id="backupTextArea" readonly style="width:100%;height:100px;font-size:11px;padding:8px;border-radius:8px;border:2px solid rgba(30,60,30,0.1);font-family:monospace;box-sizing:border-box;" onclick="this.select();">${escapeHtml(jsonStr)}</textarea>
+        <div class="btn-row" style="margin-top:8px;">
+            <button class="btn-secondary" onclick="closeModal()">关闭</button>
+            <button class="btn-primary" id="copyBackupBtn">📋 复制备份内容</button>
+        </div>
+        <div style="margin-top:10px;text-align:center;">
+            <button class="btn-secondary small" id="tryDownloadBackupBtn" style="font-size:11px;">💾 尝试直接下载文件（部分设备不支持）</button>
+        </div>
+    `);
+
+    document.getElementById('shareBackupBtn')?.addEventListener('click', () => {
+        shareBackupContent(jsonStr, fileName);
+    });
+
+    document.getElementById('copyBackupBtn')?.addEventListener('click', () => {
+        copyTextToClipboard(jsonStr).then(() => {
+            showToast('✅ 已复制！请粘贴到备忘录/文件管理器保存', 'success', 3000);
+        }).catch(() => {
+            showToast('⚠️ 自动复制失败，请长按上方文本框手动全选复制', 'error', 3000);
+        });
+    });
+
+    document.getElementById('tryDownloadBackupBtn')?.addEventListener('click', () => {
+        try {
+            const blob = new Blob([jsonStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = fileName;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            setTimeout(() => URL.revokeObjectURL(url), 3000);
+        } catch(e) {
+            showToast('❌ 该设备不支持直接下载，请用上方"复制备份内容"或"分享备份"', 'error', 3000);
+        }
+    });
+}
+
+// 📲 调用系统分享面板，把备份直接交给网盘/微信/QQ等App处理，
+// 不需要我们对接任何网盘接口——分享出去后用哪个App保存，由用户自己在系统分享面板里选择。
+// 优先以文件形式分享（对方App拿到的是一个可直接另存的 .json 文件），
+// 环境不支持则退回纯文本分享，两者都不支持则提示用其他方式。
+async function shareBackupContent(jsonStr, fileName) {
+    if (!navigator.share) {
+        showToast('⚠️ 当前环境不支持系统分享，请用"复制备份内容"或"下载文件"', 'error', 3000);
+        return;
+    }
     try {
-        let payload, day, ytName;
-        if (G.phase === 'playing') {
-            payload = serializeGameState();
-            day = G.day;
-            ytName = G.player?.ytName;
-        } else {
-            const info = getAutoSaveInfo();
-            if (!info || !info.data) {
-                showToast('⚠️ 未找到可导出的存档', 'error');
+        if (navigator.canShare && typeof File !== 'undefined') {
+            const file = new File([jsonStr], fileName, { type: 'application/json' });
+            if (navigator.canShare({ files: [file] })) {
+                await navigator.share({ files: [file], title: 'MC模拟器存档备份' });
                 return;
             }
-            payload = info.data;
-            day = info.day;
-            ytName = info.data.player?.ytName;
         }
-        const exportPayload = {
-            timestamp: new Date().toLocaleString(),
-            day: day,
-            version: CURRENT_APP_VERSION,
-            data: payload
-        };
-        const blob = new Blob([JSON.stringify(exportPayload)], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const safeName = (ytName || 'MC模拟器存档').replace(/[\\/:*?"<>|]/g, '');
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `${safeName}_第${day || 1}天_备份.json`;
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(url), 3000);
-        showToast('✅ 存档已导出！更新App前请务必先做这一步', 'success', 3000);
+        await navigator.share({ title: 'MC模拟器存档备份', text: jsonStr });
     } catch(e) {
-        console.error('导出存档失败', e);
-        showToast('❌ 导出失败：' + e.message, 'error');
+        if (e && e.name !== 'AbortError') {
+            showToast('⚠️ 分享失败，请改用"复制备份内容"或"下载文件"', 'error', 3000);
+        }
     }
+}
+
+// 兼容各类 WebView 的剪贴板复制：优先用标准 Clipboard API，失败则退回 execCommand
+function copyTextToClipboard(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        return navigator.clipboard.writeText(text);
+    }
+    return new Promise((resolve, reject) => {
+        try {
+            const ta = document.createElement('textarea');
+            ta.value = text;
+            ta.style.position = 'fixed';
+            ta.style.left = '-9999px';
+            document.body.appendChild(ta);
+            ta.focus();
+            ta.select();
+            const ok = document.execCommand('copy');
+            document.body.removeChild(ta);
+            ok ? resolve() : reject(new Error('execCommand copy failed'));
+        } catch(e) { reject(e); }
+    });
+}
+
+// 📥 打开恢复弹窗：同时提供"选择文件导入"与"粘贴文本导入"两种方式，
+// 应对部分 WebView 壳工程不支持网页文件下载、但支持原生文件选择的情况。
+function openRestoreModal() {
+    openModal(`
+        <h3>📥 存档恢复</h3>
+        <p style="font-size:12px;color:#666;line-height:1.6;">方式一：如果之前是"分享保存/下载"到了网盘或文件管理器，直接选择文件导入（系统文件选择器里通常能看到网盘来源）：</p>
+        <button class="btn-secondary" id="restoreFilePickBtn" style="width:100%;margin-bottom:12px;">📂 选择存档文件导入</button>
+        <p style="font-size:12px;color:#666;line-height:1.6;">方式二：如果你之前是"复制文本"备份的，把内容粘贴到下方：</p>
+        <textarea id="restoreTextArea" placeholder="粘贴备份文本内容到这里..." style="width:100%;height:100px;font-size:11px;padding:8px;border-radius:8px;border:2px solid rgba(30,60,30,0.1);font-family:monospace;box-sizing:border-box;"></textarea>
+        <div class="btn-row" style="margin-top:8px;">
+            <button class="btn-secondary" onclick="closeModal()">关闭</button>
+            <button class="btn-primary" id="restoreTextBtn">✅ 粘贴导入</button>
+        </div>
+    `);
+
+    document.getElementById('restoreFilePickBtn')?.addEventListener('click', () => {
+        $('importSaveFileInput')?.click();
+    });
+
+    document.getElementById('restoreTextBtn')?.addEventListener('click', () => {
+        const text = document.getElementById('restoreTextArea')?.value.trim();
+        if (!text) { showToast('⚠️ 请先粘贴备份文本', 'error'); return; }
+        closeModal();
+        importSaveFromText(text);
+    });
+}
+
+// 🛡️ 导入落地的共用逻辑：文件导入与文本粘贴导入最终都走这里
+function _applyImportedStateData(stateData) {
+    if (_gameInitialized && !confirm('导入将与当前游戏进度合并（自建角色/群聊/剧情等以备份为准），确认导入吗？')) {
+        return;
+    }
+    applyDeserializedGameState(stateData);
+    _gameInitialized = true;
+    G.phase = 'playing';
+
+    const setup = $('setupPage');
+    const game = $('gamePage');
+    if (setup) {
+        setup.classList.remove('active');
+        setup.style.display = 'none';
+    }
+    if (game) {
+        game.classList.add('active');
+        game.style.display = 'flex';
+    }
+
+    updateUI();
+    switchTab('story');
+    autoSaveGame();
+    showToast('✅ 存档导入成功！自建角色与群聊已找回', 'success', 3000);
 }
 
 // 📥 从备份文件导入存档：更新/重装 App 后，若发现自建角色/群聊丢失，
@@ -155,28 +289,7 @@ function importSaveFromFile(file) {
                 showToast('❌ 存档文件格式不正确，无法导入', 'error');
                 return;
             }
-            if (_gameInitialized && !confirm('导入将与当前游戏进度合并（自建角色/群聊/剧情等以备份文件为准），确认导入吗？')) {
-                return;
-            }
-            applyDeserializedGameState(stateData);
-            _gameInitialized = true;
-            G.phase = 'playing';
-
-            const setup = $('setupPage');
-            const game = $('gamePage');
-            if (setup) {
-                setup.classList.remove('active');
-                setup.style.display = 'none';
-            }
-            if (game) {
-                game.classList.add('active');
-                game.style.display = 'flex';
-            }
-
-            updateUI();
-            switchTab('story');
-            autoSaveGame();
-            showToast('✅ 存档导入成功！自建角色与群聊已找回', 'success', 3000);
+            _applyImportedStateData(stateData);
         } catch(e) {
             console.error('导入存档失败', e);
             showToast('❌ 导入失败，文件可能已损坏：' + e.message, 'error');
@@ -184,6 +297,22 @@ function importSaveFromFile(file) {
     };
     reader.onerror = () => showToast('❌ 文件读取失败', 'error');
     reader.readAsText(file);
+}
+
+// 📥 从粘贴的文本导入存档：不需要任何文件下载/选择权限，兼容性最强
+function importSaveFromText(text) {
+    try {
+        const parsed = JSON.parse(text);
+        const stateData = (parsed && typeof parsed === 'object' && parsed.data) ? parsed.data : parsed;
+        if (!stateData || typeof stateData !== 'object' || (!stateData.player && !stateData.npcs)) {
+            showToast('❌ 备份文本格式不正确，无法导入', 'error');
+            return;
+        }
+        _applyImportedStateData(stateData);
+    } catch(e) {
+        console.error('导入存档失败', e);
+        showToast('❌ 导入失败，文本可能不完整或已损坏：' + e.message, 'error');
+    }
 }
 
 function getAutoSaveInfo() {
@@ -516,5 +645,8 @@ window.confirmExitGame = confirmExitGame;
 window.serializeGameState = serializeGameState;
 window.applyDeserializedGameState = applyDeserializedGameState;
 window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
-window.exportSaveToFile = exportSaveToFile;
+window.openBackupModal = openBackupModal;
+window.openRestoreModal = openRestoreModal;
+window.shareBackupContent = shareBackupContent;
 window.importSaveFromFile = importSaveFromFile;
+window.importSaveFromText = importSaveFromText;
