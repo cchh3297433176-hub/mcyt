@@ -243,12 +243,12 @@ function renderDashboard() {
         <div class="stat-card"><div class="num">${totalViews}</div><div class="label">👀 总观看</div></div>
     </div>
     `;
-    const collectionNames = Object.keys(G.collections);
+    const collectionNames = Object.keys(G.collections || {});
     if (collectionNames.length > 0) {
         html += `<div style="margin-bottom:10px;font-weight:700;font-size:15px;">📚 合集</div>`;
         for (const name of collectionNames) {
             const col = G.collections[name];
-            const colVideos = col.videos.map(idx => G.player.videos[idx]).filter(v => v);
+            const colVideos = (col.videos || []).map(idx => G.player.videos[idx]).filter(v => v);
             const totalViewsCol = col.totalViews || 0;
             const totalLikesCol = col.totalLikes || 0;
             const totalCommentsCol = col.totalComments || 0;
@@ -279,18 +279,18 @@ function renderDashboard() {
             `;
         }
     }
-    const singleVideos = p.videos.filter(v => !v.collection);
+    const singleVideos = (p.videos || []).filter(v => !v.collection);
     html += `<div style="margin-top:12px;font-weight:700;font-size:15px;">🎬 单视频</div>`;
     if (singleVideos.length === 0) {
         html += `<div class="no-videos-msg">暂无单视频</div>`;
     } else {
         html += `<div class="video-list">`;
         const sorted = [...singleVideos].reverse();
-        sorted.forEach((video, index) => {
+        sorted.forEach((video) => {
             const realIndex = p.videos.indexOf(video);
             html += `
             <div class="video-card" data-video-index="${realIndex}">
-                <div class="video-title">${video.title}</div>
+                <div class="video-title">${escapeHtml(video.title)}</div>
                 <div class="video-meta">
                     <span>📅 第${video.day}天</span>
                     <span>👁️ ${video.views || 0} 次观看</span>
@@ -347,10 +347,10 @@ function renderComments(videoIndex, container) {
         comments.forEach((comment, idx) => {
             html += `
             <div class="comment-item" data-comment-idx="${idx}">
-                <div class="comment-user">${comment.user}</div>
-                <div class="comment-content">${comment.content}</div>
+                <div class="comment-user">${escapeHtml(comment.user)}</div>
+                <div class="comment-content">${escapeHtml(comment.content)}</div>
                 <div class="reply-box">
-                    <input type="text" placeholder="回复 @${comment.user}..." class="reply-input" data-video-idx="${videoIndex}" data-comment-idx="${idx}">
+                    <input type="text" placeholder="回复 @${escapeHtml(comment.user)}..." class="reply-input" data-video-idx="${videoIndex}" data-comment-idx="${idx}">
                     <button class="reply-send" data-video-idx="${videoIndex}" data-comment-idx="${idx}">发送</button>
                 </div>
             </div>
@@ -408,15 +408,16 @@ function sendReply(videoIndex, commentIndex, replyText) {
 function renderDataPanel() {
     const container = (dom && dom.dataTab) || document.getElementById('dataTab');
     if (!container) return;
+    ensureNpcIntegrity();
     const p = G.player;
-    const s = p.skills;
-    const totalViews = p.videos.reduce((sum, v) => sum + (v.views || 0), 0);
+    const s = p.skills || {};
+    const totalViews = (p.videos || []).reduce((sum, v) => sum + (v.views || 0), 0);
     const skillNames = { building: '🏗️ 建筑', redstone: '🔧 红石', pvp: '⚔️ PvP', survival: '🌲 生存', hunting: '🏹 追杀' };
     let html = `
     <div class="data-grid">
-        <div class="ditem"><div class="val">${p.followers}</div><div class="lbl">❤️ 粉丝</div></div>
-        <div class="ditem"><div class="val">${p.likes}</div><div class="lbl">👍 累计点赞</div></div>
-        <div class="ditem"><div class="val">💰 ${p.money}</div><div class="lbl">游戏货币</div></div>
+        <div class="ditem"><div class="val">${p.followers || 0}</div><div class="lbl">❤️ 粉丝</div></div>
+        <div class="ditem"><div class="val">${p.likes || 0}</div><div class="lbl">👍 累计点赞</div></div>
+        <div class="ditem"><div class="val">💰 ${p.money || 0}</div><div class="lbl">游戏货币</div></div>
         <div class="ditem"><div class="val">${totalViews}</div><div class="lbl">👀 总观看</div></div>
     </div>
     <div style="font-size:15px;font-weight:700;color:var(--text);margin:6px 0 10px;">🎯 玩家技术属性</div>
@@ -434,14 +435,14 @@ function renderDataPanel() {
         `;
     }
     html += `<div style="font-size:15px;font-weight:700;color:var(--text);margin:14px 0 10px;">🤖 角色技术属性</div>`;
-    for (const [id, npc] of Object.entries(G.npcs)) {
+    for (const [id, npc] of Object.entries(G.npcs || {})) {
         const ns = npc.skills || { building: 0, redstone: 0, pvp: 0, survival: 0, hunting: 0 };
         const avg = Math.round((ns.building + ns.redstone + ns.pvp + ns.survival + ns.hunting) / 5);
-        const isLover = G.player.lovers.includes(npc.name);
+        const isLover = (G.player.lovers || []).includes(npc.name);
         html += `
         <div class="npc-card" onclick="openChat('${id}')">
             <div class="npc-info">
-                <div class="npc-name">${npc.avatarUrl ? `<img src="${npc.avatarUrl}" style="width:20px;height:20px;border-radius:50%;vertical-align:middle;">` : (npc.avatarEmoji || '👤')} ${npc.name} ${isLover ? '💕' : ''}</div>
+                <div class="npc-name">${npc.avatarUrl ? `<img src="${npc.avatarUrl}" style="width:20px;height:20px;border-radius:50%;vertical-align:middle;">` : (npc.avatarEmoji || '👤')} ${escapeHtml(npc.name)} ${isLover ? '💕' : ''}</div>
                 <div class="npc-desc">${npc.isCustom ? '自定义角色' : `平均技术 ${avg}`} · 好感 ${npc.favor||0}</div>
             </div>
             <div style="font-size:11px;color:var(--text2);display:flex;gap:4px;flex-wrap:wrap;">
@@ -489,7 +490,32 @@ if (!G.memoryConfig) {
 if (!G.memorySummaries) G.memorySummaries = [];
 if (!G.groupMemories) G.groupMemories = {};
 
-// 获取全部可用模型列表供用户选择（包含低成本模型档案）
+// 🛡️ NPC 与聊天数据结构完整性自动对齐与保护
+function ensureNpcIntegrity() {
+    if (!G.npcs || typeof G.npcs !== 'object') G.npcs = {};
+    if (!G.chatHistory || typeof G.chatHistory !== 'object') G.chatHistory = {};
+
+    // 默认 NPC 补全，同时绝对不覆盖玩家的历史自建 NPC
+    if (typeof DEFAULT_NPCS !== 'undefined' && DEFAULT_NPCS) {
+        for (const [id, def] of Object.entries(DEFAULT_NPCS)) {
+            if (!G.npcs[id]) {
+                G.npcs[id] = Object.assign({}, def);
+            }
+        }
+    }
+
+    // 校验补齐每个 NPC 的关键字段
+    for (const [id, npc] of Object.entries(G.npcs)) {
+        if (!npc.id) npc.id = id;
+        if (!npc.name) npc.name = id;
+        if (npc.favor === undefined) npc.favor = 50;
+        if (!npc.summaryThreshold) npc.summaryThreshold = 10;
+        if (!npc.keepRecent) npc.keepRecent = 5;
+        if (!G.chatHistory[id]) G.chatHistory[id] = [];
+    }
+}
+
+// 获取全部可用模型列表供用户选择
 function getAvailableMemoryModels() {
     const list = [];
     if (G.aiProfiles && Array.isArray(G.aiProfiles) && G.aiProfiles.length) {
@@ -657,6 +683,8 @@ function renderAvatarBadge(obj, size = 44) {
 function renderSocialPanel() {
     const container = (dom && dom.socialTab) || document.getElementById('socialTab');
     if (!container) return;
+    ensureNpcIntegrity();
+
     if (G.currentChatGroup) {
         renderGroupChatWindow(container);
         return;
@@ -707,12 +735,12 @@ function buildChatListHTML() {
     let itemsHtml = '';
 
     if (isDirect) {
-        for (const [id, npc] of Object.entries(G.npcs)) {
+        for (const [id, npc] of Object.entries(G.npcs || {})) {
             const chatHist = G.chatHistory[id] || [];
             const lastMsg = chatHist.length > 0 ? chatHist[chatHist.length - 1] : null;
-            const purePreview = lastMsg ? stripThought(lastMsg.text) : (npc.memorySummary ? `[记忆: ${stripThought(npc.memorySummary).slice(0, 15)}...]` : '暂无新消息');
+            const purePreview = lastMsg ? stripThought(lastMsg.text || '') : (npc.memorySummary ? `[记忆: ${stripThought(npc.memorySummary).slice(0, 15)}...]` : '暂无新消息');
             const time = lastMsg ? (lastMsg.time || '') : '';
-            const isLover = G.player.lovers.includes(npc.name);
+            const isLover = (G.player.lovers || []).includes(npc.name);
             
             itemsHtml += `
             <div class="chat-item" data-id="${id}" style="display:flex;align-items:center;padding:10px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;background:#fff;border:1px solid #f0f4f0;">
@@ -727,20 +755,20 @@ function buildChatListHTML() {
             </div>`;
         }
     } else {
-        const groupKeys = Object.keys(G.groups);
+        const groupKeys = Object.keys(G.groups || {});
         if (!groupKeys.length) {
             itemsHtml += `<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">暂无群聊，点击右上角 ➕ 创建专属粉丝群或主播交流群！</div>`;
         } else {
             for (const [gid, grp] of Object.entries(G.groups)) {
                 const msgs = G.groupChatHistory[gid] || [];
                 const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
-                const purePreview = lastMsg ? `${lastMsg.senderName}: ${stripThought(lastMsg.text)}` : (grp.desc || '开启热烈讨论吧');
+                const purePreview = lastMsg ? `${lastMsg.senderName}: ${stripThought(lastMsg.text || '')}` : (grp.desc || '开启热烈讨论吧');
                 itemsHtml += `
                 <div class="group-item" data-gid="${gid}" style="display:flex;align-items:center;padding:10px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;background:#fff;border:1px solid #f0f4f0;">
                     <div style="margin-right:12px;flex-shrink:0;">${renderAvatarBadge(grp, 44)}</div>
                     <div style="flex:1;min-width:0;">
                         <div style="display:flex;justify-content:space-between;align-items:center;">
-                            <span style="font-weight:700;font-size:14px;color:var(--text);">${escapeHtml(grp.name)} <span style="font-size:11px;color:#999;">(${grp.members.length}人)</span></span>
+                            <span style="font-weight:700;font-size:14px;color:var(--text);">${escapeHtml(grp.name)} <span style="font-size:11px;color:#999;">(${(grp.members || []).length}人)</span></span>
                             <span style="font-size:11px;color:#bbb;">${lastMsg ? (lastMsg.time || '') : ''}</span>
                         </div>
                         <div style="font-size:12px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:3px;">${escapeHtml(purePreview.slice(0, 30))}</div>
@@ -913,7 +941,7 @@ function openInsertNarrativeModal(targetType, targetId) {
     };
 }
 
-// 🎬 拍共创视频模态框：支持输入灵感一键AI扩写
+// 🎬 拍共创视频模态框
 function openCollabVideoPublishModal(targetType, targetId) {
     const isGroup = targetType === 'group';
     let participants = [];
@@ -926,7 +954,7 @@ function openCollabVideoPublishModal(targetType, targetId) {
         if (npc) participants.push(npc);
     }
 
-    const partnerCheckboxes = participants.map((p, i) => `
+    const partnerCheckboxes = participants.map((p) => `
         <label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;background:#f4f6f4;padding:4px 8px;border-radius:12px;margin:2px;">
             <input type="checkbox" class="collab-partner-check" value="${p.id}" checked>
             <span>${p.avatarEmoji || '👤'} ${escapeHtml(p.name)}</span>
@@ -1012,7 +1040,7 @@ function openCollabVideoPublishModal(targetType, targetId) {
         if (!G.player.videos) G.player.videos = [];
         G.player.videos.push(videoObj);
 
-        // 同步推送一条到油管外部推荐池，让玩家在油管流里能刷到
+        // 推送一条到油管外部推荐池
         if (!G.ytExternalVideos) G.ytExternalVideos = [];
         G.ytExternalVideos.unshift({
             _id: 'yt_collab_' + Date.now(),
@@ -1028,7 +1056,7 @@ function openCollabVideoPublishModal(targetType, targetId) {
             comments: []
         });
 
-        // 增加好感度与属性
+        // 增加好感度与专属记忆
         partnerIds.forEach(id => {
             const n = G.npcs[id];
             if (n) {
@@ -1065,7 +1093,6 @@ function handleInviteCollabStream(targetType, targetId) {
 
     if (!partnerNames.length) { showToast('找不到联动搭档', 'error'); return; }
 
-    // 存储联动标记，进入直播面板后结算获得额外加成
     G.pendingCollabPartners = partnerNames;
     showToast(`📺 已向 ${partnerNames.join('、')} 发出连麦邀请！切换至直播面板开启直播`, 'success', 2500);
     switchTab('stream');
@@ -1155,7 +1182,6 @@ function renderSingleChatWindow(container) {
     document.getElementById('singleChatHeaderProfileBtn')?.addEventListener('click', showCard);
     container.querySelectorAll('.chat-npc-avatar-btn').forEach(btn => btn.onclick = showCard);
 
-    // 点击 ➕ 弹出合作菜单
     document.getElementById('chatActionInsertBtn').onclick = () => {
         openChatActionMenuModal('single', npcId);
     };
@@ -1219,7 +1245,7 @@ async function checkNpcMemorySummarize(npcId) {
         npc._summarizing = true;
         try {
             const toSummarize = history.slice(0, Math.max(1, history.length - keepRecent));
-            const textToSummarize = toSummarize.map(m => `${m.from === 'player' ? '主角' : npc.name}: ${stripThought(m.text)}`).join('\n');
+            const textToSummarize = toSummarize.map(m => `${m.from === 'player' ? '主角' : npc.name}: ${stripThought(m.text || '')}`).join('\n');
             const prior = npc.memorySummary ? `【此前已有记忆】：\n${npc.memorySummary}\n\n` : '';
             const sys = `你是精炼的角色长期记忆整理助手。请将主角与「${npc.name}」的最新私聊对话与此前记忆进行提炼合并，输出一段不超过180字的精炼记忆摘要。保留两人的关系变化、关键话题、约定承诺与喜好细节。直接输出摘要正文，严禁废话。`;
 
@@ -1249,7 +1275,7 @@ async function triggerAIReplyForSingle(npcId) {
 
     const recent = history.slice(-10).map(m => {
         if (m.from === 'action') return `[旁白: ${m.text}]`;
-        return `${m.from === 'player' ? '玩家' : npc.name}: ${stripThought(m.text)}`;
+        return `${m.from === 'player' ? '玩家' : npc.name}: ${stripThought(m.text || '')}`;
     }).join('\n');
 
     let npcMemoryContext = '';
@@ -1336,7 +1362,7 @@ function renderGroupChatWindow(container) {
             <div style="display:flex;align-items:center;gap:10px;">
                 <button onclick="closeGroupChat()" style="border:none;background:none;font-size:20px;color:#333;cursor:pointer;padding:0 4px;">❮</button>
                 <div>
-                    <div style="font-weight:700;font-size:15px;">${escapeHtml(grp.name)} <span style="font-size:12px;color:#888;">(${grp.members.length})</span></div>
+                    <div style="font-weight:700;font-size:15px;">${escapeHtml(grp.name)} <span style="font-size:12px;color:#888;">(${(grp.members || []).length})</span></div>
                     <div style="font-size:11px;color:#888;">${grp.desc ? escapeHtml(grp.desc.slice(0, 18)) : '群聊自由交流'}</div>
                 </div>
             </div>
@@ -1389,7 +1415,6 @@ function renderGroupChatWindow(container) {
         }
     };
 
-    // 群聊点击 ➕ 呼出群合作菜单
     document.getElementById('groupActionInsertBtn').onclick = () => {
         openChatActionMenuModal('group', gid);
     };
@@ -1417,7 +1442,7 @@ async function checkGroupMemorySummarize(gid) {
         grp._summarizing = true;
         try {
             const toSummarize = history.slice(0, Math.max(1, history.length - keepRecent));
-            const textToSummarize = toSummarize.map(m => `${m.senderName}: ${stripThought(m.text)}`).join('\n');
+            const textToSummarize = toSummarize.map(m => `${m.senderName}: ${stripThought(m.text || '')}`).join('\n');
             const prior = G.groupMemories[gid] ? `【群聊已有纪要】：\n${G.groupMemories[gid]}\n\n` : '';
 
             const sys = `你是群聊记忆纪要整理员。请将群聊「${grp.name}」中的讨论内容提炼为一段150字以内的核心纪要，包含聊过的八卦、共同约定、关键笑点与事件。直接输出纪要正文。`;
@@ -1470,7 +1495,7 @@ async function triggerGroupAIReply(gid) {
         }
     });
 
-    const recent = history.slice(-10).map(m => `${m.senderName}: ${stripThought(m.text)}`).join('\n');
+    const recent = history.slice(-10).map(m => `${m.senderName}: ${stripThought(m.text || '')}`).join('\n');
 
     try {
         G.isGenerating = true;
@@ -1676,6 +1701,7 @@ function handleFriendRequestAction(reqId, accept) {
             summaryThreshold: 10,
             keepRecent: 5
         };
+        if (!G.chatHistory[id]) G.chatHistory[id] = [];
         showToast(`🎉 已同意 ${req.name} 的好友申请！`, 'success', 2500);
         appendStory(`🤝 你通过了「${req.name}」的好友申请，已添加到联系人列表中。`, '🤝 新增好友');
         addGlobalMemoryRecord(`【结识好友】：添加了新好友「${req.name}」（${req.fromReason || '社交申请'}）。`);
@@ -1775,6 +1801,7 @@ function openEditNpcModal(npcId) {
             keepRecent,
             isCustom: true
         };
+        if (!G.chatHistory[id]) G.chatHistory[id] = [];
         showToast('✅ 角色信息已保存', 'success');
         closeModal();
         renderSocialPanel();
@@ -1869,7 +1896,7 @@ function openGroupSettingsModal(gid) {
     if (!grp) return;
 
     let memberCheckboxes = '';
-    const allNpcIds = Object.keys(G.npcs);
+    const allNpcIds = Object.keys(G.npcs || {});
 
     allNpcIds.forEach(nid => {
         const n = G.npcs[nid];
@@ -1972,9 +1999,9 @@ function openChat(npcId) { G.currentChatNpc = npcId; renderSocialPanel(); }
 function closeChat() { G.currentChatNpc = null; renderSocialPanel(); }
 
 // ============================================================
-// 🧠 经典复刻级记忆总结模态框（结合截图 UI 与多层级支持）
+// 🧠 经典复刻级记忆总结模态框
 // ============================================================
-let activeMemoryScope = 'story'; // 'story' | 'character' | 'group'
+let activeMemoryScope = 'story';
 let selectedScopeTargetId = null;
 
 function openMemoryModal() {
@@ -1983,6 +2010,7 @@ function openMemoryModal() {
 window.openMemoryModal = openMemoryModal;
 
 function renderMemoryModalView() {
+    ensureNpcIntegrity();
     const memCfg = G.memoryConfig || {
         enabled: true,
         defaultThreshold: 10,
@@ -1991,7 +2019,6 @@ function renderMemoryModalView() {
     };
     G.memoryConfig = memCfg;
 
-    // 统计当前选定范围的未归档轮数
     let unarchivedCount = 0;
     let existingSummaries = [];
 
@@ -2010,12 +2037,10 @@ function renderMemoryModalView() {
         existingSummaries = G.groupMemories[gid] ? [{ text: G.groupMemories[gid], day: G.day }] : [];
     }
 
-    // 动态生成模型下拉列表（含便宜模型档案）
     const modelOptions = getAvailableMemoryModels().map(m => `
         <option value="${m.key}" ${m.key === memCfg.selectedModelKey ? 'selected' : ''}>${escapeHtml(m.name)}</option>
     `).join('');
 
-    // 已有记忆总结列表
     let summariesListHtml = '<div style="color:#888;font-size:12px;padding:4px 0;">暂无</div>';
     if (existingSummaries.length > 0) {
         summariesListHtml = existingSummaries.map((s, idx) => `
@@ -2029,7 +2054,6 @@ function renderMemoryModalView() {
         `).join('');
     }
 
-    // 范围选择选择器
     let scopeSelectorHtml = `
     <div style="display:flex;gap:6px;margin-bottom:12px;background:#f0f4f0;padding:4px;border-radius:10px;">
         <button onclick="switchMemoryScope('story')" style="flex:1;border:none;padding:5px 0;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;background:${activeMemoryScope==='story'?'#fff':'transparent'};color:${activeMemoryScope==='story'?'var(--primary)':'#666'};">📖 主线剧情</button>
@@ -2039,7 +2063,7 @@ function renderMemoryModalView() {
     `;
 
     if (activeMemoryScope === 'character') {
-        const npcOpts = Object.values(G.npcs).map(n => `
+        const npcOpts = Object.values(G.npcs || {}).map(n => `
             <option value="${n.id}" ${n.id === selectedScopeTargetId ? 'selected' : ''}>${escapeHtml(n.name)}</option>
         `).join('');
         scopeSelectorHtml += `
@@ -2048,7 +2072,7 @@ function renderMemoryModalView() {
             <select id="scopeTargetSelect" style="flex:1;padding:4px 8px;border-radius:6px;border:1px solid #ccc;font-size:12px;">${npcOpts}</select>
         </div>`;
     } else if (activeMemoryScope === 'group') {
-        const grpOpts = Object.values(G.groups).map(g => `
+        const grpOpts = Object.values(G.groups || {}).map(g => `
             <option value="${g.id}" ${g.id === selectedScopeTargetId ? 'selected' : ''}>${escapeHtml(g.name)}</option>
         `).join('');
         scopeSelectorHtml += `
@@ -2112,7 +2136,6 @@ function renderMemoryModalView() {
         </div>
     `);
 
-    // 绑定下拉切换角色或群聊
     const stSelect = document.getElementById('scopeTargetSelect');
     if (stSelect) {
         stSelect.onchange = () => {
@@ -2121,17 +2144,14 @@ function renderMemoryModalView() {
         };
     }
 
-    // AI 生成总结
     document.getElementById('btnRunAiSummary').onclick = async () => {
         await executeManualAiSummary();
     };
 
-    // 改为手动填写总结
     document.getElementById('btnManualWriteSummary').onclick = () => {
         openManualMemoryInputModal();
     };
 
-    // 配置实时同步
     document.getElementById('memAutoSummaryCheck').onchange = (e) => {
         G.memoryConfig.enabled = e.target.checked;
         autoSaveGame();
@@ -2173,7 +2193,6 @@ window.handleDeleteSummaryItem = function(idx) {
     autoSaveGame();
 };
 
-// 执行手动触发 AI 总结
 async function executeManualAiSummary() {
     const keepRecent = parseInt(document.getElementById('memKeepRecentInput').value) || 5;
     const selectedModel = document.getElementById('memModelSelect').value;
@@ -2200,7 +2219,7 @@ async function executeManualAiSummary() {
             return;
         }
         const sliceItems = list.slice(0, list.length - keepRecent);
-        textToSummarize = sliceItems.map(m => `${m.from === 'player' ? '主角' : npc.name}: ${stripThought(m.text)}`).join('\n');
+        textToSummarize = sliceItems.map(m => `${m.from === 'player' ? '主角' : npc.name}: ${stripThought(m.text || '')}`).join('\n');
         prior = npc.memorySummary || '';
     } else if (activeMemoryScope === 'group') {
         const grp = G.groups[selectedScopeTargetId];
@@ -2210,7 +2229,7 @@ async function executeManualAiSummary() {
             return;
         }
         const sliceItems = list.slice(0, list.length - keepRecent);
-        textToSummarize = sliceItems.map(m => `${m.senderName}: ${stripThought(m.text)}`).join('\n');
+        textToSummarize = sliceItems.map(m => `${m.senderName}: ${stripThought(m.text || '')}`).join('\n');
         prior = G.groupMemories[selectedScopeTargetId] || '';
     }
 
@@ -2300,7 +2319,7 @@ function openManualMemoryInputModal() {
 function renderMemoir() {
     const container = (dom && dom.memoirTab) || document.getElementById('memoirTab');
     if (!container) return;
-    if (G.memoir.length === 0) {
+    if ((G.memoir || []).length === 0) {
         container.innerHTML = `<div style="text-align:center;color:var(--text2);padding:30px 0;">还没有记录，开始你的主播生涯吧！</div>`;
         return;
     }
@@ -2310,8 +2329,8 @@ function renderMemoir() {
         html += `
         <div class="timeline-item">
             <span class="date">📅 第${e.day}天</span>
-            <strong>${e.event}</strong>
-            ${e.details ? ` -- ${e.details}` : ''}
+            <strong>${escapeHtml(e.event)}</strong>
+            ${e.details ? ` -- ${escapeHtml(e.details)}` : ''}
             <span style="font-size:10px;color:var(--text2);display:block;margin-top:2px;">${e.timestamp}</span>
         </div>
         `;
