@@ -1,254 +1,199 @@
-<!-- index.html -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>MC YouTube模拟器 6.0</title>
-    <!-- 完全信任你原汁原味的完美原版样式 -->
-    <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>🎀 MC YouTube模拟器💕 6.0</title>
+    <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-    <div id="appContainer">
-        <!-- 🎮 游戏初始开局身份设定页 -->
-        <div id="setupPage" style="display:none;">
+    <div id="toast" class="toast"></div>
+    <div id="achievementToast" class="achievement-unlock-toast"></div>
+    <div id="app">
+        <!-- ===== SETUP PAGE ===== -->
+        <div id="setupPage" class="page active">
+            <div class="setup-title">🎀 MC YouTube模拟器💕 6.0</div>
+            <div class="setup-sub">成为我的世界主播，书写你的传奇</div>
+            <div id="resumeBanner" style="display:none;background:#eaf5ea;border:2px solid var(--primary);border-radius:12px;padding:12px;margin:0 0 14px;text-align:center;"></div>
             <div class="setup-card">
-                <h2>🎮 设定你的 Minecraft YouTube 主播</h2>
-                <div class="form-group">
-                    <label>频道名称</label>
-                    <input type="text" id="setupYtName" placeholder="例如：MC_CraftMaster">
+                <div class="api-key-section">
+                    <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                        <span>🌐 联网与AI模型设置</span>
+                        <span style="background:var(--primary);color:#fff;padding:0 8px;border-radius:12px;font-size:11px;font-weight:700;">OpenAI 兼容接口</span>
+                    </div>
+                    <div id="apiSettingsContainer"></div>
                 </div>
                 <div class="form-group">
-                    <label>主播皮上形象 / 人设风格</label>
-                    <input type="text" id="setupPersona" placeholder="例如：技术流高冷少女 / 搞笑整活阳光少年">
+                    <label>📷 头像 <span class="required">*</span></label>
+                    <div class="avatar-upload-wrap">
+                        <div class="avatar-preview" id="avatarPreview">👤</div>
+                        <button class="upload-btn" id="uploadAvatarBtn">选择图片</button>
+                        <input type="file" id="avatarFileInput" accept="image/png,image/jpeg" class="file-input">
+                    </div>
                 </div>
                 <div class="form-group">
-                    <label>创作主打赛道</label>
-                    <select id="setupCategory">
-                        <option value="技术生存 & 红石研究">🔧 技术生存 & 红石研究</option>
-                        <option value="极致猎人极限追杀 (Manhunt)">⚔️ 极限猎人追杀 (Manhunt)</option>
-                        <option value="唯美大场景史诗建筑">🏗️ 唯美史诗建筑</option>
-                        <option value="整蛊挑战与沙雕联机">🎉 整蛊挑战与沙雕联机</option>
-                        <option value="硬核极限生存 (Hardcore)">💀 硬核极限生存 (Hardcore)</option>
+                    <label>🎭 你的身份 <span class="required">*</span></label>
+                    <div class="radio-group" id="identityGroup">
+                        <input type="radio" name="identity" id="idNew" value="new" checked>
+                        <label for="idNew">🆕 新主播</label>
+                        <input type="radio" name="identity" id="idFans" value="fans">
+                        <label for="idFans">⭐ 已有粉丝</label>
+                        <input type="radio" name="identity" id="idVeteran" value="veteran">
+                        <label for="idVeteran">🏆 老牌主播</label>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>📅 年龄 <span class="required">*</span></label>
+                    <input type="number" id="ageInput" placeholder="例如 18" min="8" max="99" value="18">
+                </div>
+                <div class="form-group">
+                    <label>📺 YouTube 账号名 <span class="required">*</span></label>
+                    <input type="text" id="ytNameInput" placeholder="例如：MC_CraftMaster" value="MC_CraftMaster">
+                </div>
+                <div class="form-group">
+                    <label>🎭 皮上形象（虚拟人设） <span class="required">*</span></label>
+                    <textarea id="personaInput" placeholder="描述你的网络形象..." style="min-height:40px;">一位充满活力的冒险家，擅长红石科技，偶尔整活，声音富有感染力。</textarea>
+                </div>
+                <div class="form-group">
+                    <label>🧱 MC 皮肤形象 <span class="required">*</span></label>
+                    <textarea id="skinInput" placeholder="描述你的皮肤外观..." style="min-height:40px;">身穿钻石甲，头戴金色头盔，背后有红色披风，左眼有一道伤疤。</textarea>
+                </div>
+                <div class="form-group">
+                    <label>🎯 创作赛道 <span class="required">*</span></label>
+                    <select id="categorySelect">
+                        <option value="追杀">⚔️ 追杀</option>
+                        <option value="剧情" selected>📖 剧情</option>
+                        <option value="生存">🌿 生存</option>
+                        <option value="休闲">🎮 休闲</option>
+                        <option value="建筑教程">🏗️ 建筑教程</option>
+                        <option value="红石">🔴 红石</option>
+                        <option value="整活">🤡 整活</option>
+                        <option value="混合">🌈 混合</option>
                     </select>
                 </div>
-                <button class="btn-primary" id="btnStartGame" style="width:100%;margin-top:14px;">🚀 开启主播生涯</button>
+                <div class="form-group" style="margin-bottom:6px;">
+                    <label style="font-size:12px;">🔧 技术属性 (0-100)</label>
+                    <div class="skill-input-group"><label>🏗️</label><input type="range" id="skillBuilding" min="0" max="100" value="20"><input type="number" id="skillBuildingNum" min="0" max="100" value="20"></div>
+                    <div class="skill-input-group"><label>🔧</label><input type="range" id="skillRedstone" min="0" max="100" value="20"><input type="number" id="skillRedstoneNum" min="0" max="100" value="20"></div>
+                    <div class="skill-input-group"><label>⚔️</label><input type="range" id="skillPvp" min="0" max="100" value="20"><input type="number" id="skillPvpNum" min="0" max="100" value="20"></div>
+                    <div class="skill-input-group"><label>🌲</label><input type="range" id="skillSurvival" min="0" max="100" value="20"><input type="number" id="skillSurvivalNum" min="0" max="100" value="20"></div>
+                    <div class="skill-input-group"><label>🏹</label><input type="range" id="skillHunting" min="0" max="100" value="20"><input type="number" id="skillHuntingNum" min="0" max="100" value="20"></div>
+                    <div style="font-size:11px;color:var(--text2);margin-top:2px;">💡 皮上形象中的关键词会额外加成</div>
+                </div>
+                <button class="btn-primary" id="startGameBtn">🚀 填入Key，开始游戏</button>
+                <button class="btn-secondary" id="setupLoadGameBtn" style="width:100%;margin-top:8px;">📂 读取已有存档</button>
+                <div style="margin-top:8px;font-size:11px;color:#999;text-align:center;">💡 所有剧情由 AI 实时生成，每回合 800+ 字</div>
             </div>
         </div>
-
-        <!-- 🖥️ 游戏主视口与操作界面 -->
+        
+        <!-- ===== GAME PAGE (已增加初始隐藏防御，防止堆叠错位) ===== -->
         <div id="gamePage" style="display:none;">
-            <!-- 顶部状态栏 -->
-            <header class="game-header">
-                <!-- 还原P1排版：左个人信息 + 右行动点 在同一行 -->
-                <div class="header-top-row" style="display: flex; justify-content: space-between; align-items: center;">
-                    <div class="header-user-badge" id="headerAvatar" title="点击修改头像与频道名">
-                        <div class="header-avatar-circle" id="headerAvatarBox">
-                            <span id="headerAvatarEmoji">🧑</span>
+            <!-- 左侧竖排操作栏 -->
+            <div class="action-bar-vertical" id="actionBar">
+                <button class="action-btn primary" data-action="stream"><span class="icon">📹</span><span class="label">直播</span></button>
+                <button class="action-btn gold" data-action="video"><span class="icon">🎬</span><span class="label">视频</span></button>
+                <!-- 0消耗秒进聊天与动态中心 -->
+                <button class="action-btn" data-action="chat"><span class="icon">💬</span><span class="label">聊天</span></button>
+                <button class="action-btn" data-action="collab"><span class="icon">🤜</span><span class="label">合作</span></button>
+                <!-- 0消耗秒进同人浏览器/AO3中心 -->
+                <button class="action-btn" data-action="fanart"><span class="icon">🎨</span><span class="label">同人</span></button>
+                <!-- 0消耗秒进仿油管 App 平台 -->
+                <button class="action-btn" data-action="youtube"><span class="icon">▶️</span><span class="label">油管</span></button>
+                <button class="action-btn" data-action="sub"><span class="icon">🧘</span><span class="label">皮下</span></button>
+                <button class="action-btn" id="webSearchToggleBtn"><span class="icon">🌐</span><span class="label">联网</span></button>
+                <button class="action-btn" id="rerollBtn"><span class="icon">🔄</span><span class="label">重说</span></button>
+                <button class="action-btn" id="editContentBtn"><span class="icon">✏️</span><span class="label">编辑</span></button>
+                <button class="action-btn" id="memorySummaryBtn"><span class="icon">🧠</span><span class="label">记忆</span></button>
+                <button class="action-btn" data-action="next"><span class="icon">⏩</span><span class="label">下一天</span></button>
+            </div>
+            <!-- 右侧主区域 -->
+            <div class="game-main">
+                <div class="game-header">
+                    <div class="left">
+                        <!-- 点击头像更换昵称与头像 -->
+                        <div class="avatar-circle" id="headerAvatar" style="cursor:pointer;position:relative;" title="点击修改头像与名字">
+                            <img id="headerAvatarImg" src="" alt="avatar">
                         </div>
-                        <div class="header-name-info">
-                            <div class="header-name" id="headerYtName">MC_CraftMaster</div>
-                            <div class="header-time-info">
-                                <span id="dayDisplay">第 1 天</span>
-                                <span id="timeSlotDisplay">早晨 ☀️</span>
-                            </div>
-                        </div>
+                        <span>📆 第 <span class="day" id="dayDisplay">1</span> 天</span>
+                        <span>🕐 <span class="time" id="timeDisplay">早晨</span></span>
                     </div>
-                    
-                    <div class="ap-bar-container">
-                        <span class="ap-icon">⚡</span>
-                        <span id="apDisplay">6</span>
+                    <div class="right">
+                        <span>⚡ 行动点</span>
+                        <span class="ap" id="apDisplay">6</span>
                         <div class="ap-dots" id="apDots">
-                            <span class="dot active"></span>
-                            <span class="dot active"></span>
-                            <span class="dot active"></span>
-                            <span class="dot active"></span>
-                            <span class="dot active"></span>
-                            <span class="dot active"></span>
+                            <div class="ap-dot filled"></div>
+                            <div class="ap-dot filled"></div>
+                            <div class="ap-dot filled"></div>
+                            <div class="ap-dot filled"></div>
+                            <div class="ap-dot filled"></div>
+                            <div class="ap-dot filled"></div>
+                        </div>
+                        <div class="save-load-btns">
+                            <button class="sl-btn" id="modelSettingsBtn">⚙️ 模型</button>
+                            <button class="sl-btn" id="saveGameBtn">💾 存档</button>
+                            <button class="sl-btn" id="loadGameBtn">📂 读档</button>
+                            <button class="sl-btn" id="exitGameBtn" style="background:#ffe4e1;color:#c0392b;">🚪 退出</button>
                         </div>
                     </div>
                 </div>
-
-                <!-- 还原P1排版：底部5个按钮 -->
-                <div class="header-actions-row">
-                    <button class="hdr-btn model-btn" id="headerSettingsBtn" title="模型与API设置">⚙️ 模型</button>
-                    <button class="hdr-btn save-btn" id="headerSaveBtn" title="手动存档">💾 存档</button>
-                    <button class="hdr-btn load-btn" id="headerLoadBtn" title="读取存档">📂 读档</button>
-                    <button class="hdr-btn quit-btn" id="headerQuitBtn" title="退出重置">🚪 退出</button>
-                    <div class="hdr-pill fans-pill" title="累计点赞/好感">
-                        <span>❤️</span>
-                        <span id="headerLikesCount">0</span>
-                    </div>
+                <!-- 顶部选项卡 -->
+                <div class="tab-bar">
+                    <button class="tab-btn active" data-tab="story">📖 剧情</button>
+                    <button class="tab-btn" data-tab="stream">🔴 直播</button>
+                    <button class="tab-btn" data-tab="dashboard">📊 频道</button>
+                    <button class="tab-btn" data-tab="shop">🛒 商店</button>
+                    <button class="tab-btn" data-tab="data">📈 数据</button>
+                    <button class="tab-btn" data-tab="memoir">📜 回忆录</button>
+                    <button class="tab-btn" data-tab="achievements">🏆 成就</button>
                 </div>
-            </header>
-
-            <!-- 核心布局：左侧竖排操作栏 + 右侧主内容视口 -->
-            <div class="game-layout">
-                <!-- 左侧竖排操作栏 -->
-                <aside class="action-bar-vertical" id="actionBar">
-                    <!-- 常规行动 -->
-                    <button class="action-btn live" onclick="performAction('stream')">
-                        <span class="btn-icon">📹</span>
-                        <span class="btn-txt">直播</span>
-                    </button>
-                    <button class="action-btn video" onclick="performAction('video')">
-                        <span class="btn-icon">🎬</span>
-                        <span class="btn-txt">视频</span>
-                    </button>
-
-                    <!-- 手机独立 App 矩阵 -->
-                    <button class="action-btn app chat" onclick="performAction('chat')">
-                        <span class="btn-icon">💬</span>
-                        <span class="btn-txt">聊天</span>
-                    </button>
-                    <button class="action-btn app ao3" onclick="performAction('fanart')">
-                        <span class="btn-icon">🎨</span>
-                        <span class="btn-txt">同人</span>
-                    </button>
-                    <button class="action-btn app yt" onclick="performAction('youtube')">
-                        <span class="btn-icon">▶️</span>
-                        <span class="btn-txt">油管</span>
-                    </button>
-
-                    <button class="action-btn sub" onclick="performAction('sub')">
-                        <span class="btn-icon">🧘</span>
-                        <span class="btn-txt">皮下</span>
-                    </button>
-
-                    <!-- 辅助工具按钮（补上了 action-btn 类，消除大黑框，恢复原版精致比例） -->
-                    <button class="action-btn tool-btn" id="toggleSearchBtn" title="联网搜索">
-                        <span class="btn-icon">🌐</span>
-                        <span class="btn-txt">联网</span>
-                    </button>
-                    <button class="action-btn tool-btn" id="rerollStoryBtn" title="重新生成上一条">
-                        <span class="btn-icon">🔄</span>
-                        <span class="btn-txt">重说</span>
-                    </button>
-                    <button class="action-btn tool-btn" id="editContentBtn" title="编辑已发内容与总结">
-                        <span class="btn-icon">✏️</span>
-                        <span class="btn-txt">编辑</span>
-                    </button>
-                    <button class="action-btn tool-btn" id="memorySummaryBtn" title="记忆管理与总结">
-                        <span class="btn-icon">🧠</span>
-                        <span class="btn-txt">记忆</span>
-                    </button>
-
-                    <button class="action-btn next-day" onclick="performAction('next')">
-                        <span class="btn-icon">⏩</span>
-                        <span class="btn-txt">下一天</span>
-                    </button>
-                </aside>
-
-                <!-- 右侧主视口 -->
-                <main class="main-viewport">
-                    <!-- 顶部横排页签 -->
-                    <nav class="tab-bar">
-                        <button class="tab-btn active" data-tab="story">📖 剧情</button>
-                        <button class="tab-btn" data-tab="stream">🔴 直播</button>
-                        <button class="tab-btn" data-tab="dashboard">📊 频道</button>
-                        <button class="tab-btn" data-tab="shop">🛒 商店</button>
-                        <button class="tab-btn" data-tab="data">📈 数据</button>
-                        <button class="tab-btn" data-tab="memoir">📜 回忆录</button>
-                        <button class="tab-btn" data-tab="achievements">🏆 成就</button>
-                    </nav>
-
-                    <!-- Tab 内容容器 -->
-                    <div class="tab-content-wrap">
-                        <div id="storyTab" class="tab-pane active">
-                            <div id="storyArea" class="story-stream">
-                                <!-- 原版 P1 同款新手引导精美卡片 -->
-                                <div class="story-card" style="background: #ffffff; border-radius: 16px; padding: 20px; box-shadow: 0 4px 12px rgba(0,0,0,0.06); border-left: 6px solid #4caf50; margin-bottom: 16px;">
-                                    <h3 style="margin: 0 0 12px 0; color: #2e7d32; font-size: 18px; font-weight: normal; display: flex; align-items: center; gap: 8px;">
-                                        ✨ 欢迎来到 Minecraft YouTube 生涯！
-                                    </h3>
-                                    <p style="margin: 0 0 12px 0; color: #333; font-size: 14px; line-height: 1.6;">你现在已经是一名拥有专属风格的 MCUP 主。请点击左侧功能开启你的今天：</p>
-                                    <ul style="margin: 0; padding-left: 20px; color: #555; font-size: 14px; line-height: 1.8;">
-                                        <li>🎬 <b>视频</b> / 📹 <b>直播</b>：创作内容，积累粉丝与收益（消耗行动点）。</li>
-                                        <li>💬 <b>聊天</b> / 🎨 <b>同人</b> / ▶️ <b>油管</b>：随时随地与好友主播互动，查看社区反响。</li>
-                                        <li>⚙️ <b>模型</b>：记得先在右上角配置好你的 API Key 与模型档案哦！</li>
-                                    </ul>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div id="streamTab" class="tab-pane" style="display:none;"></div>
-                        <div id="dashboardTab" class="tab-pane" style="display:none;"></div>
-                        <div id="shopTab" class="tab-pane" style="display:none;"></div>
-                        <div id="dataTab" class="tab-pane" style="display:none;"></div>
-                        <div id="memoirTab" class="tab-pane" style="display:none;"></div>
-                        <div id="achievementsTab" class="tab-pane" style="display:none;"></div>
-
-                        <!-- 手机独立 App 视口 -->
-                        <div id="socialTab" class="tab-pane" style="display:none;"></div>
-                        <div id="browserTab" class="tab-pane" style="display:none;"></div>
-                        <div id="youtubeTab" class="tab-pane" style="display:none;"></div>
-                    </div>
-                </main>
+                <div class="content-container">
+                    <div class="tab-content story-area active" id="storyTab"><div id="storyArea"></div></div>
+                    <div class="tab-content" id="streamTab"><div id="streamContainer"></div></div>
+                    <div class="tab-content dashboard-area" id="dashboardTab"></div>
+                    <div class="tab-content dashboard-area" id="shopTab"></div>
+                    <!-- 聊天与朋友圈容器 -->
+                    <div class="tab-content dashboard-area" id="socialTab" style="padding:0;background:var(--bg);"></div>
+                    <!-- 浏览器与同人AO3容器 -->
+                    <div class="tab-content dashboard-area" id="browserTab" style="padding:0;background:var(--bg);"></div>
+                    <!-- 油管 YouTube 平台容器 -->
+                    <div class="tab-content dashboard-area" id="youtubeTab" style="padding:0;background:var(--bg);"></div>
+                    <div class="tab-content dashboard-area" id="dataTab"></div>
+                    <div class="tab-content dashboard-area" id="memoirTab"></div>
+                    <div class="tab-content dashboard-area" id="achievementsTab"></div>
+                </div>
             </div>
         </div>
-
-        <!-- 🏆 成就解锁轻量 Toast -->
-        <div id="achievementToast" class="achievement-unlock-toast"></div>
-
-        <!-- 📢 双页版本公告轮播弹窗容器 -->
-        <div id="noticeModal" class="modal-overlay" style="display:none;">
-            <div class="modal-window notice-window">
-                <button class="modal-close-btn" id="noticeCloseBtn">✕</button>
-                <div class="notice-slider-track" id="noticeSliderTrack"></div>
+        <!-- ===== MODAL ===== -->
+        <div class="modal-overlay" id="modal">
+            <div class="modal-box" id="modalContent">
+                <button class="close-btn" id="modalClose">✕</button>
+                <div id="modalBody"></div>
             </div>
         </div>
-
-        <!-- 👤 主播信息修改弹窗容器 -->
-        <div id="editProfileModal" class="modal-overlay" style="display:none;"></div>
-
-        <!-- 🪟 全局通用模态弹窗系统 -->
-        <div id="modalOverlay" class="modal-overlay" style="display:none;">
-            <div class="modal-window">
-                <button class="modal-close-btn" onclick="closeModal()">✕</button>
-                <div id="modalBody" class="modal-body"></div>
-                <div id="modalContent" class="modal-content"></div>
-            </div>
-        </div>
-
-        <!-- ⏳ AI 请求加载遮罩 -->
-        <div id="loadingOverlay" class="loading-overlay" style="display:none;">
-            <div class="loading-spinner"></div>
-            <div class="loading-text" id="loadingText">AI 正在组织语言与生成中...</div>
-        </div>
-
-        <!-- 💬 全局浮动提示 -->
-        <div id="toastContainer" class="toast-container"></div>
-        <div id="toast" class="toast-item" style="display:none;"></div>
     </div>
-
-    <!-- 🛡️ 究极神级容错补丁（必看核心）：防止已删减的HTML导致JS断链 -->
+    
+    <!-- 🛡️ JS 崩溃防御盾：拦截缺失节点报错，护航游戏加载 -->
     <script>
         (function(){
-            // 拦截原生的 getElementById
             var originalGetElementById = document.getElementById.bind(document);
             document.getElementById = function(id) {
                 var el = originalGetElementById(id);
-                if (el) return el; // 找到了就正常返回
-                
-                // 找不到时，直接变出一个隐形的假节点给JS！防止 .addEventListener() 直接抛错崩盘
-                console.warn('[DOM 防御伞] 检测到遗失的远古组件 ID: ' + id + '，已自动提供 Dummy 接盘');
+                if (el) return el;
+                // 当 JS 寻找被删除的遗留 ID 时，创建一个隐形假节点给它，防止抛错
                 var dummy = document.createElement('div');
                 dummy.id = id;
                 dummy.style.display = 'none';
                 document.body.appendChild(dummy);
                 return dummy;
             };
-
-            // 同样拦截快捷方式 $
             window.$ = document.getElementById;
             
             window.addEventListener('error', function(e) {
-                console.warn('捕获到非致命警告，已自动防御:', e.message);
+                console.warn('捕获非致命警告，已自动防御:', e.message);
             });
         })();
     </script>
 
-    <!-- 按序引入核心模块脚本 -->
     <script src="js/01-state-config.js"></script>
     <script src="js/02-ai-network.js"></script>
     <script src="js/03-game-core-1.js"></script>
@@ -259,36 +204,28 @@
     <script src="js/08-save-load.js"></script>
     <script src="js/09-events-init.js"></script>
 
-    <!-- 🚀 启动视口流转与防绿屏调度 -->
+    <!-- 🚀 安全的视图启动器，防止白屏死机 -->
     <script>
-        (function() {
-            function syncInitialView() {
-                var setup = document.getElementById('setupPage');
-                var game = document.getElementById('gamePage');
-                if (!setup || !game) return;
-
-                var hasSave = false;
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(function() {
                 try {
-                    hasSave = !!localStorage.getItem('mcyt_autosave');
-                } catch(e) {}
-
-                var isPlaying = (typeof window.G !== 'undefined' && window.G && window.G.phase === 'playing');
-
-                if (isPlaying || hasSave) {
-                    setup.style.display = 'none';
-                    game.style.display = 'flex';
-                } else {
-                    setup.style.display = 'block';
-                    game.style.display = 'none';
+                    var hasSave = !!localStorage.getItem('mcyt_autosave');
+                    var isPlaying = (typeof window.G !== 'undefined' && window.G && window.G.phase === 'playing');
+                    var setup = document.getElementById('setupPage');
+                    var game = document.getElementById('gamePage');
+                    
+                    if (hasSave || isPlaying) {
+                        if(setup) { setup.classList.remove('active'); setup.style.display = 'none'; }
+                        if(game) { game.style.display = 'flex'; }
+                    } else {
+                        if(setup) { setup.classList.add('active'); setup.style.display = 'block'; }
+                        if(game) { game.style.display = 'none'; }
+                    }
+                } catch(e) {
+                    console.warn('视图启动器遇到异常:', e);
                 }
-            }
-
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', syncInitialView);
-            } else {
-                syncInitialView();
-            }
-        })();
+            }, 100);
+        });
     </script>
 </body>
 </html>
