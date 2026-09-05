@@ -1,6 +1,6 @@
 // 存档/读档/初始化模块（v6.2.0 增强防丢与平滑迁移版）
 // ============================================================
-const CURRENT_APP_VERSION = '6.2.3'; // 递增版本号，确保更新后 100% 弹出全新更新公告
+const CURRENT_APP_VERSION = '6.4.0'; // 递增版本号，确保更新后 100% 弹出全新更新公告
 
 let _gameInitialized = false;
 let _skipStartChoiceOnce = false;
@@ -129,11 +129,18 @@ function openBackupModal() {
     const safeName = (ytName || 'MC模拟器存档').replace(/[\\/:*?"<>|]/g, '');
     const fileName = `${safeName}_第${day || 1}天_备份.json`;
 
+    const envTip = (window.NativeBridge && window.NativeBridge.hasNativeCapability())
+        ? '✅ 已检测到APP原生接口，下载/分享功能可用'
+        : (navigator.share ? '📱 当前环境支持系统分享' : '⚠️ 未检测到原生接口，推荐使用「复制备份内容」保存');
+
     openModal(`
         <h3>📤 存档备份</h3>
+        <div style="font-size:11px;padding:6px 10px;border-radius:8px;margin-bottom:10px;background:${window.NativeBridge && window.NativeBridge.hasNativeCapability() ? '#e8f5e9' : '#fff3e0'};color:${window.NativeBridge && window.NativeBridge.hasNativeCapability() ? '#2e7d32' : '#e65100'};">
+            ${envTip}
+        </div>
         <p style="font-size:12px;color:#666;line-height:1.6;">
             推荐点「📲 分享备份」，直接把文件发送到网盘App（百度网盘/阿里云盘等）、微信文件传输助手等保存。<br>
-            也可以点「复制备份内容」粘贴到备忘录里保存。恢复时打开「📥 恢复」即可。
+            也可以点「💾 下载到手机」保存到下载目录，或「复制备份内容」粘贴到备忘录里保存。恢复时打开「📥 恢复」即可。
         </p>
         <div style="text-align:center;margin-bottom:10px;">
             <button class="btn-primary" id="shareBackupBtn" style="width:100%;">📲 分享备份到网盘 / 微信 / 其他App</button>
@@ -144,7 +151,15 @@ function openBackupModal() {
             <button class="btn-primary" id="copyBackupBtn">📋 复制备份内容</button>
         </div>
         <div style="margin-top:10px;text-align:center;">
-            <button class="btn-secondary small" id="tryDownloadBackupBtn" style="font-size:11px;">💾 尝试直接下载文件（部分设备不支持）</button>
+            <button class="btn-secondary small" id="tryDownloadBackupBtn" style="font-size:12px;">💾 下载到手机文件</button>
+        </div>
+        <div style="margin-top:8px;text-align:center;">
+            <button class="btn-secondary small" id="genImageBackupBtn" style="font-size:12px;background:#e3f2fd;color:#1565c0;border-color:#90caf9;">🖼️ 生成图片备份（长按保存到相册）</button>
+        </div>
+        <div id="imageBackupContainer" style="display:none;margin-top:12px;text-align:center;">
+            <div style="font-size:11px;color:#1565c0;margin-bottom:6px;">👇 长按下方图片 → 保存到相册 / 分享到微信</div>
+            <img id="backupImage" style="max-width:100%;border:2px solid #90caf9;border-radius:8px;image-rendering:pixelated;" alt="备份图片">
+            <div id="imageBackupInfo" style="font-size:10px;color:#666;margin-top:4px;"></div>
         </div>
     `);
 
@@ -160,7 +175,17 @@ function openBackupModal() {
         });
     });
 
-    document.getElementById('tryDownloadBackupBtn')?.addEventListener('click', () => {
+    document.getElementById('tryDownloadBackupBtn')?.addEventListener('click', async () => {
+        // 优先走原生桥接层下载到手机文件系统
+        if (window.NativeBridge) {
+            showToast('⏳ 正在保存到手机文件...', 'info', 2000);
+            const result = await window.NativeBridge.downloadFile(fileName, jsonStr, 'application/json');
+            if (result.success) {
+                showToast('✅ 文件已保存到手机下载目录！(' + result.method + ')', 'success', 4000);
+                return;
+            }
+        }
+        // 降级：标准 Blob 下载
         try {
             const blob = new Blob([jsonStr], { type: 'application/json' });
             const url = URL.createObjectURL(blob);
@@ -171,35 +196,80 @@ function openBackupModal() {
             a.click();
             document.body.removeChild(a);
             setTimeout(() => URL.revokeObjectURL(url), 3000);
+            showToast('✅ 已触发浏览器下载', 'success', 3000);
         } catch(e) {
             showToast('❌ 该设备不支持直接下载，请用上方"复制备份内容"或"分享备份"', 'error', 3000);
         }
     });
+    // 🖼️ 生成图片备份：把存档编码成 PNG 图片，用户长按保存到相册
+    // 这是 toAPP 等不支持文件下载的 WebView 的终极方案——只依赖长按保存图片功能
+    document.getElementById('genImageBackupBtn')?.addEventListener('click', () => {
+        if (!window.ImageBackup) {
+            showToast('⚠️ 图片备份模块未加载', 'error');
+            return;
+        }
+        showToast('⏳ 正在生成备份图片...', 'info', 2000);
+        // 异步生成，避免大存档卡住 UI
+        setTimeout(() => {
+            try {
+                const dataUrl = window.ImageBackup.encodeBackupToImage(jsonStr);
+                const info = window.ImageBackup.getImageBackupInfo(jsonStr);
+                const img = document.getElementById('backupImage');
+                const container = document.getElementById('imageBackupContainer');
+                const infoEl = document.getElementById('imageBackupInfo');
+                if (img) img.src = dataUrl;
+                if (container) container.style.display = 'block';
+                if (infoEl) {
+                    infoEl.textContent = `图片尺寸：${info.imageWidth}×${info.imageHeight}px | 原始数据：${(info.rawSize/1024).toFixed(1)}KB | 压缩后：${(info.compressedSize/1024).toFixed(1)}KB`;
+                }
+                showToast('✅ 备份图片已生成！请长按图片保存到相册', 'success', 4000);
+            } catch (e) {
+                console.error('生成备份图片失败', e);
+                showToast('❌ 生成备份图片失败：' + e.message, 'error', 4000);
+            }
+        }, 50);
+    });
 }
 
-// 📲 调用系统分享面板，把备份直接交给网盘/微信/QQ等App处理，
-// 不需要我们对接任何网盘接口——分享出去后用哪个App保存，由用户自己在系统分享面板里选择。
-// 优先以文件形式分享（对方App拿到的是一个可直接另存的 .json 文件），
-// 环境不支持则退回纯文本分享，两者都不支持则提示用其他方式。
+// 📲 调用系统分享面板，把备份直接交给网盘/微信/QQ等App处理
+// 优先走 NativeBridge（toAPP 等壳工程的原生接口），不支持则降级到 Web Share API
 async function shareBackupContent(jsonStr, fileName) {
-    if (!navigator.share) {
-        showToast('⚠️ 当前环境不支持系统分享，请用"复制备份内容"或"下载文件"', 'error', 3000);
-        return;
+    // 第1优先：原生桥接层（toAPP / FusionApp 等 WebView 壳的原生分享接口）
+    if (window.NativeBridge) {
+        const result = await window.NativeBridge.shareFile(fileName, jsonStr, 'application/json', 'MC模拟器存档备份');
+        if (result.success) {
+            showToast('✅ 已调起系统分享，请选择网盘/微信等保存', 'success', 3000);
+            return;
+        }
     }
-    try {
-        if (navigator.canShare && typeof File !== 'undefined') {
-            const file = new File([jsonStr], fileName, { type: 'application/json' });
-            if (navigator.canShare({ files: [file] })) {
-                await navigator.share({ files: [file], title: 'MC模拟器存档备份' });
-                return;
+    // 第2优先：Web Share API（标准浏览器）
+    if (navigator.share) {
+        try {
+            if (navigator.canShare && typeof File !== 'undefined') {
+                const file = new File([jsonStr], fileName, { type: 'application/json' });
+                if (navigator.canShare({ files: [file] })) {
+                    await navigator.share({ files: [file], title: 'MC模拟器存档备份' });
+                    return;
+                }
+            }
+            await navigator.share({ title: 'MC模拟器存档备份', text: jsonStr });
+            return;
+        } catch(e) {
+            if (e && e.name !== 'AbortError') {
+                console.warn('Web Share 失败', e);
             }
         }
-        await navigator.share({ title: 'MC模拟器存档备份', text: jsonStr });
-    } catch(e) {
-        if (e && e.name !== 'AbortError') {
-            showToast('⚠️ 分享失败，请改用"复制备份内容"或"下载文件"', 'error', 3000);
+    }
+    // 第3优先：尝试原生下载（下载后用户可在文件管理器里分享）
+    if (window.NativeBridge) {
+        const dl = await window.NativeBridge.downloadFile(fileName, jsonStr, 'application/json');
+        if (dl.success) {
+            showToast('✅ 已下载到手机文件！可在文件管理器中找到后分享', 'success', 4000);
+            return;
         }
     }
+    // 终极降级：提示用复制文本
+    showToast('⚠️ 当前环境不支持分享/下载，请用"复制备份内容"粘贴到备忘录保存', 'error', 4000);
 }
 
 // 兼容各类 WebView 的剪贴板复制：优先用标准 Clipboard API，失败则退回 execCommand
@@ -231,15 +301,39 @@ function openRestoreModal() {
         <p style="font-size:12px;color:#666;line-height:1.6;">方式一：如果之前是"分享保存/下载"到了网盘或文件管理器，直接选择文件导入（系统文件选择器里通常能看到网盘来源）：</p>
         <button class="btn-secondary" id="restoreFilePickBtn" style="width:100%;margin-bottom:12px;">📂 选择存档文件导入</button>
         <p style="font-size:12px;color:#666;line-height:1.6;">方式二：如果你之前是"复制文本"备份的，把内容粘贴到下方：</p>
-        <textarea id="restoreTextArea" placeholder="粘贴备份文本内容到这里..." style="width:100%;height:100px;font-size:11px;padding:8px;border-radius:8px;border:2px solid rgba(30,60,30,0.1);font-family:monospace;box-sizing:border-box;"></textarea>
-        <div class="btn-row" style="margin-top:8px;">
+        <textarea id="restoreTextArea" placeholder="粘贴备份文本内容到这里..." style="width:100%;height:80px;font-size:11px;padding:8px;border-radius:8px;border:2px solid rgba(30,60,30,0.1);font-family:monospace;box-sizing:border-box;"></textarea>
+        <div class="btn-row" style="margin-top:8px;margin-bottom:12px;">
             <button class="btn-secondary" onclick="closeModal()">关闭</button>
             <button class="btn-primary" id="restoreTextBtn">✅ 粘贴导入</button>
+        </div>
+        <p style="font-size:12px;color:#1565c0;line-height:1.6;font-weight:600;">方式三（推荐）：如果你之前是"图片备份"保存到相册的，选择图片恢复：</p>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+            <button class="btn-secondary" id="restoreImagePickBtn" style="flex:1;font-size:12px;background:#e3f2fd;color:#1565c0;border-color:#90caf9;">🖼️ 从相册选图片</button>
+            <button class="btn-secondary" id="restoreImagePasteBtn" style="flex:1;font-size:12px;background:#e3f2fd;color:#1565c0;border-color:#90caf9;">📋 粘贴图片</button>
+        </div>
+        <input type="file" id="restoreImageFileInput" accept="image/png,image/jpeg,image/*" class="file-input" style="display:none;">
+        <div id="restoreImagePreviewContainer" style="display:none;text-align:center;margin-bottom:8px;">
+            <img id="restoreImagePreview" style="max-width:100%;max-height:150px;border:2px solid #90caf9;border-radius:8px;" alt="待恢复图片">
+            <div style="font-size:10px;color:#666;margin-top:4px;" id="restoreImageFileName"></div>
         </div>
     `);
 
     document.getElementById('restoreFilePickBtn')?.addEventListener('click', () => {
-        $('importSaveFileInput')?.click();
+        // 优先走原生桥接层的文件选择器（toAPP 等 WebView 壳可能需要原生实现）
+        if (window.NativeBridge && window.NativeBridge.hasNativeCapability()) {
+            window.NativeBridge.pickFile('.json,application/json', (file) => {
+                if (file) {
+                    closeModal();
+                    importSaveFromFile(file);
+                } else {
+                    // 原生选择失败，降级到标准 input
+                    $('importSaveFileInput')?.click();
+                }
+            });
+        } else {
+            // 标准浏览器文件选择
+            $('importSaveFileInput')?.click();
+        }
     });
 
     document.getElementById('restoreTextBtn')?.addEventListener('click', () => {
@@ -248,6 +342,82 @@ function openRestoreModal() {
         closeModal();
         importSaveFromText(text);
     });
+
+    // 🖼️ 从相册选择备份图片
+    document.getElementById('restoreImagePickBtn')?.addEventListener('click', () => {
+        $('restoreImageFileInput')?.click();
+    });
+
+    // 图片文件选择后解码并导入
+    document.getElementById('restoreImageFileInput')?.addEventListener('change', function() {
+        const file = this.files[0];
+        if (!file) return;
+        _restoreFromImageFile(file);
+        this.value = '';
+    });
+
+    // 📋 从剪贴板粘贴图片（用户在相册里复制图片后，到这里粘贴）
+    document.getElementById('restoreImagePasteBtn')?.addEventListener('click', async () => {
+        if (!window.ImageBackup) {
+            showToast('⚠️ 图片备份模块未加载', 'error');
+            return;
+        }
+        showToast('⏳ 正在读取剪贴板图片...', 'info', 2000);
+        const dataUrl = await window.ImageBackup.readImageFromClipboard();
+        if (dataUrl) {
+            // 显示预览
+            const preview = document.getElementById('restoreImagePreview');
+            const container = document.getElementById('restoreImagePreviewContainer');
+            const nameEl = document.getElementById('restoreImageFileName');
+            if (preview) preview.src = dataUrl;
+            if (container) container.style.display = 'block';
+            if (nameEl) nameEl.textContent = '来自剪贴板';
+            // 解码导入
+            _decodeAndImportImage(dataUrl);
+        } else {
+            showToast('⚠️ 剪贴板里没有图片，请先在相册里长按图片→复制，再回来点粘贴', 'error', 4000);
+        }
+    });
+}
+
+// 🖼️ 从图片文件恢复存档的共用逻辑
+function _restoreFromImageFile(file) {
+    if (!window.ImageBackup) {
+        showToast('⚠️ 图片备份模块未加载', 'error');
+        return;
+    }
+    // 显示预览
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const dataUrl = e.target.result;
+        const preview = document.getElementById('restoreImagePreview');
+        const container = document.getElementById('restoreImagePreviewContainer');
+        const nameEl = document.getElementById('restoreImageFileName');
+        if (preview) preview.src = dataUrl;
+        if (container) container.style.display = 'block';
+        if (nameEl) nameEl.textContent = file.name;
+        // 解码导入
+        _decodeAndImportImage(dataUrl);
+    };
+    reader.onerror = () => showToast('❌ 图片读取失败', 'error');
+    reader.readAsDataURL(file);
+}
+
+// 🖼️ 解码图片并导入存档
+async function _decodeAndImportImage(dataUrl) {
+    if (!window.ImageBackup) return;
+    showToast('⏳ 正在解码备份图片...', 'info', 2000);
+    try {
+        const jsonStr = await window.ImageBackup.decodeImageToBackup(dataUrl);
+        closeModal();
+        // 延迟一下让弹窗关闭动画完成
+        setTimeout(() => {
+            importSaveFromText(jsonStr);
+        }, 200);
+    } catch (e) {
+        console.error('图片解码失败', e);
+        showToast('❌ 图片解码失败：' + e.message + '（请确认是用本游戏生成的备份图片，且保存的是原图不是截图）', 'error', 5000);
+    }
 }
 
 // 🛡️ 导入落地的共用逻辑：文件导入与文本粘贴导入最终都走这里

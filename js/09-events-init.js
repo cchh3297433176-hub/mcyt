@@ -127,6 +127,10 @@ document.addEventListener('DOMContentLoaded', () => {
     $('setupImportSaveBtn')?.addEventListener('click', () => {
         if (typeof openRestoreModal === 'function') openRestoreModal();
     });
+    // 📤 存档备份（初始设定页按钮）：进入游戏前也能备份当前自动存档，更新App前必备
+    $('setupBackupBtn')?.addEventListener('click', () => {
+        if (typeof openBackupModal === 'function') openBackupModal();
+    });
     $('modelSettingsBtn')?.addEventListener('click', () => {
         openModal(`<h3 style="margin-bottom:10px;">⚙️ 模型设置</h3>` + buildModelSettingsHTML('modal') + buildSearchSettingsHTML('modal'));
         bindModelSettingsUI('modal');
@@ -259,7 +263,9 @@ function openVersionNoticeModal(version) {
                     <ul style="padding-left:18px;margin-bottom:10px;font-size:13px;color:#444;line-height:1.6;">
                         <li style="margin-bottom:8px;">1. 优化记忆总结功能，可以自动总结内容，并且设置多少轮一总结，不同角色的记忆会分开放置。</li>
                         <li style="margin-bottom:8px;">2. 合作选项合并入聊天功能，可发送给联系人合作邀请，在油管发共创视频。</li>
-                        <li>3. 🆕 新增「📤 备份 / 📥 恢复」存档备份功能（顶部与开局页均有入口）：更新App前先点「📤 备份」→「📲 分享备份」发送到网盘/微信保存（或复制文本），更新后如遇自建角色/群聊/API配置丢失，用「📥 恢复」选择该文件或粘贴文本即可完整找回。</li>
+                        <li style="margin-bottom:8px;">3. 🆕 新增「原生能力桥接层」：智能检测 toAPP 等打包工具的原生 JS 接口，让「📤 备份」能真正下载文件到手机、调用系统分享到微信/网盘，「📥 恢复」能调用系统文件选择器。</li>
+                        <li style="margin-bottom:8px;">4. 🖼️ 🆕 新增「图片备份」功能（重点！）：把存档编码成 PNG 图片，点「生成图片备份」后长按图片保存到相册/分享到微信。恢复时点「从相册选图片」或「粘贴图片」即可解码还原。<b>完全不需要 toAPP 支持文件下载</b>，只依赖长按保存图片功能，toAPP 用户首选这个方式！</li>
+                        <li>5. 📱 初始页新增「📤 备份存档」按钮，更新 APP 前在首页就能备份。备份弹窗会显示当前设备能力检测结果。</li>
                     </ul>
                 </div>
             </div>
