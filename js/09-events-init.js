@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btn.addEventListener('click', function() { switchTab(this.dataset.tab); });
     });
 
-    // 左侧竖排操作栏按钮
+    // 左侧竖排操作栏按钮统一事件委托
     document.querySelectorAll('.action-bar-vertical .action-btn').forEach(btn => {
         btn.addEventListener('click', async function(e) {
             const action = this.dataset.action;
@@ -38,7 +38,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            const actionsWithModal = ['stream', 'video', 'collab', 'comment', 'sub'];
+            // 核心支持：YouTube 油管中心 0 消耗直接进入
+            if (action === 'youtube' || action === 'comment') {
+                switchTab('youtube');
+                return;
+            }
+
+            const actionsWithModal = ['stream', 'video', 'collab', 'sub'];
             if (actionsWithModal.includes(action)) {
                 if (action === 'video') { 
                     await performAction(action); 
@@ -182,7 +188,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 });
 
-// 弹出修改玩家头像与名字弹窗，并更新记忆
+// 弹出修改玩家头像与名字弹窗，并更新长期记忆
 function openEditPlayerProfileModal() {
     const currentName = G.player.ytName || '主播';
     const currentAvatar = G.player.avatar || '';
@@ -247,7 +253,6 @@ function openEditPlayerProfileModal() {
         G.player.ytName = newName;
         G.player.avatar = newAvatarData;
 
-        // 如果修改了名字，在长期记忆中明确注明，确保 AI 生成后续剧情认知连贯
         if (nameChanged) {
             if (!G.memorySummaries) G.memorySummaries = [];
             const memoText = `【更名记录】：第 ${G.day} 天，主角将频道名称由「${oldName}」正式更改为「${newName}」。所有NPC、粉丝与AI剧情中，「${oldName}」与「${newName}」均为同一人，人际关系与历史成就完全继承。`;
@@ -275,14 +280,12 @@ function openActionModal(action) {
         stream: '📹 直播',
         video: '🎬 制作视频',
         collab: '🤜 合作视频',
-        comment: '💭 评论互动',
         sub: '🧘 皮下活动',
     };
     const placeholders = {
         stream: '例如：挑战末地龙...',
         video: '例如：生存日记...',
         collab: '例如：与好友合拍生存...',
-        comment: '例如：在热门视频下留言...',
         sub: '例如：健身、探索...',
     };
     const title = actionNames[action] || '🎮 行动';

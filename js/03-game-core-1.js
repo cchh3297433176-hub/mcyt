@@ -84,7 +84,7 @@ function updateUI() {
     }
     if (followerEl) followerEl.textContent = `❤️ ${G.player.followers}`;
     
-    // 头部头像展示更新：如果上传了头像则显示，否则保留默认
+    // 头部头像更新
     if (G.player.avatar && dom.headerAvatarImg) {
         dom.headerAvatarImg.src = G.player.avatar;
         dom.headerAvatarImg.style.display = 'block';
@@ -95,7 +95,7 @@ function updateUI() {
     autoSaveGame();
 }
 
-// 核心修复：switchTab 健壮识别 socialTab 与 browserTab
+// 核心修复：switchTab 健壮支持 socialTab、browserTab 与 youtubeTab
 function switchTab(tab) {
     const map = {
         story: 'storyTab',
@@ -104,6 +104,7 @@ function switchTab(tab) {
         shop: 'shopTab',
         social: 'socialTab',
         browser: 'browserTab',
+        youtube: 'youtubeTab',
         data: 'dataTab',
         memoir: 'memoirTab',
         feed: 'feedTab',
@@ -138,6 +139,9 @@ function switchTab(tab) {
     }
     if (tab === 'browser') {
         if (typeof renderBrowserPanel === 'function') renderBrowserPanel();
+    }
+    if (tab === 'youtube') {
+        if (typeof renderYouTubePanel === 'function') renderYouTubePanel();
     }
     if (tab === 'shop') renderShop();
     if (tab === 'memoir') renderMemoir();
@@ -241,6 +245,7 @@ function renderAllPanels() {
     if (activeTab === 'dashboard') renderDashboard();
     if (activeTab === 'social' || document.getElementById('socialTab')?.style.display === 'block') renderSocialPanel();
     if (document.getElementById('browserTab')?.style.display === 'block' && typeof renderBrowserPanel === 'function') renderBrowserPanel();
+    if (document.getElementById('youtubeTab')?.style.display === 'block' && typeof renderYouTubePanel === 'function') renderYouTubePanel();
     if (activeTab === 'shop') renderShop();
     if (activeTab === 'memoir') renderMemoir();
     if (activeTab === 'stream') renderStreamPanel();
