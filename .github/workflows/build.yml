@@ -25,8 +25,13 @@ jobs:
 
       - name: Create Android Project
         run: |
-          mkdir -p proj/app/src/main/assets proj/app/src/main/res/values proj/app/src/main/res/xml proj/app/src/main/java/com/mcyt/simulator
+          mkdir -p proj/app/src/main/assets proj/app/src/main/res/values proj/app/src/main/res/xml proj/app/src/main/res/mipmap proj/app/src/main/java/com/mcyt/simulator
           cp -r index.html style.css js proj/app/src/main/assets/ 2>/dev/null || cp -r * proj/app/src/main/assets/
+
+          # 自动注入自定义图标（如果根目录存在 icon.png）
+          if [ -f "icon.png" ]; then
+            cp icon.png proj/app/src/main/res/mipmap/ic_launcher.png
+          fi
 
           echo "include ':app'" > proj/settings.gradle
 
@@ -49,8 +54,8 @@ jobs:
                   applicationId "com.mcyt.simulator"
                   minSdk 21
                   targetSdk 34
-                  versionCode 1494
-                  versionName "1.494"
+                  versionCode 1495
+                  versionName "1.495"
               }
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_1_8
@@ -85,6 +90,7 @@ jobs:
               <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
               <application
                   android:label="Mcyt模拟器"
+                  android:icon="@mipmap/ic_launcher"
                   android:theme="@style/Theme.FullScreen"
                   android:networkSecurityConfig="@xml/network_security_config"
                   android:usesCleartextTraffic="true">
@@ -195,5 +201,5 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: McytSimulator-v1.494
+          name: McytSimulator-v1.495
           path: proj/app/build/outputs/apk/debug/app-debug.apk
