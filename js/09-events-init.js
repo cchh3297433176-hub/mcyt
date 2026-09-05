@@ -26,19 +26,14 @@ document.addEventListener('DOMContentLoaded', () => {
             const action = this.dataset.action;
             if (!action) return;
 
-            // 核心支持：聊天中心 0 消耗直接进入
             if (action === 'chat') {
                 switchTab('social');
                 return;
             }
-
-            // 核心支持：同人浏览器 0 消耗直接进入
             if (action === 'fanart') {
                 switchTab('browser');
                 return;
             }
-
-            // 核心支持：YouTube 油管中心 0 消耗直接进入
             if (action === 'youtube' || action === 'comment') {
                 switchTab('youtube');
                 return;
@@ -57,7 +52,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // 左上角头像点击弹窗：更改名字与头像，并将更名记忆注明进长期档案
+    // 左上角头像点击弹窗
     $('headerAvatar')?.addEventListener('click', () => {
         openEditPlayerProfileModal();
     });
@@ -110,27 +105,22 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     $('exitGameBtn')?.addEventListener('click', confirmExitGame);
 
-    // 📤📥 存档备份/恢复（游戏内头部按钮）：更新App前导出、更新后导入，防止自建角色/群聊丢失
+    // 🖼️ 纯图片存档备份/恢复（游戏内头部按钮）
     $('exportSaveBtn')?.addEventListener('click', () => {
         if (typeof openBackupModal === 'function') openBackupModal();
     });
     $('importSaveBtn')?.addEventListener('click', () => {
         if (typeof openRestoreModal === 'function') openRestoreModal();
     });
-    $('importSaveFileInput')?.addEventListener('change', function() {
-        const file = this.files[0];
-        if (file && typeof importSaveFromFile === 'function') importSaveFromFile(file);
-        this.value = '';
-    });
 
-    // 📥 存档恢复（初始设定页按钮）：全新安装/更新后无自动存档时，也能直接导入备份
+    // 🖼️ 纯图片存档备份/恢复（初始设定页按钮）
     $('setupImportSaveBtn')?.addEventListener('click', () => {
         if (typeof openRestoreModal === 'function') openRestoreModal();
     });
-    // 📤 存档备份（初始设定页按钮）：进入游戏前也能备份当前自动存档，更新App前必备
     $('setupBackupBtn')?.addEventListener('click', () => {
         if (typeof openBackupModal === 'function') openBackupModal();
     });
+
     $('modelSettingsBtn')?.addEventListener('click', () => {
         openModal(`<h3 style="margin-bottom:10px;">⚙️ 模型设置</h3>` + buildModelSettingsHTML('modal') + buildSearchSettingsHTML('modal'));
         bindModelSettingsUI('modal');
@@ -219,10 +209,9 @@ document.addEventListener('DOMContentLoaded', () => {
 // 📢 双页滑动公告系统（主公告 + 更新优化与新功能）
 // ============================================================
 function checkAndShowVersionNoticeModal(forceOpen = false) {
-    const ver = window.CURRENT_APP_VERSION || '6.1.0';
+    const ver = window.CURRENT_APP_VERSION || '6.4.0';
     const dismissedVersion = localStorage.getItem('mcyt_dismissed_notice_ver');
 
-    // 如果未被静音或属于版本更新后的全新启动或被强制打开
     if (forceOpen || dismissedVersion !== ver) {
         openVersionNoticeModal(ver);
     }
@@ -234,7 +223,6 @@ function openVersionNoticeModal(version) {
         <h3 style="margin:0;display:flex;align-items:center;gap:6px;">📢 系统公告 <span style="font-size:11px;background:rgba(46,125,50,0.12);color:var(--primary);padding:2px 8px;border-radius:10px;font-weight:700;">v${version}</span></h3>
     </div>
 
-    <!-- 双页滑动视口容器 -->
     <div class="notice-slider-wrap">
         <div class="notice-slider-track" id="noticeSliderTrack">
             <!-- 第 1 页：主公告 -->
@@ -263,22 +251,19 @@ function openVersionNoticeModal(version) {
                     <ul style="padding-left:18px;margin-bottom:10px;font-size:13px;color:#444;line-height:1.6;">
                         <li style="margin-bottom:8px;">1. 优化记忆总结功能，可以自动总结内容，并且设置多少轮一总结，不同角色的记忆会分开放置。</li>
                         <li style="margin-bottom:8px;">2. 合作选项合并入聊天功能，可发送给联系人合作邀请，在油管发共创视频。</li>
-                        <li style="margin-bottom:8px;">3. 🆕 新增「原生能力桥接层」：智能检测 toAPP 等打包工具的原生 JS 接口，让「📤 备份」能真正下载文件到手机、调用系统分享到微信/网盘，「📥 恢复」能调用系统文件选择器。</li>
-                        <li style="margin-bottom:8px;">4. 🖼️ 🆕 新增「图片备份」功能（重点！）：把存档编码成 PNG 图片，点「生成图片备份」后长按图片保存到相册/分享到微信。恢复时点「从相册选图片」或「粘贴图片」即可解码还原。<b>完全不需要 toAPP 支持文件下载</b>，只依赖长按保存图片功能，toAPP 用户首选这个方式！</li>
-                        <li>5. 📱 初始页新增「📤 备份存档」按钮，更新 APP 前在首页就能备份。备份弹窗会显示当前设备能力检测结果。</li>
+                        <li style="margin-bottom:8px;">3. 🖼️ 全面升级「纯图片备份系统」：彻底去除失效的下载与文本复制，一键生成备份图，长按即可保存到相册！</li>
+                        <li style="margin-bottom:8px;">4. 📥 相册恢复极速读取：全新安装或更新 APP 后，在首页直接点「相册选图片」即可一键找回所有自建角色与群聊。</li>
                     </ul>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- 翻页圆点指示器 -->
     <div class="notice-dots-wrap">
         <div class="notice-dot active" id="noticeDot0"></div>
         <div class="notice-dot" id="noticeDot1"></div>
     </div>
 
-    <!-- 底部翻页按键与静音选项 -->
     <div class="notice-footer-opt">
         <label class="notice-checkbox-label">
             <input type="checkbox" id="dismissVersionNoticeCheck" style="accent-color:var(--primary);width:15px;height:15px;">
@@ -331,7 +316,6 @@ function openVersionNoticeModal(version) {
     });
 }
 
-// 弹出修改玩家头像与名字弹窗，并更新长期记忆
 function openEditPlayerProfileModal() {
     const currentName = G.player.ytName || '主播';
     const currentAvatar = G.player.avatar || '';
