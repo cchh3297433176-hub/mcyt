@@ -82,7 +82,10 @@
                 </div>
                 <button class="btn-primary" id="startGameBtn">🚀 填入Key，开始游戏</button>
                 <button class="btn-secondary" id="setupLoadGameBtn" style="width:100%;margin-top:8px;">📂 读取已有存档</button>
-                <button class="btn-secondary" id="setupImportSaveBtn" style="width:100%;margin-top:8px;">📥 导入备份存档</button>
+                <div style="display:flex;gap:8px;margin-top:8px;">
+                    <button class="btn-secondary" id="setupBackupBtn" style="flex:1;">📤 备份存档</button>
+                    <button class="btn-secondary" id="setupImportSaveBtn" style="flex:1;">📥 导入备份</button>
+                </div>
                 <div style="margin-top:8px;font-size:11px;color:#999;text-align:center;">💡 所有剧情由 AI 实时生成，每回合 800+ 字</div>
                 <div style="margin-top:6px;font-size:11px;color:#e67e22;text-align:center;">⚠️ 更新App前请先在游戏内点「📤 备份」备份存档，避免自建角色/群聊丢失</div>
             </div>
@@ -207,6 +210,8 @@
     <script src="js/06-video-story.js"></script>
     <script src="js/07-actions-social.js"></script>
     <script src="js/08-save-load.js"></script>
+    <script src="js/10-native-bridge.js"></script>
+    <script src="js/11-image-backup.js"></script>
     <script src="js/09-events-init.js"></script>
 
     <!-- 🚀 安全的视图启动器，防止白屏死机 -->
