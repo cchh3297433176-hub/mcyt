@@ -9,129 +9,140 @@ const CONFIG = {
 };
 
 // ============================================================
-// NPC 核心设定
+// NPC 核心预设库（官方主播池，随玩家粉丝与热度逐步申请好友）
 // ============================================================
-const NPC_GROXMC = {
-    id: 'groxmc',
-    name: 'Groxmc',
-    gender: '男',
-    persona: '骚话连篇但较自我中心，风趣幽默，和熟人合作时暴虐村民为卖点，口头禅：hey yo chill / Alright bet。直播风格风趣幽默。',
-    appearance: '黑色西装打红色领带的黑色骷髅，气质冷峻帅气。',
-    skin: '黑色西装打红色领带的黑色骷髅',
-    category: '血腥抽象暴力、村民虐待',
-    followers: 7420000,
-    catchphrase: 'hey yo chill',
-    streamStyle: '风趣幽默，声音不大',
-    avatarEmoji: '💀',
-    initialFavor: 0,
-    favor: 0,
-    interactionCount: 0,
-    works: ['《100万个村民模拟文明》', '《100万村民追猎》'],
-    _confessed: false,
-    _relationship: 'single',
-    skills: { building: 95, redstone: 80, pvp: 25, survival: 95, hunting: 60 }
+const OFFICIAL_NPCS = {
+    groxmc: {
+        id: 'groxmc',
+        name: 'Groxmc',
+        gender: '男',
+        persona: '骚话连篇但较自我中心，风趣幽默，和熟人合作时暴虐村民为卖点，口头禅：hey yo chill / Alright bet。直播风格风趣幽默。',
+        appearance: '黑色西装打红色领带的黑色骷髅，气质冷峻帅气。',
+        skin: '黑色西装打红色领带的黑色骷髅',
+        category: '血腥抽象暴力、村民虐待',
+        followers: 7420000,
+        minFollowers: 30000, // 达到3万粉丝可能引起其关注
+        catchphrase: 'hey yo chill',
+        streamStyle: '风趣幽默，声音不大',
+        avatarEmoji: '💀',
+        initialFavor: 0,
+        favor: 0,
+        interactionCount: 0,
+        works: ['《100万个村民模拟文明》', '《100万村民追猎》'],
+        _confessed: false,
+        _relationship: 'single',
+        skills: { building: 95, redstone: 80, pvp: 25, survival: 95, hunting: 60 }
+    },
+    twixxel: {
+        id: 'twixxel',
+        name: 'Twixxel',
+        gender: '男',
+        persona: '性格温和，在关键时候给出方法。胆子不大，有点怕怪物，看见空房屋会住进去。',
+        appearance: '通体纯黑色，仅有四个白色像素点眼睛和微笑嘴。',
+        skin: '通体纯黑色，四个像素点眼睛',
+        category: '伪实况、恐怖模组实况',
+        followers: 1090000,
+        minFollowers: 10000, // 达到1万粉丝可能关注
+        catchphrase: 'Oh no...',
+        streamStyle: '抽象风，偶尔段子',
+        avatarEmoji: '👾',
+        initialFavor: 0,
+        favor: 0,
+        interactionCount: 0,
+        works: ['《I\'ve genuinely never been this scared》'],
+        _confessed: false,
+        _relationship: 'single',
+        skills: { building: 60, redstone: 40, pvp: 50, survival: 85, hunting: 80 }
+    },
+    xqree: {
+        id: 'xqree',
+        name: 'xqree',
+        gender: '男',
+        persona: '外表温和，实际敢爱敢恨，对喜欢的人温柔有礼，声音好听被吓到就喘。',
+        appearance: '穿着西装，戴俄罗斯遮耳帽，肤色为黑，眼睛白色。',
+        skin: '西装遮耳帽黑皮白眼',
+        category: '伪实况、二创',
+        followers: 110000,
+        minFollowers: 3000, // 新人早期容易结识
+        catchphrase: 'Oh gosh...',
+        streamStyle: '暂无直播',
+        avatarEmoji: '🐰',
+        initialFavor: 0,
+        favor: 0,
+        interactionCount: 0,
+        works: ['《Falsity》系列'],
+        _confessed: false,
+        _relationship: 'single',
+        skills: { building: 80, redstone: 55, pvp: 80, survival: 50, hunting: 50 }
+    },
+    dream: {
+        id: 'dream',
+        name: 'Dream',
+        gender: '男',
+        persona: '技术超群、自信张扬的速通者，天性神秘，享受掌控。',
+        appearance: '白色笑脸面具，绿色上衣，黑色裤子。',
+        skin: '白色笑脸面具绿色上衣',
+        category: 'Manhunt、速通',
+        followers: 35000000,
+        minFollowers: 100000, // 顶级大主播，需要10万粉关注
+        catchphrase: 'In this video...',
+        streamStyle: '快节奏、高强度挑战',
+        avatarEmoji: '🎭',
+        initialFavor: 0,
+        favor: 0,
+        interactionCount: 0,
+        works: ['《Minecraft Manhunt》系列'],
+        _confessed: false,
+        _relationship: 'single',
+        minFollowersForDM: 500000,
+        skills: { building: 90, redstone: 90, pvp: 100, survival: 100, hunting: 100 }
+    },
+    thatmob: {
+        id: 'thatmob',
+        name: 'ThatMob',
+        gender: '男',
+        persona: '20岁加拿大/法国人，随和健谈，带点傲娇。',
+        appearance: '炭黑色皮肤、黑发、翠绿眼睛，绿色护目镜黑色战术夹克。',
+        skin: '绿色护目镜黑色战术夹克',
+        category: '恐怖模组、ARG',
+        followers: 2400000,
+        minFollowers: 20000,
+        catchphrase: '',
+        streamStyle: '随和健谈',
+        avatarEmoji: '👽',
+        initialFavor: 0,
+        favor: 0,
+        interactionCount: 0,
+        works: ['《Verity》系列'],
+        _confessed: false,
+        _relationship: 'single',
+        skills: { building: 60, redstone: 50, pvp: 40, survival: 75, hunting: 70 }
+    },
+    whispy: {
+        id: 'whispy',
+        name: 'Whispy',
+        gender: '男',
+        persona: '充满活力，好感度高了之后话唠且粘人，被称作小南瓜。真生气了会一声不吭。',
+        appearance: '橙色南瓜头，粉色连帽衫。',
+        skin: '橙色南瓜头粉色连帽衫',
+        category: '恐怖模组创作者、《Verity》配音',
+        followers: 210000,
+        minFollowers: 5000,
+        catchphrase: '',
+        streamStyle: '高萌',
+        avatarEmoji: '🎃',
+        initialFavor: 0,
+        favor: 0,
+        interactionCount: 0,
+        works: ['为 Verity 角色配音'],
+        _confessed: false,
+        _relationship: 'single',
+        skills: { building: 55, redstone: 40, pvp: 35, survival: 70, hunting: 60 }
+    }
 };
-const NPC_TWIXXEL = {
-    id: 'twixxel',
-    name: 'Twixxel',
-    gender: '男',
-    persona: '性格温和，在关键时候给出方法。胆子不大，有点怕怪物，看见空房屋会住进去。',
-    appearance: '通体纯黑色，仅有四个白色像素点眼睛和微笑嘴。',
-    skin: '通体纯黑色，四个像素点眼睛',
-    category: '伪实况、恐怖模组实况',
-    followers: 1090000,
-    catchphrase: 'Oh no...',
-    streamStyle: '抽象风，偶尔段子',
-    avatarEmoji: '👾',
-    initialFavor: 0,
-    favor: 0,
-    interactionCount: 0,
-    works: ['《I\'ve genuinely never been this scared》'],
-    _confessed: false,
-    _relationship: 'single',
-    skills: { building: 60, redstone: 40, pvp: 50, survival: 85, hunting: 80 }
-};
-const NPC_XQREE = {
-    id: 'xqree',
-    name: 'xqree',
-    gender: '男',
-    persona: '外表温和，实际敢爱敢恨，对喜欢的人温柔有礼，声音好听被吓到就喘。',
-    appearance: '穿着西装，戴俄罗斯遮耳帽，肤色为黑，眼睛白色。',
-    skin: '西装遮耳帽黑皮白眼',
-    category: '伪实况、二创',
-    followers: 110000,
-    catchphrase: 'Oh gosh...',
-    streamStyle: '暂无直播',
-    avatarEmoji: '🐰',
-    initialFavor: 0,
-    favor: 0,
-    interactionCount: 0,
-    works: ['《Falsity》系列'],
-    _confessed: false,
-    _relationship: 'single',
-    skills: { building: 80, redstone: 55, pvp: 80, survival: 50, hunting: 50 }
-};
-const NPC_DREAM = {
-    id: 'dream',
-    name: 'Dream',
-    gender: '男',
-    persona: '技术超群、自信张扬的速通者，天性神秘，享受掌控。',
-    appearance: '白色笑脸面具，绿色上衣，黑色裤子。',
-    skin: '白色笑脸面具绿色上衣',
-    category: 'Manhunt、速通',
-    followers: 35000000,
-    catchphrase: 'In this video...',
-    streamStyle: '快节奏、高强度挑战',
-    avatarEmoji: '🎭',
-    initialFavor: 0,
-    favor: 0,
-    interactionCount: 0,
-    works: ['《Minecraft Manhunt》系列'],
-    _confessed: false,
-    _relationship: 'single',
-    minFollowersForDM: 500000,
-    skills: { building: 90, redstone: 90, pvp: 100, survival: 100, hunting: 100 }
-};
-const NPC_THATMOB = {
-    id: 'thatmob',
-    name: 'ThatMob',
-    gender: '男',
-    persona: '20岁加拿大/法国人，随和健谈，带点傲娇。',
-    appearance: '炭黑色皮肤、黑发、翠绿眼睛，绿色护目镜黑色战术夹克。',
-    skin: '绿色护目镜黑色战术夹克',
-    category: '恐怖模组、ARG',
-    followers: 2400000,
-    catchphrase: '',
-    streamStyle: '随和健谈',
-    avatarEmoji: '👽',
-    initialFavor: 0,
-    favor: 0,
-    interactionCount: 0,
-    works: ['《Verity》系列'],
-    _confessed: false,
-    _relationship: 'single',
-    skills: { building: 60, redstone: 50, pvp: 40, survival: 75, hunting: 70 }
-};
-const NPC_WHISPY = {
-    id: 'whispy',
-    name: 'Whispy',
-    gender: '男',
-    persona: '充满活力，好感度高了之后话唠且粘人，被称作小南瓜。真生气了会一声不吭。',
-    appearance: '橙色南瓜头，粉色连帽衫。',
-    skin: '橙色南瓜头粉色连帽衫',
-    category: '恐怖模组创作者、《Verity》配音',
-    followers: 210000,
-    catchphrase: '',
-    streamStyle: '高萌',
-    avatarEmoji: '🎃',
-    initialFavor: 0,
-    favor: 0,
-    interactionCount: 0,
-    works: ['为 Verity 角色配音'],
-    _confessed: false,
-    _relationship: 'single',
-    skills: { building: 55, redstone: 40, pvp: 35, survival: 70, hunting: 60 }
-};
+
+// 保持历史兼容的 DEFAULT_NPCS 镜像引用
+const DEFAULT_NPCS = OFFICIAL_NPCS;
 
 // ============================================================
 // GLOBAL STATE
@@ -188,16 +199,17 @@ let G = {
     totalCollabs: 0,
     totalDMs: 0,
     currentStream: null,
-    npcs: {
-        groxmc: { ...NPC_GROXMC },
-        twixxel: { ...NPC_TWIXXEL },
-        xqree: { ...NPC_XQREE },
-        dream: { ...NPC_DREAM },
-        thatmob: { ...NPC_THATMOB },
-        whispy: { ...NPC_WHISPY }
-    },
+
+    // 社交与通讯录机制（新档初始联系人为空，随粉丝热度与好友申请加入）
+    npcs: {},
     chatHistory: {},
     _chatMsgId: 0,
+
+    // 大小号系统
+    currentAccountId: 'main', // 'main' 代表大号，其余为小号 id
+    altAccounts: [], // 存储格式：[{ id: 'alt_xxx', name: '小号名字', avatar: '...', bio: '...' }]
+    blockedNpcs: [], // 记录哪些 NPC 拉黑了大号（无法再用大号发消息）
+
     fanworks: [],
     fanclubMessages: [],
     _fanworkId: 0,
@@ -208,7 +220,8 @@ let G = {
     phoneNav: 'chats',
     groups: {},
     groupChatHistory: {},
-    friendRequests: [],
+    friendRequests: [], // 待处理好友申请
+    groupInvites: [],   // 待处理群聊邀请
     momentsFilterNpcId: null,
     confessionState: null,
     collections: {},
@@ -226,7 +239,7 @@ let G = {
     _npcInitiatedToday: {},
 };
 
-// 安全 DOM 索引助手（摒弃易出错的 Proxy，直接返回原生元素）
+// 安全 DOM 索引助手
 const $ = id => document.getElementById(id);
 const dom = {
     get setupPage() { return $('setupPage'); },

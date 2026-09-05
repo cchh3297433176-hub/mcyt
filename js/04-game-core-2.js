@@ -1,5 +1,5 @@
 // js/04-game-core-2.js
-// 成就系统、商店、数据面板、手机社交(含聊天加号合作联动)与复刻级记忆总结系统
+// 成就系统、商店、数据面板、手机社交(含微信式多条连发、好感度增长、粉丝热度好友申请、拉黑与大小号系统)
 // ============================================================
 
 // 成就系统
@@ -128,9 +128,9 @@ function renderShop() {
     const equipCosts = [0, 500, 1500, 4000, 8000, 15000];
     const equipMultipliers = [1.0, 1.2, 1.5, 2.0, 2.8, 4.0];
     const items = [
-        { id: 'hot1', label: '🔥 热度小包', desc: '一次性增加 5,000 粉丝', cost: 1000, effect: () => { G.player.followers += 5000; } },
-        { id: 'hot2', label: '🔥 热度中包', desc: '一次性增加 20,000 粉丝', cost: 3500, effect: () => { G.player.followers += 20000; } },
-        { id: 'hot3', label: '🔥 热度大包', desc: '一次性增加 50,000 粉丝', cost: 8000, effect: () => { G.player.followers += 50000; } },
+        { id: 'hot1', label: '🔥 热度小包', desc: '一次性增加 5,000 粉丝', cost: 1000, effect: () => { G.player.followers += 5000; checkSocialRequestsTrigger(); } },
+        { id: 'hot2', label: '🔥 热度中包', desc: '一次性增加 20,000 粉丝', cost: 3500, effect: () => { G.player.followers += 20000; checkSocialRequestsTrigger(); } },
+        { id: 'hot3', label: '🔥 热度大包', desc: '一次性增加 50,000 粉丝', cost: 8000, effect: () => { G.player.followers += 50000; checkSocialRequestsTrigger(); } },
     ];
     let html = `
     <h3>🛒 商店</h3>
@@ -342,6 +342,8 @@ function renderComments(videoIndex, container) {
     if (!video) return;
     const comments = video.comments || [];
     let html = '';
+    const activeAccount = getActiveAccountInfo();
+
     if (comments.length === 0) html = `<div class="no-comments">还没有评论，快来抢沙发！</div>`;
     else {
         comments.forEach((comment, idx) => {
@@ -350,7 +352,7 @@ function renderComments(videoIndex, container) {
                 <div class="comment-user">${escapeHtml(comment.user)}</div>
                 <div class="comment-content">${escapeHtml(comment.content)}</div>
                 <div class="reply-box">
-                    <input type="text" placeholder="回复 @${escapeHtml(comment.user)}..." class="reply-input" data-video-idx="${videoIndex}" data-comment-idx="${idx}">
+                    <input type="text" placeholder="以 [${escapeHtml(activeAccount.name)}] 回复 @${escapeHtml(comment.user)}..." class="reply-input" data-video-idx="${videoIndex}" data-comment-idx="${idx}">
                     <button class="reply-send" data-video-idx="${videoIndex}" data-comment-idx="${idx}">发送</button>
                 </div>
             </div>
@@ -387,19 +389,25 @@ function sendReply(videoIndex, commentIndex, replyText) {
     if (G.actionPoints < 2) { showToast('⚠️ 行动点不足', 'error'); return; }
     G.actionPoints -= 2;
     updateUI();
-    const newComment = { user: G.player.ytName, content: `回复 @${targetComment.user}: ${replyText}` };
+
+    const currentAcc = getActiveAccountInfo();
+    const isAlt = currentAcc.isAlt;
+    const senderName = currentAcc.name + (isAlt ? ' (小号)' : '');
+
+    const newComment = { user: senderName, content: `回复 @${targetComment.user}: ${replyText}` };
     video.comments.unshift(newComment);
     const gain = rand(1, 5);
     G.player.followers += gain;
     G.player.likes += rand(1, 3);
     updateUI();
-    appendStory(`💬 你在视频「${video.title}」中回复了 @${targetComment.user}: ${replyText}`, '📨 回复');
+    appendStory(`💬 你以「${senderName}」在视频「${video.title}」中回复了 @${targetComment.user}: ${replyText}`, '📨 回复');
     const container = document.getElementById(`colcom-${video.collection}-${videoIndex}`) || document.getElementById(`comments-${videoIndex}`);
     if (container && container.style.display !== 'none') renderComments(videoIndex, container);
     showToast(`✅ 回复成功！粉丝 +${gain}`, 'success', 2000);
     if (document.querySelector('.tab-btn.active')?.dataset.tab === 'data') renderDataPanel();
     advanceTimeSlot();
     autoSaveGame();
+    checkSocialRequestsTrigger();
 }
 
 // ============================================================
@@ -434,22 +442,28 @@ function renderDataPanel() {
         </div>
         `;
     }
-    html += `<div style="font-size:15px;font-weight:700;color:var(--text);margin:14px 0 10px;">🤖 角色技术属性</div>`;
-    for (const [id, npc] of Object.entries(G.npcs || {})) {
-        const ns = npc.skills || { building: 0, redstone: 0, pvp: 0, survival: 0, hunting: 0 };
-        const avg = Math.round((ns.building + ns.redstone + ns.pvp + ns.survival + ns.hunting) / 5);
-        const isLover = (G.player.lovers || []).includes(npc.name);
-        html += `
-        <div class="npc-card" onclick="openChat('${id}')">
-            <div class="npc-info">
-                <div class="npc-name">${npc.avatarUrl ? `<img src="${npc.avatarUrl}" style="width:20px;height:20px;border-radius:50%;vertical-align:middle;">` : (npc.avatarEmoji || '👤')} ${escapeHtml(npc.name)} ${isLover ? '💕' : ''}</div>
-                <div class="npc-desc">${npc.isCustom ? '自定义角色' : `平均技术 ${avg}`} · 好感 ${npc.favor||0}</div>
+    html += `<div style="font-size:15px;font-weight:700;color:var(--text);margin:14px 0 10px;">🤖 通讯录角色关系</div>`;
+    const npcEntries = Object.entries(G.npcs || {});
+    if (npcEntries.length === 0) {
+        html += `<div style="padding:14px;background:#fff;border-radius:10px;color:#888;font-size:13px;text-align:center;">暂无联系人。提升粉丝热度以引起各路主播的关注！</div>`;
+    } else {
+        for (const [id, npc] of npcEntries) {
+            const ns = npc.skills || { building: 0, redstone: 0, pvp: 0, survival: 0, hunting: 0 };
+            const avg = Math.round((ns.building + ns.redstone + ns.pvp + ns.survival + ns.hunting) / 5);
+            const isLover = (G.player.lovers || []).includes(npc.name);
+            const isBlocked = (G.blockedNpcs || []).includes(id);
+            html += `
+            <div class="npc-card" onclick="openChat('${id}')">
+                <div class="npc-info">
+                    <div class="npc-name">${npc.avatarUrl ? `<img src="${npc.avatarUrl}" style="width:20px;height:20px;border-radius:50%;vertical-align:middle;">` : (npc.avatarEmoji || '👤')} ${escapeHtml(npc.name)} ${isLover ? '💕' : ''} ${isBlocked ? '<span style="color:#e53935;font-size:11px;">[已拉黑你]</span>' : ''}</div>
+                    <div class="npc-desc">${npc.isCustom ? '自建好友' : `平均技术 ${avg}`} · 好感 ${npc.favor||0}</div>
+                </div>
+                <div style="font-size:11px;color:var(--text2);display:flex;gap:4px;flex-wrap:wrap;">
+                    <span>🏗️${ns.building}</span> <span>🔧${ns.redstone}</span> <span>⚔️${ns.pvp}</span> <span>🌲${ns.survival}</span> <span>🏹${ns.hunting}</span>
+                </div>
             </div>
-            <div style="font-size:11px;color:var(--text2);display:flex;gap:4px;flex-wrap:wrap;">
-                <span>🏗️${ns.building}</span> <span>🔧${ns.redstone}</span> <span>⚔️${ns.pvp}</span> <span>🌲${ns.survival}</span> <span>🏹${ns.hunting}</span>
-            </div>
-        </div>
-        `;
+            `;
+        }
     }
     if (p.streamHistory && p.streamHistory.length > 0) {
         html += `<div style="font-size:15px;font-weight:700;color:var(--text);margin:14px 0 8px;">📺 直播历史</div>`;
@@ -477,34 +491,23 @@ function renderDataPanel() {
 }
 
 // ============================================================
-// 🧠 记忆系统核心配置与独立便宜总结模型调度
+// 🧠 记忆系统核心配置
 // ============================================================
 if (!G.memoryConfig) {
     G.memoryConfig = {
-        enabled: true,              // 是否开启后台自动总结
-        defaultThreshold: 10,       // 默认触发总结轮数
-        defaultKeepRecent: 5,       // 总结后保留最近多少轮对话
-        selectedModelKey: ''        // 选中的专门总结模型
+        enabled: true,
+        defaultThreshold: 10,
+        defaultKeepRecent: 5,
+        selectedModelKey: ''
     };
 }
 if (!G.memorySummaries) G.memorySummaries = [];
 if (!G.groupMemories) G.groupMemories = {};
 
-// 🛡️ NPC 与聊天数据结构完整性自动对齐与保护
 function ensureNpcIntegrity() {
     if (!G.npcs || typeof G.npcs !== 'object') G.npcs = {};
     if (!G.chatHistory || typeof G.chatHistory !== 'object') G.chatHistory = {};
 
-    // 默认 NPC 补全，同时绝对不覆盖玩家的历史自建 NPC
-    if (typeof DEFAULT_NPCS !== 'undefined' && DEFAULT_NPCS) {
-        for (const [id, def] of Object.entries(DEFAULT_NPCS)) {
-            if (!G.npcs[id]) {
-                G.npcs[id] = Object.assign({}, def);
-            }
-        }
-    }
-
-    // 校验补齐每个 NPC 的关键字段
     for (const [id, npc] of Object.entries(G.npcs)) {
         if (!npc.id) npc.id = id;
         if (!npc.name) npc.name = id;
@@ -515,7 +518,6 @@ function ensureNpcIntegrity() {
     }
 }
 
-// 获取全部可用模型列表供用户选择
 function getAvailableMemoryModels() {
     const list = [];
     if (G.aiProfiles && Array.isArray(G.aiProfiles) && G.aiProfiles.length) {
@@ -532,7 +534,6 @@ function getAvailableMemoryModels() {
     return list;
 }
 
-// 调度记忆总结的专属模型，节省主模型额度
 async function callMemoryAI(messages, options = {}) {
     const cfg = G.memoryConfig || {};
     let targetProfile = null;
@@ -607,6 +608,213 @@ function addGlobalMemoryRecord(text) {
     });
 }
 
+function pushChatMessageSafe(npcId, msgObj) {
+    if (!G.chatHistory) G.chatHistory = {};
+    if (!G.chatHistory[npcId]) G.chatHistory[npcId] = [];
+    G.chatHistory[npcId].push(msgObj);
+    if (typeof pushChat === 'function') {
+        try { pushChat(npcId, msgObj); } catch (_) {}
+    }
+}
+
+// ============================================================
+// 📱 账号生态体系（大号与小号系统支持）
+// ============================================================
+if (!G.currentAccountId) G.currentAccountId = 'main';
+if (!G.altAccounts) G.altAccounts = [];
+if (!G.blockedNpcs) G.blockedNpcs = [];
+
+function getActiveAccountInfo() {
+    if (G.currentAccountId === 'main' || !G.currentAccountId) {
+        return {
+            id: 'main',
+            isAlt: false,
+            name: G.player.ytName || '主播大号',
+            avatar: G.player.avatar || null,
+            bio: 'YouTube 频道官方号'
+        };
+    }
+    const found = (G.altAccounts || []).find(a => a.id === G.currentAccountId);
+    if (found) {
+        return {
+            id: found.id,
+            isAlt: true,
+            name: found.name,
+            avatar: found.avatar || null,
+            bio: found.bio || '私密小号'
+        };
+    }
+    return { id: 'main', isAlt: false, name: G.player.ytName || '主播大号', avatar: G.player.avatar, bio: '' };
+}
+
+function switchAccount(accId) {
+    G.currentAccountId = accId;
+    const acc = getActiveAccountInfo();
+    showToast(`🔀 已切换账号为：${acc.name}`, 'info', 1800);
+    renderSocialPanel();
+    autoSaveGame();
+}
+
+function openAccountManagerModal() {
+    const mainAcc = { name: G.player.ytName, id: 'main' };
+    const currentId = G.currentAccountId || 'main';
+
+    let altsHtml = '';
+    (G.altAccounts || []).forEach(alt => {
+        altsHtml += `
+        <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#f8faf8;border-radius:8px;margin-bottom:6px;border:1px solid #e2ece2;">
+            <div style="display:flex;align-items:center;gap:8px;">
+                <div style="font-size:20px;">${alt.avatar ? `<img src="${alt.avatar}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;">` : '🎭'}</div>
+                <div>
+                    <div style="font-weight:700;font-size:13px;">${escapeHtml(alt.name)} <span style="font-size:10px;color:#2e7d32;background:#e8f5e9;padding:1px 4px;border-radius:4px;">小号</span></div>
+                    <div style="font-size:10px;color:#888;">${escapeHtml(alt.bio || '无简介')}</div>
+                </div>
+            </div>
+            <div style="display:flex;gap:6px;">
+                ${currentId === alt.id ? '<span style="font-size:11px;color:#2e7d32;font-weight:700;padding:4px 6px;">● 当前使用</span>' : `<button class="upload-btn" onclick="switchAccount('${alt.id}');closeModal();" style="padding:4px 8px;font-size:11px;">使用</button>`}
+                <button class="upload-btn" onclick="deleteAltAccount('${alt.id}')" style="padding:4px 6px;font-size:11px;background:#e53935;">🗑️</button>
+            </div>
+        </div>`;
+    });
+
+    openModal(`
+        <h3>🎭 账号切换与小号中心</h3>
+        <p style="font-size:12px;color:#666;">你可以创建自定义的小号与主播接触，若大号被主播拉黑，可用小号进行转圜求原谅！</p>
+        
+        <div style="margin:10px 0;border:1px solid #eee;border-radius:10px;padding:10px;background:#fff;">
+            <div style="font-weight:700;font-size:13px;margin-bottom:8px;">📌 官方主账号</div>
+            <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#f0f8f0;border-radius:8px;border:1px solid #d0ebd0;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <div style="font-size:20px;">${G.player.avatar ? `<img src="${G.player.avatar}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;">` : '👑'}</div>
+                    <div>
+                        <div style="font-weight:700;font-size:13px;">${escapeHtml(mainAcc.name)} <span style="font-size:10px;color:#fff;background:var(--primary);padding:1px 6px;border-radius:4px;">大号</span></div>
+                        <div style="font-size:10px;color:#666;">粉丝 ${G.player.followers || 0} · 认证主播</div>
+                    </div>
+                </div>
+                ${currentId === 'main' ? '<span style="font-size:11px;color:#2e7d32;font-weight:700;padding:4px 6px;">● 当前使用</span>' : `<button class="upload-btn" onclick="switchAccount('main');closeModal();" style="padding:4px 8px;font-size:11px;">使用</button>`}
+            </div>
+
+            <div style="font-weight:700;font-size:13px;margin:12px 0 6px;">👥 注册的小号列表</div>
+            ${altsHtml || '<div style="font-size:12px;color:#999;padding:6px 0;">暂无小号，点击下方快速注册</div>'}
+        </div>
+
+        <div class="btn-row" style="flex-direction:column;gap:8px;">
+            <button class="btn-primary" id="btnRegisterNewAlt" style="width:100%;">➕ 注册新的自定义小号</button>
+            <button class="btn-secondary" onclick="closeModal()" style="width:100%;">关闭</button>
+        </div>
+    `);
+
+    document.getElementById('btnRegisterNewAlt').onclick = () => {
+        closeModal();
+        openCreateAltAccountModal();
+    };
+}
+
+function openCreateAltAccountModal() {
+    openModal(`
+        <h3>➕ 注册自定义小号</h3>
+        <p style="font-size:12px;color:#666;">为小号起一个不会被主播一眼识破的 ID 与设定：</p>
+        <div class="form-group">
+            <label>小号名称 / ID <span class="required">*</span></label>
+            <input type="text" id="altNameInput" placeholder="如：路过的红石学徒 / 匿名纯路人">
+        </div>
+        <div class="form-group">
+            <label>小号个性签名</label>
+            <input type="text" id="altBioInput" placeholder="如：只看不说话，热爱MC建筑...">
+        </div>
+        <div class="btn-row">
+            <button class="btn-secondary" onclick="openAccountManagerModal()">返回</button>
+            <button class="btn-primary" id="btnConfirmCreateAlt">完成注册并登录</button>
+        </div>
+    `);
+
+    document.getElementById('btnConfirmCreateAlt').onclick = () => {
+        const name = document.getElementById('altNameInput').value.trim();
+        const bio = document.getElementById('altBioInput').value.trim();
+        if (!name) { showToast('⚠️ 请填写小号名称', 'error'); return; }
+
+        if (!G.altAccounts) G.altAccounts = [];
+        const newAlt = {
+            id: 'alt_' + Date.now(),
+            name,
+            bio: bio || '路人小号',
+            avatar: null,
+            createdAt: G.day
+        };
+        G.altAccounts.push(newAlt);
+        G.currentAccountId = newAlt.id;
+
+        showToast(`🎉 小号「${name}」注册成功并已登录！`, 'success', 2500);
+        closeModal();
+        renderSocialPanel();
+        autoSaveGame();
+    };
+}
+
+function deleteAltAccount(altId) {
+    if (!confirm('确定要注销这个小号吗？')) return;
+    G.altAccounts = (G.altAccounts || []).filter(a => a.id !== altId);
+    if (G.currentAccountId === altId) G.currentAccountId = 'main';
+    showToast('🗑️ 小号已注销', 'info');
+    openAccountManagerModal();
+    autoSaveGame();
+}
+
+// ============================================================
+// 🔔 粉丝热度与主播好友申请触发引擎
+// ============================================================
+function checkSocialRequestsTrigger() {
+    if (typeof OFFICIAL_NPCS === 'undefined') return;
+    if (!G.friendRequests) G.friendRequests = [];
+    if (!G.groupInvites) G.groupInvites = [];
+    const followers = G.player.followers || 0;
+
+    // 1. 遍历官方主播库，判断是否满足好友申请门槛且未添加、未在申请列表中
+    for (const [id, npc] of Object.entries(OFFICIAL_NPCS)) {
+        if (G.npcs[id]) continue; // 已经在通讯录中
+        const inFreq = G.friendRequests.some(r => r.npcOfficialId === id || r.name === npc.name);
+        if (inFreq) continue; // 已经在好友申请待办池
+
+        const threshold = npc.minFollowers || 5000;
+        if (followers >= threshold) {
+            // 热度达标，根据粉丝量比例判定触发
+            const chance = followers > threshold * 2 ? 0.8 : 0.45;
+            if (Math.random() < chance) {
+                G.friendRequests.push({
+                    _id: 'freq_' + id + '_' + Date.now(),
+                    npcOfficialId: id,
+                    name: npc.name,
+                    fromReason: `关注到你的作品 (粉丝达到 ${followers.toLocaleString()})`,
+                    persona: npc.persona,
+                    avatarEmoji: npc.avatarEmoji || '👤',
+                    avatarUrl: null,
+                    day: G.day
+                });
+                showToast(`📬 顶级主播「${npc.name}」因你的热度向你发来了好友申请！`, 'success', 3500);
+                addMemoir('好友申请', `知名主播 ${npc.name} 关注到了你的频道并申请加为好友`);
+                addGlobalMemoryRecord(`【社交突破】：知名MC主播「${npc.name}」关注到主角，主动递来好友申请。`);
+            }
+        }
+    }
+
+    // 2. 粉丝群邀请触发判定
+    if (followers >= 5000 && !G.groups['fan_club_1']) {
+        const hasInv = G.groupInvites.some(gi => gi.gid === 'fan_club_1');
+        if (!hasInv) {
+            G.groupInvites.push({
+                _id: 'ginv_' + Date.now(),
+                gid: 'fan_club_1',
+                name: '🎉 主播后援会 1 号群',
+                desc: '由核心粉丝自发为你建立的专属粉丝后援讨论基地！',
+                avatarEmoji: '👑',
+                inviter: '狂热铁粉'
+            });
+            showToast('👥 收到粉丝自建后援群的加入邀请！', 'info', 3000);
+        }
+    }
+}
+window.checkSocialRequestsTrigger = checkSocialRequestsTrigger;
+
 // ============================================================
 // 📱 手机社交中心
 // ============================================================
@@ -615,6 +823,7 @@ if (!G.chatActiveTab) G.chatActiveTab = 'direct';
 if (!G.groups) G.groups = {};
 if (!G.groupChatHistory) G.groupChatHistory = {};
 if (!G.friendRequests) G.friendRequests = [];
+if (!G.groupInvites) G.groupInvites = [];
 if (!G.momentsFilterNpcId) G.momentsFilterNpcId = null;
 
 function bindLongPressEvent(el, onLongPress, onClick) {
@@ -699,9 +908,19 @@ function renderSocialPanel() {
 function renderPhoneApp(container) {
     const isMoments = G.phoneNav === 'moments';
     let contentHtml = isMoments ? buildMomentsHTML() : buildChatListHTML();
+    const activeAcc = getActiveAccountInfo();
 
     const html = `
     <div class="phone-app-wrap" style="background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.06);height:82vh;max-height:850px;display:flex;flex-direction:column;">
+        <!-- 顶部身份条（显示当前登录大号还是小号，支持快速切号） -->
+        <div style="background:#f1f7f1;padding:6px 12px;border-bottom:1px solid #e0ebe0;display:flex;justify-content:space-between;align-items:center;font-size:12px;">
+            <div style="display:flex;align-items:center;gap:6px;">
+                <span>${activeAcc.isAlt ? '🎭' : '👑'} 当前账号：<b>${escapeHtml(activeAcc.name)}</b></span>
+                ${activeAcc.isAlt ? '<span style="font-size:10px;background:#ffe082;color:#795548;padding:1px 4px;border-radius:4px;font-weight:700;">小号模式</span>' : ''}
+            </div>
+            <button onclick="openAccountManagerModal()" style="border:1px solid #b8dbb8;background:#fff;padding:2px 8px;border-radius:12px;font-size:11px;cursor:pointer;color:#2e7d32;font-weight:700;">🔀 切换/注册小号</button>
+        </div>
+
         <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;">
             ${contentHtml}
         </div>
@@ -731,33 +950,52 @@ function renderPhoneApp(container) {
 
 function buildChatListHTML() {
     const isDirect = G.chatActiveTab !== 'group';
-    const pendingCount = (G.friendRequests || []).length;
+    const pendingCount = (G.friendRequests || []).length + (G.groupInvites || []).length;
     let itemsHtml = '';
 
     if (isDirect) {
-        for (const [id, npc] of Object.entries(G.npcs || {})) {
-            const chatHist = G.chatHistory[id] || [];
-            const lastMsg = chatHist.length > 0 ? chatHist[chatHist.length - 1] : null;
-            const purePreview = lastMsg ? stripThought(lastMsg.text || '') : (npc.memorySummary ? `[记忆: ${stripThought(npc.memorySummary).slice(0, 15)}...]` : '暂无新消息');
-            const time = lastMsg ? (lastMsg.time || '') : '';
-            const isLover = (G.player.lovers || []).includes(npc.name);
-            
+        const npcList = Object.entries(G.npcs || {});
+        if (!npcList.length) {
             itemsHtml += `
-            <div class="chat-item" data-id="${id}" style="display:flex;align-items:center;padding:10px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;background:#fff;border:1px solid #f0f4f0;">
-                <div style="margin-right:12px;flex-shrink:0;">${renderAvatarBadge(npc, 44)}</div>
-                <div style="flex:1;min-width:0;">
-                    <div style="display:flex;justify-content:space-between;align-items:center;">
-                        <span style="font-weight:700;font-size:14px;color:var(--text);">${escapeHtml(npc.name)} ${isLover ? '💕' : ''} ${npc.isCustom ? '<span style="font-size:10px;color:var(--primary);border:1px solid;padding:0 4px;border-radius:4px;">自定义</span>' : ''}</span>
-                        <span style="font-size:11px;color:#bbb;">${time}</span>
-                    </div>
-                    <div style="font-size:12px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:3px;">${escapeHtml(purePreview.slice(0, 30))}</div>
+            <div style="text-align:center;color:#888;padding:45px 16px;font-size:13px;line-height:1.7;">
+                <div style="font-size:36px;margin-bottom:8px;">📬</div>
+                <b>通讯录空空如也</b><br>
+                新人主播需要通过<b>录制视频</b>、<b>联机开播</b>积累粉丝热度。<br>
+                随着你的频道声名鹊起，各路MC大主播与热情粉丝会主动递来好友申请！<br>
+                <div style="margin-top:10px;">
+                    <button class="upload-btn" onclick="openAddChatTargetModal()" style="padding:6px 14px;font-size:12px;">查看待处理好友申请 (${(G.friendRequests||[]).length})</button>
                 </div>
             </div>`;
+        } else {
+            for (const [id, npc] of npcList) {
+                const chatHist = G.chatHistory[id] || [];
+                const lastMsg = chatHist.length > 0 ? chatHist[chatHist.length - 1] : null;
+                const purePreview = lastMsg ? stripThought(lastMsg.text || '') : (npc.memorySummary ? `[记忆: ${stripThought(npc.memorySummary).slice(0, 15)}...]` : '新添加好友，快来打个招呼吧');
+                const time = lastMsg ? (lastMsg.time || '') : '';
+                const isLover = (G.player.lovers || []).includes(npc.name);
+                const isBlocked = (G.blockedNpcs || []).includes(id);
+
+                itemsHtml += `
+                <div class="chat-item" data-id="${id}" style="display:flex;align-items:center;padding:10px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;background:#fff;border:1px solid #f0f4f0;position:relative;">
+                    <div style="margin-right:12px;flex-shrink:0;">${renderAvatarBadge(npc, 44)}</div>
+                    <div style="flex:1;min-width:0;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <span style="font-weight:700;font-size:14px;color:var(--text);">${escapeHtml(npc.name)} ${isLover ? '💕' : ''} ${isBlocked ? '<span style="font-size:10px;color:#fff;background:#e53935;padding:1px 5px;border-radius:4px;">已拉黑大号</span>' : ''}</span>
+                            <span style="font-size:11px;color:#bbb;">${time}</span>
+                        </div>
+                        <div style="font-size:12px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:3px;">${escapeHtml(purePreview.slice(0, 30))}</div>
+                    </div>
+                </div>`;
+            }
         }
     } else {
         const groupKeys = Object.keys(G.groups || {});
         if (!groupKeys.length) {
-            itemsHtml += `<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">暂无群聊，点击右上角 ➕ 创建专属粉丝群或主播交流群！</div>`;
+            itemsHtml += `
+            <div style="text-align:center;color:#aaa;padding:40px 16px;font-size:13px;line-height:1.6;">
+                暂无群聊。<br>
+                粉丝增长后会收到后援粉丝群邀请，<br>也可以点击右上角 ➕ 自建专属主播交流群！
+            </div>`;
         } else {
             for (const [gid, grp] of Object.entries(G.groups)) {
                 const msgs = G.groupChatHistory[gid] || [];
@@ -785,12 +1023,12 @@ function buildChatListHTML() {
             <button id="tabGroupBtn" style="border:none;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;background:${!isDirect ? '#fff' : 'transparent'};color:${!isDirect ? 'var(--primary)' : '#666'};">👥 群聊</button>
         </div>
         <div style="position:relative;">
-            <button id="addChatTargetBtn" title="新建与好友申请" style="border:none;background:var(--primary);color:#fff;width:34px;height:34px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;">➕</button>
-            ${pendingCount > 0 ? `<span style="position:absolute;top:-4px;right:-4px;width:12px;height:12px;background:#ff4757;border:2px solid #fff;border-radius:50%;"></span>` : ''}
+            <button id="addChatTargetBtn" title="新建与好友/群邀请" style="border:none;background:var(--primary);color:#fff;width:34px;height:34px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;">➕</button>
+            ${pendingCount > 0 ? `<span style="position:absolute;top:-4px;right:-4px;width:12px;height:12px;background:#ff4757;border:2px solid #fff;border-radius:50%;display:block;"></span>` : ''}
         </div>
     </div>
     <div style="font-size:11px;color:#888;padding:6px 16px;background:#fcfdfc;border-bottom:1px dashed #eee;">
-        💡 提示：长按联系人或群聊可编辑人设、头像与独立记忆设置
+        💡 提示：长按联系人或群聊可编辑人设与独立记忆；右上角 ➕ 处理主播好友申请与进群
     </div>
     <div class="chat-list" style="flex:1;overflow-y:auto;padding:8px;">
         ${itemsHtml}
@@ -929,7 +1167,7 @@ function openInsertNarrativeModal(targetType, targetId) {
         if (!act) return;
         const msgObj = { from: 'action', text: `* ${act} *`, time: new Date().toLocaleTimeString().slice(0, 5) };
         if (targetType === 'single') {
-            pushChat(targetId, msgObj);
+            pushChatMessageSafe(targetId, msgObj);
             renderSingleChatWindow(document.getElementById('socialTab'));
         } else {
             if (!G.groupChatHistory[targetId]) G.groupChatHistory[targetId] = [];
@@ -1077,6 +1315,7 @@ function openCollabVideoPublishModal(targetType, targetId) {
         updateUI();
         autoSaveGame();
         renderSocialPanel();
+        checkSocialRequestsTrigger();
     };
 }
 
@@ -1103,6 +1342,8 @@ function renderSingleChatWindow(container) {
     const npc = G.npcs[npcId];
     if (!npc) { closeChat(); return; }
     const chatHist = G.chatHistory[npcId] || [];
+    const activeAcc = getActiveAccountInfo();
+    const isBlocked = (G.blockedNpcs || []).includes(npcId);
 
     let messagesHtml = '';
     for (const msg of chatHist) {
@@ -1117,6 +1358,7 @@ function renderSingleChatWindow(container) {
             <div style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
                 ${!isSelf ? `<div class="chat-npc-avatar-btn" style="margin-right:8px;flex-shrink:0;cursor:pointer;" title="点击查看名片与动态">${renderAvatarBadge(npc, 34)}</div>` : ''}
                 <div style="max-width:75%;">
+                    ${isSelf && msg.senderAccount ? `<div style="font-size:10px;color:#888;text-align:right;margin-bottom:2px;">${escapeHtml(msg.senderAccount)}</div>` : ''}
                     <div style="background:${isSelf ? '#95ec69' : '#fff'};color:#111;padding:8px 12px;border-radius:${isSelf ? '10px 0 10px 10px' : '0 10px 10px 10px'};box-shadow:0 1px 3px rgba(0,0,0,0.08);font-size:14px;line-height:1.5;word-break:break-word;">
                         ${isSelf ? escapeHtml(msg.text).replace(/\n/g, '<br>') : renderContentWithThoughts(msg.text)}
                     </div>
@@ -1133,22 +1375,33 @@ function renderSingleChatWindow(container) {
             <div style="display:flex;align-items:center;gap:10px;">
                 <button onclick="closeChat()" style="border:none;background:none;font-size:20px;color:#333;cursor:pointer;padding:0 4px;">❮</button>
                 <div id="singleChatHeaderProfileBtn" style="cursor:pointer;" title="点击查看TA的名片">
-                    <div style="font-weight:700;font-size:15px;">${escapeHtml(npc.name)}</div>
-                    <div style="font-size:11px;color:#2e7d32;">● 在线 ${npc.memorySummary ? '· 🧠专属记忆' : ''}</div>
+                    <div style="font-weight:700;font-size:15px;display:flex;align-items:center;gap:6px;">
+                        <span>${escapeHtml(npc.name)}</span>
+                        <span style="font-size:11px;color:#e53935;font-weight:normal;background:#ffebee;padding:1px 6px;border-radius:8px;">❤️ ${npc.favor || 0}</span>
+                    </div>
+                    <div id="chatOnlineStatusText" style="font-size:11px;color:#2e7d32;">
+                        ${isBlocked ? '<span style="color:#d32f2f;">⚠️ TA已拉黑你的大号</span>' : '● 在线'} ${npc.memorySummary ? '· 🧠专属记忆' : ''}
+                    </div>
                 </div>
             </div>
             <div style="display:flex;gap:8px;align-items:center;">
-                <button id="triggerAIReplyBtn" title="让AI生成回复" style="border:none;background:#ff4757;color:#fff;width:34px;height:34px;border-radius:8px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(255,71,87,0.35);">⚡</button>
+                <button id="triggerAIReplyBtn" title="让TA回复或主动发消息" style="border:none;background:#ff4757;color:#fff;width:36px;height:36px;border-radius:10px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(255,71,87,0.35);transition:transform 0.15s ease;" onmousedown="this.style.transform='scale(0.92)'" onmouseup="this.style.transform='scale(1)'">⚡</button>
             </div>
         </div>
 
+        ${isBlocked && !activeAcc.isAlt ? `
+        <div style="background:#ffebee;color:#c62828;padding:6px 12px;font-size:11px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #ffcdd2;">
+            <span>🚫 你的大号已被对方拉黑拒收。</span>
+            <button onclick="openAccountManagerModal()" style="border:none;background:#c62828;color:#fff;padding:2px 8px;border-radius:6px;font-size:10px;cursor:pointer;">切小号求原谅</button>
+        </div>` : ''}
+
         <div id="chatMessageArea" style="flex:1;overflow-y:auto;padding:14px;">
-            ${messagesHtml || '<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">发消息不消耗点数，点击 ➕ 可发起拍视频共创或联动直播！</div>'}
+            ${messagesHtml || '<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">点击右上方 ⚡ 闪电按钮，TA 会主动找你搭话哦！<br>发消息不消耗行动点，点击 ➕ 可发起拍共创视频！</div>'}
         </div>
 
         <div style="padding:8px 10px;background:#fff;border-top:1px solid #e5ebe5;display:flex;gap:8px;align-items:center;">
             <button id="chatActionInsertBtn" title="合作/拍视频/旁白" style="border:1px solid #ccc;background:#f8f9f8;color:#555;width:36px;height:36px;border-radius:50%;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;">➕</button>
-            <textarea id="singleChatInput" rows="1" placeholder="输入消息（可连续发多条）..." style="flex:1;padding:8px 12px;border-radius:18px;border:1px solid #ddd;background:#f8faf8;font-size:14px;resize:none;outline:none;font-family:inherit;"></textarea>
+            <textarea id="singleChatInput" rows="1" placeholder="${activeAcc.isAlt ? `[以小号 ${activeAcc.name} 发送]...` : '输入消息（可连续发多条）...'}" style="flex:1;padding:8px 12px;border-radius:18px;border:1px solid #ddd;background:#f8faf8;font-size:14px;resize:none;outline:none;font-family:inherit;"></textarea>
             <button id="singleSendBtn" style="border:none;background:var(--primary);color:#fff;padding:8px 16px;border-radius:18px;font-size:13px;font-weight:700;cursor:pointer;">发送</button>
         </div>
     </div>
@@ -1164,46 +1417,83 @@ function renderSingleChatWindow(container) {
     const doSend = () => {
         const text = input.value.trim();
         if (!text) return;
-        pushChat(npcId, { from: 'player', text, time: new Date().toLocaleTimeString().slice(0, 5) });
+
+        // 🚫 判定拉黑阻拦：如果大号被拉黑且当前使用的是大号
+        if (isBlocked && !activeAcc.isAlt) {
+            pushChatMessageSafe(npcId, {
+                from: 'player',
+                text,
+                senderAccount: activeAcc.name,
+                time: new Date().toLocaleTimeString().slice(0, 5)
+            });
+            pushChatMessageSafe(npcId, {
+                from: 'action',
+                text: '❌ 消息已发出，但被对方拒收了。（你已被拉黑）',
+                time: new Date().toLocaleTimeString().slice(0, 5)
+            });
+            input.value = '';
+            renderSingleChatWindow(container);
+            showToast('⚠️ 对方开启了朋友验证，你还不是 TA 的朋友（已被拉黑）', 'error', 3000);
+            return;
+        }
+
+        pushChatMessageSafe(npcId, {
+            from: 'player',
+            text,
+            senderAccount: activeAcc.isAlt ? `${activeAcc.name} (小号)` : activeAcc.name,
+            time: new Date().toLocaleTimeString().slice(0, 5)
+        });
         input.value = '';
         renderSingleChatWindow(container);
         autoSaveGame();
     };
 
-    sendBtn.onclick = doSend;
-    input.onkeydown = (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            doSend();
-        }
-    };
+    if (sendBtn) sendBtn.onclick = doSend;
+    if (input) {
+        input.onkeydown = (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                doSend();
+            }
+        };
+    }
 
     const showCard = () => openNpcProfileCardModal(npcId);
     document.getElementById('singleChatHeaderProfileBtn')?.addEventListener('click', showCard);
     container.querySelectorAll('.chat-npc-avatar-btn').forEach(btn => btn.onclick = showCard);
 
-    document.getElementById('chatActionInsertBtn').onclick = () => {
-        openChatActionMenuModal('single', npcId);
-    };
+    const actBtn = document.getElementById('chatActionInsertBtn');
+    if (actBtn) actBtn.onclick = () => openChatActionMenuModal('single', npcId);
 
-    document.getElementById('triggerAIReplyBtn').onclick = async () => {
-        if (G.isGenerating) { showToast('⏳ AI 正在组织语言中...'); return; }
-        showToast('⚡ 正在请求回复...', 'success', 1200);
-        await triggerAIReplyForSingle(npcId);
-        renderSingleChatWindow(container);
-    };
+    const triggerBtn = document.getElementById('triggerAIReplyBtn');
+    if (triggerBtn) {
+        const handleTriggerAI = async (e) => {
+            if (e) { e.preventDefault(); e.stopPropagation(); }
+            if (G.isGenerating) { showToast('⏳ TA 正在打字中，请稍候...', 'info', 1500); return; }
+            triggerBtn.style.opacity = '0.6';
+            triggerBtn.style.pointerEvents = 'none';
+            await triggerAIReplyForSingle(npcId);
+            if (document.getElementById('triggerAIReplyBtn')) {
+                document.getElementById('triggerAIReplyBtn').style.opacity = '1';
+                document.getElementById('triggerAIReplyBtn').style.pointerEvents = 'auto';
+            }
+        };
+        triggerBtn.onclick = handleTriggerAI;
+    }
 }
 
 function openNpcProfileCardModal(npcId) {
     const npc = G.npcs[npcId];
     if (!npc) return;
+    const isBlocked = (G.blockedNpcs || []).includes(npcId);
+
     openModal(`
         <div style="text-align:center;padding:10px 0;">
             <div style="display:flex;justify-content:center;margin-bottom:8px;">
                 ${renderAvatarBadge(npc, 64)}
             </div>
             <div style="font-weight:700;font-size:17px;color:var(--text);">${escapeHtml(npc.name)}</div>
-            <div style="font-size:12px;color:#888;margin-top:2px;">好感度：<b>${npc.favor||0}</b> / 100</div>
+            <div style="font-size:12px;color:#888;margin-top:2px;">好感度：<b style="color:#e53935;">${npc.favor||0}</b> / 100 ${isBlocked ? '· <span style="color:#d32f2f;">已拉黑大号</span>' : ''}</div>
             <div style="background:#f8faf8;padding:10px 14px;border-radius:10px;margin:12px 0;text-align:left;font-size:13px;color:#555;line-height:1.6;border:1px solid #eee;">
                 <div><b>人设标签：</b>${escapeHtml(npc.persona || '普通朋友')}</div>
                 ${npc.memorySummary ? `<div style="margin-top:6px;padding-top:6px;border-top:1px dashed #ddd;color:#2e7d32;"><b>🧠 私聊记忆：</b>${escapeHtml(npc.memorySummary)}</div>` : ''}
@@ -1267,49 +1557,207 @@ async function checkNpcMemorySummarize(npcId) {
     }
 }
 
+function splitIntoChatBubbles(rawText) {
+    if (!rawText) return [];
+    const clean = stripThought(rawText).trim();
+    if (!clean) return [];
+
+    const bubbles = [];
+    const msgTagRegex = /\[MSG\]([\s\S]*?)\[\/MSG\]/gi;
+    let match;
+    while ((match = msgTagRegex.exec(clean)) !== null) {
+        const item = match[1].trim();
+        if (item) bubbles.push(item);
+    }
+
+    if (bubbles.length > 0) return bubbles;
+
+    const lines = clean.split(/\n+/).map(l => l.trim()).filter(Boolean);
+    if (lines.length > 1 && lines.length <= 4) {
+        return lines;
+    }
+
+    if (lines.length === 1 && lines[0].length > 45) {
+        const sentences = lines[0].split(/([。！？!?~～]+)/).filter(Boolean);
+        let current = '';
+        for (let i = 0; i < sentences.length; i++) {
+            current += sentences[i];
+            if (i % 2 === 1 || current.length > 25) {
+                if (current.trim()) bubbles.push(current.trim());
+                current = '';
+            }
+        }
+        if (current.trim()) bubbles.push(current.trim());
+        if (bubbles.length > 0) return bubbles.slice(0, 3);
+    }
+
+    return [clean];
+}
+
+// ⚡ 单人聊天 AI 回复触发（包含微信连发、好感度增减、拉黑判定与小号求原谅解黑）
 async function triggerAIReplyForSingle(npcId) {
     const npc = G.npcs[npcId];
     if (!npc) return;
     const history = G.chatHistory[npcId] || [];
-    if (!history.length) { showToast('请先发送至少一条对话'); return; }
+    const activeAcc = getActiveAccountInfo();
+    const isCurrentlyBlocked = (G.blockedNpcs || []).includes(npcId);
 
-    const recent = history.slice(-10).map(m => {
-        if (m.from === 'action') return `[旁白: ${m.text}]`;
-        return `${m.from === 'player' ? '玩家' : npc.name}: ${stripThought(m.text || '')}`;
-    }).join('\n');
+    // 如果大号被拉黑且当前正在用大号调 AI
+    if (isCurrentlyBlocked && !activeAcc.isAlt) {
+        showToast('⚠️ 对方已将你的大号拉黑，无法接收回复。请使用小号求原谅。', 'error', 3000);
+        return;
+    }
+
+    const statusEl = document.getElementById('chatOnlineStatusText');
+    if (statusEl) statusEl.innerHTML = `<span style="color:#ff9800;">✍️ 对方正在打字...</span>`;
+
+    let recentContext = '';
+    if (history.length > 0) {
+        recentContext = history.slice(-10).map(m => {
+            if (m.from === 'action') return `[旁白/动作: ${m.text}]`;
+            const speaker = m.from === 'player' ? (m.senderAccount || '主角') : npc.name;
+            return `${speaker}: ${stripThought(m.text || '')}`;
+        }).join('\n');
+    } else {
+        recentContext = '（目前双方尚未开始私聊，这是你主动找玩家开启话题的破冰时刻）';
+    }
 
     let npcMemoryContext = '';
-    if (npc.memorySummary) npcMemoryContext += `【与玩家的私聊记忆】\n${npc.memorySummary}\n`;
-    if (npc.knownGroupEvents) npcMemoryContext += `【TA在群聊里获知的事】\n${npc.knownGroupEvents}\n`;
+    if (npc.memorySummary) npcMemoryContext += `【与玩家的历史专属记忆】\n${npc.memorySummary}\n`;
+    if (npc.knownGroupEvents) npcMemoryContext += `【你在群聊里获知的事情】\n${npc.knownGroupEvents}\n`;
+
+    const altModePrompt = activeAcc.isAlt ? `
+【当前对话者身份说明】：
+与你聊天的这名用户自称是「${activeAcc.name}」（个性签名：${activeAcc.bio}）。你【不知道】TA 其实是主角「${G.player.ytName}」的小号。
+${isCurrentlyBlocked ? `特别注意：你此前因为严重冲突拉黑了主角「${G.player.ytName}」。如果这名小号用户在极力为「${G.player.ytName}」说情、诚恳道歉或解释误会，你可以根据诚意决定是否松口原谅大号。如果你在心里决定原谅「${G.player.ytName}」并解除拉黑，请在回复末尾附带系统标记 [UNBLOCK_MAIN]。` : ''}
+` : `
+【当前对话者身份说明】：
+与你聊天的是知名 MC 主播大号「${G.player.ytName}」。
+如果对方言语恶劣、故意辱骂、极度挑衅突破了你的底线，你极度愤怒，决定拉黑 TA！如果决定拉黑对方大号，请在回复末尾附带系统标记 [BLOCK_USER]。
+`;
 
     const sysPrompt = `
-    你正在扮演角色「${npc.name}」。
-    设定：${npc.persona || '普通朋友'}。
-    好感度：${npc.favor || 0}/100。
-    ${npcMemoryContext}
-    【要求】
-    1. 自然接住玩家发送的最后内容，使用手机聊天的口吻。
-    2. 严禁复读玩家原话，只输出发言正文。
-    最近对话记录：
-    ${recent}
-    `;
+你正在真实模拟扮演 Minecraft 主播/好友「${npc.name}」。
+人设性格：${npc.persona || '一位热情友好的同伴'}。
+当前好感度：${npc.favor || 50}/100。
+${npcMemoryContext}
+${altModePrompt}
+
+【极为关键的微信连发口吻规范】：
+1. 真实生活中的即时通讯聊天不会发一大坨文本。请使用口语化、随性自然的口吻，像发微信一样连续发送 1 到 3 条简短句子。
+2. 必须且只能使用以下格式包裹每条短消息（1~3条）：
+[MSG]第一句短消息[/MSG]
+[MSG]第二句短消息（可选，如补充说明、发表情或反问）[/MSG]
+3. 严禁复读玩家的原话，不要输出角色名字前缀，禁止包含 Markdown 代码块。
+
+最近对话上下文：
+${recentContext}
+`;
 
     try {
         G.isGenerating = true;
-        showLoading();
-        const reply = await callAI([
+        if (typeof showLoading === 'function') showLoading();
+
+        const rawReply = await callAI([
             { role: 'system', content: sysPrompt },
-            { role: 'user', content: '请进行回复。' }
-        ], { maxTokens: 800, temperature: 0.85 });
-        hideLoading();
-        pushChat(npcId, { from: 'npc', text: reply, time: new Date().toLocaleTimeString().slice(0, 5) });
+            { role: 'user', content: history.length > 0 ? '请根据当前聊天上下文连发回复。' : '请主动向对方发消息打个招呼或开启有趣话题。' }
+        ], { maxTokens: 450, temperature: 0.88 });
+
+        if (typeof hideLoading === 'function') hideLoading();
+
+        // 判定拉黑与解黑标记
+        let cleanText = rawReply;
+        let triggeredBlock = false;
+        let triggeredUnblock = false;
+
+        if (cleanText.includes('[BLOCK_USER]')) {
+            cleanText = cleanText.replace(/\[BLOCK_USER\]/g, '').trim();
+            triggeredBlock = true;
+        }
+        if (cleanText.includes('[UNBLOCK_MAIN]')) {
+            cleanText = cleanText.replace(/\[UNBLOCK_MAIN\]/g, '').trim();
+            triggeredUnblock = true;
+        }
+
+        const bubbles = splitIntoChatBubbles(cleanText);
+        const finalBubbles = bubbles.length ? bubbles : ['在呢！刚忙完手头的事情～'];
+
+        // 逐条模拟微信连发
+        for (let i = 0; i < finalBubbles.length; i++) {
+            const bText = finalBubbles[i];
+            pushChatMessageSafe(npcId, {
+                from: 'npc',
+                text: bText,
+                time: new Date().toLocaleTimeString().slice(0, 5)
+            });
+
+            const container = (dom && dom.socialTab) || document.getElementById('socialTab');
+            if (G.currentChatNpc === npcId && container) {
+                renderSingleChatWindow(container);
+            }
+
+            if (i < finalBubbles.length - 1) {
+                await new Promise(res => setTimeout(res, 650));
+            }
+        }
+
+        // 处理拉黑逻辑
+        if (triggeredBlock) {
+            if (!G.blockedNpcs) G.blockedNpcs = [];
+            if (!G.blockedNpcs.includes(npcId)) G.blockedNpcs.push(npcId);
+            npc.favor = Math.max(0, (npc.favor || 0) - 25);
+            pushChatMessageSafe(npcId, {
+                from: 'action',
+                text: `⚠️ 「${npc.name}」已被激怒，并将你的官方大号拉入了黑名单！`,
+                time: new Date().toLocaleTimeString().slice(0, 5)
+            });
+            showToast(`🚫 你已被 ${npc.name} 拉黑！可注册小号前去求原谅转圜`, 'error', 4500);
+        }
+
+        // 处理解除拉黑逻辑
+        if (triggeredUnblock && isCurrentlyBlocked) {
+            G.blockedNpcs = (G.blockedNpcs || []).filter(id => id !== npcId);
+            npc.favor = Math.min(100, (npc.favor || 0) + 15);
+            pushChatMessageSafe(npcId, {
+                from: 'action',
+                text: `✨ 「${npc.name}」心软释怀了，已将你的大号「${G.player.ytName}」从黑名单中解除！`,
+                time: new Date().toLocaleTimeString().slice(0, 5)
+            });
+            showToast(`🎉 成功！通过小号真诚求情，${npc.name} 已解除大号拉黑！`, 'success', 4500);
+            addMemoir('重归于好', `通过小号的转圜，${npc.name} 谅解并解除了大号的拉黑`);
+        }
+
+        // ❤️ 好感度平稳增长机制：1~3 点
+        if (!triggeredBlock) {
+            const curFavor = npc.favor !== undefined ? npc.favor : 50;
+            if (curFavor < 100) {
+                const gain = rand(1, 3);
+                const newFavor = Math.min(100, curFavor + gain);
+                npc.favor = newFavor;
+                showToast(`💕 ${npc.name} 好感度 +${gain}（当前: ${newFavor}）`, 'success', 2000);
+            }
+        }
+
+        const container = (dom && dom.socialTab) || document.getElementById('socialTab');
+        if (G.currentChatNpc === npcId && container) {
+            renderSingleChatWindow(container);
+        }
+
         await checkNpcMemorySummarize(npcId);
         autoSaveGame();
     } catch (e) {
-        hideLoading();
-        showToast('❌ 回复失败，请检查网络', 'error');
+        if (typeof hideLoading === 'function') hideLoading();
+        console.error('私聊 AI 回复失败', e);
+        showToast('❌ 回复失败，请检查网络或 API 设置', 'error');
+        const container = (dom && dom.socialTab) || document.getElementById('socialTab');
+        if (container) renderSingleChatWindow(container);
     } finally {
         G.isGenerating = false;
+        const curStatusEl = document.getElementById('chatOnlineStatusText');
+        const isNowBlocked = (G.blockedNpcs || []).includes(npcId);
+        if (curStatusEl) {
+            curStatusEl.innerHTML = `${isNowBlocked ? '<span style="color:#d32f2f;">⚠️ TA已拉黑你的大号</span>' : '● 在线'} ${npc.memorySummary ? '· 🧠专属记忆' : ''}`;
+        }
     }
 }
 
@@ -1331,6 +1779,7 @@ function renderGroupChatWindow(container) {
     const grp = G.groups[gid];
     if (!grp) { closeGroupChat(); return; }
     const msgs = G.groupChatHistory[gid] || [];
+    const activeAcc = getActiveAccountInfo();
 
     let messagesHtml = '';
     for (const msg of msgs) {
@@ -1368,7 +1817,7 @@ function renderGroupChatWindow(container) {
             </div>
             <div style="display:flex;gap:8px;align-items:center;">
                 <button id="groupSettingsBtn" style="border:1px solid #ddd;background:#fff;color:#555;padding:4px 8px;border-radius:8px;font-size:12px;cursor:pointer;">⚙️ 管理</button>
-                <button id="triggerGroupAIBtn" title="触发群成员回复" style="border:none;background:#ff4757;color:#fff;width:34px;height:34px;border-radius:8px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(255,71,87,0.35);">⚡</button>
+                <button id="triggerGroupAIBtn" title="触发群成员回复" style="border:none;background:#ff4757;color:#fff;width:36px;height:36px;border-radius:10px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(255,71,87,0.35);">⚡</button>
             </div>
         </div>
 
@@ -1378,7 +1827,7 @@ function renderGroupChatWindow(container) {
 
         <div style="padding:8px 10px;background:#fff;border-top:1px solid #e5ebe5;display:flex;gap:8px;align-items:center;">
             <button id="groupActionInsertBtn" title="群合作/共创视频/旁白" style="border:1px solid #ccc;background:#f8f9f8;color:#555;width:36px;height:36px;border-radius:50%;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;">➕</button>
-            <textarea id="groupChatInput" rows="1" placeholder="在群里发言..." style="flex:1;padding:8px 12px;border-radius:18px;border:1px solid #ddd;background:#f8faf8;font-size:14px;resize:none;outline:none;font-family:inherit;"></textarea>
+            <textarea id="groupChatInput" rows="1" placeholder="以 [${escapeHtml(activeAcc.name)}] 在群里发言..." style="flex:1;padding:8px 12px;border-radius:18px;border:1px solid #ddd;background:#f8faf8;font-size:14px;resize:none;outline:none;font-family:inherit;"></textarea>
             <button id="groupSendBtn" style="border:none;background:var(--primary);color:#fff;padding:8px 16px;border-radius:18px;font-size:13px;font-weight:700;cursor:pointer;">发送</button>
         </div>
     </div>
@@ -1398,7 +1847,7 @@ function renderGroupChatWindow(container) {
         G.groupChatHistory[gid].push({
             _id: 'gmsg_' + Date.now() + '_' + rand(100, 999),
             from: 'player',
-            senderName: G.player.ytName,
+            senderName: activeAcc.name,
             text,
             time: new Date().toLocaleTimeString().slice(0, 5)
         });
@@ -1407,25 +1856,31 @@ function renderGroupChatWindow(container) {
         autoSaveGame();
     };
 
-    sendBtn.onclick = doSend;
-    input.onkeydown = (e) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            doSend();
-        }
-    };
+    if (sendBtn) sendBtn.onclick = doSend;
+    if (input) {
+        input.onkeydown = (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                doSend();
+            }
+        };
+    }
 
-    document.getElementById('groupActionInsertBtn').onclick = () => {
+    document.getElementById('groupActionInsertBtn')?.addEventListener('click', () => {
         openChatActionMenuModal('group', gid);
-    };
+    });
 
-    document.getElementById('groupSettingsBtn').onclick = () => openGroupSettingsModal(gid);
-    document.getElementById('triggerGroupAIBtn').onclick = async () => {
-        if (G.isGenerating) { showToast('⏳ AI 正在组织群聊中...'); return; }
-        showToast('⚡ 触发群聊讨论...', 'success', 1200);
-        await triggerGroupAIReply(gid);
-        renderGroupChatWindow(container);
-    };
+    document.getElementById('groupSettingsBtn')?.addEventListener('click', () => openGroupSettingsModal(gid));
+    
+    const triggerGrpBtn = document.getElementById('triggerGroupAIBtn');
+    if (triggerGrpBtn) {
+        triggerGrpBtn.onclick = async () => {
+            if (G.isGenerating) { showToast('⏳ AI 正在组织群聊中...'); return; }
+            showToast('⚡ 触发群聊讨论...', 'success', 1200);
+            await triggerGroupAIReply(gid);
+            renderGroupChatWindow(container);
+        };
+    }
 }
 
 async function checkGroupMemorySummarize(gid) {
@@ -1499,7 +1954,7 @@ async function triggerGroupAIReply(gid) {
 
     try {
         G.isGenerating = true;
-        showLoading();
+        if (typeof showLoading === 'function') showLoading();
 
         let generatedCount = 0;
 
@@ -1604,7 +2059,7 @@ async function triggerGroupAIReply(gid) {
             }
         }
 
-        hideLoading();
+        if (typeof hideLoading === 'function') hideLoading();
         if (generatedCount > 0) {
             showToast(`⚡ 群内收到 ${generatedCount} 条新回复！`, 'success', 1500);
             await checkGroupMemorySummarize(gid);
@@ -1613,7 +2068,7 @@ async function triggerGroupAIReply(gid) {
             showToast('⚠️ 本轮成员都在潜水，再试一次吧', 'info', 2000);
         }
     } catch (e) {
-        hideLoading();
+        if (typeof hideLoading === 'function') hideLoading();
         console.error('群聊生成失败', e);
         showToast('❌ 群聊生成失败，请检查网络设置', 'error');
     } finally {
@@ -1622,26 +2077,51 @@ async function triggerGroupAIReply(gid) {
 }
 
 // ============================================================
-// ➕ 新建与好友申请管理弹窗
+// ➕ 新建与好友/群邀请管理弹窗
 // ============================================================
 function openAddChatTargetModal() {
     const requests = G.friendRequests || [];
+    const groupInvs = G.groupInvites || [];
+
     let requestsHtml = '';
     if (!requests.length) {
-        requestsHtml = `<div style="font-size:12px;color:#999;padding:8px 0;">暂无待处理的好友申请</div>`;
+        requestsHtml = `<div style="font-size:12px;color:#999;padding:6px 0;">暂无好友申请（随粉丝热度增长会有主播与粉丝递来申请）</div>`;
     } else {
         requestsHtml = requests.map(r => `
             <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#f9fbf9;border-radius:8px;margin-bottom:6px;border:1px solid #eef2ee;">
                 <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
                     ${renderAvatarBadge(r, 34)}
                     <div style="flex:1;min-width:0;">
-                        <div style="font-weight:700;font-size:13px;">${escapeHtml(r.name)} <span style="font-size:10px;color:#999;">(${escapeHtml(r.fromReason||'申请')})</span></div>
+                        <div style="font-weight:700;font-size:13px;">${escapeHtml(r.name)} <span style="font-size:10px;color:#2e7d32;background:#e8f5e9;padding:1px 4px;border-radius:4px;">${escapeHtml(r.fromReason||'申请')}</span></div>
                         <div style="font-size:11px;color:#777;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(r.persona||'')}</div>
                     </div>
                 </div>
                 <div style="display:flex;gap:4px;margin-left:8px;">
-                    <button class="upload-btn" onclick="handleFriendRequestAction('${r._id}', true)" style="padding:3px 8px;font-size:11px;">✅ 通过</button>
-                    <button class="upload-btn" onclick="handleFriendRequestAction('${r._id}', false)" style="padding:3px 8px;font-size:11px;background:#c62828;">❌ 拒绝</button>
+                    <button class="upload-btn" onclick="handleFriendRequestAction('${r._id}', true)" style="padding:3px 8px;font-size:11px;">✅ 同意</button>
+                    <button class="upload-btn" onclick="handleFriendRequestAction('${r._id}', false)" style="padding:3px 8px;font-size:11px;background:#c62828;">❌ 忽略</button>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    let groupInvsHtml = '';
+    if (groupInvs.length > 0) {
+        groupInvsHtml = `
+        <div style="font-size:13px;font-weight:700;margin:12px 0 6px;color:#1565c0;display:flex;justify-content:space-between;">
+            <span>📬 群聊加入邀请</span>
+            <span style="font-size:10px;background:#e3f2fd;color:#1565c0;padding:1px 6px;border-radius:10px;">${groupInvs.length}个新邀请</span>
+        </div>` + groupInvs.map(inv => `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#f8fbff;border-radius:8px;margin-bottom:6px;border:1px solid #ddecfa;">
+                <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
+                    <div style="font-size:22px;">${inv.avatarEmoji || '👥'}</div>
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-weight:700;font-size:13px;">${escapeHtml(inv.name)}</div>
+                        <div style="font-size:11px;color:#666;">${escapeHtml(inv.desc || '')}</div>
+                    </div>
+                </div>
+                <div style="display:flex;gap:4px;margin-left:8px;">
+                    <button class="upload-btn" onclick="handleGroupInviteAction('${inv._id}', true)" style="padding:3px 8px;font-size:11px;background:#1565c0;">✅ 加入</button>
+                    <button class="upload-btn" onclick="handleGroupInviteAction('${inv._id}', false)" style="padding:3px 8px;font-size:11px;background:#757575;">忽略</button>
                 </div>
             </div>
         `).join('');
@@ -1651,35 +2131,21 @@ function openAddChatTargetModal() {
         <h3>➕ 社交与好友中心</h3>
         <div style="margin:10px 0 12px;border:1px solid #eee;border-radius:10px;padding:10px;background:#fff;">
             <div style="font-size:13px;font-weight:700;margin-bottom:6px;color:var(--primary);display:flex;align-items:center;justify-content:space-between;">
-                <span>📬 好友申请列表</span>
+                <span>📬 主播与好友申请列表</span>
                 ${requests.length ? `<span style="background:#ff4757;color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;">${requests.length}条新申请</span>` : ''}
             </div>
             ${requestsHtml}
+            ${groupInvsHtml}
         </div>
         <div class="btn-row" style="flex-direction:column;gap:8px;">
-            <button class="btn-primary" id="btnNewCustomNPC" style="width:100%;">👤 新建自定义联系人 / 粉丝</button>
-            <button class="btn-primary" id="btnNewGroup" style="width:100%;background:#3866c4;">👥 创建新群聊</button>
+            <button class="btn-primary" id="btnNewCustomNPC" style="width:100%;">👤 自建新联系人 / 粉丝</button>
+            <button class="btn-primary" id="btnNewGroup" style="width:100%;background:#3866c4;">👥 自建新群聊</button>
             <button class="btn-secondary" onclick="closeModal()" style="width:100%;">关闭</button>
         </div>
     `);
 
     document.getElementById('btnNewCustomNPC').onclick = () => { closeModal(); openEditNpcModal(null); };
     document.getElementById('btnNewGroup').onclick = () => { closeModal(); openEditGroupModal(null); };
-}
-
-function receiveFriendRequest(req) {
-    if (!G.friendRequests) G.friendRequests = [];
-    const entry = {
-        _id: 'freq_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
-        name: req.name,
-        fromReason: req.fromReason || '',
-        persona: req.persona || '',
-        avatarEmoji: req.avatarEmoji || '👤',
-        avatarUrl: req.avatarUrl || null,
-        day: req.day || G.day,
-    };
-    G.friendRequests.push(entry);
-    showToast(`📬 收到来自 ${entry.name} 的好友申请！`, 'success', 2500);
 }
 
 function handleFriendRequestAction(reqId, accept) {
@@ -1689,21 +2155,34 @@ function handleFriendRequestAction(reqId, accept) {
     G.friendRequests.splice(idx, 1);
 
     if (accept) {
-        const id = 'custom_npc_' + Date.now();
-        G.npcs[id] = {
-            id,
-            name: req.name,
-            avatarEmoji: req.avatarEmoji || '👤',
-            avatarUrl: req.avatarUrl || null,
-            persona: req.persona || '一位热心好友',
-            favor: 40,
-            isCustom: true,
-            summaryThreshold: 10,
-            keepRecent: 5
-        };
+        let id = req.npcOfficialId || ('custom_npc_' + Date.now());
+        let npcData = null;
+
+        // 如果是官方主播池中的主播，继承完整属性与作品
+        if (req.npcOfficialId && typeof OFFICIAL_NPCS !== 'undefined' && OFFICIAL_NPCS[req.npcOfficialId]) {
+            npcData = Object.assign({}, OFFICIAL_NPCS[req.npcOfficialId]);
+            npcData.favor = 40;
+            npcData.summaryThreshold = 10;
+            npcData.keepRecent = 5;
+        } else {
+            npcData = {
+                id,
+                name: req.name,
+                avatarEmoji: req.avatarEmoji || '👤',
+                avatarUrl: req.avatarUrl || null,
+                persona: req.persona || '一位热心好友',
+                favor: 40,
+                isCustom: true,
+                summaryThreshold: 10,
+                keepRecent: 5
+            };
+        }
+
+        G.npcs[id] = npcData;
         if (!G.chatHistory[id]) G.chatHistory[id] = [];
-        showToast(`🎉 已同意 ${req.name} 的好友申请！`, 'success', 2500);
-        appendStory(`🤝 你通过了「${req.name}」的好友申请，已添加到联系人列表中。`, '🤝 新增好友');
+
+        showToast(`🎉 已添加「${req.name}」为好友！`, 'success', 2500);
+        appendStory(`🤝 你通过了「${req.name}」的好友申请，双方正式添加为好友。`, '🤝 新增好友');
         addGlobalMemoryRecord(`【结识好友】：添加了新好友「${req.name}」（${req.fromReason || '社交申请'}）。`);
     } else {
         showToast(`已婉拒 ${req.name} 的好友申请`, 'info', 1500);
@@ -1713,6 +2192,38 @@ function handleFriendRequestAction(reqId, accept) {
     renderSocialPanel();
 }
 window.handleFriendRequestAction = handleFriendRequestAction;
+
+function handleGroupInviteAction(invId, accept) {
+    const idx = (G.groupInvites || []).findIndex(i => i._id === invId);
+    if (idx === -1) return;
+    const inv = G.groupInvites[idx];
+    G.groupInvites.splice(idx, 1);
+
+    if (accept) {
+        const gid = inv.gid || ('grp_' + Date.now());
+        G.groups[gid] = {
+            id: gid,
+            name: inv.name,
+            avatarEmoji: inv.avatarEmoji || '👥',
+            avatarUrl: '',
+            desc: inv.desc || '粉丝后援群聊',
+            members: Object.keys(G.npcs).slice(0, 4),
+            activeMembers: Object.keys(G.npcs).slice(0, 4),
+            streamerMode: 'unified',
+            summaryThreshold: 10,
+            keepRecent: 5
+        };
+        if (!G.groupChatHistory[gid]) G.groupChatHistory[gid] = [];
+        showToast(`🎉 成功加入群聊「${inv.name}」！`, 'success', 2500);
+        appendStory(`👥 你接受了邀请，成功加入了群聊「${inv.name}」。`, '👥 加入群聊');
+    } else {
+        showToast(`已婉拒群邀请`, 'info', 1500);
+    }
+    autoSaveGame();
+    closeModal();
+    renderSocialPanel();
+}
+window.handleGroupInviteAction = handleGroupInviteAction;
 
 function openEditNpcModal(npcId) {
     const isNew = !npcId;
@@ -1999,7 +2510,7 @@ function openChat(npcId) { G.currentChatNpc = npcId; renderSocialPanel(); }
 function closeChat() { G.currentChatNpc = null; renderSocialPanel(); }
 
 // ============================================================
-// 🧠 经典复刻级记忆总结模态框
+// 🧠 记忆总结模态框
 // ============================================================
 let activeMemoryScope = 'story';
 let selectedScopeTargetId = null;
@@ -2069,7 +2580,7 @@ function renderMemoryModalView() {
         scopeSelectorHtml += `
         <div style="margin-bottom:10px;display:flex;align-items:center;gap:8px;font-size:12px;">
             <span>选择角色：</span>
-            <select id="scopeTargetSelect" style="flex:1;padding:4px 8px;border-radius:6px;border:1px solid #ccc;font-size:12px;">${npcOpts}</select>
+            <select id="scopeTargetSelect" style="flex:1;padding:4px 8px;border-radius:6px;border:1px solid #ccc;font-size:12px;">${npcOpts || '<option>暂无角色</option>'}</select>
         </div>`;
     } else if (activeMemoryScope === 'group') {
         const grpOpts = Object.values(G.groups || {}).map(g => `
@@ -2234,7 +2745,7 @@ async function executeManualAiSummary() {
     }
 
     closeModal();
-    showLoading();
+    if (typeof showLoading === 'function') showLoading();
     G.isGenerating = true;
 
     try {
@@ -2264,12 +2775,12 @@ async function executeManualAiSummary() {
             G.groupChatHistory[selectedScopeTargetId] = (G.groupChatHistory[selectedScopeTargetId] || []).slice(G.groupChatHistory[selectedScopeTargetId].length - keepRecent);
         }
 
-        hideLoading();
+        if (typeof hideLoading === 'function') hideLoading();
         showToast('🎉 AI 记忆总结生成完毕！已成功归档。', 'success', 2500);
         autoSaveGame();
         openMemoryModal();
     } catch(e) {
-        hideLoading();
+        if (typeof hideLoading === 'function') hideLoading();
         showMemoryFailNoticeModal('AI 记忆总结', e.message);
     } finally {
         G.isGenerating = false;
@@ -2338,4 +2849,8 @@ function renderMemoir() {
     html += `</div>`;
     container.innerHTML = html;
 }
+// 暴露全局
+window.openAccountManagerModal = openAccountManagerModal;
+window.switchAccount = switchAccount;
+window.deleteAltAccount = deleteAltAccount;
 // ============================================================

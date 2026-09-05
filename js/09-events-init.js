@@ -209,7 +209,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // 📢 双页滑动公告系统（主公告 + 更新优化与新功能）
 // ============================================================
 function checkAndShowVersionNoticeModal(forceOpen = false) {
-    const ver = window.CURRENT_APP_VERSION || '1.500';
+    const ver = window.CURRENT_APP_VERSION || '1.501';
     const dismissedVersion = localStorage.getItem('mcyt_dismissed_notice_ver');
 
     if (forceOpen || dismissedVersion !== ver) {
@@ -247,12 +247,12 @@ function openVersionNoticeModal(version) {
             <!-- 第 2 页：更新优化与新功能 -->
             <div class="notice-slide-page">
                 <div class="notice-card-box">
-                    <h4>🚀 本次更新优化方面</h4>
+                    <h4>🚀 本次更新优化方面 (v${version})</h4>
                     <ul style="padding-left:18px;margin-bottom:10px;font-size:13px;color:#444;line-height:1.6;">
-                        <li style="margin-bottom:8px;">1. 优化记忆总结功能，可以自动总结内容，并且设置多少轮一总结，不同角色的记忆会分开放置。</li>
-                        <li style="margin-bottom:8px;">2. 合作选项合并入聊天功能，可发送给联系人合作邀请，在油管发共创视频。</li>
-                        <li style="margin-bottom:8px;">3. 增加备份功能，把存档编码进 PNG 图片，点击下载图片备份后直接保存到手机；在恢复功能选择导入该图片即可还原。也可以下载标准 JSON 存档文件，并支持自行选择喜欢的封面图制作独属于你的记忆存档图！</li>
-                        <li style="margin-bottom:8px;color:#b91c1c;">4. ⚠️ <b>特别注意</b>：因更新底层外壳，更新可能有概率会覆盖掉原有通讯录角色与进度，请在每次更新前使用备份功能导出数据，更新后一键导入恢复，防止数据丢失！</li>
+                        <li style="margin-bottom:8px;">1. <b>修复闪电按钮与微信式连发</b>：修复私聊界面 ⚡ 按钮无反应问题，即便无记录也会破冰搭话；AI 回复模拟真实手机聊天，一次生成按节奏连发 1~3 条短气泡。</li>
+                        <li style="margin-bottom:8px;">2. <b>好感度机制恢复</b>：修复私聊好感度不增长 Bug，角色回复后根据互动质量与性格平稳增加 1~3 点好感，带有即时反馈。</li>
+                        <li style="margin-bottom:8px;">3. <b>真实好友与粉丝群申请</b>：新存档通讯录不再直接塞满主播，随着玩家制作视频、开播等累积粉丝热度，各路大主播与粉丝会主动递来好友申请与后援群邀请函！旧存档已完整保护不坏档。</li>
+                        <li style="margin-bottom:8px;">4. <b>触怒拉黑与大小号系统</b>：聊天过度冒犯会被主播拒收拉黑。支持一键注册与切换小号、发表评论；使用小号添加主播聊天说情诚恳道歉，可成功解除大号拉黑！</li>
                     </ul>
                 </div>
             </div>

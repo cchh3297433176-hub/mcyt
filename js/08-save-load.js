@@ -1,6 +1,6 @@
-// 存档/读档/初始化模块（v1.500 全量数据保护与强提示版）
+// 存档/读档/初始化模块（v1.501 全量数据保护与大小号系统兼容版）
 // ============================================================
-const CURRENT_APP_VERSION = '1.500';
+const CURRENT_APP_VERSION = '1.501';
 
 let _gameInitialized = false;
 let _skipStartChoiceOnce = false;
@@ -47,6 +47,21 @@ function initGame() {
         game.style.display = 'flex';
     }
 
+    // 新档初始化：初始通讯录为空，但为新手提供第一封来自粉丝的破冰申请
+    if (!G.npcs || Object.keys(G.npcs).length === 0) {
+        G.npcs = {};
+        if (!G.friendRequests || G.friendRequests.length === 0) {
+            G.friendRequests = [{
+                _id: 'freq_init_' + Date.now(),
+                name: '狂热苦力怕',
+                fromReason: '粉丝日常来信',
+                persona: '你的忠实小迷弟，特别喜欢看你录的MC视频！',
+                avatarEmoji: '🟢',
+                day: 1
+            }];
+        }
+    }
+
     updateUI();
     if (!G.storyHistory || G.storyHistory.length === 0) {
         appendInitialWelcomeStory();
@@ -68,7 +83,7 @@ function appendInitialWelcomeStory() {
         `你的皮上形象是：${p.persona}，皮肤是：${p.skin}。\n\n` +
         `今天是你在 MC 油管世界的第 1 天，你是一名学生，正值暑假。\n` +
         `你有 6 个行动点（每2点推进一个时段），规划你的主播生涯吧！\n\n` +
-        `💡 点击左侧功能图标开启日常活动，或进入聊天/同人/油管体验丰富互动！`;
+        `💡 提示：新人主播在联系人列表中初始没有大主播好友，随着你提升粉丝热度与作品曝光，主播们与粉丝们会主动向你递来好友申请与粉丝群邀请！`;
     appendStory(text, '🎮 游戏开始');
 }
 
@@ -142,7 +157,7 @@ function openRestoreModal() {
     fileInput.click();
 }
 
-// 从选中的文件恢复存档（自动识别 PNG 图片元数据或 JSON 文本）
+// 从选中的文件恢复存档
 function _restoreFromSelectedFile(file) {
     showToast('⏳ 正在读取存档文件...', 'info', 2000);
 
@@ -163,7 +178,6 @@ function _restoreFromSelectedFile(file) {
                 }
             } catch (err) {
                 console.error('PNG 元数据解析失败，尝试旧版像素解析...', err);
-                // 兼容兜底：如果是旧版噪点图
                 _fallbackOldImageRestore(file);
             }
         };
@@ -218,7 +232,7 @@ function _applyImportedStateData(stateData) {
         return;
     }
 
-    if (_gameInitialized && !confirm('检测到已有游玩进度，导入将合并存档（自建角色、剧情与群聊完整继承），确定导入吗？')) {
+    if (_gameInitialized && !confirm('检测到已有游玩进度，导入将合并存档（自建角色、联系人通讯录、剧情与小号完整继承），确定导入吗？')) {
         return;
     }
 
@@ -241,13 +255,11 @@ function _applyImportedStateData(stateData) {
     switchTab('story');
     autoSaveGame();
 
-    // 计算统计数据展示给玩家
     const npcCount = Object.keys(G.npcs || {}).length;
     const chatCount = Object.values(G.chatHistory || {}).reduce((acc, cur) => acc + (cur.length || 0), 0);
     const dayVal = G.day || 1;
     const nameVal = G.player?.ytName || '主角';
 
-    // 强力弹窗提示，百分百让用户确认成功
     if (typeof openModal === 'function') {
         openModal(`
             <div style="text-align:center;padding:10px 0;">
@@ -256,14 +268,15 @@ function _applyImportedStateData(stateData) {
                 <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px;font-size:13px;color:#166534;line-height:1.8;text-align:left;margin-bottom:16px;">
                     <div>👤 <b>主播名称</b>：${escapeHtml(nameVal)}</div>
                     <div>📅 <b>游戏进度</b>：第 ${dayVal} 天</div>
-                    <div>👥 <b>角色通讯录</b>：已找回 ${npcCount} 位角色</div>
+                    <div>👥 <b>角色通讯录</b>：已完整找回 ${npcCount} 位联系人</div>
                     <div>💬 <b>聊天记忆</b>：已还原 ${chatCount} 条完整对话</div>
+                    <div>📱 <b>账号生态</b>：大号与 ${(G.altAccounts||[]).length} 个小号数据已就绪</div>
                 </div>
                 <button class="btn-primary" onclick="closeModal()" style="width:100%;padding:10px;">进入游戏</button>
             </div>
         `);
     } else {
-        alert(`✅ 存档导入成功！\n\n已为您还原：\n- 主播：${nameVal}\n- 进度：第 ${dayVal} 天\n- 角色：${npcCount} 位\n- 对话记录：${chatCount} 条`);
+        alert(`✅ 存档导入成功！\n\n已为您还原：\n- 主播：${nameVal}\n- 进度：第 ${dayVal} 天\n- 联系人：${npcCount} 位\n- 对话记录：${chatCount} 条`);
     }
 }
 
@@ -491,7 +504,7 @@ function confirmExitGame() {
     }
 }
 
-// 🛡️ 全量数据打包：确保所有聊天记录、NPC独立记忆、全局记忆百分百不漏
+// 🛡️ 全量数据打包：支持大小号生态、拉黑关系与邀请池
 function serializeGameState() {
     return {
         player: G.player,
@@ -504,10 +517,14 @@ function serializeGameState() {
         memoryConfig: G.memoryConfig,
         npcs: G.npcs,
         chatHistory: G.chatHistory,
+        currentAccountId: G.currentAccountId || 'main',
+        altAccounts: G.altAccounts || [],
+        blockedNpcs: G.blockedNpcs || [],
         groups: G.groups,
         groupChatHistory: G.groupChatHistory,
         groupMemories: G.groupMemories,
         friendRequests: G.friendRequests,
+        groupInvites: G.groupInvites || [],
         feed: G.feed,
         fanworks: G.fanworks,
         ao3User: G.ao3User,
@@ -533,9 +550,11 @@ function applyDeserializedGameState(data) {
     if (data.maxActionPoints !== undefined) G.maxActionPoints = data.maxActionPoints;
     if (Array.isArray(data.storyHistory)) G.storyHistory = data.storyHistory;
 
+    // 🛡️ 旧存档联系人与自建角色完整继承
     if (!G.npcs) G.npcs = {};
-    const defaultNpcs = (typeof DEFAULT_NPCS !== 'undefined') ? DEFAULT_NPCS : {};
-    G.npcs = Object.assign({}, defaultNpcs, G.npcs, data.npcs || {});
+    if (data.npcs && typeof data.npcs === 'object') {
+        G.npcs = Object.assign({}, G.npcs, data.npcs);
+    }
 
     if (!G.chatHistory) G.chatHistory = {};
     if (data.chatHistory) {
@@ -545,6 +564,11 @@ function applyDeserializedGameState(data) {
             }
         }
     }
+
+    // 大小号与拉黑数据还原
+    G.currentAccountId = data.currentAccountId || 'main';
+    G.altAccounts = Array.isArray(data.altAccounts) ? data.altAccounts : [];
+    G.blockedNpcs = Array.isArray(data.blockedNpcs) ? data.blockedNpcs : [];
 
     if (!G.groups) G.groups = {};
     if (data.groups) G.groups = Object.assign({}, G.groups, data.groups);
@@ -564,6 +588,7 @@ function applyDeserializedGameState(data) {
     if (Array.isArray(data.memorySummaries)) G.memorySummaries = data.memorySummaries;
     if (data.memoryConfig) G.memoryConfig = Object.assign({}, G.memoryConfig, data.memoryConfig);
     if (Array.isArray(data.friendRequests)) G.friendRequests = data.friendRequests;
+    if (Array.isArray(data.groupInvites)) G.groupInvites = data.groupInvites;
     if (Array.isArray(data.feed)) G.feed = data.feed;
     if (Array.isArray(data.fanworks)) G.fanworks = data.fanworks;
     if (data.ao3User) G.ao3User = data.ao3User;
