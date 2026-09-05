@@ -64,8 +64,8 @@ jobs:
                   applicationId "com.mcyt.simulator"
                   minSdk 21
                   targetSdk 34
-                  versionCode 1496
-                  versionName "1.496"
+                  versionCode 1500
+                  versionName "1.500"
               }
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_1_8
@@ -165,7 +165,6 @@ jobs:
 
                   webView.setWebViewClient(new WebViewClient());
 
-                  // 核心修复：放行网页端 input type=file 文件选择器，解决点击无反应
                   webView.setWebChromeClient(new WebChromeClient() {
                       @Override
                       public boolean onShowFileChooser(WebView wv, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
@@ -263,5 +262,5 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: McytSimulator-v1.496
+          name: McytSimulator-v1.500
           path: proj/app/build/outputs/apk/release/app-release.apk
