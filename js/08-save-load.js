@@ -1,6 +1,6 @@
-// 存档/读档/初始化模块（v6.4.1 原生文件下载与极简恢复版）
+// 存档/读档/初始化模块（v1.500 全量数据保护与强提示版）
 // ============================================================
-const CURRENT_APP_VERSION = '6.4.1'; // 递增至 6.4.1，确保更新后 100% 弹出全新更新公告
+const CURRENT_APP_VERSION = '1.500';
 
 let _gameInitialized = false;
 let _skipStartChoiceOnce = false;
@@ -85,11 +85,11 @@ function autoSaveGame() {
         }));
     } catch(e) {
         console.warn('自动存档写入失败', e);
-        showToast('⚠️ 自动保存失败，建议立刻点击「📤 备份」下载存档文件', 'error', 5000);
+        showToast('⚠️ 自动保存失败，建议立刻点击「备份」下载存档', 'error', 5000);
     }
 }
 
-// 📤 打开备份流程：直接呼起导出弹窗
+// 打开备份流程
 function openBackupModal() {
     let payload, day, ytName;
     if (G.phase === 'playing') {
@@ -121,14 +121,14 @@ function openBackupModal() {
     }
 }
 
-// 📥 打开恢复流程：直接呼起文件选择器（同时支持 .json 文件与图片恢复）
+// 打开恢复流程（支持选取 .png 存档图、.json 文件）
 function openRestoreModal() {
     let fileInput = document.getElementById('restoreJsonFileInputDynamic');
     if (!fileInput) {
         fileInput = document.createElement('input');
         fileInput.id = 'restoreJsonFileInputDynamic';
         fileInput.type = 'file';
-        fileInput.accept = '.json,image/*,text/plain';
+        fileInput.accept = '.json,image/*';
         fileInput.style.display = 'none';
         document.body.appendChild(fileInput);
 
@@ -142,40 +142,47 @@ function openRestoreModal() {
     fileInput.click();
 }
 
-// 从选中的文件恢复存档（智能识别 JSON 文件或纯文本码）
+// 从选中的文件恢复存档（自动识别 PNG 图片元数据或 JSON 文本）
 function _restoreFromSelectedFile(file) {
     showToast('⏳ 正在读取存档文件...', 'info', 2000);
-    const reader = new FileReader();
 
-    if (file.type.indexOf('image/') === 0) {
+    const isImage = file.type.indexOf('image/') === 0 || file.name.toLowerCase().endsWith('.png') || file.name.toLowerCase().endsWith('.jpg');
+
+    if (isImage) {
+        const reader = new FileReader();
         reader.onload = (e) => {
-            const dataUrl = e.target.result;
-            _decodeAndImportImage(dataUrl);
+            const arrayBuffer = e.target.result;
+            const uint8 = new Uint8Array(arrayBuffer);
+            try {
+                if (window.ImageBackup && typeof window.ImageBackup.extractSaveFromPngBytes === 'function') {
+                    const parsed = window.ImageBackup.extractSaveFromPngBytes(uint8);
+                    const stateData = (parsed && parsed.data) ? parsed.data : parsed;
+                    _applyImportedStateData(stateData);
+                } else {
+                    throw new Error('图片解析引擎未就绪');
+                }
+            } catch (err) {
+                console.error('PNG 元数据解析失败，尝试旧版像素解析...', err);
+                // 兼容兜底：如果是旧版噪点图
+                _fallbackOldImageRestore(file);
+            }
         };
-        reader.readAsDataURL(file);
+        reader.onerror = () => showToast('❌ 图片读取失败', 'error');
+        reader.readAsArrayBuffer(file);
     } else {
+        const reader = new FileReader();
         reader.onload = (e) => {
             try {
                 const text = e.target.result.trim();
-                let parsed = null;
-
-                if (text.startsWith('{')) {
-                    parsed = JSON.parse(text);
-                } else if (text.startsWith('MCYTB64:') && window.ImageBackup) {
-                    parsed = window.ImageBackup.decodeBackupText(text);
-                } else {
-                    throw new Error('无法识别的文件格式');
-                }
-
+                let parsed = JSON.parse(text);
                 const stateData = (parsed && parsed.data) ? parsed.data : parsed;
                 if (!stateData || (!stateData.player && !stateData.npcs)) {
-                    throw new Error('文件中不包含有效的游戏数据');
+                    throw new Error('JSON 中不包含有效的游戏数据');
                 }
-
                 _applyImportedStateData(stateData);
             } catch (err) {
-                console.error('导入失败', err);
-                showToast('❌ 导入失败：' + err.message, 'error', 5000);
+                console.error('JSON 解析失败', err);
+                alert('❌ 导入失败：' + err.message + '\n请确认选择的是正确的存档文件。');
             }
         };
         reader.onerror = () => showToast('❌ 文件读取失败', 'error');
@@ -183,31 +190,38 @@ function _restoreFromSelectedFile(file) {
     }
 }
 
-// 兼容旧版图片解码
-async function _decodeAndImportImage(dataUrl) {
-    showToast('⏳ 正在解码还原图片存档...', 'info', 2000);
-    try {
-        let stateObj = null;
+// 兼容旧版噪点图恢复兜底
+function _fallbackOldImageRestore(file) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+        const dataUrl = e.target.result;
         if (window.ImageBackup && typeof window.ImageBackup.decodeDataUrlToSave === 'function') {
-            stateObj = await new Promise((resolve, reject) => {
-                window.ImageBackup.decodeDataUrlToSave(dataUrl, (err, res) => err ? reject(err) : resolve(res));
+            window.ImageBackup.decodeDataUrlToSave(dataUrl, (err, res) => {
+                if (err || !res) {
+                    alert('❌ 该图片不包含可识别的存档数据！\n请确认选取的是本游戏导出的存档图片原图。');
+                } else {
+                    const stateData = (res && res.data) ? res.data : res;
+                    _applyImportedStateData(stateData);
+                }
             });
+        } else {
+            alert('❌ 无法识别该图片文件');
         }
-        const stateData = (stateObj && stateObj.data) ? stateObj.data : stateObj;
-        if (!stateData || (!stateData.player && !stateData.npcs)) {
-            throw new Error('图片中不包含有效游戏数据');
-        }
-        _applyImportedStateData(stateData);
-    } catch (e) {
-        showToast('❌ 解码失败：' + e.message, 'error', 5000);
-    }
+    };
+    reader.readAsDataURL(file);
 }
 
-// 🛡️ 导入落地：深度平滑合并
+// 🛡️ 导入落地：深度平滑合并 + 强弹窗提示
 function _applyImportedStateData(stateData) {
-    if (_gameInitialized && !confirm('导入将与当前游戏进度合并（自建角色/群聊/剧情等以备份为准），确认导入吗？')) {
+    if (!stateData || (!stateData.player && !stateData.npcs)) {
+        alert('❌ 存档数据损坏或为空，导入终止！');
         return;
     }
+
+    if (_gameInitialized && !confirm('检测到已有游玩进度，导入将合并存档（自建角色、剧情与群聊完整继承），确定导入吗？')) {
+        return;
+    }
+
     applyDeserializedGameState(stateData);
     _gameInitialized = true;
     G.phase = 'playing';
@@ -226,7 +240,31 @@ function _applyImportedStateData(stateData) {
     updateUI();
     switchTab('story');
     autoSaveGame();
-    showToast('✅ 存档导入成功！所有进度已找回', 'success', 3000);
+
+    // 计算统计数据展示给玩家
+    const npcCount = Object.keys(G.npcs || {}).length;
+    const chatCount = Object.values(G.chatHistory || {}).reduce((acc, cur) => acc + (cur.length || 0), 0);
+    const dayVal = G.day || 1;
+    const nameVal = G.player?.ytName || '主角';
+
+    // 强力弹窗提示，百分百让用户确认成功
+    if (typeof openModal === 'function') {
+        openModal(`
+            <div style="text-align:center;padding:10px 0;">
+                <div style="font-size:42px;margin-bottom:8px;">🎉</div>
+                <h3 style="color:#16a34a;margin-bottom:10px;">存档导入成功！</h3>
+                <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px;font-size:13px;color:#166534;line-height:1.8;text-align:left;margin-bottom:16px;">
+                    <div>👤 <b>主播名称</b>：${escapeHtml(nameVal)}</div>
+                    <div>📅 <b>游戏进度</b>：第 ${dayVal} 天</div>
+                    <div>👥 <b>角色通讯录</b>：已找回 ${npcCount} 位角色</div>
+                    <div>💬 <b>聊天记忆</b>：已还原 ${chatCount} 条完整对话</div>
+                </div>
+                <button class="btn-primary" onclick="closeModal()" style="width:100%;padding:10px;">进入游戏</button>
+            </div>
+        `);
+    } else {
+        alert(`✅ 存档导入成功！\n\n已为您还原：\n- 主播：${nameVal}\n- 进度：第 ${dayVal} 天\n- 角色：${npcCount} 位\n- 对话记录：${chatCount} 条`);
+    }
 }
 
 function getAutoSaveInfo() {
@@ -453,6 +491,7 @@ function confirmExitGame() {
     }
 }
 
+// 🛡️ 全量数据打包：确保所有聊天记录、NPC独立记忆、全局记忆百分百不漏
 function serializeGameState() {
     return {
         player: G.player,
