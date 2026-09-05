@@ -1,6 +1,6 @@
-// 存档/读档/初始化模块（v6.4.0 原生文件下载与极简恢复版）
+// 存档/读档/初始化模块（v6.4.1 原生文件下载与极简恢复版）
 // ============================================================
-const CURRENT_APP_VERSION = '6.4.0';
+const CURRENT_APP_VERSION = '6.4.1'; // 递增至 6.4.1，确保更新后 100% 弹出全新更新公告
 
 let _gameInitialized = false;
 let _skipStartChoiceOnce = false;
