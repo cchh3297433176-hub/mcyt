@@ -83,26 +83,22 @@
                 <button class="btn-primary" id="startGameBtn">🚀 填入Key，开始游戏</button>
                 <button class="btn-secondary" id="setupLoadGameBtn" style="width:100%;margin-top:8px;">📂 读取已有存档</button>
                 <div style="display:flex;gap:8px;margin-top:8px;">
-                    <button class="btn-secondary" id="setupBackupBtn" style="flex:1;">📤 备份存档</button>
-                    <button class="btn-secondary" id="setupImportSaveBtn" style="flex:1;">📥 导入备份</button>
+                    <button class="btn-secondary" id="setupBackupBtn" style="flex:1;">📤 图片备份</button>
+                    <button class="btn-secondary" id="setupImportSaveBtn" style="flex:1;">📥 相册恢复</button>
                 </div>
                 <div style="margin-top:8px;font-size:11px;color:#999;text-align:center;">💡 所有剧情由 AI 实时生成，每回合 800+ 字</div>
-                <div style="margin-top:6px;font-size:11px;color:#e67e22;text-align:center;">⚠️ 更新App前请先在游戏内点「📤 备份」备份存档，避免自建角色/群聊丢失</div>
+                <div style="margin-top:6px;font-size:11px;color:#e67e22;text-align:center;">⚠️ 更新App前请先点「📤 图片备份」，将存档图存入手机相册！</div>
             </div>
         </div>
         
-        <!-- ===== GAME PAGE (已增加初始隐藏防御，防止堆叠错位) ===== -->
+        <!-- ===== GAME PAGE ===== -->
         <div id="gamePage" style="display:none;">
             <!-- 左侧竖排操作栏 -->
             <div class="action-bar-vertical" id="actionBar">
                 <button class="action-btn primary" data-action="stream"><span class="icon">📹</span><span class="label">直播</span></button>
                 <button class="action-btn gold" data-action="video"><span class="icon">🎬</span><span class="label">视频</span></button>
-                <!-- 0消耗秒进聊天与动态中心 -->
                 <button class="action-btn" data-action="chat"><span class="icon">💬</span><span class="label">聊天</span></button>
-                <!-- 合作按钮已废除：邀请合拍/联动直播请在聊天「➕」号中发起 -->
-                <!-- 0消耗秒进同人浏览器/AO3中心 -->
                 <button class="action-btn" data-action="fanart"><span class="icon">🎨</span><span class="label">同人</span></button>
-                <!-- 0消耗秒进仿油管 App 平台 -->
                 <button class="action-btn" data-action="youtube"><span class="icon">▶️</span><span class="label">油管</span></button>
                 <button class="action-btn" data-action="sub"><span class="icon">🧘</span><span class="label">皮下</span></button>
                 <button class="action-btn" id="webSearchToggleBtn"><span class="icon">🌐</span><span class="label">联网</span></button>
@@ -115,7 +111,6 @@
             <div class="game-main">
                 <div class="game-header">
                     <div class="left">
-                        <!-- 点击头像更换昵称与头像 -->
                         <div class="avatar-circle" id="headerAvatar" style="cursor:pointer;position:relative;" title="点击修改头像与名字">
                             <img id="headerAvatarImg" src="" alt="avatar">
                         </div>
@@ -123,7 +118,7 @@
                         <span>🕐 <span class="time" id="timeDisplay">早晨</span></span>
                     </div>
                     <div class="right">
-                        <span>⚡ 行动点</span>
+                        <span>⚡</span>
                         <span class="ap" id="apDisplay">6</span>
                         <div class="ap-dots" id="apDots">
                             <div class="ap-dot filled"></div>
@@ -137,9 +132,8 @@
                             <button class="sl-btn" id="modelSettingsBtn">⚙️ 模型</button>
                             <button class="sl-btn" id="saveGameBtn">💾 存档</button>
                             <button class="sl-btn" id="loadGameBtn">📂 读档</button>
-                            <button class="sl-btn" id="exportSaveBtn" title="备份存档（复制文本或尝试下载文件），更新App前建议先备份">📤 备份</button>
-                            <button class="sl-btn" id="importSaveBtn" title="从备份文本或文件恢复存档">📥 恢复</button>
-                            <input type="file" id="importSaveFileInput" accept="application/json,.json" class="file-input" style="display:none;">
+                            <button class="sl-btn" id="exportSaveBtn">📤 备份</button>
+                            <button class="sl-btn" id="importSaveBtn">📥 恢复</button>
                             <button class="sl-btn" id="exitGameBtn" style="background:#ffe4e1;color:#c0392b;">🚪 退出</button>
                         </div>
                     </div>
@@ -159,11 +153,8 @@
                     <div class="tab-content" id="streamTab"><div id="streamContainer"></div></div>
                     <div class="tab-content dashboard-area" id="dashboardTab"></div>
                     <div class="tab-content dashboard-area" id="shopTab"></div>
-                    <!-- 聊天与朋友圈容器 -->
                     <div class="tab-content dashboard-area" id="socialTab" style="padding:0;background:var(--bg);"></div>
-                    <!-- 浏览器与同人AO3容器 -->
                     <div class="tab-content dashboard-area" id="browserTab" style="padding:0;background:var(--bg);"></div>
-                    <!-- 油管 YouTube 平台容器 -->
                     <div class="tab-content dashboard-area" id="youtubeTab" style="padding:0;background:var(--bg);"></div>
                     <div class="tab-content dashboard-area" id="dataTab"></div>
                     <div class="tab-content dashboard-area" id="memoirTab"></div>
@@ -180,24 +171,14 @@
         </div>
     </div>
     
-    <!-- 🛡️ JS 崩溃防御盾：拦截缺失节点报错，护航游戏加载 -->
+    <!-- 🛡️ 安全 DOM 代理：仅对查询做可选返回，绝不在 body 注入假节点干扰事件 -->
     <script>
         (function(){
-            var originalGetElementById = document.getElementById.bind(document);
-            document.getElementById = function(id) {
-                var el = originalGetElementById(id);
-                if (el) return el;
-                // 当 JS 寻找被删除的遗留 ID 时，创建一个隐形假节点给它，防止抛错
-                var dummy = document.createElement('div');
-                dummy.id = id;
-                dummy.style.display = 'none';
-                document.body.appendChild(dummy);
-                return dummy;
+            window.$ = function(id) {
+                return document.getElementById(id);
             };
-            window.$ = document.getElementById;
-            
             window.addEventListener('error', function(e) {
-                console.warn('捕获非致命警告，已自动防御:', e.message);
+                console.warn('[WebView Warning]:', e.message);
             });
         })();
     </script>
@@ -209,12 +190,12 @@
     <script src="js/05-streaming.js"></script>
     <script src="js/06-video-story.js"></script>
     <script src="js/07-actions-social.js"></script>
-    <script src="js/08-save-load.js"></script>
     <script src="js/10-native-bridge.js"></script>
     <script src="js/11-image-backup.js"></script>
+    <script src="js/08-save-load.js"></script>
     <script src="js/09-events-init.js"></script>
 
-    <!-- 🚀 安全的视图启动器，防止白屏死机 -->
+    <!-- 🚀 安全的视图启动器 -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             setTimeout(function() {

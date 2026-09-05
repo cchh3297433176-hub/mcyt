@@ -391,8 +391,10 @@ body {
     overflow: hidden;
     background: var(--bg);
 }
+
+/* 优化头部栏：防止小屏按钮折行挤压退出按钮 */
 .game-header {
-    padding: 8px 12px;
+    padding: 6px 10px;
     background: var(--card);
     border-bottom: 1px solid rgba(30, 60, 30, 0.06);
     display: flex;
@@ -406,14 +408,14 @@ body {
 .game-header .left {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 13px;
+    gap: 5px;
+    font-size: 12px;
     font-weight: 600;
     color: var(--text);
 }
 .game-header .left .avatar-circle {
-    width: 30px;
-    height: 30px;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
     background: #dce8dc;
     border: 2px solid var(--primary);
@@ -422,8 +424,7 @@ body {
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 .game-header .left .avatar-circle:hover {
-    transform: scale(1.1);
-    box-shadow: 0 0 8px rgba(46, 125, 50, 0.4);
+    transform: scale(1.08);
 }
 .game-header .left .avatar-circle img {
     width: 100%;
@@ -439,10 +440,11 @@ body {
 .game-header .right {
     display: flex;
     align-items: center;
-    gap: 6px;
-    font-size: 12px;
+    gap: 4px;
+    font-size: 11px;
     color: var(--text);
     flex-wrap: wrap;
+    justify-content: flex-end;
 }
 .game-header .right .ap {
     color: var(--primary);
@@ -450,11 +452,11 @@ body {
 }
 .ap-dots {
     display: flex;
-    gap: 3px;
+    gap: 2px;
 }
 .ap-dot {
-    width: 8px;
-    height: 8px;
+    width: 7px;
+    height: 7px;
     border-radius: 50%;
     background: #dce8dc;
     transition: var(--transition);
@@ -462,7 +464,7 @@ body {
 }
 .ap-dot.filled {
     background: var(--primary);
-    box-shadow: 0 0 6px rgba(46, 125, 50, 0.25);
+    box-shadow: 0 0 4px rgba(46, 125, 50, 0.25);
 }
 .ap-dot.spent {
     background: #c0d0c0;
@@ -1813,30 +1815,31 @@ body {
     display: none;
     font-size: 14px;
 }
-.achievement-unlock-shturl.cc/ {
-    display: block;
-}
 .achievement-unlock-toast .ach-icon {
     font-size: 28px;
     margin-right: 8px;
 }
-/* 存档按钮 */
+
+/* 核心优化：顶部存档按钮布局自适应收缩 */
 .save-load-btns {
     display: flex;
-    gap: 4px;
+    gap: 3px;
     align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
 }
 .save-load-btns .sl-btn {
     background: rgba(46, 125, 50, 0.08);
     border: 1px solid rgba(46, 125, 50, 0.15);
-    border-radius: 12px;
-    padding: 2px 8px;
-    font-size: 11px;
+    border-radius: 10px;
+    padding: 2px 6px;
+    font-size: 10px;
     font-weight: 600;
     color: var(--primary);
     cursor: pointer;
     transition: var(--transition);
     white-space: nowrap;
+    line-height: 1.4;
 }
 .save-load-btns .sl-btn:active {
     transform: scale(0.93);
@@ -1844,6 +1847,7 @@ body {
 .save-load-btns .sl-btn:hover {
     background: rgba(46, 125, 50, 0.15);
 }
+
 .save-slot-item {
     background: var(--card);
     border-radius: var(--radius);
@@ -2060,9 +2064,6 @@ body {
     display: none;
     font-size: 13px;
     backdrop-filter: blur(10px);
-}
-.shturl.cc/ {
-    display: block;
 }
 .toast.success {
     background: rgba(76, 175, 80, 0.90);
@@ -2818,34 +2819,7 @@ body {
 .image-backup-tip strong {
     color: #bf360c;
 }
-.restore-image-methods {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    margin-top: 10px;
-}
-.restore-image-methods .method-btn {
-    padding: 10px 14px;
-    border-radius: 10px;
-    border: 2px solid rgba(30, 60, 30, 0.1);
-    background: #f5faf5;
-    color: var(--text);
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    text-align: left;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    transition: var(--transition);
-}
-.restore-image-methods .method-btn:active {
-    transform: scale(0.98);
-    border-color: var(--primary);
-}
-.restore-image-methods .method-btn .icon {
-    font-size: 18px;
-}
+
 /* 适配小屏 */
 @media (max-width: 420px) {
     .action-bar-vertical {
@@ -2865,11 +2839,18 @@ body {
     .setup-title {
         font-size: 22px;
     }
+    .game-header {
+        padding: 4px 6px;
+    }
     .game-header .left {
-        font-size: 12px;
+        font-size: 11px;
     }
     .game-header .right {
-        font-size: 11px;
+        font-size: 10px;
+    }
+    .save-load-btns .sl-btn {
+        padding: 2px 4px;
+        font-size: 9px;
     }
     .story-block {
         font-size: 13px;
