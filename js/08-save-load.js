@@ -1,6 +1,6 @@
-// 存档/读档/初始化模块（v1.502 全量数据保护与大小号系统兼容版）
+// 存档/读档/初始化模块（v1.503 全量数据保护与大小号系统兼容版）
 // ============================================================
-const CURRENT_APP_VERSION = '1.502';
+const CURRENT_APP_VERSION = '1.503';
 
 let _gameInitialized = false;
 let _skipStartChoiceOnce = false;
@@ -520,6 +520,10 @@ function serializeGameState() {
         currentAccountId: G.currentAccountId || 'main',
         altAccounts: G.altAccounts || [],
         blockedNpcs: G.blockedNpcs || [],
+        blockedRecords: G.blockedRecords || [],
+        _isDeviceBanned: G._isDeviceBanned || false,
+        _banReason: G._banReason || null,
+        _securityAuditBox: G._securityAuditBox || null,
         groups: G.groups,
         groupChatHistory: G.groupChatHistory,
         groupMemories: G.groupMemories,
@@ -569,6 +573,15 @@ function applyDeserializedGameState(data) {
     G.currentAccountId = data.currentAccountId || 'main';
     G.altAccounts = Array.isArray(data.altAccounts) ? data.altAccounts : [];
     G.blockedNpcs = Array.isArray(data.blockedNpcs) ? data.blockedNpcs : [];
+    G.blockedRecords = Array.isArray(data.blockedRecords) ? data.blockedRecords : [];
+
+    // 🛡️ 封锁黑匣子与设备状态还原（防偷换设备）
+    G._isDeviceBanned = !!data._isDeviceBanned;
+    G._banReason = data._banReason || null;
+    G._securityAuditBox = data._securityAuditBox || null;
+    if (G._isDeviceBanned) {
+        try { localStorage.setItem('mcyt_device_banned_flag', 'true'); } catch (_) {}
+    }
 
     if (!G.groups) G.groups = {};
     if (data.groups) G.groups = Object.assign({}, G.groups, data.groups);

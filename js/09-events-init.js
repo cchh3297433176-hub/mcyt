@@ -209,7 +209,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // 📢 双页滑动公告系统（主公告 + 更新优化与新功能）
 // ============================================================
 function checkAndShowVersionNoticeModal(forceOpen = false) {
-    const ver = window.CURRENT_APP_VERSION || '1.502';
+    const ver = window.CURRENT_APP_VERSION || '1.503';
     const dismissedVersion = localStorage.getItem('mcyt_dismissed_notice_ver');
 
     if (forceOpen || dismissedVersion !== ver) {
@@ -249,10 +249,10 @@ function openVersionNoticeModal(version) {
                 <div class="notice-card-box">
                     <h4>🚀 本次更新优化方面 (v${version})</h4>
                     <ul style="padding-left:18px;margin-bottom:10px;font-size:13px;color:#444;line-height:1.6;">
-                        <li style="margin-bottom:8px;">1. <b>修复闪电按钮与多条气泡连发</b>：彻底修复私聊 ⚡ 闪电无反应问题，即便无记录也会破冰搭话；AI 回复模拟真实微信聊天，连珠炮式连发 3~5 条短气泡。</li>
-                        <li style="margin-bottom:8px;">2. <b>好感度机制恢复</b>：修复私聊好感度不增长 Bug，角色回复后根据互动质量与性格平稳增加 1~3 点好感。</li>
-                        <li style="margin-bottom:8px;">3. <b>消息长按操作菜单</b>：长按自己发出的消息支持【撤回】（概率被看到）、【编辑】与【删除】。</li>
-                        <li style="margin-bottom:8px;">4. <b>管理删除与重说智能化</b>：在左侧编辑弹窗中可一键删除某条错误消息；重说功能会自动撤回最近一次 AI 生成并重新发起。</li>
+                        <li style="margin-bottom:8px;">1. <b>防拉郎设备级锁死机制</b>：严守纯乙女定位，若检测到攻略对象间拉郎/男男互动，底层触发持久化锁死；导出的记忆卡保留全量证据，需管理员密匙解锁。</li>
+                        <li style="margin-bottom:8px;">2. <b>大小号聊天彻底物理隔离</b>：不同小号私聊独立互不干扰，小号可被独立拉黑，可开新号转圜；聊天窗口右上角支持一键秒切身份。</li>
+                        <li style="margin-bottom:8px;">3. <b>气泡宽度自适应与历史折叠</b>：修复短句气泡固定宽度问题，支持按条折叠展开更早历史消息。</li>
+                        <li style="margin-bottom:8px;">4. <b>全新朋友圈生态</b>：支持用户发文字/真实图片动态、编辑删除撤回、一键刷新生成好友日常动态及召唤 AI 互动评论。</li>
                     </ul>
                 </div>
             </div>
