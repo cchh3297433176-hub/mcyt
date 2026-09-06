@@ -1,5 +1,5 @@
 // js/12-phone-social.js
-// 手机社交生态系统：账号隔离、朋友圈多模态互动、时差与自定义时钟、聊天表情包、屏幕那边的TA、合作共创弹窗、动态互转
+// 手机社交生态系统：账号隔离、朋友圈多模态互动、时差与自定义时钟、聊天表情包、屏幕那边的TA、长按撤回编辑删除
 // ============================================================
 
 // ============================================================
@@ -50,11 +50,11 @@ function findStickerByKeyword(kw) {
 }
 
 // ============================================================
-// 2. 时钟、时区推导与自定义时间跟随系统
+// 2. 时差推导与时区检测工具
 // ============================================================
 if (!G.clockConfig) {
     G.clockConfig = {
-        mode: 'game', // 'game' | 'device' | 'custom'
+        mode: 'game',
         customCountry: '中国 (东八区)',
         customTimeStr: ''
     };
@@ -128,7 +128,6 @@ function formatNpcTimezoneContext(targetNpcName = '') {
 `;
 }
 
-// 弹出时钟与时区设置弹窗
 function openClockSettingsModal() {
     const cfg = G.clockConfig || { mode: 'game', customCountry: '中国 (东八区)', customTimeStr: '' };
     const curTz = detectPlayerTimezoneInfo();
@@ -393,7 +392,7 @@ function pushChatMessageSafe(npcId, msgObj, accId = null) {
 }
 
 // ============================================================
-// 4. 社交通用辅助
+// 4. 社交通用辅助与触屏长按判定（优化位移容差，增强震动反馈）
 // ============================================================
 if (!G.phoneNav) G.phoneNav = 'chats';
 if (!G.chatActiveTab) G.chatActiveTab = 'direct';
@@ -407,8 +406,8 @@ if (!G._behindScreenActive) G._behindScreenActive = {};
 
 function bindLongPressEvent(el, onLongPress, onClick) {
     if (!el) return;
-    const LONG_PRESS_MS = 500;
-    const MOVE_TOLERANCE = 10;
+    const LONG_PRESS_MS = 450;
+    const MOVE_TOLERANCE = 15; // 提高容差，防止大拇指微动导致取消长按
     let pressTimer = null;
     let longPressTriggered = false;
     let startX = 0, startY = 0;
@@ -421,6 +420,7 @@ function bindLongPressEvent(el, onLongPress, onClick) {
         clearTimer();
         pressTimer = setTimeout(() => {
             longPressTriggered = true;
+            try { if (navigator && typeof navigator.vibrate === 'function') navigator.vibrate(35); } catch (_) {}
             if (typeof onLongPress === 'function') onLongPress();
         }, LONG_PRESS_MS);
     };
@@ -467,6 +467,90 @@ function renderAvatarBadge(obj, size = 44) {
     }
     return `<div style="width:${size}px;height:${size}px;border-radius:50%;background:#eaf2ea;display:flex;align-items:center;justify-content:center;font-size:${Math.floor(size*0.45)}px;flex-shrink:0;">${emoji}</div>`;
 }
+
+// 💬 核心长按弹出菜单（撤回/编辑/删除）
+function showMessageActionSheet(msgId, targetType, targetId) {
+    const list = targetType === 'single' ? getAccountChatHistory(targetId) : (G.groupChatHistory[targetId] || []);
+    const msg = list.find(m => m._id === msgId);
+    if (!msg || msg.from !== 'player') return;
+
+    let displayPreview = msg.text;
+    if (msg.sticker) displayPreview = `[表情: ${msg.sticker.desc}]`;
+    else if (msg.sharedMoment) displayPreview = `[转发动态]: ${msg.sharedMoment.body || ''}`;
+
+    openModal(`
+        <h3>💬 消息操作</h3>
+        <div style="background:#f4f7f4;padding:8px 12px;border-radius:8px;font-size:13px;color:#333;margin:8px 0 14px;word-break:break-word;">
+            “${escapeHtml(displayPreview)}”
+        </div>
+        <div class="btn-row" style="flex-direction:column;gap:8px;">
+            <button class="btn-primary" id="btnActionRecall" style="width:100%;background:#388e3c;">↩️ 撤 回（对方有概率看到）</button>
+            ${!msg.sticker && !msg.sharedMoment ? `<button class="btn-primary" id="btnActionEdit" style="width:100%;background:#1976d2;">✏️ 编 辑（静默修改发错文字）</button>` : ''}
+            <button class="btn-secondary" id="btnActionDelete" style="width:100%;color:#c62828;background:#ffebee;border-color:#ffcdd2;">🗑️ 删 除（无痕抹去）</button>
+            <button class="btn-secondary" onclick="closeModal()" style="width:100%;">取消</button>
+        </div>
+    `);
+
+    document.getElementById('btnActionRecall').onclick = () => {
+        closeModal();
+        const origText = msg.text || (msg.sticker ? `[表情包: ${msg.sticker.desc}]` : '');
+        const isSeenByNpc = Math.random() < 0.5;
+
+        msg.from = 'action';
+        msg.text = '你撤回了一条消息';
+        msg._recalled = true;
+        msg._originalText = origText;
+        msg._seenByNpc = isSeenByNpc;
+        delete msg.sticker;
+        delete msg.sharedMoment;
+
+        if (targetType === 'single') renderSingleChatWindow(document.getElementById('socialTab'));
+        else renderGroupChatWindow(document.getElementById('socialTab'));
+
+        if (isSeenByNpc) showToast('👀 提示：你撤回了一条消息，但对方好像已经看到了...', 'info', 2500);
+        else showToast('↩️ 消息已撤回，对方没有看到', 'success', 2000);
+        autoSaveGame();
+    };
+
+    const editBtn = document.getElementById('btnActionEdit');
+    if (editBtn) {
+        editBtn.onclick = () => {
+            closeModal();
+            openModal(`
+                <h3>✏️ 编辑消息</h3>
+                <p style="font-size:12px;color:#666;">修改已发送的文字（静默修改）：</p>
+                <div class="form-group">
+                    <textarea id="editMsgTextInput" rows="3" style="width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;font-size:13px;">${escapeHtml(msg.text)}</textarea>
+                </div>
+                <div class="btn-row">
+                    <button class="btn-secondary" onclick="closeModal()">取消</button>
+                    <button class="btn-primary" id="confirmSaveEditMsg">💾 保存修改</button>
+                </div>
+            `);
+            document.getElementById('confirmSaveEditMsg').onclick = () => {
+                const newT = document.getElementById('editMsgTextInput').value.trim();
+                if (!newT) { showToast('内容不能为空', 'error'); return; }
+                msg.text = newT;
+                closeModal();
+                if (targetType === 'single') renderSingleChatWindow(document.getElementById('socialTab'));
+                else renderGroupChatWindow(document.getElementById('socialTab'));
+                showToast('✅ 消息已成功修改', 'success', 1500);
+                autoSaveGame();
+            };
+        };
+    }
+
+    document.getElementById('btnActionDelete').onclick = () => {
+        closeModal();
+        const idx = list.findIndex(m => m._id === msgId);
+        if (idx !== -1) list.splice(idx, 1);
+        if (targetType === 'single') renderSingleChatWindow(document.getElementById('socialTab'));
+        else renderGroupChatWindow(document.getElementById('socialTab'));
+        showToast('🗑️ 消息已从历史中抹除', 'info', 1500);
+        autoSaveGame();
+    };
+}
+window.showMessageActionSheet = showMessageActionSheet;
 
 // 社交主路由
 function renderSocialPanel() {
@@ -619,7 +703,7 @@ function buildChatListHTML() {
         </div>
     </div>
     <div style="font-size:11px;color:#888;padding:6px 16px;background:#fcfdfc;border-bottom:1px dashed #eee;">
-        💡 提示：长按消息可撤回/编辑/删除；输入框左侧 ➕ 可发起拍共创视频
+        💡 提示：长按消息气泡可撤回、编辑或删除；输入框左侧 ➕ 可发起拍共创视频
     </div>
     <div class="chat-list" style="flex:1;overflow-y:auto;padding:8px;">
         ${itemsHtml}
@@ -643,7 +727,7 @@ function bindChatListEvents(container) {
 }
 
 // ============================================================
-// 5. 朋友圈生态系统（支持竖排3种发图模式、动态转发）
+// 5. 朋友圈生态系统
 // ============================================================
 function buildMomentsHTML() {
     let feedItems = [...(G.feed || [])].reverse();
@@ -760,7 +844,6 @@ function bindMomentsEvents(container) {
         };
     });
 
-    // ↗️ 转发动态到私聊
     container.querySelectorAll('.moment-share-btn').forEach(btn => {
         btn.onclick = () => {
             const id = parseInt(btn.dataset.id);
@@ -801,7 +884,6 @@ function bindMomentsEvents(container) {
     });
 }
 
-// 转发动态给角色的选择框
 function openShareMomentTargetModal(momentId) {
     const item = (G.feed || []).find(f => f.id === momentId);
     if (!item) return;
@@ -866,7 +948,6 @@ function openShareMomentTargetModal(momentId) {
     });
 }
 
-// 朋友圈发动态弹窗（严格竖排 1 2 3 单选）
 function openCreateMomentPostModal() {
     const curAcc = getActiveAccountInfo();
     openModal(`
@@ -882,7 +963,6 @@ function openCreateMomentPostModal() {
         </div>
         <div class="form-group">
             <label>配图形式选择 (竖排单选)</label>
-            <!-- 严格竖排 1 2 3 -->
             <div style="display:flex;flex-direction:column;gap:8px;margin-top:6px;background:#f8faf8;padding:8px 10px;border-radius:8px;border:1px solid #e5ebe5;">
                 <label style="font-size:12.5px;display:flex;align-items:center;gap:6px;cursor:pointer;">
                     <input type="radio" name="postImgType" value="real" checked>
@@ -898,13 +978,11 @@ function openCreateMomentPostModal() {
                 </label>
             </div>
 
-            <!-- 上传图片区 -->
             <div id="postImgRealArea" style="margin-top:8px;">
                 <input type="file" id="postRealFileInput" accept="image/*" style="font-size:12px;">
                 <div id="postImgPreview" style="margin-top:6px;"></div>
             </div>
 
-            <!-- 文字描述区 -->
             <div id="postImgDescArea" style="display:none;margin-top:8px;">
                 <input type="text" id="postImgDescInput" placeholder="描绘图片内容，如：Verity西装黄色笑脸立绘截图">
             </div>
@@ -1335,7 +1413,7 @@ function sendStickerMessage(targetType, targetId, stickerObj) {
 }
 
 // ============================================================
-// 7. 加号互动菜单与共创视频（从原04完整移植，彻底解决加号无法点击）
+// 7. 加号互动菜单与共创视频
 // ============================================================
 function openChatActionMenuModal(targetType, targetId) {
     const isGroup = targetType === 'group';
@@ -1537,7 +1615,7 @@ function handleInviteCollabStream(targetType, targetId) {
 }
 
 // ============================================================
-// 8. 私聊窗口与「屏幕那边的TA」动作感知（顶栏轻量化、纯净输入框、跳转动态）
+// 8. 私聊窗口与「屏幕那边的TA」动作感知
 // ============================================================
 function jumpToMomentCard(momentId) {
     G.currentChatNpc = null;
@@ -1607,7 +1685,6 @@ function renderSingleChatWindow(container) {
                     <img src="${msg.sticker.url}" alt="${escapeHtml(msg.sticker.desc)}" style="width:85px;height:85px;border-radius:8px;object-fit:cover;display:block;">
                 </div>`;
             } else if (msg.sharedMoment) {
-                // 转发朋友圈动态气泡
                 const sm = msg.sharedMoment;
                 bubbleContent = `
                 <div onclick="jumpToMomentCard(${sm.id})" style="cursor:pointer;background:#fff;border-radius:8px;padding:8px;border:1px solid #e0e0e0;max-width:210px;">
@@ -1625,7 +1702,7 @@ function renderSingleChatWindow(container) {
                 ${!isSelf ? `<div class="chat-npc-avatar-btn" style="margin-right:8px;flex-shrink:0;cursor:pointer;" title="点击查看名片与动态">${renderAvatarBadge(npc, 34)}</div>` : ''}
                 <div style="max-width:75%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                     ${isSelf && msg.senderAccount ? `<div style="font-size:10px;color:#888;margin-bottom:2px;">${escapeHtml(msg.senderAccount)}</div>` : ''}
-                    <div class="chat-bubble ${isSelf ? 'self-bubble' : ''}" style="width:fit-content;max-width:100%;display:inline-block;background:${isSelf ? ((msg.sticker || msg.sharedMoment) ? 'transparent' : '#95ec69') : ((msg.sticker || msg.sharedMoment) ? 'transparent' : '#fff')};color:#111;padding:${(msg.sticker || msg.sharedMoment) ? '0' : '8px 12px'};border-radius:${isSelf ? '10px 0 10px 10px' : '0 10px 10px 10px'};box-shadow:${(msg.sticker || msg.sharedMoment) ? 'none' : '0 1px 3px rgba(0,0,0,0.08)'};font-size:14px;line-height:1.5;word-break:break-word;user-select:none;-webkit-user-select:none;">
+                    <div class="chat-bubble ${isSelf ? 'self-bubble' : ''}" style="width:fit-content;max-width:100%;display:inline-block;background:${isSelf ? ((msg.sticker || msg.sharedMoment) ? 'transparent' : '#95ec69') : ((msg.sticker || msg.sharedMoment) ? 'transparent' : '#fff')};color:#111;padding:${(msg.sticker || msg.sharedMoment) ? '0' : '8px 12px'};border-radius:${isSelf ? '10px 0 10px 10px' : '0 10px 10px 10px'};box-shadow:${(msg.sticker || msg.sharedMoment) ? 'none' : '0 1px 3px rgba(0,0,0,0.08)'};font-size:14px;line-height:1.5;word-break:break-word;user-select:none;-webkit-user-select:none;cursor:pointer;">
                         ${bubbleContent}
                     </div>
                     <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
@@ -1679,7 +1756,6 @@ function renderSingleChatWindow(container) {
         <div style="padding:6px 8px;background:#fff;border-top:1px solid #e5ebe5;display:flex;gap:5px;align-items:center;">
             <button id="chatActionInsertBtn" title="合作/拍视频/旁白" style="border:1px solid #ccc;background:#f8f9f8;color:#555;width:32px;height:32px;border-radius:50%;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;">➕</button>
             <button id="chatToggleStickerBtn" title="发送表情包" style="border:1px solid #ccc;background:${_stickerDrawerOpen ? '#eaf5ea' : '#f8f9f8'};color:#555;width:32px;height:32px;border-radius:50%;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;">😊</button>
-            <!-- 纯净空 placeholder，绝不带冗余名字 -->
             <textarea id="singleChatInput" rows="1" placeholder="" style="flex:1;padding:7px 10px;border-radius:16px;border:1px solid #ddd;background:#f8faf8;font-size:13.5px;resize:none;outline:none;font-family:inherit;"></textarea>
             <button id="singleSendBtn" style="border:none;background:var(--primary);color:#fff;padding:6px 13px;border-radius:16px;font-size:12.5px;font-weight:700;cursor:pointer;">发送</button>
         </div>
@@ -1713,12 +1789,13 @@ function renderSingleChatWindow(container) {
 
     document.getElementById('singleChatHeaderAccountBtn')?.addEventListener('click', openAccountManagerModal);
 
+    // 🌟 全面绑定长按气泡触发操作（文字、表情包均生效）
     container.querySelectorAll('.chat-msg-row[data-from="player"]').forEach(row => {
         const msgId = row.dataset.msgid;
         const bubble = row.querySelector('.self-bubble');
         if (bubble && msgId) {
             bindLongPressEvent(bubble, () => {
-                if (typeof showMessageActionSheet === 'function') showMessageActionSheet(msgId, 'single', npcId);
+                showMessageActionSheet(msgId, 'single', npcId);
             });
         }
     });
@@ -1773,7 +1850,7 @@ function renderSingleChatWindow(container) {
     document.getElementById('singleChatHeaderProfileBtn')?.addEventListener('click', showCard);
     container.querySelectorAll('.chat-npc-avatar-btn').forEach(btn => btn.onclick = showCard);
 
-    // 🌟 修复加号事件绑定
+    // 加号按钮打开合作/动作弹窗
     document.getElementById('chatActionInsertBtn')?.addEventListener('click', () => {
         openChatActionMenuModal('single', npcId);
     });
@@ -1884,7 +1961,6 @@ async function triggerAIReplyForSingle(npcId) {
     const availableStickers = (G.stickerLibrary || []).slice(0, 20).map(s => s.desc).join('、');
     const curFavor = npc.favor || 0;
 
-    // 好感度分层生疏度铁律约束
     let favorStageRule = '';
     if (curFavor < 20) {
         favorStageRule = `
@@ -2066,7 +2142,7 @@ function renderGroupChatWindow(container) {
                 ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${renderAvatarBadge({ avatarUrl: msg.senderAvatarUrl, avatarEmoji: msg.senderAvatar || '👤' }, 34)}</div>` : ''}
                 <div style="max-width:75%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                     ${!isSelf ? `<div style="font-size:11px;color:#777;margin-bottom:2px;">${escapeHtml(msg.senderName)}</div>` : ''}
-                    <div class="chat-bubble ${isSelf ? 'self-bubble' : ''}" style="width:fit-content;max-width:100%;display:inline-block;background:${isSelf ? (msg.sticker ? 'transparent' : '#95ec69') : (msg.sticker ? 'transparent' : '#fff')};color:#111;padding:${msg.sticker ? '0' : '8px 12px'};border-radius:${isSelf ? '10px 0 10px 10px' : '0 10px 10px 10px'};box-shadow:${msg.sticker ? 'none' : '0 1px 3px rgba(0,0,0,0.08)'};font-size:14px;line-height:1.5;word-break:break-word;user-select:none;-webkit-user-select:none;">
+                    <div class="chat-bubble ${isSelf ? 'self-bubble' : ''}" style="width:fit-content;max-width:100%;display:inline-block;background:${isSelf ? (msg.sticker ? 'transparent' : '#95ec69') : (msg.sticker ? 'transparent' : '#fff')};color:#111;padding:${msg.sticker ? '0' : '8px 12px'};border-radius:${isSelf ? '10px 0 10px 10px' : '0 10px 10px 10px'};box-shadow:${msg.sticker ? 'none' : '0 1px 3px rgba(0,0,0,0.08)'};font-size:14px;line-height:1.5;word-break:break-word;user-select:none;-webkit-user-select:none;cursor:pointer;">
                         ${bubbleContent}
                     </div>
                     <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
@@ -2118,6 +2194,17 @@ function renderGroupChatWindow(container) {
     document.getElementById('groupToggleStickerBtn')?.addEventListener('click', () => {
         _stickerDrawerOpen = !_stickerDrawerOpen;
         renderGroupChatWindow(container);
+    });
+
+    // 绑定群聊自己消息长按操作
+    container.querySelectorAll('.chat-msg-row[data-from="player"]').forEach(row => {
+        const msgId = row.dataset.msgid;
+        const bubble = row.querySelector('.self-bubble');
+        if (bubble && msgId) {
+            bindLongPressEvent(bubble, () => {
+                showMessageActionSheet(msgId, 'group', gid);
+            });
+        }
     });
 
     const input = document.getElementById('groupChatInput');
@@ -2190,3 +2277,4 @@ window.handleInviteCollabStream = handleInviteCollabStream;
 window.openInsertNarrativeModal = openInsertNarrativeModal;
 window.openShareMomentTargetModal = openShareMomentTargetModal;
 window.jumpToMomentCard = jumpToMomentCard;
+window.showMessageActionSheet = showMessageActionSheet;

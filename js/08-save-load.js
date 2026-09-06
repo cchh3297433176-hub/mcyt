@@ -1,7 +1,7 @@
 // js/08-save-load.js
-// 存档/读档/初始化模块（v1.600 全量数据保护、特赦令消费与大小号系统兼容版）
+// 存档/读档/初始化模块（v1.602 全量数据保护、特赦令消费与大小号系统兼容版）
 // ============================================================
-const CURRENT_APP_VERSION = '1.600';
+const CURRENT_APP_VERSION = '1.602';
 
 let _gameInitialized = false;
 let _skipStartChoiceOnce = false;
