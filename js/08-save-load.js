@@ -1,6 +1,6 @@
-// 存档/读档/初始化模块（v1.503 全量数据保护与大小号系统兼容版）
+// 存档/读档/初始化模块（v1.504 全量数据保护与大小号系统兼容版）
 // ============================================================
-const CURRENT_APP_VERSION = '1.503';
+const CURRENT_APP_VERSION = '1.504';
 
 let _gameInitialized = false;
 let _skipStartChoiceOnce = false;

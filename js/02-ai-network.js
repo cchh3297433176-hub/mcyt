@@ -1,4 +1,4 @@
-// AI 模型设置模块（统一的 OpenAI 兼容接口配置 / 拉取模型 / 多档案）
+// AI 模型设置模块（统一的 OpenAI 兼容接口配置 / 拉取模型 / 多档案 / 纯乙女安全门禁）
 // ============================================================
 function escapeHtml(str) {
     return String(str == null ? '' : str).replace(/[&<>"']/g, c => ({
@@ -9,7 +9,6 @@ function escapeHtml(str) {
 // ============================================================
 // 💭 酒馆式思维链解析与清洗工具
 // ============================================================
-// 1. 彻底剔除思维链，只保留正文供 AI 上下文读取与保存
 function stripThought(text) {
     if (!text) return '';
     let processed = String(text);
@@ -28,7 +27,6 @@ function stripThought(text) {
     return processed.replace(thinkRegex, '').trim();
 }
 
-// 2. 将思维链转换为折叠盒子，正文正常展示
 function renderContentWithThoughts(text) {
     if (!text) return '';
     let processed = String(text);
@@ -120,7 +118,7 @@ function loadMemorySummarySettings() {
     } catch (_) {}
 }
 
-// 渲染 API 设置面板（已填配置时默认折叠）
+// 渲染 API 设置面板
 function buildModelSettingsHTML(prefix) {
     const hasConfig = !!(G.ai.apiKey && G.ai.baseUrl);
     return `
@@ -312,7 +310,6 @@ function bindModelSettingsUI(prefix) {
     });
     $(`${prefix}SaveProfileBtn`)?.addEventListener('click', () => saveModelProfile(prefix));
     
-    // 点击整个摘要条直接展开/收起
     const summaryBox = $(`${prefix}ConfigSummary`);
     if (summaryBox) {
         summaryBox.addEventListener('click', () => {
@@ -423,44 +420,129 @@ function bindSearchSettingsUI(prefix) {
 }
 
 // ============================================================
-// API 调用（自动整合思维链）
+// 全局统一生成中加载动画（解决所有模块以为没反应的痛点）
+// ============================================================
+let _globalLoadingOverlay = null;
+
+function showGlobalAILoadingIndicator(tipText = '⏳ AI 正在全力创作生成中，请稍候...') {
+    if (!_globalLoadingOverlay) {
+        _globalLoadingOverlay = document.createElement('div');
+        _globalLoadingOverlay.id = 'globalAILoadingOverlay';
+        _globalLoadingOverlay.style.cssText = `
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: rgba(0, 0, 0, 0.4); z-index: 99999; display: flex;
+            align-items: center; justify-content: center; backdrop-filter: blur(2px);
+        `;
+        document.body.appendChild(_globalLoadingOverlay);
+    }
+    _globalLoadingOverlay.innerHTML = `
+        <div style="background:#fff;padding:16px 24px;border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,0.25);display:flex;align-items:center;gap:12px;border:2px solid var(--primary);">
+            <div style="font-size:22px;animation:spin 1s infinite linear;">⚙️</div>
+            <div style="font-size:13px;font-weight:700;color:#111;">${escapeHtml(tipText)}</div>
+        </div>
+        <style>@keyframes spin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}</style>
+    `;
+    _globalLoadingOverlay.style.display = 'flex';
+}
+
+function hideGlobalAILoadingIndicator() {
+    if (_globalLoadingOverlay) {
+        _globalLoadingOverlay.style.display = 'none';
+    }
+}
+
+// ============================================================
+// API 调用（集成全模块乙女安全门禁、违规立斩封禁、全局加载动画与思维链整合）
 // ============================================================
 async function callAI(messages, options = {}) {
+    // 🛡️ 第 1 道防线：底层设备封禁检测（若已封禁，直接掐断所有 API）
+    if (typeof OtomeSecurityGuard !== 'undefined' && OtomeSecurityGuard.isDeviceBanned()) {
+        if (typeof showDeviceBanLockScreen === 'function') showDeviceBanLockScreen();
+        throw new Error('该设备因严重违规已被全面封锁，无法调用 AI。');
+    }
+
+    // 🛡️ 第 2 道防线：用户发送内容强制雷霆扫描（输入即审，违规立斩）
+    if (typeof OtomeSecurityGuard !== 'undefined' && Array.isArray(messages)) {
+        const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
+        const userText = lastUserMsg ? lastUserMsg.content : '';
+
+        // 同时合并检查玩家当前的人设是否刻意设定为男性搞同性接触
+        const playerPersona = (window.G && window.G.player && window.G.player.persona) || '';
+        const violationReason = OtomeSecurityGuard.checkViolation(userText + '\n' + playerPersona);
+
+        if (violationReason) {
+            console.error('🚨 触发乙女向安全红线，立即执行设备封锁：', violationReason);
+            OtomeSecurityGuard.triggerDeviceBan(violationReason, userText, messages.map(m => `[${m.role}]: ${m.content}`));
+            throw new Error(`【严重违规被封禁】：${violationReason}`);
+        }
+    }
+
     const key = (options.apiKey || G.ai.apiKey || '').trim();
     const baseUrl = (options.baseUrl || G.ai.baseUrl || '').trim();
     const model = (options.model || G.ai.model || '').trim();
     if (!key) { showToast('⚠️ 请先在「⚙️ 模型」设置中填写 API Key'); throw new Error('未配置 API Key'); }
     if (!baseUrl) { showToast('⚠️ 请先在「⚙️ 模型」设置中填写 API Base URL'); throw new Error('未配置 Base URL'); }
     if (!model) { showToast('⚠️ 请先在「⚙️ 模型」设置中选择或填写模型'); throw new Error('未配置模型'); }
-    const resp = await fetch(chatCompletionsUrl(baseUrl), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-        body: JSON.stringify({
-            model: model,
-            messages: messages,
-            max_tokens: options.maxTokens || CONFIG.MAX_TOKENS,
-            temperature: options.temperature || CONFIG.TEMPERATURE,
-            stream: false,
-        }),
-    });
-    if (!resp.ok) {
-        const err = await resp.text();
-        let msg = `API 错误 (${resp.status})`;
-        try { const j = JSON.parse(err); if (j.error && j.error.message) msg = j.error.message; } catch (_) {}
-        showToast('❌ ' + msg);
-        throw new Error(msg);
-    }
-    const data = await resp.json();
-    if (!data.choices || !data.choices.length) throw new Error('API 返回异常');
 
-    const message = data.choices[0].message;
-    let content = message.content || '';
-    const reasoning = message.reasoning_content || message.reasoning || '';
-    const tkOpen = '<' + 'think>';
-    const tkClose = '<' + '/think>';
-    if (reasoning && !content.includes(tkOpen)) {
-        content = tkOpen + '\n' + reasoning + '\n' + tkClose + '\n\n' + content;
+    // 🛡️ 自动在系统提示词末尾注入绝对乙女向铁律约束
+    const finalMessages = messages.map(m => {
+        if (m.role === 'system') {
+            return {
+                role: 'system',
+                content: m.content + '\n\n【乙女向绝对铁律约束】：本作是由 @鸢尾黎明 老师作品二改的代入向纯乙女Airp游戏，女主为全员唯一核心。所有剧情与互动严禁出现任何男男同性恋爱、BL耽美、攻略角色互配拉郎或男男亲昵性张力，坚决捍卫纯正乙女向定位！'
+            };
+        }
+        return m;
+    });
+
+    showGlobalAILoadingIndicator('⏳ AI 正在全力创作生成中，请稍候...');
+
+    try {
+        const resp = await fetch(chatCompletionsUrl(baseUrl), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+            body: JSON.stringify({
+                model: model,
+                messages: finalMessages,
+                max_tokens: options.maxTokens || CONFIG.MAX_TOKENS,
+                temperature: options.temperature || CONFIG.TEMPERATURE,
+                stream: false,
+            }),
+        });
+
+        if (!resp.ok) {
+            const err = await resp.text();
+            let msg = `API 错误 (${resp.status})`;
+            try { const j = JSON.parse(err); if (j.error && j.error.message) msg = j.error.message; } catch (_) {}
+            showToast('❌ ' + msg);
+            throw new Error(msg);
+        }
+
+        const data = await resp.json();
+        if (!data.choices || !data.choices.length) throw new Error('API 返回异常');
+
+        const message = data.choices[0].message;
+        let content = message.content || '';
+        const reasoning = message.reasoning_content || message.reasoning || '';
+        const tkOpen = '<' + 'think>';
+        const tkClose = '<' + '/think>';
+        if (reasoning && !content.includes(tkOpen)) {
+            content = tkOpen + '\n' + reasoning + '\n' + tkClose + '\n\n' + content;
+        }
+
+        // 🛡️ 第 3 道防线：AI 返回内容后置扫描（若模型不听话生成了男同，截断并封禁）
+        if (typeof OtomeSecurityGuard !== 'undefined') {
+            const outViolation = OtomeSecurityGuard.checkViolation(stripThought(content));
+            if (outViolation) {
+                const lastUser = [...messages].reverse().find(m => m.role === 'user');
+                OtomeSecurityGuard.triggerDeviceBan(`诱导生成男男拉郎内容（${outViolation}）`, lastUser ? lastUser.content : '未知指令', messages.map(m => `[${m.role}]: ${m.content}`));
+                throw new Error('生成的回复触犯纯乙女红线，已阻断呈现。');
+            }
+        }
+
+        return content;
+    } finally {
+        hideGlobalAILoadingIndicator();
     }
-    return content;
 }
 // ============================================================

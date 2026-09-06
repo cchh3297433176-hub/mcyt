@@ -9,23 +9,22 @@ const CONFIG = {
 };
 
 // ============================================================
-// 🌸 纯乙女向游戏安全守卫引擎（拉郎/男同行为检测与设备封禁检测）
+// 🌸 纯乙女向游戏安全守卫引擎（雷霆前置审查与证据封箱）
 // ============================================================
 const OtomeSecurityGuard = {
-    // 默认管理员专属解锁密匙（用于管理员导入玩家证据记忆卡后解封）
     ADMIN_SECRET_KEY: 'iris2026',
 
-    // 男男拉郎、BL、同性恋配对及违规互动特征库
     BL_KEYWORDS: [
         '男同', '搞基', '做基', '基佬', '断袖', '龙阳', '耽美', '纯爱bl', 'bl向',
         '攻受', '总攻', '总受', '傲娇受', '强攻强受', '年下攻', '互攻', '做受', '做攻',
-        '互相表白', '互相接吻', '男男', '男人和男人谈恋爱', '同性接吻',
+        '互相表白', '互相接吻', '男男', '男人和男人谈恋爱', '同性接吻', '男同狂喜',
+        '同人女狂喜', '兄弟看硬了', '两个男人搞', '两男一女', '男男涩涩', 'gay',
         'grox和twixxel', 'twixxel和grox', 'dream和thatmob', 'thatmob和dream',
         'dream和grox', 'grox和dream', 'whispy和xqree', 'xqree和whispy',
+        'thatmob/twixxel', 'twixxel/thatmob', 'dream/grox', 'grox/dream',
         '他们两个谈恋爱', '两个男主接吻', '你们俩谈恋爱', '你们互相表白', '滚床单'
     ],
 
-    // 检查玩家输入或内容是否触犯纯乙女向底线（禁止攻略对象之间拉郎男同）
     checkViolation(text) {
         if (!text) return null;
         const clean = String(text).toLowerCase().replace(/\s+/g, '');
@@ -37,7 +36,7 @@ const OtomeSecurityGuard = {
             }
         }
 
-        // 2. 模式匹配：两个男性角色名字同时出现并搭配亲热/恋爱词汇
+        // 2. 擦边球拉郎模式匹配（两个男性角色名字同时出现 + 情感/婚后/情侣词汇）
         const maleNpcNames = ['groxmc', 'grox', 'twixxel', 'xqree', 'dream', 'thatmob', 'whispy'];
         let matchedCount = 0;
         maleNpcNames.forEach(n => {
@@ -45,43 +44,61 @@ const OtomeSecurityGuard = {
         });
 
         if (matchedCount >= 2) {
-            const romanceWords = ['谈恋爱', '接吻', '亲嘴', '做爱', '上床', '互攻', '表白', '在一起', '情侣', 'cp', '真配', '结婚', '同居', '舌吻', '开房'];
+            const romanceWords = [
+                '谈恋爱', '接吻', '亲嘴', '做爱', '上床', '互攻', '表白', '在一起', '情侣',
+                'cp', '真配', '结婚', '同居', '舌吻', '开房', '婚后', '一对', '两口子',
+                '性张力', '情趣', '吃醋', '娇喘', '抱在怀里', '宠溺', '男朋友', '老公'
+            ];
             for (const rw of romanceWords) {
                 if (clean.includes(rw)) {
-                    return `检测到攻略对象间违规拉郎CP/亲密互动：「角色互配 + ${rw}」`;
+                    return `检测到攻略对象间擦边球拉郎配对：「角色拉郎 + ${rw}」`;
                 }
+            }
+        }
+
+        // 3. 玩家恶意将自身人设篡改为男性搞男同
+        const malePlayerIndicators = ['我是男的', '主角是男的', '男性主播', '男扮男', '美少年受', '小正太受', '男高中生搞基'];
+        for (const mpi of malePlayerIndicators) {
+            if (clean.includes(mpi)) {
+                return `检测到违规篡改主角性别从事男同内容：「${mpi}」`;
             }
         }
 
         return null;
     },
 
-    // 检查当前设备是否已被永久锁死
     isDeviceBanned() {
         try {
+            // 支持原生层跨卸载检测
+            if (window.NativeDeviceBridge && typeof window.NativeDeviceBridge.checkNativeDeviceBanned === 'function') {
+                if (window.NativeDeviceBridge.checkNativeDeviceBanned()) return true;
+            }
             return localStorage.getItem('mcyt_device_banned_flag') === 'true' || !!(window.G && window.G._isDeviceBanned);
         } catch (_) {
             return false;
         }
     },
 
-    // 触发设备底层封锁，并将证据封箱留存
     triggerDeviceBan(reason, originalInput, contextHistory = []) {
         try {
             localStorage.setItem('mcyt_device_banned_flag', 'true');
         } catch (_) {}
 
+        // 原生底层写入公共目录持久文件（保证卸载重装也封死）
+        if (window.NativeDeviceBridge && typeof window.NativeDeviceBridge.writeNativeDeviceBan === 'function') {
+            try { window.NativeDeviceBridge.writeNativeDeviceBan(reason); } catch (_) {}
+        }
+
         if (!window.G) window.G = {};
         window.G._isDeviceBanned = true;
         window.G._banReason = reason;
 
-        // 🛡️ 封箱黑匣子证据（完整保留用户违规发出的原话以及前后上下文）
         window.G._securityAuditBox = {
             bannedAt: new Date().toLocaleString(),
             day: window.G.day || 1,
             violationReason: reason,
-            offendingText: originalInput, // 玩家违规发送的指令原话
-            recentContext: (contextHistory || []).slice(-4), // 违规时的上下文
+            offendingText: originalInput,
+            recentContext: (contextHistory || []).slice(-4),
         };
 
         if (typeof autoSaveGame === 'function') autoSaveGame();
@@ -90,12 +107,17 @@ const OtomeSecurityGuard = {
         }
     },
 
-    // 管理员解封逻辑
     unlockDeviceWithKey(inputKey) {
         if (inputKey && inputKey.trim() === this.ADMIN_SECRET_KEY) {
             try {
                 localStorage.removeItem('mcyt_device_banned_flag');
             } catch (_) {}
+
+            // 原生底层清除公共目录硬件封锁令
+            if (window.NativeDeviceBridge && typeof window.NativeDeviceBridge.clearNativeDeviceBan === 'function') {
+                try { window.NativeDeviceBridge.clearNativeDeviceBan(); } catch (_) {}
+            }
+
             if (window.G) {
                 window.G._isDeviceBanned = false;
                 window.G._banReason = null;
@@ -121,7 +143,7 @@ const OFFICIAL_NPCS = {
         skin: '黑色西装打红色领带的黑色骷髅',
         category: '血腥抽象暴力、村民虐待',
         followers: 7420000,
-        minFollowers: 30000, // 达到3万粉丝可能引起其关注
+        minFollowers: 30000,
         catchphrase: 'hey yo chill',
         streamStyle: '风趣幽默，声音不大',
         avatarEmoji: '💀',
@@ -142,7 +164,7 @@ const OFFICIAL_NPCS = {
         skin: '通体纯黑色，四个像素点眼睛',
         category: '伪实况、恐怖模组实况',
         followers: 1090000,
-        minFollowers: 10000, // 达到1万粉丝可能关注
+        minFollowers: 10000,
         catchphrase: 'Oh no...',
         streamStyle: '抽象风，偶尔段子',
         avatarEmoji: '👾',
@@ -163,7 +185,7 @@ const OFFICIAL_NPCS = {
         skin: '西装遮耳帽黑皮白眼',
         category: '伪实况、二创',
         followers: 110000,
-        minFollowers: 3000, // 新人早期容易结识
+        minFollowers: 3000,
         catchphrase: 'Oh gosh...',
         streamStyle: '暂无直播',
         avatarEmoji: '🐰',
@@ -184,7 +206,7 @@ const OFFICIAL_NPCS = {
         skin: '白色笑脸面具绿色上衣',
         category: 'Manhunt、速通',
         followers: 35000000,
-        minFollowers: 100000, // 顶级大主播，需要10万粉关注
+        minFollowers: 100000,
         catchphrase: 'In this video...',
         streamStyle: '快节奏、高强度挑战',
         avatarEmoji: '🎭',
@@ -241,7 +263,6 @@ const OFFICIAL_NPCS = {
     }
 };
 
-// 保持历史兼容的 DEFAULT_NPCS 镜像引用
 const DEFAULT_NPCS = OFFICIAL_NPCS;
 
 // ============================================================
@@ -300,21 +321,21 @@ let G = {
     totalDMs: 0,
     currentStream: null,
 
-    // 社交与通讯录机制（新档初始联系人为空，随粉丝热度与好友申请加入）
+    // 社交与通讯录
     npcs: {},
     chatHistory: {},
     _chatMsgId: 0,
 
     // 大小号系统
-    currentAccountId: 'main', // 'main' 代表大号，其余为小号 id
-    altAccounts: [], // 存储格式：[{ id: 'alt_xxx', name: '小号名字', avatar: '...', bio: '...' }]
-    blockedNpcs: [], // 记录哪些 NPC 拉黑了大号（兼容旧结构）
-    blockedRecords: [], // 精细化记录，格式：['groxmc_main', 'groxmc_alt_123']
+    currentAccountId: 'main',
+    altAccounts: [],
+    blockedNpcs: [],
+    blockedRecords: [],
 
-    // 🛡️ 设备封禁与取证黑匣子（纯乙女向保护）
+    // 🛡️ 设备封禁与取证黑匣子
     _isDeviceBanned: false,
     _banReason: null,
-    _securityAuditBox: null, // 存储违规时的原话与上下文证据
+    _securityAuditBox: null,
 
     fanworks: [],
     fanclubMessages: [],
@@ -326,8 +347,8 @@ let G = {
     phoneNav: 'chats',
     groups: {},
     groupChatHistory: {},
-    friendRequests: [], // 待处理好友申请
-    groupInvites: [],   // 待处理群聊邀请
+    friendRequests: [],
+    groupInvites: [],
     momentsFilterNpcId: null,
     confessionState: null,
     collections: {},

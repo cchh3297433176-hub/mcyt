@@ -209,7 +209,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // 📢 双页滑动公告系统（主公告 + 更新优化与新功能）
 // ============================================================
 function checkAndShowVersionNoticeModal(forceOpen = false) {
-    const ver = window.CURRENT_APP_VERSION || '1.503';
+    const ver = window.CURRENT_APP_VERSION || '1.504';
     const dismissedVersion = localStorage.getItem('mcyt_dismissed_notice_ver');
 
     if (forceOpen || dismissedVersion !== ver) {

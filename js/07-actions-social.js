@@ -1,11 +1,10 @@
 // js/07-actions-social.js
-// 行动处理与外部社区（AO3 同人中心 & YouTube 油管中心）
+// 行动处理与外部社区（AO3 同人中心 & YouTube 油管中心 - 纯乙女防线版）
 // ============================================================
 async function performAction(action, detail = '', useSearch = false) {
     if (G.isGenerating) { showToast('⏳ 正在生成剧情...'); return; }
     if (action === 'next') { advanceDayFree(); return; }
 
-    // 聊天、同人浏览器、油管中心均属于手机独立 App，0消耗行动点，不推进时段！
     if (action === 'chat' || action === 'dm' || action === 'friend' || action === 'fanclub') {
         switchTab('social');
         return;
@@ -196,7 +195,7 @@ function buildAo3HomeHTML() {
         worksListHtml = `
         <div style="text-align:center;padding:50px 20px;color:#888;">
             <div style="font-size:32px;margin-bottom:8px;">📖</div>
-            <div style="font-weight:700;font-size:14px;">当前收藏夹空空如也</div>
+            <div style="font-weight:700;font-size:14px;">当前书架空空如也</div>
             <div style="font-size:12px;margin-top:4px;">长按或点击右侧管理即可编辑/删除已有书籍。点击右上角 ➕ 开坑新书吧！</div>
             <button class="btn-primary" onclick="triggerFanCreationPrompt()" style="margin-top:14px;max-width:200px;display:inline-block;padding:8px 16px;font-size:13px;">🎲 随机生成粉丝同人文</button>
         </div>
@@ -252,7 +251,7 @@ function buildAo3HomeHTML() {
             </div>
         </div>
         <div style="font-size:11px;color:#888;padding:5px 12px;background:#fff8ee;border-bottom:1px dashed #e8d8c8;">
-            💡 提示：长按书籍卡片或点击「⚙️管理」可编辑小说人设、更换封面或删除书籍。
+            💡 提示：纯乙女向游戏严禁在攻略对象之间搞拉郎男同配对；长按可编辑或删除违规作品。
         </div>
         <div class="ao3-work-list">
             ${worksListHtml}
@@ -619,6 +618,16 @@ function openEditBookSettingsModal(workId) {
 
         if (!t) { showToast('⚠️ 标题不能为空', 'error'); return; }
 
+        // 🛡️ 编辑修改时同样执行严苛的乙女安全拦截
+        if (typeof OtomeSecurityGuard !== 'undefined') {
+            const vReason = OtomeSecurityGuard.checkViolation(t + '\n' + p + '\n' + tagStr + '\n' + s);
+            if (vReason) {
+                closeModal();
+                OtomeSecurityGuard.triggerDeviceBan(vReason, `[AO3修改书籍] ${t} | CP: ${p} | 简介: ${s}`);
+                return;
+            }
+        }
+
         work.title = t;
         work.pairing = p;
         work.tags = tagStr ? tagStr.split(/[,，\s]+/).filter(Boolean) : [];
@@ -637,7 +646,7 @@ async function triggerFanCreationPrompt() {
     if (G.isGenerating) { showToast('⏳ 正在生成中，请稍候'); return; }
     openModal(`
         <h3>🎲 粉丝同人创作</h3>
-        <p style="font-size:12px;color:#666;">粉丝们正在 AO3 上为你创作同人小说，可指定灵感关键词或任由粉丝放飞：</p>
+        <p style="font-size:12px;color:#666;">粉丝们正在 AO3 上为你创作同人小说（纯乙女向）：</p>
         <div class="form-group">
             <textarea id="fanPromptDetail" rows="2" placeholder="可选：例如「与 Dream 联机迷路」、「红石实验室大爆炸」、「和 Twixxel 一起露营」..."></textarea>
         </div>
@@ -672,11 +681,11 @@ function openCreateCustomBookModal() {
         </div>
         <div class="form-group">
             <label>涉及 CP / 角色关系</label>
-            <input type="text" id="newBookPairing" placeholder="如：${G.player.ytName} & Dream / 友情向">
+            <input type="text" id="newBookPairing" placeholder="如：${G.player.ytName} & Dream（严禁攻略对象之间互配）">
         </div>
         <div class="form-group">
             <label>标签 Tags（用逗号隔开）</label>
-            <input type="text" id="newBookTags" placeholder="如：冒险, 生存, 强强, 互损日常">
+            <input type="text" id="newBookTags" placeholder="如：冒险, 生存, 团宠, 甜宠日常">
         </div>
         <div class="form-group">
             <label>封面设置（本地相册上传 / Emoji）</label>
@@ -722,6 +731,16 @@ function openCreateCustomBookModal() {
         if (!title) { showToast('⚠️ 请输入书籍名称', 'error'); return; }
         if (!summary) { showToast('⚠️ 请填写简介作为生成线索', 'error'); return; }
 
+        // 🛡️ 开坑雷霆前置审查：如果发现男男拉郎，绝不调用大模型，直接触发封禁！
+        if (typeof OtomeSecurityGuard !== 'undefined') {
+            const vReason = OtomeSecurityGuard.checkViolation(title + '\n' + pairing + '\n' + tagsRaw + '\n' + summary);
+            if (vReason) {
+                closeModal();
+                OtomeSecurityGuard.triggerDeviceBan(vReason, `[AO3开坑] 书名: ${title} | CP: ${pairing} | 简介: ${summary}`);
+                return;
+            }
+        }
+
         const tags = tagsRaw ? tagsRaw.split(/[,，\s]+/).filter(Boolean) : ['原创同人'];
         closeModal();
 
@@ -740,7 +759,6 @@ function openCreateCustomBookModal() {
 async function generateNewBookFromAI(params = {}) {
     if (G.isGenerating) { showToast('⏳ 正在生成中，请稍候'); return; }
     G.isGenerating = true;
-    showLoading();
 
     try {
         const p = G.player;
@@ -752,7 +770,7 @@ async function generateNewBookFromAI(params = {}) {
         if (isAuthorMe) {
             accountIdentityPrompt = `【重大背景】：本文是由著名 MC 主播「${p.ytName}」本人亲自以大号在 AO3 上实名开坑创作的！文章风格或字里行间带有正主主播的真实视角和生活痕迹。`;
         } else {
-            accountIdentityPrompt = `【作者背景】：作者笔名为「${authorName}」，表面上是一名同人作者，但其实是主播「${p.ytName}」披着的小号。文风极其贴切，偶尔会流露出只有主播才知道的独门红石/探险习惯细节。`;
+            accountIdentityPrompt = `【作者背景】：作者笔名为「${authorName}」，表面上是一名同人作者，但其实是主播「${p.ytName}」披着的小号。文风极其贴切。`;
         }
 
         let promptGuide = '';
@@ -791,8 +809,6 @@ async function generateNewBookFromAI(params = {}) {
             { role: 'system', content: sysPrompt },
             { role: 'user', content: '请创作新书第1章。' }
         ], { maxTokens: 10000, temperature: 0.95 });
-
-        hideLoading();
 
         const grab = (tag) => { const m = raw.match(new RegExp(`\\[${tag}\\]([\\s\\S]*?)\\[/${tag}\\]`)); return m ? m[1].trim() : ''; };
         const title = params.customTitle || grab('TITLE') || 'MC世界奇幻之旅';
@@ -838,8 +854,7 @@ async function generateNewBookFromAI(params = {}) {
         openAo3Reader(workId);
 
     } catch (e) {
-        hideLoading();
-        showToast('❌ 同人作品生成失败，请检查网络或配置', 'error');
+        showToast('❌ 同人作品生成失败：' + e.message, 'error');
     } finally {
         G.isGenerating = false;
         updateUI();
@@ -852,7 +867,6 @@ async function urgeContinueBookChapter(workId) {
     if (G.isGenerating) { showToast('⏳ 正在生成中，请稍候'); return; }
 
     G.isGenerating = true;
-    showLoading();
 
     try {
         const nextChapterNum = work.chapters.length + 1;
@@ -873,8 +887,6 @@ async function urgeContinueBookChapter(workId) {
             { role: 'system', content: sysPrompt },
             { role: 'user', content: `请续写第 ${nextChapterNum} 章。` }
         ], { maxTokens: 10000, temperature: 0.95 });
-
-        hideLoading();
 
         const grab = (tag) => { const m = raw.match(new RegExp(`\\[${tag}\\]([\\s\\S]*?)\\[/${tag}\\]`)); return m ? m[1].trim() : ''; };
         const chTitle = grab('CHAPTER_TITLE') || `第 ${nextChapterNum} 章`;
@@ -897,8 +909,7 @@ async function urgeContinueBookChapter(workId) {
         renderBrowserPanel();
 
     } catch (e) {
-        hideLoading();
-        showToast('❌ 催更续写失败，请稍后重试', 'error');
+        showToast('❌ 催更续写失败：' + e.message, 'error');
     } finally {
         G.isGenerating = false;
         updateUI();
@@ -911,7 +922,6 @@ async function generateAo3ReviewsByAI(workId) {
     if (G.isGenerating) { showToast('⏳ 正在生成中，请稍候'); return; }
 
     G.isGenerating = true;
-    showLoading();
 
     try {
         const p = G.player;
@@ -930,8 +940,8 @@ async function generateAo3ReviewsByAI(workId) {
             accountReactionsPrompt = `
             【注意重点】：作者名叫「${work.author}」（其实是主播 ${p.ytName} 披的小号）。
             读者评论可以包括：
-            1. 普通读者的疯狂夸奖与对 CP 的沉浸式嗑糖。
-            2. 随机出现 1 位眼尖显微镜读者留言：“等一下……为什么文中这个探险走位习惯和说话口癖，跟主播 ${p.ytName} 昨晚直播里一模一样？作者你老实交代是不是皮下本体？！”产生掉马怀疑。
+            1. 普通读者的夸赞与沉浸式讨论。
+            2. 随机出现 1 位读者怀疑是不是正主主播开的小号。
             `;
         }
 
@@ -939,7 +949,7 @@ async function generateAo3ReviewsByAI(workId) {
         const sysPrompt = `
         你正在模拟 AO3 网站《${work.title}》（CP: ${work.pairing || '无'}）评论区下的真实读者书评。
         ${accountReactionsPrompt}
-        请生成 3 至 4 条读者长短不一的真实评论。表情只能使用标准 Emoji（如 😭、🔥、❤️、🤣 等）。
+        请生成 3 至 4 条读者长短不一的真实评论。表情只能使用标准 Emoji。
         格式要求（每行一条）：
         [REVIEW name=读者昵称]评论正文内容[/REVIEW]
         `;
@@ -948,8 +958,6 @@ async function generateAo3ReviewsByAI(workId) {
             { role: 'system', content: sysPrompt },
             { role: 'user', content: `读者阅读完章节「${currentCh.title}」后的最新书评：` }
         ], { maxTokens: 800, temperature: 0.95 });
-
-        hideLoading();
 
         if (!work.reviews) work.reviews = [];
         const re = /\[REVIEW\s+name=([^\]]+?)\]([\s\S]*?)(?:\[\/REVIEW\]|$)/gi;
@@ -986,8 +994,7 @@ async function generateAo3ReviewsByAI(workId) {
         autoSaveGame();
 
     } catch (e) {
-        hideLoading();
-        showToast('❌ 评论生成失败', 'error');
+        showToast('❌ 评论生成失败：' + e.message, 'error');
     } finally {
         G.isGenerating = false;
     }
@@ -1010,6 +1017,15 @@ function openAo3WriteCommentModal(workId) {
     document.getElementById('confirmPostAo3Comment').onclick = () => {
         const text = document.getElementById('myAo3CommentInput').value.trim();
         if (!text) { showToast('⚠️ 评论内容不能为空', 'error'); return; }
+
+        if (typeof OtomeSecurityGuard !== 'undefined') {
+            const vReason = OtomeSecurityGuard.checkViolation(text);
+            if (vReason) {
+                closeModal();
+                OtomeSecurityGuard.triggerDeviceBan(vReason, `[AO3发表评论] ${text}`);
+                return;
+            }
+        }
 
         const work = (G.fanworks || []).find(w => w._id === workId);
         if (work) {
@@ -1053,6 +1069,15 @@ function openAo3ReplyModal(workId, reviewIdx) {
         const text = document.getElementById('myAo3ReplyInput').value.trim();
         if (!text) { showToast('⚠️ 回复内容不能为空', 'error'); return; }
 
+        if (typeof OtomeSecurityGuard !== 'undefined') {
+            const vReason = OtomeSecurityGuard.checkViolation(text);
+            if (vReason) {
+                closeModal();
+                OtomeSecurityGuard.triggerDeviceBan(vReason, `[AO3回复读者] ${text}`);
+                return;
+            }
+        }
+
         if (!targetRev.replies) targetRev.replies = [];
         targetRev.replies.push({
             author: currentAo3Name,
@@ -1069,7 +1094,7 @@ function openAo3ReplyModal(workId, reviewIdx) {
 }
 
 // ============================================================
-// 真实的 MC 游戏圈网友昵称生成池（中英文地道网友）
+// 真实的 MC 游戏圈网友昵称生成池
 // ============================================================
 function getRandomRealisticNetName() {
     const realisticNames = [
@@ -1637,6 +1662,15 @@ function openCreateCustomChannelModal() {
         if (!name) { showToast('⚠️ 频道名称不能为空', 'error'); return; }
         if (!promptText) { showToast('⚠️ 请填写频道内容设定', 'error'); return; }
 
+        if (typeof OtomeSecurityGuard !== 'undefined') {
+            const vReason = OtomeSecurityGuard.checkViolation(name + '\n' + promptText);
+            if (vReason) {
+                closeModal();
+                OtomeSecurityGuard.triggerDeviceBan(vReason, `[创建油管分区] ${name} | ${promptText}`);
+                return;
+            }
+        }
+
         const newId = 'ch_' + Date.now();
         if (!G.ytCustomChannels) G.ytCustomChannels = [];
         G.ytCustomChannels.push({
@@ -1712,7 +1746,6 @@ function openYtAccountModal() {
 async function refreshYtExternalFeedByAI() {
     if (G.isGenerating) { showToast('⏳ 正在搜索刷新中...'); return; }
     G.isGenerating = true;
-    showLoading();
 
     try {
         const activeChId = G.ytState.activeChannelId || 'all';
@@ -1752,8 +1785,6 @@ async function refreshYtExternalFeedByAI() {
             { role: 'system', content: sysPrompt },
             { role: 'user', content: '请刷新3条热门推荐视频。' }
         ], { maxTokens: 900, temperature: 0.95 });
-
-        hideLoading();
 
         const newCards = [];
         const blocks = raw.split('[VIDEO]').slice(1);
@@ -1795,8 +1826,7 @@ async function refreshYtExternalFeedByAI() {
         }
 
     } catch (e) {
-        hideLoading();
-        showToast('❌ 视频刷新失败，请稍后重试', 'error');
+        showToast('❌ 视频刷新失败：' + e.message, 'error');
     } finally {
         G.isGenerating = false;
     }
@@ -1884,6 +1914,15 @@ function openPublishVideoModal() {
         if (!title) { showToast('⚠️ 标题不能为空', 'error'); return; }
         if (!summary) { showToast('⚠️ 视频简介剧情不能为空', 'error'); return; }
 
+        if (typeof OtomeSecurityGuard !== 'undefined') {
+            const vReason = OtomeSecurityGuard.checkViolation(title + '\n' + coverDesc + '\n' + summary);
+            if (vReason) {
+                closeModal();
+                OtomeSecurityGuard.triggerDeviceBan(vReason, `[发布油管视频] 标题: ${title} | 简介: ${summary}`);
+                return;
+            }
+        }
+
         closeModal();
 
         const videoObj = {
@@ -1926,14 +1965,13 @@ async function generateMoreYtCommentsByAI(videoId) {
     if (G.isGenerating) { showToast('⏳ 正在生成评论...'); return; }
 
     G.isGenerating = true;
-    showLoading();
 
     try {
         const sysPrompt = `
 你正在模拟 YouTube 游戏视频《${video.title}》（作者：${video.author}）下方的海外及本土真实观众评论区。
 【核心要求】：
 1. 构思 4 到 6 位生动的网友，名字必须像真实的 YouTube/Minecraft 活跃玩家（例如：末影猫猫、DreamWasTakenFan、Redstone_Pro、吃瓜第一线烤肉人、PixelKnight99 等真实网名），严禁使用 YouTuber_数字 或系统编号！
-2. 表情只允许使用标准 Emoji（如 😂、🔥、👏、💀、😱、❤️ 等），严禁任何未闭合字符颜文字。
+2. 表情只允许使用标准 Emoji，严禁任何未闭合字符颜文字。
 3. 严格遵循以下输出格式（每行一条）：
 [COMMENT user=网友昵称]评论正文[/COMMENT]
 4. 绝对不要在正文里包含“user=”或者角色前缀！
@@ -1943,8 +1981,6 @@ async function generateMoreYtCommentsByAI(videoId) {
             { role: 'system', content: sysPrompt },
             { role: 'user', content: '请生成4~6条生动真实的油管网友评论。' }
         ], { maxTokens: 900, temperature: 0.95 });
-
-        hideLoading();
 
         if (!video.comments) video.comments = [];
         
@@ -1998,9 +2034,8 @@ async function generateMoreYtCommentsByAI(videoId) {
         autoSaveGame();
 
     } catch (e) {
-        hideLoading();
         console.error('评论生成失败', e);
-        showToast('❌ 评论生成失败，请检查网络', 'error');
+        showToast('❌ 评论生成失败：' + e.message, 'error');
     } finally {
         G.isGenerating = false;
     }
@@ -2025,6 +2060,15 @@ function openYtWriteCommentModal(videoId) {
     document.getElementById('confirmPostYtComment').onclick = () => {
         const text = document.getElementById('myYtCommentInput').value.trim();
         if (!text) { showToast('⚠️ 评论内容不能为空', 'error'); return; }
+
+        if (typeof OtomeSecurityGuard !== 'undefined') {
+            const vReason = OtomeSecurityGuard.checkViolation(text);
+            if (vReason) {
+                closeModal();
+                OtomeSecurityGuard.triggerDeviceBan(vReason, `[油管评论留言] ${text}`);
+                return;
+            }
+        }
 
         let video = (G.ytExternalVideos || []).find(v => v._id === videoId);
         if (!video) {
@@ -2100,6 +2144,15 @@ function openYtReplyCommentModal(videoId, commentIdx) {
     document.getElementById('confirmPostYtReply').onclick = async () => {
         const replyText = document.getElementById('myYtReplyInput').value.trim();
         if (!replyText) { showToast('⚠️ 回复内容不能为空', 'error'); return; }
+
+        if (typeof OtomeSecurityGuard !== 'undefined') {
+            const vReason = OtomeSecurityGuard.checkViolation(replyText);
+            if (vReason) {
+                closeModal();
+                OtomeSecurityGuard.triggerDeviceBan(vReason, `[油管回复他人] ${replyText}`);
+                return;
+            }
+        }
 
         if (!targetComment.replies) targetComment.replies = [];
         targetComment.replies.push({
