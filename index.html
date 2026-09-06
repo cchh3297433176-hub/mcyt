@@ -1,3 +1,4 @@
+<!-- index.html -->
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -198,27 +199,35 @@
     <script src="js/08-save-load.js"></script>
     <script src="js/09-events-init.js"></script>
 
-    <!-- 🚀 安全的视图启动器 -->
+    <!-- 🚀 安全的视图启动器（支持封禁态拦截与杀后台无缝自动续玩） -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             setTimeout(function() {
                 try {
-                    var hasSave = !!localStorage.getItem('mcyt_autosave');
-                    var isPlaying = (typeof window.G !== 'undefined' && window.G && window.G.phase === 'playing');
-                    var setup = document.getElementById('setupPage');
-                    var game = document.getElementById('gamePage');
-                    
-                    if (hasSave || isPlaying) {
-                        if(setup) { setup.classList.remove('active'); setup.style.display = 'none'; }
-                        if(game) { game.style.display = 'flex'; }
+                    // 1. 优先封锁拦截
+                    if (typeof OtomeSecurityGuard !== 'undefined' && OtomeSecurityGuard.isDeviceBanned()) {
+                        if (typeof showDeviceBanLockScreen === 'function') {
+                            showDeviceBanLockScreen();
+                            return;
+                        }
+                    }
+
+                    // 2. 杀后台重进智能自启续玩：存在有效进度时，无缝恢复游戏界面
+                    var autoInfo = (typeof getAutoSaveInfo === 'function') ? getAutoSaveInfo() : null;
+                    var hasValidSave = !!(autoInfo && autoInfo.data && (autoInfo.data.player || autoInfo.data.npcs));
+
+                    if (hasValidSave && typeof resumeAutoSave === 'function') {
+                        resumeAutoSave();
                     } else {
-                        if(setup) { setup.classList.add('active'); setup.style.display = 'block'; }
-                        if(game) { game.style.display = 'none'; }
+                        var setup = document.getElementById('setupPage');
+                        var game = document.getElementById('gamePage');
+                        if (setup) { setup.classList.add('active'); setup.style.display = 'block'; }
+                        if (game) { game.classList.remove('active'); game.style.display = 'none'; }
                     }
                 } catch(e) {
                     console.warn('视图启动器遇到异常:', e);
                 }
-            }, 100);
+            }, 120);
         });
     </script>
 </body>
