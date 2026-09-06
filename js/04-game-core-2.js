@@ -1,5 +1,5 @@
 // js/04-game-core-2.js
-// 成就系统、商店、数据面板、手机社交(含微信式多条连发、好感度增长、粉丝热度好友申请、拉黑与大小号系统)
+// 成就系统、商店、数据面板、手机社交(微信式连发、好感度、长按撤回/编辑/删除、拉黑大小号)
 // ============================================================
 
 // 成就系统
@@ -28,7 +28,6 @@ function unlockAchievement(ach) {
     addMemoir('成就解锁', `${ach.name} (${ach.desc})`);
     showToast(`🏆 解锁成就：${ach.name}！`, 'success', 4000);
     
-    // 统一记忆联动：记录重大成就事件
     addGlobalMemoryRecord(`【成就达成】：主角成功解锁成就「${ach.name}」（${ach.desc}），获得 ${ach.reward} 金币。`);
 
     updateUI();
@@ -609,12 +608,16 @@ function addGlobalMemoryRecord(text) {
 }
 
 function pushChatMessageSafe(npcId, msgObj) {
+    if (!msgObj._id) msgObj._id = 'cmsg_' + Date.now() + '_' + rand(1000, 9999);
+    if (typeof pushChat === 'function') {
+        try {
+            pushChat(npcId, msgObj);
+            return;
+        } catch (_) {}
+    }
     if (!G.chatHistory) G.chatHistory = {};
     if (!G.chatHistory[npcId]) G.chatHistory[npcId] = [];
     G.chatHistory[npcId].push(msgObj);
-    if (typeof pushChat === 'function') {
-        try { pushChat(npcId, msgObj); } catch (_) {}
-    }
 }
 
 // ============================================================
@@ -769,15 +772,13 @@ function checkSocialRequestsTrigger() {
     if (!G.groupInvites) G.groupInvites = [];
     const followers = G.player.followers || 0;
 
-    // 1. 遍历官方主播库，判断是否满足好友申请门槛且未添加、未在申请列表中
     for (const [id, npc] of Object.entries(OFFICIAL_NPCS)) {
-        if (G.npcs[id]) continue; // 已经在通讯录中
+        if (G.npcs[id]) continue;
         const inFreq = G.friendRequests.some(r => r.npcOfficialId === id || r.name === npc.name);
-        if (inFreq) continue; // 已经在好友申请待办池
+        if (inFreq) continue;
 
         const threshold = npc.minFollowers || 5000;
         if (followers >= threshold) {
-            // 热度达标，根据粉丝量比例判定触发
             const chance = followers > threshold * 2 ? 0.8 : 0.45;
             if (Math.random() < chance) {
                 G.friendRequests.push({
@@ -797,7 +798,6 @@ function checkSocialRequestsTrigger() {
         }
     }
 
-    // 2. 粉丝群邀请触发判定
     if (followers >= 5000 && !G.groups['fan_club_1']) {
         const hasInv = G.groupInvites.some(gi => gi.gid === 'fan_club_1');
         if (!hasInv) {
@@ -912,7 +912,6 @@ function renderPhoneApp(container) {
 
     const html = `
     <div class="phone-app-wrap" style="background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.06);height:82vh;max-height:850px;display:flex;flex-direction:column;">
-        <!-- 顶部身份条（显示当前登录大号还是小号，支持快速切号） -->
         <div style="background:#f1f7f1;padding:6px 12px;border-bottom:1px solid #e0ebe0;display:flex;justify-content:space-between;align-items:center;font-size:12px;">
             <div style="display:flex;align-items:center;gap:6px;">
                 <span>${activeAcc.isAlt ? '🎭' : '👑'} 当前账号：<b>${escapeHtml(activeAcc.name)}</b></span>
@@ -1028,7 +1027,7 @@ function buildChatListHTML() {
         </div>
     </div>
     <div style="font-size:11px;color:#888;padding:6px 16px;background:#fcfdfc;border-bottom:1px dashed #eee;">
-        💡 提示：长按联系人或群聊可编辑人设与独立记忆；右上角 ➕ 处理主播好友申请与进群
+        💡 提示：长按消息可撤回、编辑或删除；长按联系人可编辑人设与独立记忆
     </div>
     <div class="chat-list" style="flex:1;overflow-y:auto;padding:8px;">
         ${itemsHtml}
@@ -1117,6 +1116,95 @@ function bindMomentsEvents(container) {
     });
 }
 
+// 💬 聊天长按菜单：撤回、编辑、删除
+function showMessageActionSheet(msgId, targetType, targetId) {
+    const list = targetType === 'single' ? (G.chatHistory[targetId] || []) : (G.groupChatHistory[targetId] || []);
+    const msg = list.find(m => m._id === msgId);
+    if (!msg || msg.from !== 'player') return;
+
+    openModal(`
+        <h3>💬 消息操作</h3>
+        <div style="background:#f4f7f4;padding:8px 12px;border-radius:8px;font-size:13px;color:#333;margin:8px 0 14px;word-break:break-word;">
+            “${escapeHtml(msg.text)}”
+        </div>
+        <div class="btn-row" style="flex-direction:column;gap:8px;">
+            <button class="btn-primary" id="btnActionRecall" style="width:100%;background:#388e3c;">↩️ 撤 回（对方有概率看到）</button>
+            <button class="btn-primary" id="btnActionEdit" style="width:100%;background:#1976d2;">✏️ 编 辑（静默修改发错文字）</button>
+            <button class="btn-secondary" id="btnActionDelete" style="width:100%;color:#c62828;background:#ffebee;border-color:#ffcdd2;">🗑️ 删 除（无痕抹去）</button>
+            <button class="btn-secondary" onclick="closeModal()" style="width:100%;">取消</button>
+        </div>
+    `);
+
+    // 1. 撤回逻辑
+    document.getElementById('btnActionRecall').onclick = () => {
+        closeModal();
+        const origText = msg.text;
+        const isSeenByNpc = Math.random() < 0.5; // 50% 概率正好看见
+
+        msg.from = 'action';
+        msg.text = '你撤回了一条消息';
+        msg._recalled = true;
+        msg._originalText = origText;
+        msg._seenByNpc = isSeenByNpc;
+
+        if (targetType === 'single') {
+            renderSingleChatWindow(document.getElementById('socialTab'));
+        } else {
+            renderGroupChatWindow(document.getElementById('socialTab'));
+        }
+
+        if (isSeenByNpc) {
+            showToast('👀 提示：你撤回了一条消息，但对方好像已经看到了...', 'info', 2500);
+        } else {
+            showToast('↩️ 消息已撤回，对方没有看到', 'success', 2000);
+        }
+        autoSaveGame();
+    };
+
+    // 2. 编辑逻辑
+    document.getElementById('btnActionEdit').onclick = () => {
+        closeModal();
+        openModal(`
+            <h3>✏️ 编辑消息</h3>
+            <p style="font-size:12px;color:#666;">修改已经发送的消息（AI仅会读取编辑后的内容，不会察觉你修改过）：</p>
+            <div class="form-group">
+                <textarea id="editMsgTextInput" rows="3" style="width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;font-size:13px;">${escapeHtml(msg.text)}</textarea>
+            </div>
+            <div class="btn-row">
+                <button class="btn-secondary" onclick="closeModal()">取消</button>
+                <button class="btn-primary" id="confirmSaveEditMsg">💾 保存修改</button>
+            </div>
+        `);
+        document.getElementById('confirmSaveEditMsg').onclick = () => {
+            const newT = document.getElementById('editMsgTextInput').value.trim();
+            if (!newT) { showToast('内容不能为空', 'error'); return; }
+            msg.text = newT;
+            closeModal();
+            if (targetType === 'single') {
+                renderSingleChatWindow(document.getElementById('socialTab'));
+            } else {
+                renderGroupChatWindow(document.getElementById('socialTab'));
+            }
+            showToast('✅ 消息已成功修改', 'success', 1500);
+            autoSaveGame();
+        };
+    };
+
+    // 3. 删除逻辑
+    document.getElementById('btnActionDelete').onclick = () => {
+        closeModal();
+        const idx = list.findIndex(m => m._id === msgId);
+        if (idx !== -1) list.splice(idx, 1);
+        if (targetType === 'single') {
+            renderSingleChatWindow(document.getElementById('socialTab'));
+        } else {
+            renderGroupChatWindow(document.getElementById('socialTab'));
+        }
+        showToast('🗑️ 消息已从历史中抹除', 'info', 1500);
+        autoSaveGame();
+    };
+}
+
 // 💬 聊天加号弹窗：整合拍共创视频、联动直播与旁白
 function openChatActionMenuModal(targetType, targetId) {
     const isGroup = targetType === 'group';
@@ -1165,7 +1253,7 @@ function openInsertNarrativeModal(targetType, targetId) {
     document.getElementById('confirmInsertAction').onclick = () => {
         const act = document.getElementById('actionNarrativeInput').value.trim();
         if (!act) return;
-        const msgObj = { from: 'action', text: `* ${act} *`, time: new Date().toLocaleTimeString().slice(0, 5) };
+        const msgObj = { _id: 'act_' + Date.now(), from: 'action', text: `* ${act} *`, time: new Date().toLocaleTimeString().slice(0, 5) };
         if (targetType === 'single') {
             pushChatMessageSafe(targetId, msgObj);
             renderSingleChatWindow(document.getElementById('socialTab'));
@@ -1278,7 +1366,6 @@ function openCollabVideoPublishModal(targetType, targetId) {
         if (!G.player.videos) G.player.videos = [];
         G.player.videos.push(videoObj);
 
-        // 推送一条到油管外部推荐池
         if (!G.ytExternalVideos) G.ytExternalVideos = [];
         G.ytExternalVideos.unshift({
             _id: 'yt_collab_' + Date.now(),
@@ -1294,7 +1381,6 @@ function openCollabVideoPublishModal(targetType, targetId) {
             comments: []
         });
 
-        // 增加好感度与专属记忆
         partnerIds.forEach(id => {
             const n = G.npcs[id];
             if (n) {
@@ -1319,7 +1405,6 @@ function openCollabVideoPublishModal(targetType, targetId) {
     };
 }
 
-// 🔴 邀请联动直播处理
 function handleInviteCollabStream(targetType, targetId) {
     const isGroup = targetType === 'group';
     let partnerNames = [];
@@ -1350,16 +1435,16 @@ function renderSingleChatWindow(container) {
         if (msg.from === 'action') {
             messagesHtml += `
             <div style="text-align:center;margin:8px 0;">
-                <span style="display:inline-block;background:rgba(0,0,0,0.05);color:#777;padding:4px 10px;border-radius:12px;font-size:12px;max-width:85%;">${escapeHtml(msg.text)}</span>
+                <span style="display:inline-block;background:rgba(0,0,0,0.06);color:#666;padding:4px 10px;border-radius:12px;font-size:12px;max-width:85%;">${escapeHtml(msg.text)}</span>
             </div>`;
         } else {
             const isSelf = msg.from === 'player';
             messagesHtml += `
-            <div style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
+            <div class="chat-msg-row" data-msgid="${msg._id || ''}" data-from="${msg.from}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
                 ${!isSelf ? `<div class="chat-npc-avatar-btn" style="margin-right:8px;flex-shrink:0;cursor:pointer;" title="点击查看名片与动态">${renderAvatarBadge(npc, 34)}</div>` : ''}
                 <div style="max-width:75%;">
                     ${isSelf && msg.senderAccount ? `<div style="font-size:10px;color:#888;text-align:right;margin-bottom:2px;">${escapeHtml(msg.senderAccount)}</div>` : ''}
-                    <div style="background:${isSelf ? '#95ec69' : '#fff'};color:#111;padding:8px 12px;border-radius:${isSelf ? '10px 0 10px 10px' : '0 10px 10px 10px'};box-shadow:0 1px 3px rgba(0,0,0,0.08);font-size:14px;line-height:1.5;word-break:break-word;">
+                    <div class="chat-bubble ${isSelf ? 'self-bubble' : ''}" style="background:${isSelf ? '#95ec69' : '#fff'};color:#111;padding:8px 12px;border-radius:${isSelf ? '10px 0 10px 10px' : '0 10px 10px 10px'};box-shadow:0 1px 3px rgba(0,0,0,0.08);font-size:14px;line-height:1.5;word-break:break-word;user-select:none;-webkit-user-select:none;">
                         ${isSelf ? escapeHtml(msg.text).replace(/\n/g, '<br>') : renderContentWithThoughts(msg.text)}
                     </div>
                     <div style="font-size:10px;color:#bbb;margin-top:2px;text-align:${isSelf ? 'right' : 'left'};">${msg.time || ''}</div>
@@ -1396,7 +1481,7 @@ function renderSingleChatWindow(container) {
         </div>` : ''}
 
         <div id="chatMessageArea" style="flex:1;overflow-y:auto;padding:14px;">
-            ${messagesHtml || '<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">点击右上方 ⚡ 闪电按钮，TA 会主动找你搭话哦！<br>发消息不消耗行动点，点击 ➕ 可发起拍共创视频！</div>'}
+            ${messagesHtml || '<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">点击右上方 ⚡ 闪电按钮，TA 会主动找你搭话哦！<br>长按自己发出的消息可撤回、编辑或删除</div>'}
         </div>
 
         <div style="padding:8px 10px;background:#fff;border-top:1px solid #e5ebe5;display:flex;gap:8px;align-items:center;">
@@ -1411,6 +1496,17 @@ function renderSingleChatWindow(container) {
     const msgArea = document.getElementById('chatMessageArea');
     if (msgArea) msgArea.scrollTop = msgArea.scrollHeight;
 
+    // 绑定玩家发出的气泡长按事件
+    container.querySelectorAll('.chat-msg-row[data-from="player"]').forEach(row => {
+        const msgId = row.dataset.msgid;
+        const bubble = row.querySelector('.self-bubble');
+        if (bubble && msgId) {
+            bindLongPressEvent(bubble, () => {
+                showMessageActionSheet(msgId, 'single', npcId);
+            });
+        }
+    });
+
     const input = document.getElementById('singleChatInput');
     const sendBtn = document.getElementById('singleSendBtn');
 
@@ -1418,7 +1514,6 @@ function renderSingleChatWindow(container) {
         const text = input.value.trim();
         if (!text) return;
 
-        // 🚫 判定拉黑阻拦：如果大号被拉黑且当前使用的是大号
         if (isBlocked && !activeAcc.isAlt) {
             pushChatMessageSafe(npcId, {
                 from: 'player',
@@ -1570,31 +1665,31 @@ function splitIntoChatBubbles(rawText) {
         if (item) bubbles.push(item);
     }
 
-    if (bubbles.length > 0) return bubbles;
+    if (bubbles.length > 0) return bubbles.slice(0, 5);
 
     const lines = clean.split(/\n+/).map(l => l.trim()).filter(Boolean);
-    if (lines.length > 1 && lines.length <= 4) {
-        return lines;
+    if (lines.length > 1) {
+        return lines.slice(0, 5);
     }
 
-    if (lines.length === 1 && lines[0].length > 45) {
+    if (lines.length === 1 && lines[0].length > 35) {
         const sentences = lines[0].split(/([。！？!?~～]+)/).filter(Boolean);
         let current = '';
         for (let i = 0; i < sentences.length; i++) {
             current += sentences[i];
-            if (i % 2 === 1 || current.length > 25) {
+            if (i % 2 === 1 || current.length > 20) {
                 if (current.trim()) bubbles.push(current.trim());
                 current = '';
             }
         }
         if (current.trim()) bubbles.push(current.trim());
-        if (bubbles.length > 0) return bubbles.slice(0, 3);
+        if (bubbles.length > 0) return bubbles.slice(0, 5);
     }
 
     return [clean];
 }
 
-// ⚡ 单人聊天 AI 回复触发（包含微信连发、好感度增减、拉黑判定与小号求原谅解黑）
+// ⚡ 单人聊天 AI 回复触发（撤回感知注入机制）
 async function triggerAIReplyForSingle(npcId) {
     const npc = G.npcs[npcId];
     if (!npc) return;
@@ -1602,7 +1697,6 @@ async function triggerAIReplyForSingle(npcId) {
     const activeAcc = getActiveAccountInfo();
     const isCurrentlyBlocked = (G.blockedNpcs || []).includes(npcId);
 
-    // 如果大号被拉黑且当前正在用大号调 AI
     if (isCurrentlyBlocked && !activeAcc.isAlt) {
         showToast('⚠️ 对方已将你的大号拉黑，无法接收回复。请使用小号求原谅。', 'error', 3000);
         return;
@@ -1614,6 +1708,14 @@ async function triggerAIReplyForSingle(npcId) {
     let recentContext = '';
     if (history.length > 0) {
         recentContext = history.slice(-10).map(m => {
+            // 撤回专属语义注入：根据 50% 概率判定告知 AI 到底有没有被看到
+            if (m._recalled) {
+                if (m._seenByNpc) {
+                    return `[系统提示: 玩家发送了“${m._originalText}”，随后慌忙撤回了该消息。但被你正好亲眼看到了！你可以抓住这个撤回的内容调侃或质问 TA]`;
+                } else {
+                    return `[系统提示: 玩家刚刚撤回了一条消息。你完全没来得及看清发了什么，只看到提示对方撤回了一条消息。你可以好奇问 TA 撤回了什么]`;
+                }
+            }
             if (m.from === 'action') return `[旁白/动作: ${m.text}]`;
             const speaker = m.from === 'player' ? (m.senderAccount || '主角') : npc.name;
             return `${speaker}: ${stripThought(m.text || '')}`;
@@ -1637,18 +1739,20 @@ ${isCurrentlyBlocked ? `特别注意：你此前因为严重冲突拉黑了主�
 `;
 
     const sysPrompt = `
-你正在真实模拟扮演 Minecraft 主播/好友「${npc.name}」。
+你正在扮演真实沉浸的 Minecraft 主播/好友「${npc.name}」。
 人设性格：${npc.persona || '一位热情友好的同伴'}。
 当前好感度：${npc.favor || 50}/100。
 ${npcMemoryContext}
 ${altModePrompt}
 
-【极为关键的微信连发口吻规范】：
-1. 真实生活中的即时通讯聊天不会发一大坨文本。请使用口语化、随性自然的口吻，像发微信一样连续发送 1 到 3 条简短句子。
-2. 必须且只能使用以下格式包裹每条短消息（1~3条）：
-[MSG]第一句短消息[/MSG]
-[MSG]第二句短消息（可选，如补充说明、发表情或反问）[/MSG]
-3. 严禁复读玩家的原话，不要输出角色名字前缀，禁止包含 Markdown 代码块。
+【极为核心的即时聊天连发规范（参考真实微信连珠炮聊天）】：
+1. 人在打字聊天时不会长篇大论发一段，而是想到一句发一句，连续发送 3 到 5 条生动口语的短消息气泡（包含惊讶、吐槽、追问、叮嘱、表情动作等连续互动）！
+2. 必须且只能使用以下格式输出连续短消息（每条必须独立用 [MSG] 包裹，禁止包含 markdown 代码块）：
+[MSG]第一句：针对对方话语的第一时间自然反应[/MSG]
+[MSG]第二句：跟进吐槽或情绪展开[/MSG]
+[MSG]第三句：进一步发问或细节调侃[/MSG]
+[MSG]第四句：叮嘱、表态或带有小动作的收尾（可选）[/MSG]
+3. 严禁复读玩家的原话，不要在正文输出角色的名字前缀。
 
 最近对话上下文：
 ${recentContext}
@@ -1660,12 +1764,11 @@ ${recentContext}
 
         const rawReply = await callAI([
             { role: 'system', content: sysPrompt },
-            { role: 'user', content: history.length > 0 ? '请根据当前聊天上下文连发回复。' : '请主动向对方发消息打个招呼或开启有趣话题。' }
-        ], { maxTokens: 450, temperature: 0.88 });
+            { role: 'user', content: history.length > 0 ? '请根据当前聊天上下文连续发送多条回复。' : '请主动向对方发消息打个招呼或开启有趣话题。' }
+        ], { maxTokens: 550, temperature: 0.9 });
 
         if (typeof hideLoading === 'function') hideLoading();
 
-        // 判定拉黑与解黑标记
         let cleanText = rawReply;
         let triggeredBlock = false;
         let triggeredUnblock = false;
@@ -1680,9 +1783,8 @@ ${recentContext}
         }
 
         const bubbles = splitIntoChatBubbles(cleanText);
-        const finalBubbles = bubbles.length ? bubbles : ['在呢！刚忙完手头的事情～'];
+        const finalBubbles = bubbles.length ? bubbles : ['在呢！刚在剪视频，怎么啦？'];
 
-        // 逐条模拟微信连发
         for (let i = 0; i < finalBubbles.length; i++) {
             const bText = finalBubbles[i];
             pushChatMessageSafe(npcId, {
@@ -1697,11 +1799,10 @@ ${recentContext}
             }
 
             if (i < finalBubbles.length - 1) {
-                await new Promise(res => setTimeout(res, 650));
+                await new Promise(res => setTimeout(res, 600));
             }
         }
 
-        // 处理拉黑逻辑
         if (triggeredBlock) {
             if (!G.blockedNpcs) G.blockedNpcs = [];
             if (!G.blockedNpcs.includes(npcId)) G.blockedNpcs.push(npcId);
@@ -1714,7 +1815,6 @@ ${recentContext}
             showToast(`🚫 你已被 ${npc.name} 拉黑！可注册小号前去求原谅转圜`, 'error', 4500);
         }
 
-        // 处理解除拉黑逻辑
         if (triggeredUnblock && isCurrentlyBlocked) {
             G.blockedNpcs = (G.blockedNpcs || []).filter(id => id !== npcId);
             npc.favor = Math.min(100, (npc.favor || 0) + 15);
@@ -1727,7 +1827,6 @@ ${recentContext}
             addMemoir('重归于好', `通过小号的转圜，${npc.name} 谅解并解除了大号的拉黑`);
         }
 
-        // ❤️ 好感度平稳增长机制：1~3 点
         if (!triggeredBlock) {
             const curFavor = npc.favor !== undefined ? npc.favor : 50;
             if (curFavor < 100) {
@@ -1737,6 +1836,17 @@ ${recentContext}
                 showToast(`💕 ${npc.name} 好感度 +${gain}（当前: ${newFavor}）`, 'success', 2000);
             }
         }
+
+        G._lastRegenerate = async () => {
+            const hist = G.chatHistory[npcId] || [];
+            while (hist.length > 0 && hist[hist.length - 1].from === 'npc') {
+                hist.pop();
+            }
+            showToast(`🔄 正在重新生成 ${npc.name} 的私聊回复...`, 'info', 1500);
+            const chatCont = (dom && dom.socialTab) || document.getElementById('socialTab');
+            if (chatCont) renderSingleChatWindow(chatCont);
+            await triggerAIReplyForSingle(npcId);
+        };
 
         const container = (dom && dom.socialTab) || document.getElementById('socialTab');
         if (G.currentChatNpc === npcId && container) {
@@ -1786,16 +1896,16 @@ function renderGroupChatWindow(container) {
         if (msg.from === 'action') {
             messagesHtml += `
             <div style="text-align:center;margin:8px 0;">
-                <span style="display:inline-block;background:rgba(0,0,0,0.05);color:#777;padding:3px 10px;border-radius:12px;font-size:11px;">${escapeHtml(msg.text)}</span>
+                <span style="display:inline-block;background:rgba(0,0,0,0.06);color:#666;padding:3px 10px;border-radius:12px;font-size:11px;">${escapeHtml(msg.text)}</span>
             </div>`;
         } else {
             const isSelf = msg.from === 'player';
             messagesHtml += `
-            <div style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
+            <div class="chat-msg-row" data-msgid="${msg._id || ''}" data-from="${msg.from}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
                 ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${renderAvatarBadge({ avatarUrl: msg.senderAvatarUrl, avatarEmoji: msg.senderAvatar || '👤' }, 34)}</div>` : ''}
                 <div style="max-width:75%;">
                     ${!isSelf ? `<div style="font-size:11px;color:#777;margin-bottom:2px;">${escapeHtml(msg.senderName)}</div>` : ''}
-                    <div style="background:${isSelf ? '#95ec69' : '#fff'};color:#111;padding:8px 12px;border-radius:${isSelf ? '10px 0 10px 10px' : '0 10px 10px 10px'};box-shadow:0 1px 3px rgba(0,0,0,0.08);font-size:14px;line-height:1.5;word-break:break-word;">
+                    <div class="chat-bubble ${isSelf ? 'self-bubble' : ''}" style="background:${isSelf ? '#95ec69' : '#fff'};color:#111;padding:8px 12px;border-radius:${isSelf ? '10px 0 10px 10px' : '0 10px 10px 10px'};box-shadow:0 1px 3px rgba(0,0,0,0.08);font-size:14px;line-height:1.5;word-break:break-word;user-select:none;-webkit-user-select:none;">
                         ${isSelf ? escapeHtml(msg.text).replace(/\n/g, '<br>') : renderContentWithThoughts(msg.text)}
                     </div>
                     <div style="font-size:10px;color:#bbb;margin-top:2px;text-align:${isSelf ? 'right' : 'left'};">${msg.time || ''}</div>
@@ -1822,7 +1932,7 @@ function renderGroupChatWindow(container) {
         </div>
 
         <div id="groupMessageArea" style="flex:1;overflow-y:auto;padding:14px;">
-            ${messagesHtml || '<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">群里静悄悄的，点击 ➕ 可发起群成员拍视频或多人开播！</div>'}
+            ${messagesHtml || '<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">群里静悄悄的，点击 ➕ 可发起群成员拍视频或多人开播！<br>长按自己发出的消息可撤回、编辑或删除</div>'}
         </div>
 
         <div style="padding:8px 10px;background:#fff;border-top:1px solid #e5ebe5;display:flex;gap:8px;align-items:center;">
@@ -1836,6 +1946,16 @@ function renderGroupChatWindow(container) {
 
     const msgArea = document.getElementById('groupMessageArea');
     if (msgArea) msgArea.scrollTop = msgArea.scrollHeight;
+
+    container.querySelectorAll('.chat-msg-row[data-from="player"]').forEach(row => {
+        const msgId = row.dataset.msgid;
+        const bubble = row.querySelector('.self-bubble');
+        if (bubble && msgId) {
+            bindLongPressEvent(bubble, () => {
+                showMessageActionSheet(msgId, 'group', gid);
+            });
+        }
+    });
 
     const input = document.getElementById('groupChatInput');
     const sendBtn = document.getElementById('groupSendBtn');
@@ -1950,7 +2070,12 @@ async function triggerGroupAIReply(gid) {
         }
     });
 
-    const recent = history.slice(-10).map(m => `${m.senderName}: ${stripThought(m.text || '')}`).join('\n');
+    const recent = history.slice(-10).map(m => {
+        if (m._recalled) {
+            return m._seenByNpc ? `[群提示: ${m.senderName}发了“${m._originalText}”，又撤回了，但被群友看到了]` : `[群提示: ${m.senderName}撤回了一条消息]`;
+        }
+        return `${m.senderName}: ${stripThought(m.text || '')}`;
+    }).join('\n');
 
     try {
         G.isGenerating = true;
@@ -2158,7 +2283,6 @@ function handleFriendRequestAction(reqId, accept) {
         let id = req.npcOfficialId || ('custom_npc_' + Date.now());
         let npcData = null;
 
-        // 如果是官方主播池中的主播，继承完整属性与作品
         if (req.npcOfficialId && typeof OFFICIAL_NPCS !== 'undefined' && OFFICIAL_NPCS[req.npcOfficialId]) {
             npcData = Object.assign({}, OFFICIAL_NPCS[req.npcOfficialId]);
             npcData.favor = 40;
@@ -2428,7 +2552,7 @@ function openGroupSettingsModal(gid) {
 
     openModal(`
         <h3>⚙️ 群管理：${escapeHtml(grp.name)}</h3>
-        <div style="font-size:13px;font-weight:700;margin:10px 0 6px;">🤖 回复模式</div>
+        <div style="font-size:13px;font-weight:700;margin-top:10px;margin-bottom:6px;">🤖 回复模式</div>
         <div style="background:#f9fbf9;padding:8px 12px;border-radius:8px;font-size:12px;line-height:1.6;margin-bottom:12px;">
             <label style="display:block;cursor:pointer;margin-bottom:6px;">
                 <input type="radio" name="streamerMode" value="unified" ${grp.streamerMode !== 'separate' ? 'checked' : ''}>
@@ -2849,8 +2973,10 @@ function renderMemoir() {
     html += `</div>`;
     container.innerHTML = html;
 }
+
 // 暴露全局
 window.openAccountManagerModal = openAccountManagerModal;
 window.switchAccount = switchAccount;
 window.deleteAltAccount = deleteAltAccount;
+window.showMessageActionSheet = showMessageActionSheet;
 // ============================================================

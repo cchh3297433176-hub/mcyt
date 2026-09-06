@@ -241,10 +241,35 @@ async function createVideo(title, style, duration, collectionName, collectionInd
         G.collections[collectionName].videos.push(videoIndex);
         updateCollectionStats(collectionName);
     }
+    const totalFollowersAdd = followersGain + Math.floor(baseViews * 0.001);
+    const totalMoneyAdd = moneyGain + Math.floor(baseViews * 0.005);
+
     G.player.likes += baseLikes;
-    G.player.followers += followersGain + Math.floor(baseViews * 0.001);
-    G.player.money += moneyGain + Math.floor(baseViews * 0.005);
+    G.player.followers += totalFollowersAdd;
+    G.player.money += totalMoneyAdd;
     addMemoir('发布视频', `「${title}」 播放量 ${baseViews}，风格 ${style}`);
+
+    // 🔄 为视频发布专门注册重说撤回逻辑：若重说，自动移除这期视频并重新发布
+    G._lastRegenerate = async () => {
+        showToast('🔄 正在撤回刚才发布的视频并重新生成...', 'info', 2000);
+        const vIdx = G.player.videos.indexOf(videoObj);
+        if (vIdx !== -1) {
+            G.player.videos.splice(vIdx, 1);
+            G.totalVideos = Math.max(0, G.totalVideos - 1);
+            G.player.likes = Math.max(0, G.player.likes - baseLikes);
+            G.player.followers = Math.max(0, G.player.followers - totalFollowersAdd);
+            G.player.money = Math.max(0, G.player.money - totalMoneyAdd);
+            if (collectionName && G.collections[collectionName]) {
+                const cVideos = G.collections[collectionName].videos;
+                const cIdx = cVideos.indexOf(vIdx);
+                if (cIdx !== -1) cVideos.splice(cIdx, 1);
+                updateCollectionStats(collectionName);
+            }
+        }
+        await createVideo(title, style, duration, collectionName, collectionIndex, description, useSearch);
+        if (document.querySelector('.tab-btn.active')?.dataset.tab === 'dashboard') renderDashboard();
+        if (document.querySelector('.tab-btn.active')?.dataset.tab === 'data') renderDataPanel();
+    };
 
     const seriesText = collectionName ? `（合集：${collectionName}，第${collectionIndex}集）` : '';
     const descText = description ? ` 内容描述：${description}` : '';
@@ -270,12 +295,10 @@ function buildSystemPrompt() {
             : `[第${h.day}天 ${getTimeSlotName(h.time)}] ${stripThought(h.text).slice(0, 120)}...`
     ).join('\n');
 
-    // 🌐 读取统一全局记忆
     const globalMemories = (G.memorySummaries || []).map(m =>
         `[统一全局记忆 · 第${m.day || 1}天] ${stripThought(m.text || m)}`
     ).join('\n');
 
-    // 👤 读取各个 NPC 专属记忆与群聊所知事件
     const npcDetailedMemories = Object.values(G.npcs).map(n => {
         let mem = `${n.name}: 好感度 ${n.favor||0}${n._relationship === 'dating' ? ' 💕恋人' : ''}`;
         if (n.memorySummary) mem += ` | 私聊记忆: ${stripThought(n.memorySummary)}`;
@@ -283,7 +306,6 @@ function buildSystemPrompt() {
         return mem;
     }).join('\n');
 
-    // 👥 群聊公共事件纪要汇总
     const groupMemoriesList = Object.entries(G.groupMemories || {}).map(([gid, text]) => {
         const grp = G.groups[gid];
         return `[群聊「${grp ? grp.name : gid}」纪要]: ${stripThought(text)}`;
@@ -363,18 +385,35 @@ async function generateStory(tag, userPrompt, useSearch = false, replaceBlock = 
         const truncated = isLikelyTruncated(response);
         const newText = response + searchNote;
 
+        let createdEntry = null;
+
         if (!replaceBlock) {
             appendStory(newText, tag, { action: userPrompt, useSearch }, { truncated });
+            createdEntry = G.storyHistory[G.storyHistory.length - 1];
         } else {
             const entry = G.storyHistory.find(h => h._id === replaceHistoryId);
             if (entry) {
                 entry.text = newText;
                 entry.truncated = truncated;
+                createdEntry = entry;
             }
             const content = replaceBlock.querySelector('.story-content');
             if (content) content.innerHTML = renderContentWithThoughts(newText);
             showToast('✅ 重说成功', 'success', 1500);
         }
+
+        // 🔄 注册针对主线剧情的“重说”钩子：自动撤销这一条并重新生成
+        G._lastRegenerate = async () => {
+            if (createdEntry) {
+                const idx = G.storyHistory.findIndex(h => h._id === createdEntry._id);
+                if (idx !== -1) G.storyHistory.splice(idx, 1);
+                const block = dom.storyArea?.querySelector(`.story-block[data-story-id="${createdEntry._id}"]`) || document.querySelector(`.story-block[data-story-id="${createdEntry._id}"]`);
+                if (block) block.remove();
+            }
+            showToast('🔄 正在重新生成剧情...', 'info', 1500);
+            await generateStory(tag, userPrompt, useSearch);
+        };
+
         extractThemes(stripThought(newText));
         maybeAutoSummarize();
     } catch (err) {
@@ -389,7 +428,7 @@ async function generateStory(tag, userPrompt, useSearch = false, replaceBlock = 
 }
 
 // ============================================================
-// ✏️ 编辑内容弹窗
+// ✏️ 编辑内容弹窗（新增支持删除单条私信、剧情或记忆）
 // ============================================================
 function refreshStoryBlockDOM(entry) {
     const block = dom.storyArea ? dom.storyArea.querySelector(`.story-block[data-story-id="${entry._id}"]`) : document.querySelector(`.story-block[data-story-id="${entry._id}"]`);
@@ -423,9 +462,10 @@ function buildUnifiedAIEntryHTML(item) {
         <div class="edit-entry-body" style="display:none;padding:10px 12px;border-top:1px solid rgba(30,60,30,.06);">
             ${thoughtHtml}
             <textarea class="edit-textarea" style="width:100%;min-height:110px;padding:8px;border-radius:8px;border:2px solid rgba(30,60,30,.10);background:#f9fcf9;color:var(--text);font-size:13px;font-family:inherit;resize:vertical;">${escapeHtml(pureText)}</textarea>
-            <div class="btn-row" style="margin-top:8px;">
-                <button class="btn-secondary edit-cancel-btn">取消</button>
-                <button class="btn-primary edit-save-btn">💾 保存修改</button>
+            <div class="btn-row" style="margin-top:8px;display:flex;gap:6px;justify-content:flex-end;">
+                <button class="btn-secondary edit-del-btn" style="color:#e53935;border-color:#ffcdd2;background:#ffebee;padding:6px 12px;font-size:12px;margin-right:auto;">🗑️ 删除此条</button>
+                <button class="btn-secondary edit-cancel-btn" style="padding:6px 12px;font-size:12px;">取消</button>
+                <button class="btn-primary edit-save-btn" style="padding:6px 14px;font-size:12px;">💾 保存修改</button>
             </div>
         </div>
     </div>`;
@@ -464,8 +504,8 @@ function openEditContentModal(defaultTab = 'allAI') {
     const html = `
     <h3 style="margin-bottom:10px;">✏️ 编辑与管理</h3>
     <div class="btn-row" style="margin-bottom:12px;">
-        <button class="btn-secondary small" id="editTabAIBtn" style="flex:1;">🤖 AI 发送的内容（${allAIItems.length}）</button>
-        <button class="btn-secondary small" id="editTabSummaryBtn" style="flex:1;">🧠 统一记忆总结（${summaryEntries.length}）</button>
+        <button class="btn-secondary small" id="editTabAIBtn" style="flex:1;">🤖 AI 发送的内容（<span id="aiContentCount">${allAIItems.length}</span>）</button>
+        <button class="btn-secondary small" id="editTabSummaryBtn" style="flex:1;">🧠 统一记忆总结（<span id="summaryContentCount">${summaryEntries.length}</span>）</button>
     </div>
     <div id="editTabAI" style="max-height:58vh;overflow-y:auto;">
         ${allAIItems.length ? allAIItems.map(item => buildUnifiedAIEntryHTML(item)).join('') : '<p style="font-size:12px;color:#999;text-align:center;padding:20px;">暂无生成记录</p>'}
@@ -482,9 +522,10 @@ function openEditContentModal(defaultTab = 'allAI') {
                 </div>
                 <div class="edit-entry-body" style="display:none;padding:10px 12px;border-top:1px solid rgba(30,60,30,.06);">
                     <textarea class="edit-textarea" style="width:100%;min-height:100px;padding:8px;border-radius:8px;border:2px solid rgba(30,60,30,.10);background:#f9fcf9;color:var(--text);font-size:13px;font-family:inherit;resize:vertical;">${escapeHtml(stripThought(e.text || e))}</textarea>
-                    <div class="btn-row" style="margin-top:8px;">
-                        <button class="btn-secondary edit-cancel-btn">取消</button>
-                        <button class="btn-primary edit-save-btn">💾 保存修改</button>
+                    <div class="btn-row" style="margin-top:8px;display:flex;gap:6px;justify-content:flex-end;">
+                        <button class="btn-secondary edit-del-btn" style="color:#e53935;border-color:#ffcdd2;background:#ffebee;padding:6px 12px;font-size:12px;margin-right:auto;">🗑️ 删除此条</button>
+                        <button class="btn-secondary edit-cancel-btn" style="padding:6px 12px;font-size:12px;">取消</button>
+                        <button class="btn-primary edit-save-btn" style="padding:6px 14px;font-size:12px;">💾 保存修改</button>
                     </div>
                 </div>
             </div>
@@ -525,6 +566,52 @@ function openEditContentModal(defaultTab = 'allAI') {
             body.style.display = 'none';
             chevron.textContent = '▼';
         });
+
+        // 🗑️ 删除此条记录事件
+        el.querySelector('.edit-del-btn')?.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const id = el.dataset.id;
+            const type = el.dataset.type;
+
+            if (!confirm('确定要彻底删除这条记录吗？删除后将不可恢复。')) return;
+
+            if (type === 'story') {
+                const sIdx = (G.storyHistory || []).findIndex(h => h._id === id);
+                if (sIdx !== -1) G.storyHistory.splice(sIdx, 1);
+                const block = dom.storyArea?.querySelector(`.story-block[data-story-id="${id}"]`) || document.querySelector(`.story-block[data-story-id="${id}"]`);
+                if (block) block.remove();
+            } else if (type === 'chat') {
+                const npcId = el.dataset.npcid;
+                if (G.chatHistory && G.chatHistory[npcId]) {
+                    const cIdx = G.chatHistory[npcId].findIndex(m => m._id === id);
+                    if (cIdx !== -1) G.chatHistory[npcId].splice(cIdx, 1);
+                    if (G.currentChatNpc === npcId) renderSocialPanel();
+                }
+            } else if (type === 'summary') {
+                if (G.memorySummaries) {
+                    const smIdx = G.memorySummaries.findIndex(m => (m.id || m._id) === id || m === id);
+                    if (smIdx !== -1) G.memorySummaries.splice(smIdx, 1);
+                }
+            }
+
+            el.remove();
+            showToast('🗑️ 该条记录已成功删除', 'info', 1500);
+
+            // 更新弹窗顶部数量提示
+            const curAiLeft = aiTab.querySelectorAll('.edit-entry').length;
+            const curSumLeft = summaryTab.querySelectorAll('.edit-entry').length;
+            const countEl = document.getElementById('aiContentCount');
+            if (countEl) countEl.textContent = curAiLeft;
+            const sumCountEl = document.getElementById('summaryContentCount');
+            if (sumCountEl) sumCountEl.textContent = curSumLeft;
+
+            if (curAiLeft === 0) aiTab.innerHTML = '<p style="font-size:12px;color:#999;text-align:center;padding:20px;">暂无生成记录</p>';
+            if (curSumLeft === 0) summaryTab.innerHTML = '<p style="font-size:12px;color:#999;text-align:center;padding:20px;">暂无记忆总结</p>';
+
+            autoSaveGame();
+        });
+
+        // 💾 保存修改事件
         el.querySelector('.edit-save-btn')?.addEventListener('click', (e) => {
             e.stopPropagation();
             const id = el.dataset.id;
