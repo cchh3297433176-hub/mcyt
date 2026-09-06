@@ -43,7 +43,6 @@ if (!G.stickerLibrary || !G.stickerLibrary.length) {
     ];
 }
 
-// 检查某个文本是否命中表情包
 function findStickerByKeyword(kw) {
     if (!kw || !G.stickerLibrary) return null;
     const cleanKw = kw.trim().toLowerCase();
@@ -303,7 +302,7 @@ if (!G.friendRequests) G.friendRequests = [];
 if (!G.groupInvites) G.groupInvites = [];
 if (!G.momentsFilterNpcId) G.momentsFilterNpcId = null;
 if (!G._chatShowFullHistory) G._chatShowFullHistory = {};
-if (!G._behindScreenActive) G._behindScreenActive = {}; // 各 NPC 线下动作感知开关
+if (!G._behindScreenActive) G._behindScreenActive = {};
 
 function bindLongPressEvent(el, onLongPress, onClick) {
     if (!el) return;
@@ -474,7 +473,7 @@ function buildChatListHTML() {
             itemsHtml += `
             <div style="text-align:center;color:#aaa;padding:40px 16px;font-size:13px;line-height:1.6;">
                 暂无群聊。<br>
-                粉丝增长后会收到后援粉丝群邀请，<br>也可以点击右上角 ➕ 自建专属主播交流群！
+                粉丝增长后会收到后援粉丝群邀请，也可以自建群聊！
             </div>`;
         } else {
             for (const [gid, grp] of Object.entries(G.groups)) {
@@ -943,7 +942,7 @@ ${participantsDesc}
 }
 
 // ============================================================
-// 6. 表情包抽屉与导入管理弹窗（参考参考图设计）
+// 6. 表情包抽屉与导入管理（紧凑防空档布局）
 // ============================================================
 let _stickerDrawerOpen = false;
 
@@ -953,34 +952,34 @@ function buildStickerDrawerHTML() {
     const stickers = (G.stickerLibrary || []).filter(s => s.category === activeCat);
 
     let tabsHtml = cats.map(c => `
-        <button class="stk-tab-btn ${c === activeCat ? 'active' : ''}" data-cat="${escapeHtml(c)}" style="padding:4px 10px;font-size:12px;font-weight:700;border:1px solid ${c === activeCat ? 'var(--primary)' : '#ccc'};border-radius:6px;background:${c === activeCat ? '#eaf5ea' : '#fff'};color:${c === activeCat ? 'var(--primary)' : '#555'};cursor:pointer;white-space:nowrap;">
+        <button class="stk-tab-btn ${c === activeCat ? 'active' : ''}" data-cat="${escapeHtml(c)}" style="padding:4px 9px;font-size:11px;font-weight:700;border:1px solid ${c === activeCat ? 'var(--primary)' : '#ccc'};border-radius:6px;background:${c === activeCat ? '#eaf5ea' : '#fff'};color:${c === activeCat ? 'var(--primary)' : '#555'};cursor:pointer;white-space:nowrap;">
             ${escapeHtml(c)}
         </button>
     `).join('');
 
     let gridHtml = `
-        <div class="stk-item-card" id="btnAddStickerTrigger" style="width:68px;height:84px;border:2px dashed #bbb;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;background:#fafafa;">
-            <span style="font-size:24px;color:#888;">➕</span>
-            <span style="font-size:10px;color:#888;margin-top:2px;">添加</span>
+        <div class="stk-item-card" id="btnAddStickerTrigger" style="height:62px;border:1.5px dashed #aaa;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;background:#fafafa;">
+            <span style="font-size:20px;color:#888;">➕</span>
+            <span style="font-size:9.5px;color:#888;margin-top:2px;">添加</span>
         </div>
     `;
 
-    stickers.forEach((stk, idx) => {
+    stickers.forEach((stk) => {
         gridHtml += `
-        <div class="stk-item-card stk-send-btn" data-url="${escapeHtml(stk.url)}" data-desc="${escapeHtml(stk.desc)}" style="width:68px;height:84px;border:1px solid #e0e0e0;border-radius:8px;padding:3px;box-sizing:border-box;display:flex;flex-direction:column;align-items:center;cursor:pointer;background:#fff;">
-            <img src="${stk.url}" style="width:56px;height:56px;object-fit:cover;border-radius:6px;">
-            <div style="font-size:9.5px;color:#666;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;text-align:center;margin-top:3px;">${escapeHtml(stk.desc)}</div>
+        <div class="stk-item-card stk-send-btn" data-url="${escapeHtml(stk.url)}" data-desc="${escapeHtml(stk.desc)}" style="height:62px;border:1px solid #e0e0e0;border-radius:6px;padding:2px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;cursor:pointer;background:#fff;overflow:hidden;" title="${escapeHtml(stk.desc)}">
+            <img src="${stk.url}" style="width:100%;height:100%;object-fit:cover;border-radius:4px;">
         </div>
         `;
     });
 
     return `
-    <div id="stickerDrawerContainer" style="background:#f4f6f4;border-top:1px solid #ddd;padding:8px 10px;height:180px;display:flex;flex-direction:column;box-sizing:border-box;">
-        <div style="display:flex;align-items:center;gap:6px;overflow-x:auto;padding-bottom:6px;border-bottom:1px solid #e2e8e2;">
+    <div id="stickerDrawerContainer" style="background:#f4f6f4;border-top:1px solid #ddd;padding:6px 8px;height:165px;display:flex;flex-direction:column;box-sizing:border-box;">
+        <div style="display:flex;align-items:center;gap:5px;overflow-x:auto;padding-bottom:5px;border-bottom:1px solid #e2e8e2;">
             ${tabsHtml}
-            <button id="btnNewStickerCategory" title="新建分组" style="border:1px solid #bbb;background:#fff;padding:4px 8px;border-radius:6px;font-size:11px;cursor:pointer;">✏️ 新分类</button>
+            <button id="btnNewStickerCategory" title="新建分组" style="border:1px solid #bbb;background:#fff;padding:3px 7px;border-radius:6px;font-size:10.5px;cursor:pointer;white-space:nowrap;">✏️ 新分类</button>
         </div>
-        <div style="flex:1;overflow-y:auto;display:flex;flex-wrap:wrap;gap:8px;padding-top:8px;">
+        <!-- 紧凑 Grid 网格，彻底消除大面积空档 -->
+        <div style="flex:1;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill, minmax(52px, 1fr));gap:6px;padding-top:6px;">
             ${gridHtml}
         </div>
     </div>
@@ -1133,7 +1132,7 @@ function sendStickerMessage(targetType, targetId, stickerObj) {
 }
 
 // ============================================================
-// 7. 私聊窗口与「屏幕那边的TA」动作感知
+// 7. 私聊窗口与「屏幕那边的TA」动作感知（轻量化紧凑顶栏）
 // ============================================================
 function renderSingleChatWindow(container) {
     const npcId = G.currentChatNpc;
@@ -1168,9 +1167,8 @@ function renderSingleChatWindow(container) {
                 <span style="display:inline-block;background:rgba(0,0,0,0.06);color:#666;padding:4px 10px;border-radius:12px;font-size:12px;max-width:85%;">${escapeHtml(msg.text)}</span>
             </div>`;
         } else if (msg.from === 'behind_screen') {
-            // 👁️ 屏幕那边的TA · 独立剧场动作感知卡（居中淡雅卡片，不在气泡内出戏）
             messagesHtml += `
-            <div style="margin:12px 14px;background:rgba(255,253,245,0.92);border:1px dashed #d7ccc8;border-radius:10px;padding:8px 12px;font-size:12px;color:#5d4037;line-height:1.6;box-shadow:0 1px 4px rgba(0,0,0,0.04);position:relative;">
+            <div style="margin:10px 14px;background:rgba(255,253,245,0.92);border:1px dashed #d7ccc8;border-radius:10px;padding:8px 12px;font-size:12px;color:#5d4037;line-height:1.6;box-shadow:0 1px 4px rgba(0,0,0,0.04);position:relative;">
                 <div style="font-weight:700;font-size:11px;color:#8d6e63;margin-bottom:3px;display:flex;align-items:center;gap:4px;">
                     <span>👁️ 屏幕那边的 TA (${escapeHtml(npc.name)})</span>
                 </div>
@@ -1181,11 +1179,10 @@ function renderSingleChatWindow(container) {
             let bubbleContent = '';
 
             if (msg.sticker) {
-                // 表情包气泡渲染
+                // 表情包气泡：小巧精致，彻底去除图片下方的文字标注
                 bubbleContent = `
-                <div style="padding:2px;">
-                    <img src="${msg.sticker.url}" alt="${escapeHtml(msg.sticker.desc)}" style="max-width:140px;max-height:140px;border-radius:8px;object-fit:cover;display:block;">
-                    <div style="font-size:9.5px;color:#888;margin-top:3px;text-align:center;">${escapeHtml(msg.sticker.desc)}</div>
+                <div style="padding:0;display:inline-block;">
+                    <img src="${msg.sticker.url}" alt="${escapeHtml(msg.sticker.desc)}" style="width:85px;height:85px;border-radius:8px;object-fit:cover;display:block;">
                 </div>`;
             } else {
                 bubbleContent = isSelf ? escapeHtml(msg.text).replace(/\n/g, '<br>') : renderContentWithThoughts(msg.text);
@@ -1208,50 +1205,53 @@ function renderSingleChatWindow(container) {
 
     const html = `
     <div style="background:#f2f4f2;border-radius:14px;display:flex;flex-direction:column;height:82vh;max-height:850px;box-shadow:0 4px 16px rgba(0,0,0,0.08);overflow:hidden;">
-        <div style="padding:10px 14px;background:#fff;border-bottom:1px solid #e5ebe5;display:flex;justify-content:space-between;align-items:center;">
-            <div style="display:flex;align-items:center;gap:10px;">
-                <button onclick="closeChat()" style="border:none;background:none;font-size:20px;color:#333;cursor:pointer;padding:0 4px;">❮</button>
-                <div id="singleChatHeaderProfileBtn" style="cursor:pointer;" title="点击查看TA的名片">
-                    <div style="font-weight:700;font-size:15px;display:flex;align-items:center;gap:6px;">
-                        <span>${escapeHtml(npc.name)}</span>
-                        <span style="font-size:11px;color:#e53935;font-weight:normal;background:#ffebee;padding:1px 6px;border-radius:8px;">❤️ ${npc.favor || 0}</span>
+        <!-- 紧凑单行顶栏，告别臃肿与换行 -->
+        <div style="padding:8px 12px;background:#fff;border-bottom:1px solid #e5ebe5;display:flex;justify-content:space-between;align-items:center;min-height:48px;box-sizing:border-box;">
+            <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
+                <button onclick="closeChat()" style="border:none;background:none;font-size:19px;color:#333;cursor:pointer;padding:0 2px;">❮</button>
+                <div id="singleChatHeaderProfileBtn" style="cursor:pointer;flex:1;min-width:0;" title="点击查看TA的名片">
+                    <div style="font-weight:700;font-size:14.5px;display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                        <span style="overflow:hidden;text-overflow:ellipsis;">${escapeHtml(npc.name)}</span>
+                        <span style="font-size:10.5px;color:#e53935;font-weight:normal;background:#ffebee;padding:1px 5px;border-radius:6px;flex-shrink:0;">❤️ ${npc.favor || 0}</span>
                     </div>
-                    <div id="chatOnlineStatusText" style="font-size:11px;color:#2e7d32;">
-                        ${isBlocked ? '<span style="color:#d32f2f;">⚠️ TA已拉黑本账号</span>' : '● 在线'} ${npc.memorySummary ? '· 🧠专属记忆' : ''}
+                    <div id="chatOnlineStatusText" style="font-size:10.5px;color:#2e7d32;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                        ${isBlocked ? '<span style="color:#d32f2f;">⚠️ 已拉黑</span>' : '● 在线'} ${npc.memorySummary ? '· 🧠记忆' : ''}
                     </div>
                 </div>
             </div>
-            <div style="display:flex;gap:6px;align-items:center;">
-                <!-- 屏幕那边的TA 开关胶囊 -->
-                <button id="btnToggleBehindScreen" style="border:1px solid ${isBehindScreenActive ? '#8d6e63' : '#ccc'};background:${isBehindScreenActive ? '#efebe9' : '#fff'};color:${isBehindScreenActive ? '#5d4037' : '#888'};padding:3px 7px;border-radius:12px;font-size:10.5px;font-weight:700;cursor:pointer;" title="开启后AI会生成TA在线下的动作心理描写">
-                    👁️ 屏幕那边: ${isBehindScreenActive ? '开' : '关'}
+
+            <!-- 右侧紧凑小图标区 -->
+            <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+                <!-- 👁️ 屏幕那边的TA：纯眼睛小按钮 -->
+                <button id="btnToggleBehindScreen" style="border:1px solid ${isBehindScreenActive ? '#8d6e63' : '#ccc'};background:${isBehindScreenActive ? '#efebe9' : '#fff'};width:30px;height:30px;border-radius:50%;font-size:15px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.2s ease;" title="${isBehindScreenActive ? '已开启屏幕那边的动作感知(点击关闭)' : '点击开启屏幕那边的动作感知'}">
+                    👁️
                 </button>
-                <div id="singleChatHeaderAccountBtn" title="点击切换大号/小号" style="cursor:pointer;display:flex;align-items:center;background:#eef5ee;padding:3px 7px;border-radius:14px;border:1px solid #cce3cc;gap:3px;">
-                    ${activeAcc.avatar ? `<img src="${activeAcc.avatar}" style="width:18px;height:18px;border-radius:50%;object-fit:cover;">` : (activeAcc.isAlt ? '🎭' : '👑')}
-                    <span style="font-size:10.5px;font-weight:700;color:#2e7d32;max-width:55px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(activeAcc.name)}</span>
+                <!-- 切换账号：纯头像按钮 -->
+                <div id="singleChatHeaderAccountBtn" title="当前账号：${escapeHtml(activeAcc.name)} (点击切换)" style="cursor:pointer;display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;border:1.5px solid ${activeAcc.isAlt ? '#ffb300' : 'var(--primary)'};overflow:hidden;background:#fff;">
+                    ${activeAcc.avatar ? `<img src="${activeAcc.avatar}" style="width:100%;height:100%;object-fit:cover;">` : `<span style="font-size:14px;">${activeAcc.isAlt ? '🎭' : '👑'}</span>`}
                 </div>
-                <button id="triggerAIReplyBtn" title="让TA回复或主动发消息" style="border:none;background:#ff4757;color:#fff;width:34px;height:34px;border-radius:10px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(255,71,87,0.35);">⚡</button>
+                <!-- 闪电生成消息按钮 -->
+                <button id="triggerAIReplyBtn" title="让TA回复或主动发消息" style="border:none;background:#ff4757;color:#fff;width:32px;height:32px;border-radius:8px;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(255,71,87,0.35);">⚡</button>
             </div>
         </div>
 
         ${isBlocked ? `
-        <div style="background:#ffebee;color:#c62828;padding:6px 12px;font-size:11px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #ffcdd2;">
+        <div style="background:#ffebee;color:#c62828;padding:5px 12px;font-size:11px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #ffcdd2;">
             <span>🚫 你的当前账号已被对方拉黑拒收。</span>
-            <button onclick="openAccountManagerModal()" style="border:none;background:#c62828;color:#fff;padding:2px 8px;border-radius:6px;font-size:10px;cursor:pointer;">切其他小号骚扰/求原谅</button>
+            <button onclick="openAccountManagerModal()" style="border:none;background:#c62828;color:#fff;padding:2px 7px;border-radius:6px;font-size:10px;cursor:pointer;">切小号转圜</button>
         </div>` : ''}
 
-        <div id="chatMessageArea" style="flex:1;overflow-y:auto;padding:14px;">
+        <div id="chatMessageArea" style="flex:1;overflow-y:auto;padding:12px;">
             ${messagesHtml || '<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">当前账号与 TA 尚无对话，点击右上方 ⚡ 闪电按钮开启互动！</div>'}
         </div>
 
-        <!-- 表情包抽屉 -->
         ${_stickerDrawerOpen ? buildStickerDrawerHTML() : ''}
 
-        <div style="padding:8px 10px;background:#fff;border-top:1px solid #e5ebe5;display:flex;gap:6px;align-items:center;">
-            <button id="chatActionInsertBtn" title="合作/拍视频/旁白" style="border:1px solid #ccc;background:#f8f9f8;color:#555;width:34px;height:34px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;">➕</button>
-            <button id="chatToggleStickerBtn" title="发送图床表情包" style="border:1px solid #ccc;background:${_stickerDrawerOpen ? '#eaf5ea' : '#f8f9f8'};color:#555;width:34px;height:34px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;">😊</button>
-            <textarea id="singleChatInput" rows="1" placeholder="${activeAcc.isAlt ? `[小号 ${activeAcc.name}]...` : 'Message...'}" style="flex:1;padding:8px 12px;border-radius:18px;border:1px solid #ddd;background:#f8faf8;font-size:14px;resize:none;outline:none;font-family:inherit;"></textarea>
-            <button id="singleSendBtn" style="border:none;background:var(--primary);color:#fff;padding:8px 14px;border-radius:18px;font-size:13px;font-weight:700;cursor:pointer;">发送</button>
+        <div style="padding:6px 8px;background:#fff;border-top:1px solid #e5ebe5;display:flex;gap:5px;align-items:center;">
+            <button id="chatActionInsertBtn" title="合作/拍视频/旁白" style="border:1px solid #ccc;background:#f8f9f8;color:#555;width:32px;height:32px;border-radius:50%;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;">➕</button>
+            <button id="chatToggleStickerBtn" title="发送表情包" style="border:1px solid #ccc;background:${_stickerDrawerOpen ? '#eaf5ea' : '#f8f9f8'};color:#555;width:32px;height:32px;border-radius:50%;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;">😊</button>
+            <textarea id="singleChatInput" rows="1" placeholder="${activeAcc.isAlt ? `[${activeAcc.name}]...` : 'Message...'}" style="flex:1;padding:7px 10px;border-radius:16px;border:1px solid #ddd;background:#f8faf8;font-size:13.5px;resize:none;outline:none;font-family:inherit;"></textarea>
+            <button id="singleSendBtn" style="border:none;background:var(--primary);color:#fff;padding:6px 13px;border-radius:16px;font-size:12.5px;font-weight:700;cursor:pointer;">发送</button>
         </div>
     </div>
     `;
@@ -1264,7 +1264,6 @@ function renderSingleChatWindow(container) {
         bindStickerDrawerEvents('single', npcId);
     }
 
-    // 切换 屏幕那边的TA 开关
     document.getElementById('btnToggleBehindScreen')?.addEventListener('click', () => {
         G._behindScreenActive[npcId] = !G._behindScreenActive[npcId];
         showToast(G._behindScreenActive[npcId] ? '👁️ 已开启「屏幕那边的TA」动作感知' : '已关闭线下动作感知', 'info', 1500);
@@ -1352,7 +1351,7 @@ function renderSingleChatWindow(container) {
     if (triggerBtn) {
         triggerBtn.onclick = async () => {
             if (G.isGenerating) { showToast('⏳ TA 正在打字中...', 'info', 1500); return; }
-            triggerBtn.style.opacity = '0.6';
+            triggerBtn.style.opacity = '0.5';
             triggerBtn.style.pointerEvents = 'none';
             await triggerAIReplyForSingle(npcId);
             if (document.getElementById('triggerAIReplyBtn')) {
@@ -1363,7 +1362,50 @@ function renderSingleChatWindow(container) {
     }
 }
 
-// ⚡ 单人聊天 AI 回复触发（支持图床斗图、杜绝出戏括号、独立输出屏幕那边的TA）
+// 强固拆解气泡逻辑（解决模型掉格式导致无回复的 Bug）
+function splitIntoChatBubbles(rawText) {
+    if (!rawText) return [];
+    let clean = stripThought(rawText).trim();
+    if (!clean) return [];
+
+    const bubbles = [];
+    const msgTagRegex = /\[MSG\]([\s\S]*?)\[\/MSG\]/gi;
+    let match;
+    while ((match = msgTagRegex.exec(clean)) !== null) {
+        const item = match[1].trim();
+        if (item) bubbles.push(item);
+    }
+
+    if (bubbles.length > 0) return bubbles.slice(0, 5);
+
+    // 容错 1：去除可能的多余标记
+    clean = clean.replace(/\[\/?MSG\]/gi, '').trim();
+
+    // 容错 2：按换行切分
+    const lines = clean.split(/\n+/).map(l => l.trim()).filter(Boolean);
+    if (lines.length > 1) {
+        return lines.slice(0, 5);
+    }
+
+    // 容错 3：按标点符号切分成自然短句
+    if (clean.length > 25) {
+        const sentences = clean.split(/([。！？!?~～]+)/).filter(Boolean);
+        let cur = '';
+        for (let i = 0; i < sentences.length; i++) {
+            cur += sentences[i];
+            if (i % 2 === 1 || cur.length > 18) {
+                if (cur.trim()) bubbles.push(cur.trim());
+                cur = '';
+            }
+        }
+        if (cur.trim()) bubbles.push(cur.trim());
+        if (bubbles.length > 0) return bubbles.slice(0, 5);
+    }
+
+    return [clean];
+}
+
+// ⚡ 单人聊天 AI 回复触发（强固防掉格式、支持斗图、杜绝出戏括号）
 async function triggerAIReplyForSingle(npcId) {
     const npc = G.npcs[npcId];
     if (!npc) return;
@@ -1410,8 +1452,6 @@ async function triggerAIReplyForSingle(npcId) {
     }
 
     const tzContext = formatNpcTimezoneContext(npc.name);
-
-    // 收集可用表情关键词供 AI 选择斗图
     const availableStickers = (G.stickerLibrary || []).slice(0, 20).map(s => s.desc).join('、');
 
     const behindScreenPrompt = isBehindScreenActive ? `
@@ -1427,10 +1467,10 @@ ${tzContext}
 ${npcMemoryContext}
 ${playerMomentsContext}
 
-【严禁出戏括号与纯净聊天铁律】：
+【严禁出戏括号与纯净打字铁律】：
 1. 聊天气泡内【绝对禁止】包含任何动作括号（如“（叹气）”、“（喝了一口水）”、“*微笑*”等）！把聊天框当成真实的微信打字，只输出纯粹口语化的消息文字！
 2. 支持发送表情包斗图：若语境合适，可将其中一条消息写为 [STICKER:表情关键词]（可用关键词参考：${availableStickers}）。
-3. 连续发送 2 到 4 条短消息气泡，每条用 [MSG]...[/MSG] 包裹：
+3. 必须输出 2 到 4 条短消息气泡，每条用 [MSG]...[/MSG] 包裹，禁止 markdown 代码块：
 [MSG]第一句话[/MSG]
 [MSG]第二句话[/MSG]
 [MSG][STICKER:你给我老实点][/MSG]
@@ -1448,10 +1488,9 @@ ${behindScreenPrompt}
 
         if (typeof hideLoading === 'function') hideLoading();
 
-        let cleanText = rawReply;
+        let cleanText = rawReply || '';
         let behindScreenActionText = '';
 
-        // 提取屏幕那边的动作感知
         const bsMatch = cleanText.match(/\[BEHIND_SCREEN\]([\s\S]*?)\[\/BEHIND_SCREEN\]/i);
         if (bsMatch) {
             behindScreenActionText = stripThought(bsMatch[1].trim());
@@ -1459,7 +1498,7 @@ ${behindScreenPrompt}
         }
 
         const bubbles = splitIntoChatBubbles(cleanText);
-        const finalBubbles = bubbles.length ? bubbles : ['在呢！刚在剪视频，怎么啦？'];
+        const finalBubbles = (bubbles && bubbles.length) ? bubbles : ['在呢！刚在调试麦克风，怎么啦？'];
 
         for (let i = 0; i < finalBubbles.length; i++) {
             const bText = finalBubbles[i];
@@ -1495,11 +1534,10 @@ ${behindScreenPrompt}
             }
 
             if (i < finalBubbles.length - 1) {
-                await new Promise(res => setTimeout(res, 600));
+                await new Promise(res => setTimeout(res, 500));
             }
         }
 
-        // 开启了屏幕那边的TA时，追加剧场式动作感知
         if (behindScreenActionText && isBehindScreenActive) {
             pushChatMessageSafe(npcId, {
                 from: 'behind_screen',
@@ -1522,13 +1560,13 @@ ${behindScreenPrompt}
         const curStatusEl = document.getElementById('chatOnlineStatusText');
         const isNowBlocked = isAccountBlockedByNpc(npcId, activeAcc.id);
         if (curStatusEl) {
-            curStatusEl.innerHTML = `${isNowBlocked ? '<span style="color:#d32f2f;">⚠️ TA已拉黑本账号</span>' : '● 在线'} ${npc.memorySummary ? '· 🧠专属记忆' : ''}`;
+            curStatusEl.innerHTML = `${isNowBlocked ? '<span style="color:#d32f2f;">⚠️ TA已拉黑</span>' : '● 在线'} ${npc.memorySummary ? '· 🧠记忆' : ''}`;
         }
     }
 }
 
 // ============================================================
-// 8. 群聊窗口（群聊带表情包，杜绝线下动作出戏）
+// 8. 群聊窗口（带表情包，无线下动作出戏）
 // ============================================================
 function openGroupChat(gid) {
     G.currentChatGroup = gid;
@@ -1560,9 +1598,8 @@ function renderGroupChatWindow(container) {
 
             if (msg.sticker) {
                 bubbleContent = `
-                <div style="padding:2px;">
-                    <img src="${msg.sticker.url}" alt="${escapeHtml(msg.sticker.desc)}" style="max-width:140px;max-height:140px;border-radius:8px;object-fit:cover;display:block;">
-                    <div style="font-size:9.5px;color:#888;margin-top:3px;text-align:center;">${escapeHtml(msg.sticker.desc)}</div>
+                <div style="padding:0;display:inline-block;">
+                    <img src="${msg.sticker.url}" alt="${escapeHtml(msg.sticker.desc)}" style="width:85px;height:85px;border-radius:8px;object-fit:cover;display:block;">
                 </div>`;
             } else {
                 bubbleContent = isSelf ? escapeHtml(msg.text).replace(/\n/g, '<br>') : renderContentWithThoughts(msg.text);
@@ -1595,22 +1632,21 @@ function renderGroupChatWindow(container) {
             </div>
             <div style="display:flex;gap:8px;align-items:center;">
                 <button id="groupSettingsBtn" style="border:1px solid #ddd;background:#fff;color:#555;padding:4px 8px;border-radius:8px;font-size:12px;cursor:pointer;">⚙️ 管理</button>
-                <button id="triggerGroupAIBtn" title="触发群成员回复" style="border:none;background:#ff4757;color:#fff;width:36px;height:36px;border-radius:10px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(255,71,87,0.35);">⚡</button>
+                <button id="triggerGroupAIBtn" title="触发群成员回复" style="border:none;background:#ff4757;color:#fff;width:34px;height:34px;border-radius:8px;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(255,71,87,0.35);">⚡</button>
             </div>
         </div>
 
-        <div id="groupMessageArea" style="flex:1;overflow-y:auto;padding:14px;">
+        <div id="groupMessageArea" style="flex:1;overflow-y:auto;padding:12px;">
             ${messagesHtml || '<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">群里静悄悄的，点击 ➕ 拍共创视频或与群友斗图吧！</div>'}
         </div>
 
-        <!-- 表情包抽屉 -->
         ${_stickerDrawerOpen ? buildStickerDrawerHTML() : ''}
 
-        <div style="padding:8px 10px;background:#fff;border-top:1px solid #e5ebe5;display:flex;gap:6px;align-items:center;">
-            <button id="groupActionInsertBtn" title="群合作/共创视频/旁白" style="border:1px solid #ccc;background:#f8f9f8;color:#555;width:34px;height:34px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;">➕</button>
-            <button id="groupToggleStickerBtn" title="发送表情包" style="border:1px solid #ccc;background:${_stickerDrawerOpen ? '#eaf5ea' : '#f8f9f8'};color:#555;width:34px;height:34px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;">😊</button>
-            <textarea id="groupChatInput" rows="1" placeholder="以 [${escapeHtml(activeAcc.name)}] 在群里发言..." style="flex:1;padding:8px 12px;border-radius:18px;border:1px solid #ddd;background:#f8faf8;font-size:14px;resize:none;outline:none;font-family:inherit;"></textarea>
-            <button id="groupSendBtn" style="border:none;background:var(--primary);color:#fff;padding:8px 14px;border-radius:18px;font-size:13px;font-weight:700;cursor:pointer;">发送</button>
+        <div style="padding:6px 8px;background:#fff;border-top:1px solid #e5ebe5;display:flex;gap:5px;align-items:center;">
+            <button id="groupActionInsertBtn" title="群合作/共创视频/旁白" style="border:1px solid #ccc;background:#f8f9f8;color:#555;width:32px;height:32px;border-radius:50%;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;">➕</button>
+            <button id="groupToggleStickerBtn" title="发送表情包" style="border:1px solid #ccc;background:${_stickerDrawerOpen ? '#eaf5ea' : '#f8f9f8'};color:#555;width:32px;height:32px;border-radius:50%;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;">😊</button>
+            <textarea id="groupChatInput" rows="1" placeholder="以 [${escapeHtml(activeAcc.name)}] 发言..." style="flex:1;padding:7px 10px;border-radius:16px;border:1px solid #ddd;background:#f8faf8;font-size:13.5px;resize:none;outline:none;font-family:inherit;"></textarea>
+            <button id="groupSendBtn" style="border:none;background:var(--primary);color:#fff;padding:6px 13px;border-radius:16px;font-size:12.5px;font-weight:700;cursor:pointer;">发送</button>
         </div>
     </div>
     `;

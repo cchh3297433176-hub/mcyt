@@ -8,7 +8,7 @@ function escapeHtml(str) {
 }
 
 // ============================================================
-// 💭 酒馆式思维链解析与清洗工具
+// 💭 思维链清洗工具（完全静默滤除，不展示思考过程框）
 // ============================================================
 function stripThought(text) {
     if (!text) return '';
@@ -28,40 +28,11 @@ function stripThought(text) {
     return processed.replace(thinkRegex, '').trim();
 }
 
+// 纯净渲染：彻底去除思考过程折叠框，只展现干净的故事与聊天正文
 function renderContentWithThoughts(text) {
     if (!text) return '';
-    let processed = String(text);
-    const tkOpen = '<' + 'think>';
-    const tkClose = '<' + '/think>';
-    if (processed.includes(tkOpen) && !processed.includes(tkClose)) {
-        processed += tkClose;
-    }
-    if (processed.includes('<thought>') && !processed.includes('</thought>')) {
-        processed += '</thought>';
-    }
-    if (processed.includes('<reasoning>') && !processed.includes('</reasoning>')) {
-        processed += '</reasoning>';
-    }
-
-    const thinkRegex = /<(think|thought|reasoning)>([\s\S]*?)<\/\1>/gi;
-    let lastIndex = 0;
-    let htmlResult = '';
-    let match;
-
-    while ((match = thinkRegex.exec(processed)) !== null) {
-        const beforeText = processed.slice(lastIndex, match.index);
-        htmlResult += escapeHtml(beforeText).replace(/\n/g, '<br>');
-        const thoughtText = escapeHtml(match[2].trim()).replace(/\n/g, '<br>');
-        htmlResult += `
-            <details class="thought-box" style="margin:8px 0;padding:6px 10px;background:rgba(0,0,0,0.03);border:1px dashed #bbb;border-radius:8px;font-size:12px;color:#666;">
-                <summary style="cursor:pointer;user-select:none;font-weight:600;color:#777;outline:none;">💭 思考过程 (点击展开/折叠)</summary>
-                <div class="thought-content" style="margin-top:6px;line-height:1.6;color:#555;padding:4px 0;border-top:1px dashed rgba(0,0,0,0.06);">${thoughtText}</div>
-            </details>
-        `;
-        lastIndex = thinkRegex.lastIndex;
-    }
-    htmlResult += escapeHtml(processed.slice(lastIndex)).replace(/\n/g, '<br>');
-    return htmlResult;
+    const clean = stripThought(text);
+    return escapeHtml(clean).replace(/\n/g, '<br>');
 }
 
 function isLikelyTruncated(text) {
@@ -421,7 +392,7 @@ function bindSearchSettingsUI(prefix) {
 }
 
 // ============================================================
-// 全局统一生成中加载动画（解决所有模块以为没反应的痛点）
+// 全局统一生成中加载动画
 // ============================================================
 let _globalLoadingOverlay = null;
 
@@ -452,9 +423,7 @@ function hideGlobalAILoadingIndicator() {
     }
 }
 
-// ============================================================
-// 提取多模态或纯文本消息中的文本串（专为安全扫描设计）
-// ============================================================
+// 提取消息中的文本串
 function extractTextFromMessageContent(content) {
     if (typeof content === 'string') return content;
     if (Array.isArray(content)) {
@@ -470,21 +439,20 @@ function extractTextFromMessageContent(content) {
 }
 
 // ============================================================
-// API 调用（集成全模块乙女安全门禁、多模态视觉识图支持、违规立斩封禁、全局加载动画与思维链整合）
+// API 调用（集成全模块乙女安全门禁、多模态视觉识图支持、违规立斩封禁、全局加载动画与思维链静默清洗）
 // ============================================================
 async function callAI(messages, options = {}) {
-    // 🛡️ 第 1 道防线：底层设备封禁检测（若已封禁，直接掐断所有 API）
+    // 🛡️ 第 1 道防线：底层设备封禁检测
     if (typeof OtomeSecurityGuard !== 'undefined' && OtomeSecurityGuard.isDeviceBanned()) {
         if (typeof showDeviceBanLockScreen === 'function') showDeviceBanLockScreen();
         throw new Error('该设备因严重违规已被全面封锁，无法调用 AI。');
     }
 
-    // 🛡️ 第 2 道防线：用户发送内容强制雷霆扫描（输入即审，违规立斩，兼容多模态数组）
+    // 🛡️ 第 2 道防线：用户发送内容强制雷霆扫描
     if (typeof OtomeSecurityGuard !== 'undefined' && Array.isArray(messages)) {
         const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
         const userText = lastUserMsg ? extractTextFromMessageContent(lastUserMsg.content) : '';
 
-        // 同时合并检查玩家当前的人设是否刻意设定为男性搞同性接触
         const playerPersona = (window.G && window.G.player && window.G.player.persona) || '';
         const violationReason = OtomeSecurityGuard.checkViolation(userText + '\n' + playerPersona);
 
@@ -502,7 +470,7 @@ async function callAI(messages, options = {}) {
     if (!baseUrl) { showToast('⚠️ 请先在「⚙️ 模型」设置中填写 API Base URL'); throw new Error('未配置 Base URL'); }
     if (!model) { showToast('⚠️ 请先在「⚙️ 模型」设置中选择或填写模型'); throw new Error('未配置模型'); }
 
-    // 🛡️ 自动在系统提示词末尾注入绝对乙女向铁律约束（保持原对象结构）
+    // 🛡️ 自动在系统提示词末尾注入绝对乙女向铁律约束
     const finalMessages = messages.map(m => {
         if (m.role === 'system') {
             const extraIronRule = '\n\n【乙女向绝对铁律约束】：本作是由 @鸢尾黎明 老师作品二改的代入向纯乙女Airp游戏，女主为全员唯一核心。所有剧情与互动严禁出现任何男男同性恋爱、BL耽美、攻略角色互配拉郎或男男亲昵性张力，坚决捍卫纯正乙女向定位！';
@@ -553,7 +521,7 @@ async function callAI(messages, options = {}) {
             content = tkOpen + '\n' + reasoning + '\n' + tkClose + '\n\n' + content;
         }
 
-        // 🛡️ 第 3 道防线：AI 返回内容后置扫描（若模型不听话生成了男同，截断并封禁）
+        // 🛡️ 第 3 道防线：AI 返回内容后置扫描
         if (typeof OtomeSecurityGuard !== 'undefined') {
             const outViolation = OtomeSecurityGuard.checkViolation(stripThought(content));
             if (outViolation) {
