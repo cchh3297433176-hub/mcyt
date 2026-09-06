@@ -1,7 +1,7 @@
 // js/08-save-load.js
-// 存档/读档/初始化模块（v1.606 全量数据保护、同人/油管防丢、开局表单防清空版）
+// 存档/读档/初始化模块（v1.607 全量数据保护、同人/油管防丢、开局表单防清空版）
 // ============================================================
-const CURRENT_APP_VERSION = '1.606';
+const CURRENT_APP_VERSION = '1.607';
 
 let _gameInitialized = false;
 let _skipStartChoiceOnce = false;
