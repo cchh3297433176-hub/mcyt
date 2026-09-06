@@ -1,9 +1,9 @@
 // js/06-video-story.js
-// 视频制作（评论由 AI 实时生成）与多层级记忆联动的核心叙事引擎（支持博查/秘塔/Tavily主动探查联网）
+// 视频制作（评论由 AI 实时生成）与多层级记忆联动的核心叙事引擎（支持博查/秘塔/Tavily主动探查联网，支持全量AI生成文章/剧情编辑与管理）
 // ============================================================
 function openVideoModal() {
     const availableAP = G.actionPoints;
-    const collectionNames = Object.keys(G.collections);
+    const collectionNames = Object.keys(G.collections || {});
     const hasCollections = collectionNames.length > 0;
     const styles = [
         { id: 'teach', label: '📘 硬核教学' },
@@ -184,7 +184,7 @@ async function createVideo(title, style, duration, collectionName, collectionInd
     };
     const mainSkills = skillMapping[style] || ['building'];
     let extraViews = 0;
-    const pSkills = G.player.skills;
+    const pSkills = G.player.skills || {};
     for (const sk of mainSkills) extraViews += (pSkills[sk] || 0) * 500;
     let baseViews = 0, baseLikes = 0, followersGain = 0, moneyGain = 0;
     const isShort = (duration === 'short');
@@ -236,9 +236,10 @@ async function createVideo(title, style, duration, collectionName, collectionInd
         moneyGain: moneyGain,
         description: description || '',
     };
+    if (!G.player.videos) G.player.videos = [];
     const videoIndex = G.player.videos.length;
     G.player.videos.push(videoObj);
-    G.totalVideos++;
+    G.totalVideos = (G.totalVideos || 0) + 1;
     if (collectionName) {
         if (!G.collections[collectionName]) G.collections[collectionName] = { videos: [], totalViews: 0, totalLikes: 0, totalComments: 0, videoCount: 0 };
         G.collections[collectionName].videos.push(videoIndex);
@@ -247,9 +248,9 @@ async function createVideo(title, style, duration, collectionName, collectionInd
     const totalFollowersAdd = followersGain + Math.floor(baseViews * 0.001);
     const totalMoneyAdd = moneyGain + Math.floor(baseViews * 0.005);
 
-    G.player.likes += baseLikes;
-    G.player.followers += totalFollowersAdd;
-    G.player.money += totalMoneyAdd;
+    G.player.likes = (G.player.likes || 0) + baseLikes;
+    G.player.followers = (G.player.followers || 0) + totalFollowersAdd;
+    G.player.money = (G.player.money || 0) + totalMoneyAdd;
     addMemoir('发布视频', `「${title}」 播放量 ${baseViews}，风格 ${style}`);
 
     G._lastRegenerate = async () => {
@@ -286,11 +287,11 @@ async function createVideo(title, style, duration, collectionName, collectionInd
 }
 
 // ============================================================
-// 通用剧情生成与深度多层级记忆构建（融入主动探查联网）
+// 通用剧情生成与深度多层级记忆构建
 // ============================================================
 function buildSystemPrompt() {
     const p = G.player;
-    const activeStoryHistory = G.storyHistory.filter(h => !h.archived);
+    const activeStoryHistory = (G.storyHistory || []).filter(h => !h.archived);
     const historySummary = activeStoryHistory.slice(-8).map(h =>
         h.truncated
             ? `[第${h.day}天 ${getTimeSlotName(h.time)}] （内容不完整已忽略）`
@@ -301,7 +302,7 @@ function buildSystemPrompt() {
         `[统一全局记忆 · 第${m.day || 1}天] ${stripThought(m.text || m)}`
     ).join('\n');
 
-    const npcDetailedMemories = Object.values(G.npcs).map(n => {
+    const npcDetailedMemories = Object.values(G.npcs || {}).map(n => {
         let mem = `${n.name}: 好感度 ${n.favor||0}${n._relationship === 'dating' ? ' 💕恋人' : ''}`;
         if (n.memorySummary) mem += ` | 私聊记忆: ${stripThought(n.memorySummary)}`;
         if (n.knownGroupEvents) mem += ` | 群聊知晓: ${stripThought(n.knownGroupEvents)}`;
@@ -313,7 +314,7 @@ function buildSystemPrompt() {
         return `[群聊「${grp ? grp.name : gid}」纪要]: ${stripThought(text)}`;
     }).join('\n');
 
-    const memoirRecent = G.memoir.slice(-12).map(m =>
+    const memoirRecent = (G.memoir || []).slice(-12).map(m =>
         `第${m.day}天: ${m.event} ${m.details}`
     ).join('\n');
 
@@ -354,13 +355,11 @@ function buildUserPrompt(action, detail = '') {
     return base;
 }
 
-// 🧠 核心：智能推导 AI 主动检索关键词
 function deriveSmartSearchQuery(userPrompt) {
     const p = G.player;
     const npcs = Object.values(G.npcs || {}).map(n => n.name);
     let query = `Minecraft ${p.category || '游戏'} 最新热点 玩法模组`;
 
-    // 识别输入中提到的具体主播或机制
     for (const name of npcs) {
         if (userPrompt.includes(name)) {
             query = `Minecraft 主播 ${name} 最新实况 视频玩法`;
@@ -389,7 +388,6 @@ async function generateStory(tag, userPrompt, useSearch = false, replaceBlock = 
         let searchBlock = '';
         let searchNote = '';
 
-        // 🌟 主动探查式检索：只要全局开启联网或单次勾选，自主发起搜索
         const searchActive = (useSearch || (G.search && G.search.enabled));
         const hasSearchKey = !!(G.search && (G.search.apiKey || (G.search.keys && Object.values(G.search.keys).some(k => !!k))));
 
@@ -415,7 +413,7 @@ async function generateStory(tag, userPrompt, useSearch = false, replaceBlock = 
         let sys = buildSystemPrompt() + searchBlock;
         const user = buildUserPrompt(userPrompt, '');
         const messages = [{ role: 'system', content: sys }, { role: 'user', content: user }];
-        const recentHistory = G.storyHistory.filter(h => !h.archived && h._id !== replaceHistoryId).slice(-5);
+        const recentHistory = (G.storyHistory || []).filter(h => !h.archived && h._id !== replaceHistoryId).slice(-5);
         for (const h of recentHistory) {
             const pure = stripThought(h.text);
             messages.push({ role: 'assistant', content: pure.slice(0, 500) + '...' });
@@ -431,7 +429,7 @@ async function generateStory(tag, userPrompt, useSearch = false, replaceBlock = 
             appendStory(newText, tag, { action: userPrompt, useSearch }, { truncated });
             createdEntry = G.storyHistory[G.storyHistory.length - 1];
         } else {
-            const entry = G.storyHistory.find(h => h._id === replaceHistoryId);
+            const entry = (G.storyHistory || []).find(h => h._id === replaceHistoryId);
             if (entry) {
                 entry.text = newText;
                 entry.truncated = truncated;
@@ -467,7 +465,7 @@ async function generateStory(tag, userPrompt, useSearch = false, replaceBlock = 
 }
 
 // ============================================================
-// ✏️ 编辑内容弹窗
+// ✏️ 编辑与管理：全面支持所有 AI 生成文章（AO3同人文、剧情正文、油管长文、动态）与记忆净化
 // ============================================================
 function refreshStoryBlockDOM(entry) {
     const block = dom.storyArea ? dom.storyArea.querySelector(`.story-block[data-story-id="${entry._id}"]`) : document.querySelector(`.story-block[data-story-id="${entry._id}"]`);
@@ -478,87 +476,153 @@ function refreshStoryBlockDOM(entry) {
 
 function buildUnifiedAIEntryHTML(item) {
     const pureText = stripThought(item.text || '').trim();
-    const preview = escapeHtml(pureText.slice(0, 70)) + (pureText.length > 70 ? '...' : '');
+    const preview = escapeHtml(pureText.slice(0, 65)) + (pureText.length > 65 ? '...' : '');
 
     return `
-    <div class="edit-entry" data-id="${item._id}" data-type="${item._type}" data-npcid="${item._npcId || ''}" style="margin-bottom:8px;border:1px solid rgba(30,60,30,.10);border-radius:10px;overflow:hidden;background:#fff;">
-        <div class="edit-entry-header" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#f5faf5;">
+    <div class="edit-entry" data-id="${item._id}" data-type="${item._type}" data-bookid="${item._bookId || ''}" data-chapidx="${item._chapIdx !== undefined ? item._chapIdx : ''}" data-videoidx="${item._videoIdx !== undefined ? item._videoIdx : ''}" data-feedid="${item._feedId || ''}" data-npcid="${item._npcId || ''}" style="margin-bottom:8px;border:1px solid rgba(30,60,30,.12);border-radius:10px;overflow:hidden;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.03);">
+        <div class="edit-entry-header" style="cursor:pointer;display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:#f8faf8;">
             <div style="flex:1;min-width:0;">
-                <div style="font-size:12px;font-weight:700;color:var(--text);">${escapeHtml(item.title)}</div>
+                <div style="font-size:12.5px;font-weight:700;color:var(--text);">${escapeHtml(item.title)}</div>
                 <div class="edit-entry-preview" style="font-size:12px;color:#777;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${preview || '（无正文）'}</div>
             </div>
-            <span class="chevron" style="margin-left:8px;color:#999;">▼</span>
+            <span class="chevron" style="margin-left:8px;color:#999;font-size:12px;">▼</span>
         </div>
         <div class="edit-entry-body" style="display:none;padding:10px 12px;border-top:1px solid rgba(30,60,30,.06);">
-            <textarea class="edit-textarea" style="width:100%;min-height:110px;padding:8px;border-radius:8px;border:2px solid rgba(30,60,30,.10);background:#f9fcf9;color:var(--text);font-size:13px;font-family:inherit;resize:vertical;">${escapeHtml(pureText)}</textarea>
+            <div style="font-size:11px;color:#888;margin-bottom:6px;">正文内容（支持多行长文修改）：</div>
+            <textarea class="edit-textarea" style="width:100%;min-height:140px;padding:8px 10px;border-radius:8px;border:1.5px solid #cbd5e1;background:#fff;color:#1e293b;font-size:13px;font-family:inherit;line-height:1.6;resize:vertical;box-sizing:border-box;">${escapeHtml(pureText)}</textarea>
             <div class="btn-row" style="margin-top:8px;display:flex;gap:6px;justify-content:flex-end;">
                 <button class="btn-secondary edit-del-btn" style="color:#e53935;border-color:#ffcdd2;background:#ffebee;padding:6px 12px;font-size:12px;margin-right:auto;">🗑️ 删除此条</button>
                 <button class="btn-secondary edit-cancel-btn" style="padding:6px 12px;font-size:12px;">取消</button>
-                <button class="btn-primary edit-save-btn" style="padding:6px 14px;font-size:12px;">💾 保存修改</button>
+                <button class="btn-primary edit-save-btn" style="padding:6px 14px;font-size:12px;background:#16a34a;">💾 保存修改</button>
             </div>
         </div>
     </div>`;
 }
 
 function openEditContentModal(defaultTab = 'allAI') {
-    const stories = (G.storyHistory || []).map((s, idx) => ({
-        _id: s._id,
-        _type: 'story',
-        title: `📖 ${s.tag || '剧情'} · 第${s.day}天 · ${getTimeSlotName(s.time)}`,
-        text: s.text,
-        archived: s.archived,
-        order: s._id ? parseInt(s._id.replace(/\D/g, '') || idx) : idx
-    }));
+    const allAIItems = [];
 
-    const chats = [];
+    // 1. 主线剧情正文
+    (G.storyHistory || []).forEach((s, idx) => {
+        allAIItems.push({
+            _id: s._id || ('story_' + idx),
+            _type: 'story',
+            title: `📖 剧情 · ${s.tag || '主线'} · 第${s.day}天 · ${getTimeSlotName(s.time)}`,
+            text: s.text,
+            order: s.day * 100 + (s.time || 0)
+        });
+    });
+
+    // 2. AO3 同人文小说正文（包含自建或 AI 生成的作品各章节长文）
+    (G.fanworks || []).forEach(fw => {
+        if (Array.isArray(fw.chapters) && fw.chapters.length) {
+            fw.chapters.forEach((chap, cIdx) => {
+                allAIItems.push({
+                    _id: `fanwork_${fw.id}_chap_${cIdx}`,
+                    _type: 'fanwork_chapter',
+                    _bookId: fw.id,
+                    _chapIdx: cIdx,
+                    title: `🎨 AO3小说 · 《${fw.title}》 第${cIdx + 1}章`,
+                    text: chap.content || chap.text || '',
+                    order: 9999 + cIdx
+                });
+            });
+        } else if (fw.summary || fw.desc) {
+            allAIItems.push({
+                _id: `fanwork_${fw.id}_desc`,
+                _type: 'fanwork_desc',
+                _bookId: fw.id,
+                title: `🎨 AO3小说大纲 · 《${fw.title}》`,
+                text: fw.summary || fw.desc || '',
+                order: 9998
+            });
+        }
+    });
+
+    // 3. YouTube 视频脚本剧情与高光描述
+    (G.player?.videos || []).forEach((v, vIdx) => {
+        if (v.desc || v.description) {
+            allAIItems.push({
+                _id: `yt_video_${vIdx}`,
+                _type: 'video_desc',
+                _videoIdx: vIdx,
+                title: `🎬 YouTube视频文案 · 《${v.title}》`,
+                text: v.desc || v.description || '',
+                order: (v.day || 1) * 100
+            });
+        }
+    });
+
+    // 4. 朋友圈动态正文
+    (G.feed || []).forEach(f => {
+        allAIItems.push({
+            _id: `feed_${f.id}`,
+            _type: 'feed',
+            _feedId: f.id,
+            title: `🌟 朋友圈动态 · ${f.author} · ${f.time || ''}`,
+            text: f.body || '',
+            order: (f.day || 1) * 100
+        });
+    });
+
+    // 5. 私聊对话
     for (const [npcId, msgs] of Object.entries(G.chatHistory || {})) {
         const npc = G.npcs[npcId];
         const name = npc ? npc.name : npcId;
         (msgs || []).forEach(m => {
-            chats.push({
-                _id: m._id,
-                _type: 'chat',
-                _npcId: npcId,
-                title: `💬 私信 · ${m.from === 'player' ? '🧑 我' : `🤖 ${name}`} · ${m.time || ''}`,
-                text: m.text,
-                archived: false,
-                order: m._id ? parseInt(m._id.replace(/\D/g, '') || 0) : 0
-            });
+            if (m.text && !m.sticker) {
+                allAIItems.push({
+                    _id: m._id,
+                    _type: 'chat',
+                    _npcId: npcId,
+                    title: `💬 私信 · ${m.from === 'player' ? '🧑 我' : `🤖 ${name}`} · ${m.time || ''}`,
+                    text: m.text,
+                    order: 50
+                });
+            }
         });
     }
 
-    const allAIItems = [...stories, ...chats].sort((a, b) => b.order - a.order);
+    // 排序倒序展示
+    allAIItems.sort((a, b) => b.order - a.order);
+
+    // 全局记忆总结列表（支持删除旧卡他人记忆）
     const summaryEntries = [...(G.memorySummaries || [])].reverse();
 
     const html = `
     <h3 style="margin-bottom:10px;">✏️ 编辑与管理</h3>
     <div class="btn-row" style="margin-bottom:12px;">
-        <button class="btn-secondary small" id="editTabAIBtn" style="flex:1;">🤖 AI 发送的内容（<span id="aiContentCount">${allAIItems.length}</span>）</button>
+        <button class="btn-secondary small" id="editTabAIBtn" style="flex:1;">🤖 AI 生成的内容/文章（<span id="aiContentCount">${allAIItems.length}</span>）</button>
         <button class="btn-secondary small" id="editTabSummaryBtn" style="flex:1;">🧠 统一记忆总结（<span id="summaryContentCount">${summaryEntries.length}</span>）</button>
     </div>
     <div id="editTabAI" style="max-height:58vh;overflow-y:auto;">
-        ${allAIItems.length ? allAIItems.map(item => buildUnifiedAIEntryHTML(item)).join('') : '<p style="font-size:12px;color:#999;text-align:center;padding:20px;">暂无生成记录</p>'}
+        ${allAIItems.length ? allAIItems.map(item => buildUnifiedAIEntryHTML(item)).join('') : '<p style="font-size:12px;color:#999;text-align:center;padding:20px;">暂无生成文章或记录</p>'}
     </div>
     <div id="editTabSummary" style="max-height:58vh;overflow-y:auto;display:none;">
-        ${summaryEntries.length ? summaryEntries.map(e => `
-            <div class="edit-entry" data-id="${e.id || e._id}" data-type="summary" style="margin-bottom:8px;border:1px solid rgba(30,60,30,.10);border-radius:10px;background:#fff;overflow:hidden;">
-                <div class="edit-entry-header" style="cursor:pointer;padding:10px 12px;background:#f5faf5;display:flex;justify-content:space-between;align-items:center;">
-                    <div>
-                        <div style="font-size:12px;font-weight:700;">🧠 全局记忆 · 截至第${e.day || 1}天</div>
-                        <div class="edit-entry-preview" style="font-size:12px;color:#777;margin-top:2px;">${escapeHtml(stripThought(e.text || e).slice(0, 60))}...</div>
+        ${summaryEntries.length ? summaryEntries.map(e => {
+            const sumId = e.id || e._id || (typeof e === 'string' ? e : 'sm_' + Math.random());
+            const rawText = stripThought(e.text || e);
+            return `
+            <div class="edit-entry" data-id="${escapeHtml(sumId)}" data-type="summary" style="margin-bottom:8px;border:1px solid rgba(30,60,30,.12);border-radius:10px;background:#fff;overflow:hidden;">
+                <div class="edit-entry-header" style="cursor:pointer;padding:10px 12px;background:#f8faf8;display:flex;justify-content:space-between;align-items:center;">
+                    <div style="flex:1;min-width:0;">
+                        <div style="font-size:12.5px;font-weight:700;color:#166534;">🧠 全局长效记忆 · 截至第${e.day || 1}天</div>
+                        <div class="edit-entry-preview" style="font-size:12px;color:#777;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(rawText.slice(0, 60))}...</div>
                     </div>
-                    <span class="chevron" style="color:#999;">▼</span>
+                    <span class="chevron" style="color:#999;font-size:12px;">▼</span>
                 </div>
                 <div class="edit-entry-body" style="display:none;padding:10px 12px;border-top:1px solid rgba(30,60,30,.06);">
-                    <textarea class="edit-textarea" style="width:100%;min-height:100px;padding:8px;border-radius:8px;border:2px solid rgba(30,60,30,.10);background:#f9fcf9;color:var(--text);font-size:13px;font-family:inherit;resize:vertical;">${escapeHtml(stripThought(e.text || e))}</textarea>
+                    <div style="font-size:11px;color:#888;margin-bottom:6px;">记忆正文（若发现他人残留数据可直接删除）：</div>
+                    <textarea class="edit-textarea" style="width:100%;min-height:110px;padding:8px;border-radius:8px;border:1.5px solid #cbd5e1;background:#fff;color:#1e293b;font-size:13px;font-family:inherit;line-height:1.6;resize:vertical;box-sizing:border-box;">${escapeHtml(rawText)}</textarea>
                     <div class="btn-row" style="margin-top:8px;display:flex;gap:6px;justify-content:flex-end;">
                         <button class="btn-secondary edit-del-btn" style="color:#e53935;border-color:#ffcdd2;background:#ffebee;padding:6px 12px;font-size:12px;margin-right:auto;">🗑️ 删除此条</button>
                         <button class="btn-secondary edit-cancel-btn" style="padding:6px 12px;font-size:12px;">取消</button>
-                        <button class="btn-primary edit-save-btn" style="padding:6px 14px;font-size:12px;">💾 保存修改</button>
+                        <button class="btn-primary edit-save-btn" style="padding:6px 14px;font-size:12px;background:#16a34a;">💾 保存修改</button>
                     </div>
                 </div>
             </div>
-        `).join('') : '<p style="font-size:12px;color:#999;text-align:center;padding:20px;">暂无记忆总结</p>'}
+            `;
+        }).join('') : '<p style="font-size:12px;color:#999;text-align:center;padding:20px;">暂无记忆总结</p>'}
     </div>
     <div class="btn-row" style="margin-top:12px;">
         <button class="btn-secondary" onclick="closeModal()">关闭</button>
@@ -585,17 +649,20 @@ function openEditContentModal(defaultTab = 'allAI') {
         const header = el.querySelector('.edit-entry-header');
         const body = el.querySelector('.edit-entry-body');
         const chevron = el.querySelector('.chevron');
+
         header.addEventListener('click', () => {
             const isOpen = body.style.display !== 'none';
             body.style.display = isOpen ? 'none' : 'block';
             chevron.textContent = isOpen ? '▼' : '▲';
         });
+
         el.querySelector('.edit-cancel-btn')?.addEventListener('click', (e) => {
             e.stopPropagation();
             body.style.display = 'none';
             chevron.textContent = '▼';
         });
 
+        // 🗑️ 删除此条记录（彻底抹去脏数据与残留）
         el.querySelector('.edit-del-btn')?.addEventListener('click', (e) => {
             e.stopPropagation();
             const id = el.dataset.id;
@@ -608,6 +675,27 @@ function openEditContentModal(defaultTab = 'allAI') {
                 if (sIdx !== -1) G.storyHistory.splice(sIdx, 1);
                 const block = dom.storyArea?.querySelector(`.story-block[data-story-id="${id}"]`) || document.querySelector(`.story-block[data-story-id="${id}"]`);
                 if (block) block.remove();
+            } else if (type === 'fanwork_chapter') {
+                const bId = el.dataset.bookid;
+                const cIdx = parseInt(el.dataset.chapidx);
+                const fw = (G.fanworks || []).find(f => String(f.id) === String(bId));
+                if (fw && Array.isArray(fw.chapters) && fw.chapters[cIdx]) {
+                    fw.chapters.splice(cIdx, 1);
+                }
+            } else if (type === 'fanwork_desc') {
+                const bId = el.dataset.bookid;
+                const fw = (G.fanworks || []).find(f => String(f.id) === String(bId));
+                if (fw) { fw.summary = ''; fw.desc = ''; }
+            } else if (type === 'video_desc') {
+                const vIdx = parseInt(el.dataset.videoidx);
+                if (G.player?.videos && G.player.videos[vIdx]) {
+                    G.player.videos[vIdx].desc = '';
+                    G.player.videos[vIdx].description = '';
+                }
+            } else if (type === 'feed') {
+                const fId = parseInt(el.dataset.feedid);
+                const fIdx = (G.feed || []).findIndex(f => f.id === fId);
+                if (fIdx !== -1) G.feed.splice(fIdx, 1);
             } else if (type === 'chat') {
                 const npcId = el.dataset.npcid;
                 if (G.chatHistory && G.chatHistory[npcId]) {
@@ -617,7 +705,7 @@ function openEditContentModal(defaultTab = 'allAI') {
                 }
             } else if (type === 'summary') {
                 if (G.memorySummaries) {
-                    const smIdx = G.memorySummaries.findIndex(m => (m.id || m._id) === id || m === id);
+                    const smIdx = G.memorySummaries.findIndex(m => (m.id || m._id) === id || m === id || m.text === id);
                     if (smIdx !== -1) G.memorySummaries.splice(smIdx, 1);
                 }
             }
@@ -638,6 +726,7 @@ function openEditContentModal(defaultTab = 'allAI') {
             autoSaveGame();
         });
 
+        // 💾 保存修改（支持长篇小说正文、剧情、记忆修改落地）
         el.querySelector('.edit-save-btn')?.addEventListener('click', (e) => {
             e.stopPropagation();
             const id = el.dataset.id;
@@ -646,8 +735,30 @@ function openEditContentModal(defaultTab = 'allAI') {
             if (!newText) { showToast('⚠️ 内容不能为空', 'error', 1800); return; }
 
             if (type === 'story') {
-                const entry = G.storyHistory.find(h => h._id === id);
+                const entry = (G.storyHistory || []).find(h => h._id === id);
                 if (entry) { entry.text = newText; refreshStoryBlockDOM(entry); }
+            } else if (type === 'fanwork_chapter') {
+                const bId = el.dataset.bookid;
+                const cIdx = parseInt(el.dataset.chapidx);
+                const fw = (G.fanworks || []).find(f => String(f.id) === String(bId));
+                if (fw && Array.isArray(fw.chapters) && fw.chapters[cIdx]) {
+                    if (typeof fw.chapters[cIdx] === 'string') fw.chapters[cIdx] = newText;
+                    else fw.chapters[cIdx].content = newText;
+                }
+            } else if (type === 'fanwork_desc') {
+                const bId = el.dataset.bookid;
+                const fw = (G.fanworks || []).find(f => String(f.id) === String(bId));
+                if (fw) { fw.summary = newText; fw.desc = newText; }
+            } else if (type === 'video_desc') {
+                const vIdx = parseInt(el.dataset.videoidx);
+                if (G.player?.videos && G.player.videos[vIdx]) {
+                    G.player.videos[vIdx].desc = newText;
+                    G.player.videos[vIdx].description = newText;
+                }
+            } else if (type === 'feed') {
+                const fId = parseInt(el.dataset.feedid);
+                const item = (G.feed || []).find(f => f.id === fId);
+                if (item) item.body = newText;
             } else if (type === 'chat') {
                 const npcId = el.dataset.npcid;
                 const msg = (G.chatHistory[npcId] || []).find(m => m._id === id);
@@ -656,7 +767,7 @@ function openEditContentModal(defaultTab = 'allAI') {
                     if (G.currentChatNpc === npcId && typeof renderSocialPanel === 'function') renderSocialPanel();
                 }
             } else if (type === 'summary') {
-                const sm = (G.memorySummaries || []).find(m => (m.id || m._id) === id);
+                const sm = (G.memorySummaries || []).find(m => (m.id || m._id) === id || m === id || m.text === id);
                 if (sm) {
                     if (typeof sm === 'string') {
                         const sIdx = G.memorySummaries.indexOf(sm);
@@ -666,10 +777,11 @@ function openEditContentModal(defaultTab = 'allAI') {
                     }
                 }
             }
-            el.querySelector('.edit-entry-preview').textContent = newText.slice(0, 70) + (newText.length > 70 ? '...' : '');
+
+            el.querySelector('.edit-entry-preview').textContent = newText.slice(0, 65) + (newText.length > 65 ? '...' : '');
             body.style.display = 'none';
             chevron.textContent = '▼';
-            showToast('✅ 已保存修改', 'success', 1500);
+            showToast('✅ 文章/内容已保存更新！', 'success', 1500);
             autoSaveGame();
         });
     });
@@ -682,7 +794,7 @@ $('editContentBtn')?.addEventListener('click', () => openEditContentModal('allAI
 async function maybeAutoSummarize() {
     const s = G.memoryConfig || {};
     if (!s.enabled) return;
-    const active = G.storyHistory.filter(h => !h.archived);
+    const active = (G.storyHistory || []).filter(h => !h.archived);
     const threshold = s.defaultThreshold || 10;
     const keepRecent = s.defaultKeepRecent || 5;
 

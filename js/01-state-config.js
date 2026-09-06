@@ -158,9 +158,6 @@ const OtomeSecurityGuard = {
     },
 
     // 检查并消费导入卡中的一次性特赦令（彻底防止重放旧卡漏洞）
-    // 返回 { success, nativeCleared }：
-    //   success：令牌核验是否通过（决定要不要解封）
-    //   nativeCleared：设备底层持久标记是否已确认清除干净（决定要不要提示用户重启核实）
     tryRedeemPardonCertificate(importedState) {
         if (!importedState) return { success: false, nativeCleared: true };
         const cert = importedState._pardonCertificate;
@@ -223,7 +220,7 @@ const OtomeSecurityGuard = {
             }
         } catch (_) {}
 
-        // 清除原生持久标记，并如实记录清除是否真的成功（不再无条件假定成功）
+        // 清除原生持久标记
         if (window.NativeDeviceBridge && typeof window.NativeDeviceBridge.clearNativeDeviceBan === 'function') {
             try {
                 const result = window.NativeDeviceBridge.clearNativeDeviceBan();
@@ -381,106 +378,127 @@ const OFFICIAL_NPCS = {
 const DEFAULT_NPCS = OFFICIAL_NPCS;
 
 // ============================================================
-// GLOBAL STATE
+// 全新纯净初始状态工厂函数（防止任何人设/剧情/通讯录串号残留）
 // ============================================================
-let G = {
-    ai: { baseUrl: '', apiKey: '', model: '' },
-    savedModels: [],
-    _pulledModels: {},
-    search: { apiKey: '', enabled: false },
-    player: {
-        identity: 'new',
-        age: 18,
-        gender: '女',
-        ytName: 'MC_CraftMaster',
-        persona: '',
-        skin: '',
-        category: '剧情',
-        followers: 0,
-        likes: 0,
-        money: 0,
-        videos: [],
-        streams: [],
-        friends: [],
-        dms: [],
-        fanClubLevel: 0,
-        energy: 100,
-        isStudent: true,
-        isVacation: true,
-        skills: { building: 0, redstone: 0, pvp: 0, survival: 0, hunting: 0 },
-        streamHistory: [],
-        avatar: null,
-        equipmentLevel: 1,
-        metDream: false,
-        lovers: [],
-        personaStyle: 'neutral'
-    },
-    day: 1,
-    timeSlot: 0,
-    actionPoints: 6,
-    maxActionPoints: 6,
-    phase: 'setup',
-    storyHistory: [],
-    memorySummaries: [],
-    memorySummarySettings: {
-        enabled: false,
-        threshold: 10,
-        keepRecent: 5,
-        modelProfileId: '',
-    },
-    usedThemes: new Set(),
-    isGenerating: false,
-    totalVideos: 0,
-    totalStreams: 0,
-    totalCollabs: 0,
-    totalDMs: 0,
-    currentStream: null,
+function createDefaultGameState() {
+    return {
+        ai: { baseUrl: '', apiKey: '', model: '' },
+        savedModels: [],
+        _pulledModels: {},
+        search: { apiKey: '', enabled: false },
+        player: {
+            identity: 'new',
+            age: 18,
+            gender: '女',
+            ytName: 'MC_CraftMaster',
+            persona: '',
+            skin: '',
+            category: '剧情',
+            followers: 0,
+            likes: 0,
+            money: 0,
+            videos: [],
+            streams: [],
+            friends: [],
+            dms: [],
+            fanClubLevel: 0,
+            energy: 100,
+            isStudent: true,
+            isVacation: true,
+            skills: { building: 20, redstone: 20, pvp: 20, survival: 20, hunting: 20 },
+            streamHistory: [],
+            avatar: null,
+            equipmentLevel: 1,
+            metDream: false,
+            lovers: [],
+            personaStyle: 'neutral'
+        },
+        day: 1,
+        timeSlot: 0,
+        actionPoints: 6,
+        maxActionPoints: 6,
+        phase: 'setup',
+        storyHistory: [],
+        memorySummaries: [],
+        memorySummarySettings: {
+            enabled: false,
+            threshold: 10,
+            keepRecent: 5,
+            modelProfileId: '',
+        },
+        usedThemes: new Set(),
+        isGenerating: false,
+        totalVideos: 0,
+        totalStreams: 0,
+        totalCollabs: 0,
+        totalDMs: 0,
+        currentStream: null,
 
-    npcs: {},
-    chatHistory: {},
-    _chatMsgId: 0,
+        npcs: {},
+        chatHistory: {},
+        _chatMsgId: 0,
 
-    currentAccountId: 'main',
-    altAccounts: [],
-    blockedNpcs: [],
-    blockedRecords: [],
+        currentAccountId: 'main',
+        altAccounts: [],
+        blockedNpcs: [],
+        blockedRecords: [],
 
-    // 🛡️ 设备安全状态
-    _isDeviceBanned: false,
-    _banReason: null,
-    _activeBanToken: null,
-    _activeBanTime: null,
-    _securityAuditBox: null,
-    _pardonCertificate: null,
+        // 🛡️ 设备安全状态
+        _isDeviceBanned: false,
+        _banReason: null,
+        _activeBanToken: null,
+        _activeBanTime: null,
+        _securityAuditBox: null,
+        _pardonCertificate: null,
 
-    fanworks: [],
-    fanclubMessages: [],
-    _fanworkId: 0,
-    _fanclubMsgId: 0,
-    currentChatNpc: null,
-    currentChatGroup: null,
-    chatActiveTab: 'direct',
-    phoneNav: 'chats',
-    groups: {},
-    groupChatHistory: {},
-    friendRequests: [],
-    groupInvites: [],
-    momentsFilterNpcId: null,
-    confessionState: null,
-    collections: {},
-    _lastBriefing: null,
-    memoir: [],
-    _logId: 0,
-    _npcDailyConfession: {},
-    feed: [],
-    feedIdCounter: 0,
-    achievements: [],
-    unlockedAchievements: [],
-    sponsorOffers: [],
-    sponsorCooldown: 0,
-    milestoneReached: [],
-    _npcInitiatedToday: {},
-};
+        fanworks: [],
+        fanclubMessages: [],
+        _fanworkId: 0,
+        _fanclubMsgId: 0,
+        currentChatNpc: null,
+        currentChatGroup: null,
+        chatActiveTab: 'direct',
+        phoneNav: 'chats',
+        groups: {},
+        groupChatHistory: {},
+        friendRequests: [],
+        groupInvites: [],
+        momentsFilterNpcId: null,
+        confessionState: null,
+        collections: {},
+        _lastBriefing: null,
+        memoir: [],
+        _logId: 0,
+        _npcDailyConfession: {},
+        feed: [],
+        feedIdCounter: 0,
+        achievements: [],
+        unlockedAchievements: [],
+        sponsorOffers: [],
+        sponsorCooldown: 0,
+        milestoneReached: [],
+        _npcInitiatedToday: {},
+    };
+}
+
+// 深度重置全局运行态（保留网络/模型与检索设置，彻底清洗一切游戏内数据）
+function resetGameState(keepAIConfig = true) {
+    const fresh = createDefaultGameState();
+    if (keepAIConfig && window.G) {
+        if (window.G.ai) fresh.ai = Object.assign({}, window.G.ai);
+        if (window.G.savedModels) fresh.savedModels = [...window.G.savedModels];
+        if (window.G._pulledModels) fresh._pulledModels = Object.assign({}, window.G._pulledModels);
+        if (window.G.search) fresh.search = Object.assign({}, window.G.search);
+        if (window.G.memorySummarySettings) fresh.memorySummarySettings = Object.assign({}, window.G.memorySummarySettings);
+    }
+    window.G = fresh;
+    return window.G;
+}
+
+// ============================================================
+// GLOBAL STATE 初始化挂载
+// ============================================================
+let G = createDefaultGameState();
 
 const $ = id => document.getElementById(id);
 const dom = {
@@ -624,3 +642,6 @@ const SPONSOR_TYPES = [
     { id: 'peripheral', name: '🎧 外设品牌', desc: '推广键盘/鼠标/耳机', reward: 5000, risk: 0.04 },
     { id: 'server', name: '🖥️ 服务器托管', desc: '推广MC服务器托管服务', reward: 6000, risk: 0.06 },
 ];
+
+window.createDefaultGameState = createDefaultGameState;
+window.resetGameState = resetGameState;

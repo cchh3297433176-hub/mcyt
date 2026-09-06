@@ -200,13 +200,12 @@ function showDeviceBanLockScreen() {
                     <b>平台正版声明：</b>本软件为抖音 <b>@鸢尾黎明</b> 老师作品的<b>二改版本</b>，为代入向纯乙女 Airp 游戏，严禁在攻略对象之间搞男同拉郎配对。
                 </div>
             </div>
-            <p style="font-size: 12px; color: #6b7280; line-height: 1.6; margin-bottom: 16px;">
-                当前设备所有生成与游玩按键已被全面锁死。<br>
-                <b>【解封流程】</b>：点击下方红色按钮导出卡片发给管理员审核；拿到管理员发还的解密卡后，点击下方绿色按钮导入即可解除设备锁并恢复全部进度！
-            </p>
+            <div style="background: #f0fdf4; border: 1px dashed #86efac; border-radius: 10px; padding: 10px; font-size: 12px; color: #166534; line-height: 1.6; text-align: left; margin-bottom: 14px;">
+                🛡️ <b>隐私保护声明：</b><br>导出的取证卡<b>仅保留最近十次聊天与生成记录</b>用于管理员核实，且<b>默认不包含您的 API Key</b>，请放心导出发送给管理员！
+            </div>
             <div style="display: flex; flex-direction: column; gap: 8px;">
                 <button id="lockExportBackupBtn" style="padding: 12px; font-size: 14px; font-weight: 700; border: none; border-radius: 10px; background: #dc2626; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
-                    <span>📤</span> 导出全量取证记忆卡 (发送给管理员)
+                    <span>📤</span> 导出精简取证记忆卡 (发送给管理员)
                 </button>
                 <button id="lockImportPardonCardBtn" style="padding: 12px; font-size: 14px; font-weight: 700; border: none; border-radius: 10px; background: #16a34a; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
                     <span>📥</span> 导入管理员解封卡 (解除封禁)
@@ -228,7 +227,7 @@ function showDeviceBanLockScreen() {
     `;
     lockMask.style.display = 'flex';
 
-    // 1. 导出取证卡按钮（支持 PNG 隐写与 JSON 双轨，层级已提至最顶层）
+    // 1. 导出取证卡按钮
     document.getElementById('lockExportBackupBtn').onclick = (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -239,7 +238,7 @@ function showDeviceBanLockScreen() {
         }
     };
 
-    // 2. 🌟 导入管理员解封卡按钮（用户解封通道）
+    // 2. 导入管理员解封卡按钮
     document.getElementById('lockImportPardonCardBtn').onclick = (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -297,31 +296,45 @@ function showDeviceBanLockScreen() {
             adminBanner.innerHTML = `
                 <div style="display:flex;align-items:center;gap:6px;">
                     <span style="font-size:16px;">🔍</span>
-                    <span><b>管理员查房模式</b>：已放行，你可翻阅该存档所有历史取证。</span>
+                    <span><b>管理员查房模式</b>：正在查房审核他人存档。</span>
                 </div>
                 <div style="display:flex;gap:8px;">
                     <button id="btnAdminConfirmUnlockAll" style="background:#22c55e;color:#fff;border:none;padding:5px 12px;border-radius:6px;font-weight:700;font-size:12px;cursor:pointer;">✅ 签发特赦卡并导出</button>
-                    <button id="btnAdminRejectBanKeep" style="background:#dc2626;color:#fff;border:none;padding:5px 12px;border-radius:6px;font-weight:700;font-size:12px;cursor:pointer;">❌ 确属违规维持锁死</button>
+                    <button id="btnAdminExitAuditClean" style="background:#f59e0b;color:#fff;border:none;padding:5px 12px;border-radius:6px;font-weight:700;font-size:12px;cursor:pointer;">🚪 退出查房并清空</button>
+                    <button id="btnAdminRejectBanKeep" style="background:#dc2626;color:#fff;border:none;padding:5px 12px;border-radius:6px;font-weight:700;font-size:12px;cursor:pointer;">❌ 维持封禁</button>
                 </div>
             `;
 
+            // ✅ 签发特赦卡并导出
             document.getElementById('btnAdminConfirmUnlockAll').onclick = () => {
-                window._isAdminAuditing = false;
-                OtomeSecurityGuard.adminAuthorizePardon('iris2026');
+                OtomeSecurityGuard.adminAuthorizePardon(OtomeSecurityGuard.ADMIN_SECRET_KEY);
                 OtomeSecurityGuard.purgeAllDeviceBans();
-                adminBanner.remove();
 
-                alert('🎉 管理员特赦令已签发！现在为您打开导出弹窗，将导出的解密记忆卡发还给用户，用户在手机上点击绿色按钮导入即可解除封锁恢复进度！');
+                alert('🎉 管理员特赦令已签发！现在为您打开导出弹窗，将导出的解密记忆卡发还给用户，用户在手机上导入即可解除封锁！\n\n导出完成后将自动退出查房，保证您的设备纯净。');
                 openBackupModal();
+
+                setTimeout(() => {
+                    if (confirm('是否已完成特赦卡导出？点击「确定」将立即退出查房模式并重置设备，防止他人人设残留。')) {
+                        exitAdminAuditingAndCleanup();
+                    }
+                }, 1500);
             };
 
+            // 🚪 退出查房并清空
+            document.getElementById('btnAdminExitAuditClean').onclick = () => {
+                if (confirm('确定退出当前查房模式吗？退出将彻底清洗此存档数据，避免残留。')) {
+                    exitAdminAuditingAndCleanup();
+                }
+            };
+
+            // ❌ 确属违规维持锁死
             document.getElementById('btnAdminRejectBanKeep').onclick = () => {
                 window._isAdminAuditing = false;
                 adminBanner.remove();
                 showDeviceBanLockScreen();
             };
 
-            alert('🔍 密匙正确！已进入管理员查房模式。你现在可以点进私聊、同人、朋友圈任意查阅历史。查验完毕后点击顶部绿色按钮即可签发特赦卡导出！');
+            alert('🔍 密匙正确！已进入管理员查房模式。你现在可以点进私聊、同人、朋友圈任意查阅历史。查验完毕后点击顶部按钮签发特赦卡或安全退出！');
             updateUI();
             renderAllPanels();
         } else {
@@ -329,7 +342,45 @@ function showDeviceBanLockScreen() {
         }
     };
 }
+
+// 🛡️ 管理员查房彻底安全退出函数：清洗全部他人数据，防止新档串号
+function exitAdminAuditingAndCleanup() {
+    window._isAdminAuditing = false;
+    const adminBanner = document.getElementById('adminAuditStatusBar');
+    if (adminBanner) adminBanner.remove();
+
+    // 彻底清空全局状态，仅保留网络模型配置
+    if (typeof resetGameState === 'function') {
+        resetGameState(true);
+    }
+
+    _gameInitialized = false;
+    G.phase = 'setup';
+
+    // 切换回开局设定页，并清空输入框
+    const setup = $('setupPage');
+    const game = $('gamePage');
+    if (game) {
+        game.classList.remove('active');
+        game.style.display = 'none';
+    }
+    if (setup) {
+        setup.classList.add('active');
+        setup.style.display = 'block';
+    }
+
+    if ($('ytNameInput')) $('ytNameInput').value = '';
+    if ($('personaInput')) $('personaInput').value = '';
+    if ($('skinInput')) $('skinInput').value = '';
+
+    const banner = $('resumeBanner');
+    if (banner) banner.style.display = 'none';
+
+    showToast('✨ 已彻底清空查房数据，您可以全新开局或读取自己的存档！', 'success', 3500);
+}
+
 window.showDeviceBanLockScreen = showDeviceBanLockScreen;
+window.exitAdminAuditingAndCleanup = exitAdminAuditingAndCleanup;
 
 // ============================================================
 // 每日视频自然增长

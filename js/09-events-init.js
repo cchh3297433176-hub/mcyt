@@ -1,5 +1,5 @@
 // js/09-events-init.js
-// 事件绑定与公告系统（v1.600 全量大版本更新说明与正版声明）
+// 事件绑定与公告系统（v1.600 全量大版本更新说明、正版声明与个人人设资料全能编辑）
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
     // 开始游戏按钮
@@ -206,7 +206,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 🛡️ 确保全部 DOM 事件绑定完毕后，再检查是否需要弹出封禁遮罩
+    // 确保全部 DOM 事件绑定完毕后，再检查是否需要弹出封禁遮罩
     setTimeout(() => {
         if (typeof OtomeSecurityGuard !== 'undefined' && OtomeSecurityGuard.isDeviceBanned()) {
             if (typeof showDeviceBanLockScreen === 'function') {
@@ -334,30 +334,64 @@ function openVersionNoticeModal(version) {
     });
 }
 
+// ============================================================
+// 🧑 个人资料与人设全面编辑弹窗（支持改名、换头像、改人设、改皮肤、改赛道）
+// ============================================================
 function openEditPlayerProfileModal() {
-    const currentName = G.player.ytName || '主播';
-    const currentAvatar = G.player.avatar || '';
+    const p = G.player || {};
+    const currentName = p.ytName || '主播';
+    const currentAvatar = p.avatar || '';
+    const currentPersona = p.persona || '';
+    const currentSkin = p.skin || '';
+    const currentCategory = p.category || '剧情';
+
+    const categories = ['剧情', '建筑', '红石', 'PvP', '生存挑战', '模组实况', '整活搞笑'];
+    const categoryOptions = categories.map(cat => `
+        <option value="${cat}" ${cat === currentCategory ? 'selected' : ''}>${cat}</option>
+    `).join('');
 
     openModal(`
-        <h3>🧑 编辑个人资料</h3>
-        <p style="font-size:12px;color:#666;">修改频道名称与个人头像，更名信息将自动归纳进剧情记忆中。</p>
-        <div class="form-group">
-            <label>YouTube 频道账号名</label>
-            <input type="text" id="editPlayerNameInput" value="${escapeHtml(currentName)}" placeholder="输入新的频道名...">
-        </div>
-        <div class="form-group">
-            <label>更换头像</label>
-            <div class="avatar-upload-wrap">
-                <div class="avatar-preview" id="editAvatarPreview" style="width:56px;height:56px;border-radius:50%;overflow:hidden;border:2px solid var(--primary);display:flex;align-items:center;justify-content:center;background:#dce8dc;font-size:24px;">
-                    ${currentAvatar ? `<img src="${currentAvatar}" style="width:100%;height:100%;object-fit:cover;">` : '👤'}
+        <h3>🧑 编辑主播个人人设与资料</h3>
+        <p style="font-size:12px;color:#666;line-height:1.5;">自由调整你的频道名称、皮上形象、皮肤与赛道。修改后 AI 主线与私聊将立即同步感知！</p>
+        
+        <div style="max-height:68vh;overflow-y:auto;padding-right:4px;">
+            <div class="form-group">
+                <label>YouTube 频道名称 <span class="required">*</span></label>
+                <input type="text" id="editPlayerNameInput" value="${escapeHtml(currentName)}" placeholder="输入新的频道名...">
+            </div>
+
+            <div class="form-group">
+                <label>更换频道头像</label>
+                <div class="avatar-upload-wrap" style="display:flex;align-items:center;gap:12px;">
+                    <div class="avatar-preview" id="editAvatarPreview" style="width:56px;height:56px;border-radius:50%;overflow:hidden;border:2px solid var(--primary);display:flex;align-items:center;justify-content:center;background:#dce8dc;font-size:24px;flex-shrink:0;">
+                        ${currentAvatar ? `<img src="${currentAvatar}" style="width:100%;height:100%;object-fit:cover;">` : '👤'}
+                    </div>
+                    <button class="upload-btn" id="editUploadAvatarBtn" type="button">从相册选择新头像</button>
+                    <input type="file" id="editAvatarFileInput" accept="image/*" class="file-input" style="display:none;">
                 </div>
-                <button class="upload-btn" id="editUploadAvatarBtn">从相册选择</button>
-                <input type="file" id="editAvatarFileInput" accept="image/png,image/jpeg" class="file-input" style="display:none;">
+            </div>
+
+            <div class="form-group">
+                <label>主播性格人设 (Persona)</label>
+                <textarea id="editPlayerPersonaInput" rows="3" placeholder="例如：性格活泼开朗的女高中生，偶尔有些小傲娇，喜欢红石和建筑..." style="width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;font-size:13px;">${escapeHtml(currentPersona)}</textarea>
+            </div>
+
+            <div class="form-group">
+                <label>皮肤/形象外观 (Skin)</label>
+                <input type="text" id="editPlayerSkinInput" value="${escapeHtml(currentSkin)}" placeholder="例如：浅棕色双马尾，戴着猫耳耳机，身穿绿色连帽卫衣...">
+            </div>
+
+            <div class="form-group">
+                <label>主要创作赛道</label>
+                <select id="editPlayerCategorySelect" style="width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;font-size:13px;background:#fff;">
+                    ${categoryOptions}
+                </select>
             </div>
         </div>
+
         <div class="btn-row" style="margin-top:14px;">
             <button class="btn-secondary" onclick="closeModal()">取消</button>
-            <button class="btn-primary" id="savePlayerProfileBtn">💾 保存更改</button>
+            <button class="btn-primary" id="savePlayerProfileBtn">💾 保存资料与人设</button>
         </div>
     `);
 
@@ -380,7 +414,8 @@ function openEditPlayerProfileModal() {
                 const ctx = canvas.getContext('2d');
                 ctx.drawImage(img, (img.width-size)/2, (img.height-size)/2, size, size, 0, 0, 200, 200);
                 newAvatarData = canvas.toDataURL('image/jpeg');
-                document.getElementById('editAvatarPreview').innerHTML = `<img src="${newAvatarData}" style="width:100%;height:100%;object-fit:cover;">`;
+                const prev = document.getElementById('editAvatarPreview');
+                if (prev) prev.innerHTML = `<img src="${newAvatarData}" style="width:100%;height:100%;object-fit:cover;">`;
                 showToast('✅ 头像已选择', 'success', 1200);
             };
             img.src = ev.target.result;
@@ -390,26 +425,53 @@ function openEditPlayerProfileModal() {
 
     document.getElementById('savePlayerProfileBtn')?.addEventListener('click', () => {
         const newName = document.getElementById('editPlayerNameInput')?.value.trim();
-        if (!newName) { showToast('⚠️ 名字不能为空', 'error'); return; }
+        const newPersona = document.getElementById('editPlayerPersonaInput')?.value.trim();
+        const newSkin = document.getElementById('editPlayerSkinInput')?.value.trim();
+        const newCategory = document.getElementById('editPlayerCategorySelect')?.value || '剧情';
+
+        if (!newName) { showToast('⚠️ 频道名不能为空', 'error'); return; }
 
         const oldName = G.player.ytName;
+        const oldPersona = G.player.persona;
+        const oldSkin = G.player.skin;
+
         const nameChanged = oldName !== newName;
+        const personaChanged = oldPersona !== newPersona;
+        const skinChanged = oldSkin !== newSkin;
 
         G.player.ytName = newName;
         G.player.avatar = newAvatarData;
+        G.player.persona = newPersona;
+        G.player.skin = newSkin;
+        G.player.category = newCategory;
+
+        if (typeof detectPersonaStyle === 'function') {
+            G.player.personaStyle = detectPersonaStyle(newPersona);
+        }
+
+        // 同步历史记忆，让 AI 主动接纳新人设
+        if (!G.memorySummaries) G.memorySummaries = [];
 
         if (nameChanged) {
-            if (!G.memorySummaries) G.memorySummaries = [];
             const memoText = `【更名记录】：第 ${G.day} 天，主角将频道名称由「${oldName}」正式更改为「${newName}」。所有NPC、粉丝与AI剧情中，「${oldName}」与「${newName}」均为同一人，人际关系与历史成就完全继承。`;
             G.memorySummaries.push(memoText);
             addMemoir('更名启事', `频道名由「${oldName}」更改为「${newName}」`);
             appendStory(`📢 你的频道正式更名为「${newName}」，粉丝与好友们都在为你庆祝新起点！`, '📢 频道更名');
         }
 
+        if (personaChanged || skinChanged) {
+            const updateDetails = [];
+            if (personaChanged) updateDetails.push(`性格人设变更为：“${newPersona}”`);
+            if (skinChanged) updateDetails.push(`形象皮肤换为：“${newSkin}”`);
+            const updateMemo = `【主角形象与人设更新】：第 ${G.day} 天，主角${updateDetails.join('，')}。`;
+            G.memorySummaries.push(updateMemo);
+            addMemoir('形象与人设更新', updateDetails.join('；'));
+        }
+
         updateUI();
         renderAllPanels();
         closeModal();
-        showToast('✅ 资料修改成功！', 'success');
+        showToast('✅ 主播资料与人设已保存生效！', 'success', 2500);
         autoSaveGame();
     });
 }

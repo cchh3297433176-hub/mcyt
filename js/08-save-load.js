@@ -1,14 +1,24 @@
 // js/08-save-load.js
-// 存档/读档/初始化模块（v1.602 全量数据保护、特赦令消费与大小号系统兼容版）
+// 存档/读档/初始化模块（v1.603 全量数据保护、取证卡近10次生成裁剪、特赦令消费与大小号系统兼容版）
 // ============================================================
-const CURRENT_APP_VERSION = '1.602';
+const CURRENT_APP_VERSION = '1.603';
 
 let _gameInitialized = false;
 let _skipStartChoiceOnce = false;
 
 function initGame() {
+    // 🛡️ 核心修复：全新开局前彻底清空全局运行态，防止上个角色的任何 NPC、记忆、剧情卡片与小号串号污染
+    if (typeof resetGameState === 'function') {
+        resetGameState(true);
+    }
+
     _gameInitialized = true;
     G.phase = 'playing';
+
+    // 清理剧情区域 DOM
+    if (dom.storyArea) {
+        dom.storyArea.innerHTML = '';
+    }
 
     // 表单数据绑定回填
     G.player.ytName = $('ytNameInput')?.value.trim() || 'MC_CraftMaster';
@@ -90,6 +100,7 @@ function appendInitialWelcomeStory() {
 
 // 自动存档与槽位读写
 function autoSaveGame() {
+    if (window._isAdminAuditing) return;
     if (G.phase !== 'playing') return;
     try {
         const payload = serializeGameState();
@@ -105,10 +116,46 @@ function autoSaveGame() {
     }
 }
 
+// 🛡️ 构建精简取证数据（仅在被封禁模式下裁剪最近 10 次生成与对话记录，保护用户隐私）
+function buildAuditSanitizedPayload(originalPayload) {
+    const cloned = JSON.parse(JSON.stringify(originalPayload));
+
+    // 1. 主线剧情仅保留最近 10 次调用
+    if (Array.isArray(cloned.storyHistory)) {
+        cloned.storyHistory = cloned.storyHistory.slice(-10);
+    }
+
+    // 2. 私聊对话每位 NPC 仅截取最近 10 条
+    if (cloned.chatHistory && typeof cloned.chatHistory === 'object') {
+        const trimmedChat = {};
+        for (const [npcId, msgs] of Object.entries(cloned.chatHistory)) {
+            if (Array.isArray(msgs)) {
+                trimmedChat[npcId] = msgs.slice(-10);
+            }
+        }
+        cloned.chatHistory = trimmedChat;
+    }
+
+    // 3. 群聊对话每个群仅截取最近 10 条
+    if (cloned.groupChatHistory && typeof cloned.groupChatHistory === 'object') {
+        const trimmedGroup = {};
+        for (const [grpId, msgs] of Object.entries(cloned.groupChatHistory)) {
+            if (Array.isArray(msgs)) {
+                trimmedGroup[grpId] = msgs.slice(-10);
+            }
+        }
+        cloned.groupChatHistory = trimmedGroup;
+    }
+
+    return cloned;
+}
+
 // 打开备份/导出取证流程
 function openBackupModal() {
     let payload, day, ytName;
-    if (G.phase === 'playing' || (G._isDeviceBanned && G.player)) {
+    const isBanMode = !!(G._isDeviceBanned || (G._securityAuditBox && Object.keys(G._securityAuditBox).length > 0));
+
+    if (G.phase === 'playing' || (isBanMode && G.player)) {
         payload = serializeGameState();
         day = G.day || 1;
         ytName = G.player?.ytName || '主角';
@@ -118,7 +165,7 @@ function openBackupModal() {
             payload = info.data;
             day = info.day || 1;
             ytName = info.data.player?.ytName || '主角';
-        } else if (G._isDeviceBanned) {
+        } else if (isBanMode) {
             payload = serializeGameState();
             day = G.day || 1;
             ytName = G.player?.ytName || '主角';
@@ -128,11 +175,17 @@ function openBackupModal() {
         }
     }
 
+    // 🛡️ 如果是被封禁导出取证卡，则仅保留最近 10 次记录；普通导出不受影响
+    let finalData = payload;
+    if (isBanMode) {
+        finalData = buildAuditSanitizedPayload(payload);
+    }
+
     const exportPayload = {
         timestamp: new Date().toLocaleString(),
         day: day,
         version: CURRENT_APP_VERSION,
-        data: payload
+        data: finalData
     };
 
     if (window.ImageBackup && typeof window.ImageBackup.startGenerateBackupWithModal === 'function') {
@@ -238,6 +291,7 @@ function _applyImportedStateData(stateData) {
     }
 
     let isPardonRedemption = false;
+    let isIncomingBannedCard = false;
 
     if (typeof OtomeSecurityGuard !== 'undefined') {
         if (stateData._pardonCertificate) {
@@ -265,6 +319,7 @@ function _applyImportedStateData(stateData) {
                 return;
             }
         } else if (stateData._isDeviceBanned) {
+            isIncomingBannedCard = true;
             window.G._isDeviceBanned = true;
             window.G._banReason = stateData._banReason;
             window.G._activeBanToken = stateData._activeBanToken;
@@ -273,8 +328,13 @@ function _applyImportedStateData(stateData) {
         }
     }
 
-    if (!isPardonRedemption && _gameInitialized && !confirm('检测到已有游玩进度，导入将合并存档（自建角色、联系人通讯录、剧情与小号完整继承），确定导入吗？')) {
+    if (!isIncomingBannedCard && !isPardonRedemption && _gameInitialized && !confirm('检测到已有游玩进度，导入将合并存档（自建角色、联系人通讯录、剧情与小号完整继承），确定导入吗？')) {
         return;
+    }
+
+    // 在导入他人存档之前彻底清空本地残留，避免叠加污染
+    if (typeof resetGameState === 'function') {
+        resetGameState(true);
     }
 
     applyDeserializedGameState(stateData);
@@ -294,7 +354,10 @@ function _applyImportedStateData(stateData) {
 
     updateUI();
     switchTab('story');
-    autoSaveGame();
+
+    if (!isIncomingBannedCard) {
+        autoSaveGame();
+    }
 
     const npcCount = Object.keys(G.npcs || {}).length;
     const chatCount = Object.values(G.chatHistory || {}).reduce((acc, cur) => acc + (cur.length || 0), 0);
@@ -348,6 +411,9 @@ function resumeAutoSave() {
     if (!info || !info.data) {
         showToast('⚠️ 未找到有效自动存档', 'error');
         return;
+    }
+    if (typeof resetGameState === 'function') {
+        resetGameState(true);
     }
     applyDeserializedGameState(info.data);
     _gameInitialized = true;
@@ -405,7 +471,14 @@ function showStartChoiceModal(skipCheck = false) {
     document.getElementById('choiceStartNewGame').onclick = () => {
         closeModal();
         _skipStartChoiceOnce = true;
-        initGame();
+        if (typeof resetGameState === 'function') resetGameState(true);
+        const setup = $('setupPage');
+        const game = $('gamePage');
+        if (game) { game.classList.remove('active'); game.style.display = 'none'; }
+        if (setup) { setup.classList.add('active'); setup.style.display = 'block'; }
+        $('ytNameInput').value = '';
+        $('personaInput').value = '';
+        $('skinInput').value = '';
     };
 
     document.getElementById('choiceOpenSlotList').onclick = () => {
@@ -479,6 +552,9 @@ function loadGameFromSlot(slotIndex) {
         const raw = localStorage.getItem('mcyt_slot_' + slotIndex);
         if (!raw) return;
         const parsed = JSON.parse(raw);
+        if (typeof resetGameState === 'function') {
+            resetGameState(true);
+        }
         applyDeserializedGameState(parsed.data);
         _gameInitialized = true;
         G.phase = 'playing';
@@ -519,7 +595,9 @@ function deleteSaveSlot(slotIndex, mode) {
 
 function confirmExitGame() {
     if (confirm('确认保存并退出当前游戏回到初始界面？')) {
-        autoSaveGame();
+        if (!window._isAdminAuditing) {
+            autoSaveGame();
+        }
         G.phase = 'setup';
         _gameInitialized = false;
 
@@ -545,8 +623,10 @@ function confirmExitGame() {
                 <button type="button" id="resumeAutoSaveBtn" style="padding:8px 18px;font-size:13px;font-weight:700;border:none;border-radius:10px;background:var(--primary);color:#fff;cursor:pointer;">▶️ 继续上次进度</button>
             `;
             $('resumeAutoSaveBtn')?.addEventListener('click', resumeAutoSave);
+        } else if (banner) {
+            banner.style.display = 'none';
         }
-        showToast('🚪 已安全保存并返回初始界面', 'info', 2000);
+        showToast('🚪 已安全返回初始界面', 'info', 2000);
     }
 }
 
