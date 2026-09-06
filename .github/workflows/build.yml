@@ -146,11 +146,17 @@ jobs:
           import android.annotation.SuppressLint;
           import android.app.Activity;
           import android.app.DownloadManager;
+          import android.content.ContentResolver;
+          import android.content.ContentUris;
+          import android.content.ContentValues;
           import android.content.Context;
           import android.content.Intent;
+          import android.database.Cursor;
           import android.net.Uri;
+          import android.os.Build;
           import android.os.Bundle;
           import android.os.Environment;
+          import android.provider.MediaStore;
           import android.provider.Settings;
           import android.util.Base64;
           import android.webkit.DownloadListener;
@@ -164,49 +170,119 @@ jobs:
           import java.io.File;
           import java.io.FileInputStream;
           import java.io.FileOutputStream;
+          import java.io.OutputStream;
 
           public class MainActivity extends Activity {
               private WebView webView;
               private ValueCallback<Uri[]> uploadMessage;
               private static final int FILE_CHOOSER_RESULT_CODE = 1001;
 
-              private File getPersistentBanFile() {
+              // 封禁标记文件名（Downloads 目录下的隐藏文件）
+              private static final String BAN_FILE_NAME = ".mcyt_device_token.sys";
+
+              // Android 10（API 29）以下：分区存储尚未强制，原始 File 读写删除是可靠的
+              private File legacyBanFile() {
                   File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-                  return new File(dir, ".mcyt_device_token.sys");
+                  return new File(dir, BAN_FILE_NAME);
+              }
+
+              // Android 10（API 29）及以上：公共 Downloads 目录必须走 MediaStore，
+              // 否则原始 File.delete() 大概率静默失败（写入侥幸能成功，删除却经常不生效），
+              // 这正是"解封后立刻/重启后又显示被封"的根因。
+              private Uri findMediaStoreBanUri(ContentResolver resolver) {
+                  try {
+                      Uri collection = MediaStore.Downloads.EXTERNAL_CONTENT_URI;
+                      String[] projection = { MediaStore.Downloads._ID };
+                      String selection = MediaStore.Downloads.DISPLAY_NAME + "=?";
+                      String[] selectionArgs = { BAN_FILE_NAME };
+                      Cursor cursor = resolver.query(collection, projection, selection, selectionArgs, null);
+                      if (cursor != null) {
+                          try {
+                              if (cursor.moveToFirst()) {
+                                  long id = cursor.getLong(cursor.getColumnIndexOrThrow(MediaStore.Downloads._ID));
+                                  return ContentUris.withAppendedId(collection, id);
+                              }
+                          } finally {
+                              cursor.close();
+                          }
+                      }
+                  } catch (Exception ignored) {}
+                  return null;
               }
 
               public class NativeDeviceSecurityBridge {
                   @JavascriptInterface
                   public boolean checkNativeDeviceBanned() {
                       try {
-                          File banFile = getPersistentBanFile();
-                          if (banFile.exists() && banFile.length() > 0) {
-                              return true;
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                              return findMediaStoreBanUri(getContentResolver()) != null;
+                          } else {
+                              File banFile = legacyBanFile();
+                              return banFile.exists() && banFile.length() > 0;
                           }
                       } catch (Exception ignored) {}
                       return false;
                   }
 
                   @JavascriptInterface
-                  public void writeNativeDeviceBan(String reason) {
+                  public boolean writeNativeDeviceBan(String reason) {
                       try {
-                          File banFile = getPersistentBanFile();
                           String deviceId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
                           String content = "BANNED_HARDWARE:" + (deviceId != null ? deviceId : "UNKNOWN") + "\nREASON:" + reason;
-                          FileOutputStream fos = new FileOutputStream(banFile);
-                          fos.write(content.getBytes());
-                          fos.close();
-                      } catch (Exception ignored) {}
-                  }
 
-                  @JavascriptInterface
-                  public void clearNativeDeviceBan() {
-                      try {
-                          File banFile = getPersistentBanFile();
-                          if (banFile.exists()) {
-                              banFile.delete();
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                              ContentResolver resolver = getContentResolver();
+                              // 先清掉旧记录，避免 MediaStore 因重名生成 "(1)" 副本导致后续删不干净
+                              Uri existing = findMediaStoreBanUri(resolver);
+                              if (existing != null) resolver.delete(existing, null, null);
+
+                              ContentValues values = new ContentValues();
+                              values.put(MediaStore.Downloads.DISPLAY_NAME, BAN_FILE_NAME);
+                              values.put(MediaStore.Downloads.MIME_TYPE, "application/octet-stream");
+                              values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
+                              Uri newUri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                              if (newUri == null) return false;
+                              OutputStream os = resolver.openOutputStream(newUri);
+                              if (os == null) return false;
+                              os.write(content.getBytes());
+                              os.close();
+                              return true;
+                          } else {
+                              File banFile = legacyBanFile();
+                              FileOutputStream fos = new FileOutputStream(banFile);
+                              fos.write(content.getBytes());
+                              fos.close();
+                              return true;
                           }
                       } catch (Exception ignored) {}
+                      return false;
+                  }
+
+                  // 返回真实的删除结果，JS 侧应据此判断解封是否彻底生效，而不是无条件假定成功
+                  @JavascriptInterface
+                  public boolean clearNativeDeviceBan() {
+                      boolean ok = true;
+                      try {
+                          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                              ContentResolver resolver = getContentResolver();
+                              // 循环删除，兜底历史遗留的重名副本
+                              Uri uri;
+                              int guard = 0;
+                              while ((uri = findMediaStoreBanUri(resolver)) != null && guard < 10) {
+                                  int deleted = resolver.delete(uri, null, null);
+                                  if (deleted <= 0) { ok = false; break; }
+                                  guard++;
+                              }
+                          }
+                          // 同时清理可能由旧版本 APK 遗留下来的原始文件（迁移兼容）
+                          File legacy = legacyBanFile();
+                          if (legacy.exists() && !legacy.delete()) {
+                              ok = false;
+                          }
+                      } catch (Exception e) {
+                          ok = false;
+                      }
+                      return ok;
                   }
               }
 
