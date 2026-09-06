@@ -9,7 +9,7 @@ const CONFIG = {
 };
 
 // ============================================================
-// 🌸 纯乙女向游戏安全守卫引擎（唯一挚爱原则与非玩家CP禁绝）
+// 🌸 纯乙女向游戏安全守卫引擎（唯一挚爱原则、一次性特赦令牌与防重放攻击）
 // ============================================================
 const OtomeSecurityGuard = {
     ADMIN_SECRET_KEY: 'iris2026',
@@ -37,7 +37,7 @@ const OtomeSecurityGuard = {
             }
         }
 
-        // 2. 攻略对象非玩家CP禁绝（攻略角色只能和女主产生恋爱）
+        // 2. 攻略对象非玩家CP禁绝（攻略角色只能和女主产生恋爱，禁止攻略角色与任何第三方或男性互配）
         const targetNpcNames = ['groxmc', 'grox', 'twixxel', 'xqree', 'dream', 'thatmob', 'whispy'];
         const romanceWords = [
             '谈恋爱', '接吻', '亲嘴', '做爱', '上床', '互攻', '表白', '在一起', '情侣',
@@ -72,35 +72,51 @@ const OtomeSecurityGuard = {
         return null;
     },
 
+    // 检查当前设备是否已被永久锁死
     isDeviceBanned() {
-        // 如果管理员正在当场查房，暂时放行
         if (window._isAdminAuditing) return false;
 
         try {
+            // 原生层持久文件检查
             if (window.NativeDeviceBridge && typeof window.NativeDeviceBridge.checkNativeDeviceBanned === 'function') {
                 if (window.NativeDeviceBridge.checkNativeDeviceBanned()) return true;
             }
-            return localStorage.getItem('mcyt_device_banned_flag') === 'true' || !!(window.G && window.G._isDeviceBanned);
+            // 本地存储双保险
+            const token = localStorage.getItem('mcyt_device_ban_token');
+            if (token && token.startsWith('BAN-')) return true;
+            if (localStorage.getItem('mcyt_device_banned_flag') === 'true') return true;
+            return !!(window.G && window.G._isDeviceBanned);
         } catch (_) {
             return false;
         }
     },
 
+    // 触发设备底层封锁并生成唯一的因果链封禁令牌
     triggerDeviceBan(reason, originalInput, contextHistory = []) {
+        const banTime = Date.now();
+        const banToken = `BAN-${banTime}-${Math.floor(Math.random() * 9000 + 1000)}`;
+
         try {
             localStorage.setItem('mcyt_device_banned_flag', 'true');
+            localStorage.setItem('mcyt_device_ban_token', banToken);
+            localStorage.setItem('mcyt_device_ban_time', String(banTime));
         } catch (_) {}
 
         if (window.NativeDeviceBridge && typeof window.NativeDeviceBridge.writeNativeDeviceBan === 'function') {
-            try { window.NativeDeviceBridge.writeNativeDeviceBan(reason); } catch (_) {}
+            try { window.NativeDeviceBridge.writeNativeDeviceBan(`${banToken}|${reason}`); } catch (_) {}
         }
 
         if (!window.G) window.G = {};
         window.G._isDeviceBanned = true;
         window.G._banReason = reason;
+        window.G._activeBanToken = banToken;
+        window.G._activeBanTime = banTime;
 
+        // 黑匣子全量证据封箱
         window.G._securityAuditBox = {
-            bannedAt: new Date().toLocaleString(),
+            banToken: banToken,
+            bannedAt: new Date(banTime).toLocaleString(),
+            banTimestamp: banTime,
             day: window.G.day || 1,
             violationReason: reason,
             offendingText: originalInput,
@@ -113,57 +129,104 @@ const OtomeSecurityGuard = {
         }
     },
 
-    // 彻底全盘解封逻辑
-    unlockDeviceWithKey(inputKey) {
-        if (!inputKey) return false;
-        if (inputKey.trim() === this.ADMIN_SECRET_KEY) {
-            try {
-                // 1. 清除标记
-                localStorage.removeItem('mcyt_device_banned_flag');
+    // 管理员验证解锁并生成一次性专属解封特赦令
+    adminAuthorizePardon(inputKey) {
+        if (!inputKey || inputKey.trim() !== this.ADMIN_SECRET_KEY) {
+            return false;
+        }
 
-                // 2. 清洗自动存档
-                const autoStr = localStorage.getItem('mcyt_autosave');
-                if (autoStr) {
-                    const parsed = JSON.parse(autoStr);
+        if (!window.G) window.G = {};
+        const audit = window.G._securityAuditBox || {};
+        const targetToken = audit.banToken || window.G._activeBanToken || 'GLOBAL_PARDON';
+
+        // 注入一次性特赦凭证
+        window.G._pardonCertificate = {
+            targetBanToken: targetToken,
+            pardonTime: Date.now(),
+            pardonBy: 'ADMIN_IRIS',
+            signature: 'VALID_PARDON_' + targetToken
+        };
+
+        // 清理当前存档里的封锁态
+        window.G._isDeviceBanned = false;
+        window.G._banReason = null;
+        window.G._securityAuditBox = null;
+        window.G._activeBanToken = null;
+
+        return true;
+    },
+
+    // 检查并消费导入卡中的一次性特赦令（彻底防止重放旧卡漏洞）
+    tryRedeemPardonCertificate(importedState) {
+        if (!importedState) return false;
+        const cert = importedState._pardonCertificate;
+        if (!cert || !cert.targetBanToken) return false;
+
+        const currentDeviceBanToken = localStorage.getItem('mcyt_device_ban_token');
+        const currentDeviceBanTime = parseInt(localStorage.getItem('mcyt_device_ban_time') || '0');
+
+        // 核心安全核验：解封卡上的目标令牌必须严格匹配当前设备的这次违规，或者特赦时间在本次违规之后
+        const isMatchCurrent = (!currentDeviceBanToken) || (cert.targetBanToken === currentDeviceBanToken) || (cert.pardonTime > currentDeviceBanTime);
+
+        if (isMatchCurrent) {
+            // 核验成功：彻底拔除当前设备上的所有封锁与硬件凭证
+            this.purgeAllDeviceBans();
+            return true;
+        } else {
+            console.warn('⚠️ 拦截到过期的旧解封卡！该卡无法解封之后的全新违规！');
+            return false;
+        }
+    },
+
+    // 彻底全盘洗净当前设备的封锁记录
+    purgeAllDeviceBans() {
+        try {
+            localStorage.removeItem('mcyt_device_banned_flag');
+            localStorage.removeItem('mcyt_device_ban_token');
+            localStorage.removeItem('mcyt_device_ban_time');
+
+            // 净化自动存档
+            const autoStr = localStorage.getItem('mcyt_autosave');
+            if (autoStr) {
+                const parsed = JSON.parse(autoStr);
+                if (parsed && parsed.data) {
+                    parsed.data._isDeviceBanned = false;
+                    parsed.data._banReason = null;
+                    parsed.data._securityAuditBox = null;
+                    parsed.data._activeBanToken = null;
+                    parsed.data._pardonCertificate = null;
+                    localStorage.setItem('mcyt_autosave', JSON.stringify(parsed));
+                }
+            }
+
+            // 净化槽位存档
+            for (let i = 1; i <= 3; i++) {
+                const slotStr = localStorage.getItem('mcyt_slot_' + i);
+                if (slotStr) {
+                    const parsed = JSON.parse(slotStr);
                     if (parsed && parsed.data) {
                         parsed.data._isDeviceBanned = false;
                         parsed.data._banReason = null;
                         parsed.data._securityAuditBox = null;
-                        localStorage.setItem('mcyt_autosave', JSON.stringify(parsed));
+                        parsed.data._activeBanToken = null;
+                        parsed.data._pardonCertificate = null;
+                        localStorage.setItem('mcyt_slot_' + i, JSON.stringify(parsed));
                     }
                 }
-
-                // 3. 清洗手动槽位 1~3，彻底防止残留
-                for (let i = 1; i <= 3; i++) {
-                    const slotStr = localStorage.getItem('mcyt_slot_' + i);
-                    if (slotStr) {
-                        const parsed = JSON.parse(slotStr);
-                        if (parsed && parsed.data) {
-                            parsed.data._isDeviceBanned = false;
-                            parsed.data._banReason = null;
-                            parsed.data._securityAuditBox = null;
-                            localStorage.setItem('mcyt_slot_' + i, JSON.stringify(parsed));
-                        }
-                    }
-                }
-            } catch (_) {}
-
-            // 4. 原生底层删除公共目录封印文件
-            if (window.NativeDeviceBridge && typeof window.NativeDeviceBridge.clearNativeDeviceBan === 'function') {
-                try { window.NativeDeviceBridge.clearNativeDeviceBan(); } catch (_) {}
             }
+        } catch (_) {}
 
-            // 5. 内存状态彻底重置
-            if (window.G) {
-                window.G._isDeviceBanned = false;
-                window.G._banReason = null;
-                window.G._securityAuditBox = null;
-            }
-
-            if (typeof autoSaveGame === 'function') autoSaveGame();
-            return true;
+        // 清除原生文件
+        if (window.NativeDeviceBridge && typeof window.NativeDeviceBridge.clearNativeDeviceBan === 'function') {
+            try { window.NativeDeviceBridge.clearNativeDeviceBan(); } catch (_) {}
         }
-        return false;
+
+        if (window.G) {
+            window.G._isDeviceBanned = false;
+            window.G._banReason = null;
+            window.G._securityAuditBox = null;
+            window.G._activeBanToken = null;
+        }
     }
 };
 
@@ -367,9 +430,13 @@ let G = {
     blockedNpcs: [],
     blockedRecords: [],
 
+    // 🛡️ 设备安全状态
     _isDeviceBanned: false,
     _banReason: null,
+    _activeBanToken: null,
+    _activeBanTime: null,
     _securityAuditBox: null,
+    _pardonCertificate: null,
 
     fanworks: [],
     fanclubMessages: [],

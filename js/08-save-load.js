@@ -1,4 +1,4 @@
-// 存档/读档/初始化模块（v1.504 全量数据保护与大小号系统兼容版）
+// 存档/读档/初始化模块（v1.504 全量数据保护、特赦令消费与大小号系统兼容版）
 // ============================================================
 const CURRENT_APP_VERSION = '1.504';
 
@@ -204,7 +204,6 @@ function _restoreFromSelectedFile(file) {
     }
 }
 
-// 兼容旧版噪点图恢复兜底
 function _fallbackOldImageRestore(file) {
     const reader = new FileReader();
     reader.onload = (e) => {
@@ -225,11 +224,36 @@ function _fallbackOldImageRestore(file) {
     reader.readAsDataURL(file);
 }
 
-// 🛡️ 导入落地：深度平滑合并 + 强弹窗提示
+// 🛡️ 导入落地：深度平滑合并 + 特赦令核验与消费（防重放漏洞）
 function _applyImportedStateData(stateData) {
     if (!stateData || (!stateData.player && !stateData.npcs)) {
         alert('❌ 存档数据损坏或为空，导入终止！');
         return;
+    }
+
+    // 🛡️ 核心特赦令核验：如果当前设备被锁，或者导入的卡里带有特赦证明
+    if (typeof OtomeSecurityGuard !== 'undefined') {
+        // 场景 A：带有效特赦令的解封卡导入当前被封设备
+        if (stateData._pardonCertificate) {
+            const success = OtomeSecurityGuard.tryRedeemPardonCertificate(stateData);
+            if (success) {
+                const lockMask = document.getElementById('otomeDeviceBanMask');
+                if (lockMask) lockMask.remove();
+                alert('🎉 成功验证管理员特赦令！设备封锁已彻底解除，游戏已恢复正常。');
+            } else {
+                alert('⚠️ 拦截到失效的特赦令！该卡是历史旧特赦，无法用于解除之后的全新违规！设备继续保持锁死。');
+                return;
+            }
+        }
+        // 场景 B：导入的是一张被封禁的卡（由管理员在正常机器上导入审核）
+        else if (stateData._isDeviceBanned) {
+            // 管理员机器导入时，不直接写入永久设备锁，而是弹窗进入查房模式
+            window.G._isDeviceBanned = true;
+            window.G._banReason = stateData._banReason;
+            window.G._activeBanToken = stateData._activeBanToken;
+            window.G._securityAuditBox = stateData._securityAuditBox;
+            alert('⚠️ 检测到这是一张违规被锁定的取证卡！已加载全部历史，即将为您打开封锁审核界面。');
+        }
     }
 
     if (_gameInitialized && !confirm('检测到已有游玩进度，导入将合并存档（自建角色、联系人通讯录、剧情与小号完整继承），确定导入吗？')) {
@@ -260,23 +284,28 @@ function _applyImportedStateData(stateData) {
     const dayVal = G.day || 1;
     const nameVal = G.player?.ytName || '主角';
 
-    if (typeof openModal === 'function') {
-        openModal(`
-            <div style="text-align:center;padding:10px 0;">
-                <div style="font-size:42px;margin-bottom:8px;">🎉</div>
-                <h3 style="color:#16a34a;margin-bottom:10px;">存档导入成功！</h3>
-                <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px;font-size:13px;color:#166534;line-height:1.8;text-align:left;margin-bottom:16px;">
-                    <div>👤 <b>主播名称</b>：${escapeHtml(nameVal)}</div>
-                    <div>📅 <b>游戏进度</b>：第 ${dayVal} 天</div>
-                    <div>👥 <b>角色通讯录</b>：已完整找回 ${npcCount} 位联系人</div>
-                    <div>💬 <b>聊天记忆</b>：已还原 ${chatCount} 条完整对话</div>
-                    <div>📱 <b>账号生态</b>：大号与 ${(G.altAccounts||[]).length} 个小号数据已就绪</div>
-                </div>
-                <button class="btn-primary" onclick="closeModal()" style="width:100%;padding:10px;">进入游戏</button>
-            </div>
-        `);
+    if (stateData._isDeviceBanned) {
+        // 如果是被封卡，展示封锁审核屏
+        showDeviceBanLockScreen();
     } else {
-        alert(`✅ 存档导入成功！\n\n已为您还原：\n- 主播：${nameVal}\n- 进度：第 ${dayVal} 天\n- 联系人：${npcCount} 位\n- 对话记录：${chatCount} 条`);
+        if (typeof openModal === 'function') {
+            openModal(`
+                <div style="text-align:center;padding:10px 0;">
+                    <div style="font-size:42px;margin-bottom:8px;">🎉</div>
+                    <h3 style="color:#16a34a;margin-bottom:10px;">存档导入成功！</h3>
+                    <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:10px;padding:12px;font-size:13px;color:#166534;line-height:1.8;text-align:left;margin-bottom:16px;">
+                        <div>👤 <b>主播名称</b>：${escapeHtml(nameVal)}</div>
+                        <div>📅 <b>游戏进度</b>：第 ${dayVal} 天</div>
+                        <div>👥 <b>角色通讯录</b>：已完整找回 ${npcCount} 位联系人</div>
+                        <div>💬 <b>聊天记忆</b>：已还原 ${chatCount} 条完整对话</div>
+                        <div>📱 <b>账号生态</b>：大号与 ${(G.altAccounts||[]).length} 个小号数据已就绪</div>
+                    </div>
+                    <button class="btn-primary" onclick="closeModal()" style="width:100%;padding:10px;">进入游戏</button>
+                </div>
+            `);
+        } else {
+            alert(`✅ 存档导入成功！\n\n已为您还原：\n- 主播：${nameVal}\n- 进度：第 ${dayVal} 天\n- 联系人：${npcCount} 位\n- 对话记录：${chatCount} 条`);
+        }
     }
 }
 
@@ -504,7 +533,7 @@ function confirmExitGame() {
     }
 }
 
-// 🛡️ 全量数据打包：支持大小号生态、拉黑关系与邀请池
+// 🛡️ 全量数据打包：支持封禁令牌因果链与一次性特赦证书
 function serializeGameState() {
     return {
         player: G.player,
@@ -523,7 +552,10 @@ function serializeGameState() {
         blockedRecords: G.blockedRecords || [],
         _isDeviceBanned: G._isDeviceBanned || false,
         _banReason: G._banReason || null,
+        _activeBanToken: G._activeBanToken || null,
+        _activeBanTime: G._activeBanTime || null,
         _securityAuditBox: G._securityAuditBox || null,
+        _pardonCertificate: G._pardonCertificate || null, // 管理员签发的一次性特赦证书
         groups: G.groups,
         groupChatHistory: G.groupChatHistory,
         groupMemories: G.groupMemories,
@@ -569,18 +601,25 @@ function applyDeserializedGameState(data) {
         }
     }
 
-    // 大小号与拉黑数据还原
     G.currentAccountId = data.currentAccountId || 'main';
     G.altAccounts = Array.isArray(data.altAccounts) ? data.altAccounts : [];
     G.blockedNpcs = Array.isArray(data.blockedNpcs) ? data.blockedNpcs : [];
     G.blockedRecords = Array.isArray(data.blockedRecords) ? data.blockedRecords : [];
 
-    // 🛡️ 封锁黑匣子与设备状态还原（防偷换设备）
+    // 🛡️ 封锁黑匣子与设备状态还原
     G._isDeviceBanned = !!data._isDeviceBanned;
     G._banReason = data._banReason || null;
+    G._activeBanToken = data._activeBanToken || null;
+    G._activeBanTime = data._activeBanTime || null;
     G._securityAuditBox = data._securityAuditBox || null;
+    G._pardonCertificate = data._pardonCertificate || null;
+
     if (G._isDeviceBanned) {
-        try { localStorage.setItem('mcyt_device_banned_flag', 'true'); } catch (_) {}
+        try {
+            localStorage.setItem('mcyt_device_banned_flag', 'true');
+            if (G._activeBanToken) localStorage.setItem('mcyt_device_ban_token', G._activeBanToken);
+            if (G._activeBanTime) localStorage.setItem('mcyt_device_ban_time', String(G._activeBanTime));
+        } catch (_) {}
     }
 
     if (!G.groups) G.groups = {};

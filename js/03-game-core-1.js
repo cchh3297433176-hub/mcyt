@@ -166,7 +166,7 @@ function openModal(html) {
 }
 
 // ============================================================
-// 🚨 纯乙女游戏红线保护：内置查房与彻底解封系统
+// 🚨 纯乙女游戏红线保护：锁死遮罩与管理员查房解密工作流
 // ============================================================
 function showDeviceBanLockScreen() {
     let lockMask = document.getElementById('otomeDeviceBanMask');
@@ -185,6 +185,7 @@ function showDeviceBanLockScreen() {
     const audit = (window.G && window.G._securityAuditBox) || {};
     const reasonText = (window.G && window.G._banReason) || audit.violationReason || '违规在乙女向游戏中进行攻略对象拉郎/男男互动';
     const offendingText = audit.offendingText ? escapeHtml(audit.offendingText) : '';
+    const banToken = (window.G && window.G._activeBanToken) || audit.banToken || '未知编号';
 
     lockMask.innerHTML = `
         <div style="background: #fff; border-radius: 16px; padding: 22px; max-width: 430px; width: 100%; box-shadow: 0 12px 36px rgba(0,0,0,0.6); text-align: center; border: 2px solid #ef4444; max-height: 90vh; overflow-y: auto;">
@@ -192,6 +193,7 @@ function showDeviceBanLockScreen() {
             <h2 style="color: #dc2626; margin: 0 0 10px; font-size: 19px; font-weight: 800;">设备与存档已被安全封锁</h2>
             <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 12px; font-size: 13px; color: #991b1b; text-align: left; line-height: 1.6; margin-bottom: 14px;">
                 <div><b>📜 封禁原因：</b>${escapeHtml(reasonText)}</div>
+                <div style="font-size: 11px; color: #991b1b; margin-top: 2px;"><b>封禁编号：</b>${escapeHtml(banToken)}</div>
                 ${offendingText ? `<div style="margin-top:4px;font-size:11px;color:#b91c1c;background:#fff;padding:4px 8px;border-radius:4px;word-break:break-word;"><b>触发原话：</b>${offendingText}</div>` : ''}
                 <div style="margin-top: 6px; font-size: 12px; color: #7f1d1d; border-top: 1px dashed #fca5a5; padding-top: 6px;">
                     <b>平台正版声明：</b>本软件为抖音 <b>@鸢尾黎明</b> 老师作品的<b>二改版本</b>，为代入向纯乙女 Airp 游戏，严禁在攻略对象之间搞男同拉郎配对。
@@ -200,25 +202,24 @@ function showDeviceBanLockScreen() {
             <p style="font-size: 12px; color: #6b7280; line-height: 1.6; margin-bottom: 16px;">
                 当前设备所有生成与游玩按键已被全面锁死。<br>
                 <b>【全量取证机制】</b>：导出的记忆卡已<b>完整保留你被封前的所有历史对话与全部游戏记录</b>。<br>
-                请点击下方按钮导出卡片并联系管理员审核，核验确属误判后将为你解除封禁。
+                请点击下方按钮导出卡片并联系管理员审核，核验确属误判后将为你提供专属特赦解封卡。
             </p>
             <div style="display: flex; flex-direction: column; gap: 8px;">
                 <button id="lockExportBackupBtn" style="padding: 12px; font-size: 14px; font-weight: 700; border: none; border-radius: 10px; background: #dc2626; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
                     <span>📥</span> 导出全量取证记忆卡 (发送给管理员)
                 </button>
                 <button id="toggleAdminUnlockFormBtn" style="padding: 10px; font-size: 13px; font-weight: 700; border: 1px solid #ccc; border-radius: 10px; background: #f9fafb; color: #374151; cursor: pointer;">
-                    🔐 管理员密匙解锁入口
+                    🔐 管理员密匙核验入口
                 </button>
             </div>
 
-            <!-- 严格保密输入框，不给出任何密码提示 -->
             <div id="inlineAdminUnlockBox" style="display: none; margin-top: 14px; padding: 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; text-align: left;">
                 <div style="font-size: 12px; font-weight: 700; color: #344155; margin-bottom: 6px;">请输入管理员专属解封密匙：</div>
                 <div style="display: flex; gap: 6px;">
                     <input type="password" id="inlineAdminKeyInput" placeholder="请输入管理员私密解封指令..." style="flex: 1; padding: 8px; border-radius: 8px; border: 1px solid #94a3b8; font-size: 13px;">
                     <button id="btnDoInlineUnlock" style="padding: 8px 14px; background: #16a34a; color: #fff; border: none; border-radius: 8px; font-weight: 700; font-size: 13px; cursor: pointer;">验证并查房</button>
                 </div>
-                <div style="font-size: 11px; color: #64748b; margin-top: 4px;">管理员核验通过后，将撤销遮罩进入查房模式，可翻阅全部历史记录并决定是否最终解封。</div>
+                <div style="font-size: 11px; color: #64748b; margin-top: 4px;">管理员核验通过后将进入查房模式，可翻阅历史记录并签发针对本次封禁的专属特赦解密卡。</div>
             </div>
         </div>
     `;
@@ -238,17 +239,14 @@ function showDeviceBanLockScreen() {
         }
     };
 
-    // 验证密匙成功后，开启“管理员查房模式”
     document.getElementById('btnDoInlineUnlock').onclick = () => {
         const inputKey = document.getElementById('inlineAdminKeyInput').value;
         if (!inputKey) { alert('请输入管理员密匙！'); return; }
 
         if (inputKey.trim() === OtomeSecurityGuard.ADMIN_SECRET_KEY) {
-            // 开启管理员查房放行状态
             window._isAdminAuditing = true;
             lockMask.remove();
 
-            // 在游戏顶部注入醒目的查房操作栏
             let adminBanner = document.getElementById('adminAuditStatusBar');
             if (!adminBanner) {
                 adminBanner = document.createElement('div');
@@ -264,31 +262,33 @@ function showDeviceBanLockScreen() {
             adminBanner.innerHTML = `
                 <div style="display:flex;align-items:center;gap:6px;">
                     <span style="font-size:16px;">🔍</span>
-                    <span><b>管理员查房模式</b>：已放行操作，你可翻阅此存档所有历史对话取证。</span>
+                    <span><b>管理员查房模式</b>：已放行，你可翻阅该存档所有历史取证。</span>
                 </div>
                 <div style="display:flex;gap:8px;">
-                    <button id="btnAdminConfirmUnlockAll" style="background:#22c55e;color:#fff;border:none;padding:5px 12px;border-radius:6px;font-weight:700;font-size:12px;cursor:pointer;">✅ 确认误判并彻底解封导出</button>
-                    <button id="btnAdminRejectBanKeep" style="background:#dc2626;color:#fff;border:none;padding:5px 12px;border-radius:6px;font-weight:700;font-size:12px;cursor:pointer;">❌ 确属恶意违规，维持封禁</button>
+                    <button id="btnAdminConfirmUnlockAll" style="background:#22c55e;color:#fff;border:none;padding:5px 12px;border-radius:6px;font-weight:700;font-size:12px;cursor:pointer;">✅ 签发一次性特赦卡并导出</button>
+                    <button id="btnAdminRejectBanKeep" style="background:#dc2626;color:#fff;border:none;padding:5px 12px;border-radius:6px;font-weight:700;font-size:12px;cursor:pointer;">❌ 确属恶意违规，维持锁死</button>
                 </div>
             `;
 
-            // 按钮 A：确认误判并彻底拔除硬件锁
+            // 管理员确认误判，生成专属特赦令并弹出备份下载
             document.getElementById('btnAdminConfirmUnlockAll').onclick = () => {
                 window._isAdminAuditing = false;
-                OtomeSecurityGuard.unlockDeviceWithKey('iris2026');
+                OtomeSecurityGuard.adminAuthorizePardon('iris2026');
+                // 彻底清除当前管理员机器上的所有锁
+                OtomeSecurityGuard.purgeAllDeviceBans();
                 adminBanner.remove();
-                alert('🎉 已彻底清除设备底层封锁令！现在为您自动打开备份弹窗，导出解封后的纯净角色卡发还给用户即可。');
+
+                alert('🎉 管理员特赦令已签发！现在为您打开导出弹窗，将这张解密记忆卡发还给用户，用户手机导入后即可解除当次封禁！');
                 openBackupModal();
             };
 
-            // 按钮 B：确认是故意男同违规，恢复封死
             document.getElementById('btnAdminRejectBanKeep').onclick = () => {
                 window._isAdminAuditing = false;
                 adminBanner.remove();
                 showDeviceBanLockScreen();
             };
 
-            alert('🔍 密匙正确！已进入管理员查房模式。你现在可以点进私聊、同人、朋友圈任意查阅历史。查验完毕后点击顶部绿色按钮即可彻底解封导出！');
+            alert('🔍 密匙正确！已进入管理员查房模式。你现在可以点进私聊、同人、朋友圈任意查阅历史。查验完毕后点击顶部绿色按钮即可签发特赦卡导出！');
             updateUI();
             renderAllPanels();
         } else {
