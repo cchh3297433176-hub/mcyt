@@ -237,7 +237,7 @@ function setNpcBlockAccount(npcId, accId, block = true) {
 
 function getActiveAccountInfo() {
     const G = window.G;
-    const curId = G.currentAccountId || 'main';
+    const curId = String(G.currentAccountId || 'main');
     if (curId === 'main') {
         return {
             id: 'main',
@@ -247,7 +247,7 @@ function getActiveAccountInfo() {
             bio: 'YouTube 频道官方号'
         };
     }
-    const found = (G.altAccounts || []).find(a => a.id === curId);
+    const found = (G.altAccounts || []).find(a => String(a.id) === curId);
     if (found) {
         return {
             id: found.id,
@@ -262,7 +262,7 @@ function getActiveAccountInfo() {
 }
 
 function switchAccount(accId) {
-    window.G.currentAccountId = accId;
+    window.G.currentAccountId = String(accId);
     const acc = getActiveAccountInfo();
     showToast(`🔀 已切换账号为：${acc.name}`, 'info', 1800);
     renderSocialPanel();

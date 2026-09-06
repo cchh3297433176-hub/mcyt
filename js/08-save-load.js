@@ -715,8 +715,10 @@ function applyDeserializedGameState(data) {
         }
     }
 
-    g.currentAccountId = data.currentAccountId || 'main';
-    g.altAccounts = Array.isArray(data.altAccounts) ? data.altAccounts : [];
+    g.currentAccountId = String(data.currentAccountId || 'main');
+    g.altAccounts = Array.isArray(data.altAccounts)
+        ? data.altAccounts.map(a => ({ ...a, id: String(a.id) }))
+        : [];
     g.blockedNpcs = Array.isArray(data.blockedNpcs) ? data.blockedNpcs : [];
     g.blockedRecords = Array.isArray(data.blockedRecords) ? data.blockedRecords : [];
 
