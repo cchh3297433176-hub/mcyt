@@ -1946,6 +1946,16 @@ body {
     color: var(--text2);
     margin-top: 2px;
 }
+/* Android WebView 触控：按钮与社交卡片使用直接指针手势，避免轻触被解释为滚动/双击缩放。 */
+.phone-app-wrap button,
+.phone-app-wrap .chat-item,
+.phone-app-wrap .group-item,
+.phone-app-wrap .chat-npc-avatar-btn,
+.phone-app-wrap #singleChatHeaderProfileBtn {
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+}
+
 /* 弹窗 */
 .modal-overlay {
     position: fixed;
