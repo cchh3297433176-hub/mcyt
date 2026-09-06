@@ -103,7 +103,8 @@ jobs:
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <uses-permission android:name="android.permission.INTERNET" />
-              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+              <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+              <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
               <application
                   android:label="Mcyt模拟器"
                   android:icon="@mipmap/ic_launcher"
@@ -126,6 +127,7 @@ jobs:
           cat << 'EOF' > proj/app/src/main/java/com/mcyt/simulator/MainActivity.java
           package com.mcyt.simulator;
 
+          import android.annotation.SuppressLint;
           import android.app.Activity;
           import android.app.DownloadManager;
           import android.content.Context;
@@ -133,8 +135,10 @@ jobs:
           import android.net.Uri;
           import android.os.Bundle;
           import android.os.Environment;
+          import android.provider.Settings;
           import android.util.Base64;
           import android.webkit.DownloadListener;
+          import android.webkit.JavascriptInterface;
           import android.webkit.ValueCallback;
           import android.webkit.WebChromeClient;
           import android.webkit.WebSettings;
@@ -142,6 +146,7 @@ jobs:
           import android.webkit.WebViewClient;
           import android.widget.Toast;
           import java.io.File;
+          import java.io.FileInputStream;
           import java.io.FileOutputStream;
 
           public class MainActivity extends Activity {
@@ -149,6 +154,49 @@ jobs:
               private ValueCallback<Uri[]> uploadMessage;
               private static final int FILE_CHOOSER_RESULT_CODE = 1001;
 
+              // 隐藏在公共持久化目录的硬件封锁凭证（即使卸载 App，此文件依然保留在手机上）
+              private File getPersistentBanFile() {
+                  File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                  return new File(dir, ".mcyt_device_token.sys");
+              }
+
+              // 原生 JS 桥：提供卸载重装级别的底层硬件拉黑通道
+              public class NativeDeviceSecurityBridge {
+                  @JavascriptInterface
+                  public boolean checkNativeDeviceBanned() {
+                      try {
+                          File banFile = getPersistentBanFile();
+                          if (banFile.exists() && banFile.length() > 0) {
+                              return true;
+                          }
+                      } catch (Exception ignored) {}
+                      return false;
+                  }
+
+                  @JavascriptInterface
+                  public void writeNativeDeviceBan(String reason) {
+                      try {
+                          File banFile = getPersistentBanFile();
+                          String deviceId = Settings.Secure.getString(getContentResolver(), Settings.Secure.ANDROID_ID);
+                          String content = "BANNED_HARDWARE:" + (deviceId != null ? deviceId : "UNKNOWN") + "\nREASON:" + reason;
+                          FileOutputStream fos = new FileOutputStream(banFile);
+                          fos.write(content.getBytes());
+                          fos.close();
+                      } catch (Exception ignored) {}
+                  }
+
+                  @JavascriptInterface
+                  public void clearNativeDeviceBan() {
+                      try {
+                          File banFile = getPersistentBanFile();
+                          if (banFile.exists()) {
+                              banFile.delete();
+                          }
+                      } catch (Exception ignored) {}
+                  }
+              }
+
+              @SuppressLint("SetJavaScriptEnabled")
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
@@ -162,6 +210,9 @@ jobs:
                   s.setAllowFileAccess(true);
                   s.setAllowContentAccess(true);
                   s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+
+                  // 注入原生安全桥接，让前端无论是否重装都能读取持久封印状态
+                  webView.addJavascriptInterface(new NativeDeviceSecurityBridge(), "NativeDeviceBridge");
 
                   webView.setWebViewClient(new WebViewClient());
 
