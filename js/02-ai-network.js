@@ -1,5 +1,5 @@
 // js/02-ai-network.js
-// AI 模型设置模块（统一的 OpenAI 兼容接口配置 / 拉取模型 / 多档案 / 多模态视觉支持 / 纯乙女安全门禁）
+// AI 模型设置模块（统一的 OpenAI 兼容接口 / 多平台联网搜索：博查、秘塔、Tavily / 多档案 / 纯乙女安全门禁）
 // ============================================================
 function escapeHtml(str) {
     return String(str == null ? '' : str).replace(/[&<>"']/g, c => ({
@@ -28,7 +28,6 @@ function stripThought(text) {
     return processed.replace(thinkRegex, '').trim();
 }
 
-// 纯净渲染：彻底去除思考过程折叠框，只展现干净的故事与聊天正文
 function renderContentWithThoughts(text) {
     if (!text) return '';
     const clean = stripThought(text);
@@ -302,20 +301,117 @@ function bindModelSettingsUI(prefix) {
 }
 
 // ============================================================
-// 联网搜索模块（Tavily）
+// 🔍 多平台联网搜索模块（博查 Bocha / 秘塔 Metaso / Tavily）
 // ============================================================
+if (!G.search) {
+    G.search = {
+        enabled: false,
+        provider: 'bocha', // 'bocha' | 'metaso' | 'tavily'
+        apiKey: '',
+        keys: {
+            bocha: '',
+            metaso: '',
+            tavily: ''
+        }
+    };
+}
+if (!G.search.keys) {
+    G.search.keys = {
+        bocha: G.search.provider === 'bocha' ? (G.search.apiKey || '') : '',
+        metaso: G.search.provider === 'metaso' ? (G.search.apiKey || '') : '',
+        tavily: (G.search.provider === 'tavily' || !G.search.provider) ? (G.search.apiKey || '') : ''
+    };
+}
+
 function persistSearchConfig() {
     try { localStorage.setItem('mc_yt_search_config', JSON.stringify(G.search)); } catch (_) {}
 }
 function loadSearchConfig() {
     try {
         const raw = localStorage.getItem('mc_yt_search_config');
-        if (raw) { const c = JSON.parse(raw); if (c && typeof c === 'object') Object.assign(G.search, c); }
+        if (raw) {
+            const c = JSON.parse(raw);
+            if (c && typeof c === 'object') {
+                Object.assign(G.search, c);
+                if (!G.search.keys) {
+                    G.search.keys = { bocha: '', metaso: '', tavily: c.apiKey || '' };
+                }
+            }
+        }
     } catch (_) {}
 }
+
+// 🌐 统一多平台搜索网络调用
 async function webSearch(query, maxResults = 4) {
-    const key = (G.search.apiKey || '').trim();
-    if (!key) throw new Error('未配置 Tavily API Key');
+    const provider = G.search.provider || 'bocha';
+    const key = ((G.search.keys && G.search.keys[provider]) || G.search.apiKey || '').trim();
+
+    if (!key) throw new Error(`请先填入 ${provider === 'bocha' ? '博查 (Bocha)' : provider === 'metaso' ? '秘塔 (Metaso)' : 'Tavily'} 的 API Key`);
+
+    // 1. 🇨🇳 博查搜索 API (国内超快直连)
+    if (provider === 'bocha') {
+        const resp = await fetch('https://api.bochaai.com/v1/web-search', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${key}`
+            },
+            body: JSON.stringify({
+                query: query,
+                freshness: 'noLimit',
+                summary: true,
+                count: maxResults
+            })
+        });
+        if (!resp.ok) {
+            const err = await resp.text();
+            throw new Error(`博查搜索错误 (${resp.status}): ${err.slice(0, 150)}`);
+        }
+        const data = await resp.json();
+        const results = [];
+        if (data.data && data.data.webPages && Array.isArray(data.data.webPages.value)) {
+            data.data.webPages.value.forEach(item => {
+                results.push({
+                    title: item.name || item.title || '',
+                    content: item.summary || item.snippet || ''
+                });
+            });
+        }
+        return { answer: '', results };
+    }
+
+    // 2. 🇨🇳 秘塔 AI 搜索 API (深度知识/机制直连)
+    if (provider === 'metaso') {
+        const resp = await fetch('https://metaso.cn/api/v1/search', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${key}`
+            },
+            body: JSON.stringify({
+                query: query,
+                mode: 'concise',
+                limit: maxResults
+            })
+        });
+        if (!resp.ok) {
+            const err = await resp.text();
+            throw new Error(`秘塔搜索错误 (${resp.status}): ${err.slice(0, 150)}`);
+        }
+        const data = await resp.json();
+        const results = [];
+        if (Array.isArray(data.results)) {
+            data.results.forEach(r => {
+                results.push({
+                    title: r.title || '',
+                    content: r.snippet || r.content || ''
+                });
+            });
+        }
+        return { answer: data.answer || '', results };
+    }
+
+    // 3. 🌐 Tavily 国际通用搜索
     const resp = await fetch('https://api.tavily.com/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
@@ -332,6 +428,7 @@ async function webSearch(query, maxResults = 4) {
     }
     return await resp.json();
 }
+
 function formatSearchContext(data) {
     if (!data) return { text: '', titles: [] };
     let text = '';
@@ -345,51 +442,189 @@ function formatSearchContext(data) {
     }
     return { text, titles };
 }
+
+// 渲染多平台联网设置 UI（带卡片勾选 + 开关）
 function buildSearchSettingsHTML(prefix) {
+    const curProvider = G.search.provider || 'bocha';
+    const isEnabled = !!G.search.enabled;
+    const bochaKey = (G.search.keys && G.search.keys.bocha) || '';
+    const metasoKey = (G.search.keys && G.search.keys.metaso) || '';
+    const tavilyKey = (G.search.keys && G.search.keys.tavily) || '';
+
     return `
         <div class="model-settings" style="margin-top:14px;padding-top:14px;border-top:1px dashed rgba(30,60,30,.15);">
-            <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:6px;display:flex;align-items:center;gap:6px;">
-                <span>🔎 联网搜索 (Tavily)</span>
-                <span style="background:var(--primary);color:#fff;padding:0 8px;border-radius:12px;font-size:11px;font-weight:700;">可选</span>
-            </div>
-            <div style="font-size:11px;color:#999;margin-bottom:8px;line-height:1.5;">填好 API Key 后支持联网检索真实模组与资讯。前往 <a href="https://app.tavily.com" target="_blank" style="color:var(--primary);">app.tavily.com</a> 获取。</div>
-            <div class="form-group" style="margin-bottom:6px;">
-                <label style="font-size:13px;">🔑 Tavily API Key</label>
-                <div style="display:flex;gap:6px;">
-                    <input type="password" id="${prefix}SearchApiKeyInput" placeholder="tvly-..." value="${escapeHtml(G.search.apiKey)}" style="flex:1;">
-                    <button type="button" class="upload-btn" id="${prefix}SearchTestBtn" style="white-space:nowrap;padding:0 12px;">🔌 测试搜索</button>
+            <!-- 顶部总开关 -->
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                <div style="font-size:14px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px;">
+                    <span>🌐 联网实时搜索中心</span>
                 </div>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;background:${isEnabled ? '#eaf5ea' : '#f5f5f5'};padding:3px 8px;border-radius:14px;border:1px solid ${isEnabled ? 'var(--primary)' : '#ccc'};">
+                    <input type="checkbox" id="${prefix}SearchMasterToggle" ${isEnabled ? 'checked' : ''} style="width:16px;height:16px;accent-color:var(--primary);">
+                    <span style="font-size:12px;font-weight:700;color:${isEnabled ? 'var(--primary)' : '#777'};">${isEnabled ? '已开启联网' : '未开启'}</span>
+                </label>
+            </div>
+
+            <div style="font-size:11px;color:#888;margin-bottom:10px;line-height:1.5;">
+                开启后，AI 将在生成剧情、发布视频与互动时，<b>主动向搜索引擎探查真实的 MC 最新模组、玩法技巧与主播动态</b>！
+            </div>
+
+            <!-- 多平台单选勾号卡片 (博查 / 秘塔 / Tavily) -->
+            <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+                <!-- 平台 1: 博查搜索 -->
+                <div class="search-provider-card" data-provider="bocha" style="border:1.5px solid ${curProvider==='bocha'?'var(--primary)':'#e0e0e0'};background:${curProvider==='bocha'?'#f4fbf4':'#fff'};border-radius:10px;padding:10px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;">
+                    <div>
+                        <div style="font-size:13px;font-weight:700;color:#1b5e20;">🇨🇳 博查搜索 (Bocha.cn) <span style="font-size:10px;background:#c8e6c9;color:#2e7d32;padding:1px 5px;border-radius:4px;margin-left:4px;">国内推荐·超快直连</span></div>
+                        <div style="font-size:11px;color:#666;margin-top:2px;">专为国内AI打造，直连各大MC论坛、维基百科与视频社群</div>
+                    </div>
+                    <div style="font-size:18px;font-weight:900;color:var(--primary);width:24px;text-align:center;">${curProvider==='bocha'?'✔':''}</div>
+                </div>
+
+                <!-- 平台 2: 秘塔搜索 -->
+                <div class="search-provider-card" data-provider="metaso" style="border:1.5px solid ${curProvider==='metaso'?'var(--primary)':'#e0e0e0'};background:${curProvider==='metaso'?'#f4fbf4':'#fff'};border-radius:10px;padding:10px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;">
+                    <div>
+                        <div style="font-size:13px;font-weight:700;color:#1565c0;">🇨🇳 秘塔 AI 搜索 (Metaso) <span style="font-size:10px;background:#bbdefb;color:#1565c0;padding:1px 5px;border-radius:4px;margin-left:4px;">深度知识·机制全</span></div>
+                        <div style="font-size:11px;color:#666;margin-top:2px;">免翻顶流AI学术与资讯搜索引擎，适合搜硬核红石与冷门模组</div>
+                    </div>
+                    <div style="font-size:18px;font-weight:900;color:var(--primary);width:24px;text-align:center;">${curProvider==='metaso'?'✔':''}</div>
+                </div>
+
+                <!-- 平台 3: Tavily -->
+                <div class="search-provider-card" data-provider="tavily" style="border:1.5px solid ${curProvider==='tavily'?'var(--primary)':'#e0e0e0'};background:${curProvider==='tavily'?'#f4fbf4':'#fff'};border-radius:10px;padding:10px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;">
+                    <div>
+                        <div style="font-size:13px;font-weight:700;color:#e65100;">🌐 Tavily Search <span style="font-size:10px;background:#ffe0b2;color:#e65100;padding:1px 5px;border-radius:4px;margin-left:4px;">海外通用</span></div>
+                        <div style="font-size:11px;color:#666;margin-top:2px;">面向海外生态，抓取 YouTube 原版资讯与海外主播推特</div>
+                    </div>
+                    <div style="font-size:18px;font-weight:900;color:var(--primary);width:24px;text-align:center;">${curProvider==='tavily'?'✔':''}</div>
+                </div>
+            </div>
+
+            <!-- 当前选中平台的 API Key 输入与测试 -->
+            <div id="${prefix}SearchKeyConfigArea" style="background:#f9fbf9;border:1px solid #e0ebe0;border-radius:10px;padding:12px;">
+                <div style="font-size:12.5px;font-weight:700;color:#333;margin-bottom:6px;" id="${prefix}SearchKeyLabel">
+                    🔑 当前正在配置的 Key：
+                </div>
+                <div style="display:flex;gap:6px;">
+                    <input type="password" id="${prefix}SearchApiKeyInput" placeholder="输入该平台的 API Key..." value="${escapeHtml(curProvider==='bocha'?bochaKey:curProvider==='metaso'?metasoKey:tavilyKey)}" style="flex:1;">
+                    <button type="button" class="upload-btn" id="${prefix}SearchTestBtn" style="white-space:nowrap;padding:0 12px;">🔌 连通测试</button>
+                </div>
+                <div style="font-size:10.5px;color:#888;margin-top:6px;" id="${prefix}SearchHelpLink"></div>
             </div>
         </div>
     `;
 }
+
+function updateSearchHelpText(prefix) {
+    const prov = G.search.provider || 'bocha';
+    const linkEl = document.getElementById(`${prefix}SearchHelpLink`);
+    const labelEl = document.getElementById(`${prefix}SearchKeyLabel`);
+    const keyInput = document.getElementById(`${prefix}SearchApiKeyInput`);
+
+    if (labelEl) {
+        labelEl.innerHTML = `🔑 <b>${prov === 'bocha' ? '博查 (Bocha)' : prov === 'metaso' ? '秘塔 (Metaso)' : 'Tavily'}</b> 的 API Key：`;
+    }
+    if (keyInput) {
+        keyInput.value = (G.search.keys && G.search.keys[prov]) || '';
+    }
+    if (linkEl) {
+        if (prov === 'bocha') {
+            linkEl.innerHTML = `💡 前往 <a href="https://open.bochaai.com" target="_blank" style="color:var(--primary);font-weight:700;">open.bochaai.com</a> 免费申请（国内秒开，注册即送额度）`;
+        } else if (prov === 'metaso') {
+            linkEl.innerHTML = `💡 前往 <a href="https://metaso.cn" target="_blank" style="color:var(--primary);font-weight:700;">metaso.cn</a> 开发者平台获取搜索 Key`;
+        } else {
+            linkEl.innerHTML = `💡 前往 <a href="https://app.tavily.com" target="_blank" style="color:var(--primary);font-weight:700;">app.tavily.com</a> 获取国际版 Key`;
+        }
+    }
+}
+
 async function testWebSearch(prefix) {
     applySearchConfigFromUI(prefix);
-    if (!G.search.apiKey) { showToast('⚠️ 请先填写 Tavily API Key'); return; }
+    const prov = G.search.provider || 'bocha';
+    const key = (G.search.keys && G.search.keys[prov]) || '';
+    if (!key) { showToast(`⚠️ 请先填写 ${prov} 的 API Key`); return; }
+
     const btn = $(`${prefix}SearchTestBtn`);
     const originalText = btn.textContent;
     btn.disabled = true; btn.textContent = '⏳ 测试中...';
     try {
-        const data = await webSearch('Minecraft 最新模组 2026', 3);
-        const n = (data.results || []).length;
-        showToast(`✅ 联网搜索测试成功，返回 ${n} 条结果`, 'success', 2500);
+        const data = await webSearch('Minecraft 最新更新与模组', 2);
+        const count = (data.results || []).length;
+        showToast(`✅ ${prov} 联网搜索测试成功！已检索到 ${count} 条最新结果`, 'success', 2500);
     } catch (e) {
-        showToast('❌ 联网搜索测试失败：' + e.message, 'error');
+        showToast('❌ 测试失败：' + e.message, 'error', 3500);
     } finally {
         btn.disabled = false; btn.textContent = originalText;
     }
 }
+
 function applySearchConfigFromUI(prefix) {
+    const prov = G.search.provider || 'bocha';
     const keyEl = $(`${prefix}SearchApiKeyInput`);
-    if (keyEl) G.search.apiKey = (keyEl.value || '').trim();
+    if (keyEl) {
+        const v = keyEl.value.trim();
+        if (!G.search.keys) G.search.keys = {};
+        G.search.keys[prov] = v;
+        G.search.apiKey = v;
+    }
+    const toggle = $(`${prefix}SearchMasterToggle`);
+    if (toggle) {
+        G.search.enabled = toggle.checked;
+    }
     persistSearchConfig();
+    if (typeof updateWebSearchToggleUI === 'function') updateWebSearchToggleUI();
 }
+
 function bindSearchSettingsUI(prefix) {
-    const keyEl = $(`${prefix}SearchApiKeyInput`);
-    if (keyEl) keyEl.addEventListener('change', () => applySearchConfigFromUI(prefix));
-    const testBtn = $(`${prefix}SearchTestBtn`);
-    if (testBtn) testBtn.addEventListener('click', () => testWebSearch(prefix));
+    const container = document.getElementById(`${prefix}SearchKeyConfigArea`)?.parentElement;
+    if (!container) return;
+
+    updateSearchHelpText(prefix);
+
+    // 平台卡片勾选切换
+    container.querySelectorAll('.search-provider-card').forEach(card => {
+        card.onclick = () => {
+            applySearchConfigFromUI(prefix);
+            const prov = card.dataset.provider;
+            G.search.provider = prov;
+            persistSearchConfig();
+
+            container.querySelectorAll('.search-provider-card').forEach(c => {
+                const isSelected = c.dataset.provider === prov;
+                c.style.borderColor = isSelected ? 'var(--primary)' : '#e0e0e0';
+                c.style.background = isSelected ? '#f4fbf4' : '#fff';
+                c.querySelector('div:last-child').textContent = isSelected ? '✔' : '';
+            });
+
+            updateSearchHelpText(prefix);
+            showToast(`已选中 ${prov === 'bocha' ? '博查搜索' : prov === 'metaso' ? '秘塔搜索' : 'Tavily'}`, 'info', 1200);
+        };
+    });
+
+    const toggle = $(`${prefix}SearchMasterToggle`);
+    if (toggle) {
+        toggle.onchange = () => {
+            G.search.enabled = toggle.checked;
+            persistSearchConfig();
+            if (typeof updateWebSearchToggleUI === 'function') updateWebSearchToggleUI();
+            showToast(G.search.enabled ? '🌐 联网实时搜索已开启' : '🌐 联网搜索已关闭', 'info', 1500);
+        };
+    }
+
+    $(`${prefix}SearchApiKeyInput`)?.addEventListener('change', () => applySearchConfigFromUI(prefix));
+    $(`${prefix}SearchTestBtn`)?.addEventListener('click', () => testWebSearch(prefix));
 }
+
+// 快捷打开全屏联网配置模态框（供左侧竖排“🌐联网”按钮一键调用）
+function openWebSearchSettingsModal() {
+    openModal(`
+        <h3 style="margin-bottom:10px;">🌐 联网搜索引擎与实时配置</h3>
+        ${buildSearchSettingsHTML('modal')}
+        <div class="btn-row" style="margin-top:14px;">
+            <button class="btn-primary" onclick="closeModal()" style="width:100%;">完成配置</button>
+        </div>
+    `);
+    bindSearchSettingsUI('modal');
+}
+window.openWebSearchSettingsModal = openWebSearchSettingsModal;
 
 // ============================================================
 // 全局统一生成中加载动画
@@ -423,7 +658,6 @@ function hideGlobalAILoadingIndicator() {
     }
 }
 
-// 提取消息中的文本串
 function extractTextFromMessageContent(content) {
     if (typeof content === 'string') return content;
     if (Array.isArray(content)) {
@@ -439,16 +673,14 @@ function extractTextFromMessageContent(content) {
 }
 
 // ============================================================
-// API 调用（集成全模块乙女安全门禁、多模态视觉识图支持、违规立斩封禁、全局加载动画与思维链静默清洗）
+// API 调用
 // ============================================================
 async function callAI(messages, options = {}) {
-    // 🛡️ 第 1 道防线：底层设备封禁检测
     if (typeof OtomeSecurityGuard !== 'undefined' && OtomeSecurityGuard.isDeviceBanned()) {
         if (typeof showDeviceBanLockScreen === 'function') showDeviceBanLockScreen();
         throw new Error('该设备因严重违规已被全面封锁，无法调用 AI。');
     }
 
-    // 🛡️ 第 2 道防线：用户发送内容强制雷霆扫描
     if (typeof OtomeSecurityGuard !== 'undefined' && Array.isArray(messages)) {
         const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
         const userText = lastUserMsg ? extractTextFromMessageContent(lastUserMsg.content) : '';
@@ -470,7 +702,6 @@ async function callAI(messages, options = {}) {
     if (!baseUrl) { showToast('⚠️ 请先在「⚙️ 模型」设置中填写 API Base URL'); throw new Error('未配置 Base URL'); }
     if (!model) { showToast('⚠️ 请先在「⚙️ 模型」设置中选择或填写模型'); throw new Error('未配置模型'); }
 
-    // 🛡️ 自动在系统提示词末尾注入绝对乙女向铁律约束
     const finalMessages = messages.map(m => {
         if (m.role === 'system') {
             const extraIronRule = '\n\n【乙女向绝对铁律约束】：本作是由 @鸢尾黎明 老师作品二改的代入向纯乙女Airp游戏，女主为全员唯一核心。所有剧情与互动严禁出现任何男男同性恋爱、BL耽美、攻略角色互配拉郎或男男亲昵性张力，坚决捍卫纯正乙女向定位！';
@@ -521,7 +752,6 @@ async function callAI(messages, options = {}) {
             content = tkOpen + '\n' + reasoning + '\n' + tkClose + '\n\n' + content;
         }
 
-        // 🛡️ 第 3 道防线：AI 返回内容后置扫描
         if (typeof OtomeSecurityGuard !== 'undefined') {
             const outViolation = OtomeSecurityGuard.checkViolation(stripThought(content));
             if (outViolation) {
@@ -537,4 +767,11 @@ async function callAI(messages, options = {}) {
         hideGlobalAILoadingIndicator();
     }
 }
-// ============================================================
+
+// 暴露全局
+window.webSearch = webSearch;
+window.formatSearchContext = formatSearchContext;
+window.buildSearchSettingsHTML = buildSearchSettingsHTML;
+window.bindSearchSettingsUI = bindSearchSettingsUI;
+window.persistSearchConfig = persistSearchConfig;
+window.loadSearchConfig = loadSearchConfig;

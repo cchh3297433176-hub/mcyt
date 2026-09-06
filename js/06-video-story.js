@@ -1,5 +1,5 @@
 // js/06-video-story.js
-// 视频制作（评论由 AI 实时生成）与多层级记忆联动的核心叙事引擎
+// 视频制作（评论由 AI 实时生成）与多层级记忆联动的核心叙事引擎（支持博查/秘塔/Tavily主动探查联网）
 // ============================================================
 function openVideoModal() {
     const availableAP = G.actionPoints;
@@ -16,6 +16,9 @@ function openVideoModal() {
     let styleBtns = styles.map(s =>
         `<button class="style-btn ${s.id === 'epic' ? 'selected' : ''}" data-style="${s.id}">${s.label}</button>`
     ).join('');
+
+    const hasSearchConfigured = !!(G.search && (G.search.apiKey || (G.search.keys && Object.values(G.search.keys).some(k => !!k))));
+
     const html = `
     <h3>🎬 制作视频</h3>
     <p>选择视频风格、时长、合集，并输入内容描述</p>
@@ -27,11 +30,11 @@ function openVideoModal() {
         <label>📝 视频内容描述（AI将根据此描述生成剧情与网友评论）</label>
         <textarea id="videoDesc" class="desc-input" rows="3" placeholder="描述你视频的内容，例如：我在末地击败了末影龙，并建造了一个纪念塔。"></textarea>
     </div>
-    ${G.search.apiKey ? `
+    ${hasSearchConfigured ? `
     <div class="form-group" style="display:flex;align-items:center;gap:8px;margin-top:-6px;">
         <label style="font-size:13px;margin-bottom:0;display:flex;align-items:center;gap:6px;cursor:pointer;">
             <input type="checkbox" id="videoUseSearch" ${G.search.enabled ? 'checked' : ''} style="width:16px;height:16px;accent-color:var(--primary);">
-            🌐 本次联网搜索相关资料
+            🌐 启用实时联网搜索真实资讯 (博查/秘塔/Tavily)
         </label>
     </div>` : ''}
     <div class="form-group">
@@ -123,7 +126,7 @@ function openVideoModal() {
         let cost = (duration === 'short') ? 1 : 2;
         if (G.actionPoints < cost) { showToast(`⚠️ 行动点不足，需要 ${cost} 点`, 'error'); return; }
         G.actionPoints -= cost;
-        const useSearch = document.getElementById('videoUseSearch')?.checked || false;
+        const useSearch = (document.getElementById('videoUseSearch')?.checked || G.search.enabled);
         closeModal();
         await createVideo(title, style, duration, collectionName, collectionIndex, desc, useSearch);
         advanceTimeSlot();
@@ -249,7 +252,6 @@ async function createVideo(title, style, duration, collectionName, collectionInd
     G.player.money += totalMoneyAdd;
     addMemoir('发布视频', `「${title}」 播放量 ${baseViews}，风格 ${style}`);
 
-    // 🔄 为视频发布专门注册重说撤回逻辑：若重说，自动移除这期视频并重新发布
     G._lastRegenerate = async () => {
         showToast('🔄 正在撤回刚才发布的视频并重新生成...', 'info', 2000);
         const vIdx = G.player.videos.indexOf(videoObj);
@@ -284,7 +286,7 @@ async function createVideo(title, style, duration, collectionName, collectionInd
 }
 
 // ============================================================
-// 通用剧情生成与深度多层级记忆构建
+// 通用剧情生成与深度多层级记忆构建（融入主动探查联网）
 // ============================================================
 function buildSystemPrompt() {
     const p = G.player;
@@ -352,6 +354,33 @@ function buildUserPrompt(action, detail = '') {
     return base;
 }
 
+// 🧠 核心：智能推导 AI 主动检索关键词
+function deriveSmartSearchQuery(userPrompt) {
+    const p = G.player;
+    const npcs = Object.values(G.npcs || {}).map(n => n.name);
+    let query = `Minecraft ${p.category || '游戏'} 最新热点 玩法模组`;
+
+    // 识别输入中提到的具体主播或机制
+    for (const name of npcs) {
+        if (userPrompt.includes(name)) {
+            query = `Minecraft 主播 ${name} 最新实况 视频玩法`;
+            break;
+        }
+    }
+
+    if (userPrompt.includes('追杀') || userPrompt.includes('速通') || userPrompt.includes('Manhunt')) {
+        query = `Minecraft Manhunt 最新追杀技巧 陷阱反杀`;
+    } else if (userPrompt.includes('红石') || userPrompt.includes('全自动')) {
+        query = `Minecraft 最新红石黑科技 自动化农场设计`;
+    } else if (userPrompt.includes('模组') || userPrompt.includes('mod') || userPrompt.includes('生存')) {
+        query = `Minecraft 热门模组 2026 最新整合包玩法`;
+    } else if (userPrompt.includes('Verity') || userPrompt.includes('ThatMob')) {
+        query = `Minecraft ThatMob Verity 模组系列 最新进展`;
+    }
+
+    return query;
+}
+
 async function generateStory(tag, userPrompt, useSearch = false, replaceBlock = null, replaceHistoryId = null) {
     if (G.isGenerating) return;
     G.isGenerating = true;
@@ -359,19 +388,30 @@ async function generateStory(tag, userPrompt, useSearch = false, replaceBlock = 
     try {
         let searchBlock = '';
         let searchNote = '';
-        if (useSearch && G.search.apiKey) {
+
+        // 🌟 主动探查式检索：只要全局开启联网或单次勾选，自主发起搜索
+        const searchActive = (useSearch || (G.search && G.search.enabled));
+        const hasSearchKey = !!(G.search && (G.search.apiKey || (G.search.keys && Object.values(G.search.keys).some(k => !!k))));
+
+        if (searchActive && hasSearchKey && typeof webSearch === 'function') {
             try {
-                const query = `Minecraft ${G.player.category || ''} ${userPrompt}`.trim().slice(0, 200);
-                const data = await webSearch(query, 4);
+                const query = deriveSmartSearchQuery(userPrompt);
+                const currentProvider = G.search.provider || 'bocha';
+                const providerName = currentProvider === 'bocha' ? '博查搜索' : currentProvider === 'metaso' ? '秘塔搜索' : 'Tavily';
+
+                showToast(`🌐 ${providerName} 正在检索最新资料...`, 'info', 1200);
+
+                const data = await webSearch(query, 3);
                 const { text, titles } = formatSearchContext(data);
                 if (text) {
-                    searchBlock = `\n【联网参考资料】\n${text}\n`;
-                    searchNote = `\n\n🌐 已联网参考：${titles.slice(0, 3).join('、')}`;
+                    searchBlock = `\n【搜索引擎实时资料（来自 ${providerName}，请将其作为背景灵感生动融入剧情中）】\n${text}\n`;
+                    searchNote = `\n\n🌐 [实时检索自: ${providerName} · ${titles.slice(0, 2).join('、')}]`;
                 }
             } catch (e) {
-                console.warn('联网搜索失败', e);
+                console.warn('主动联网搜索暂未命中，继续正常生成:', e);
             }
         }
+
         let sys = buildSystemPrompt() + searchBlock;
         const user = buildUserPrompt(userPrompt, '');
         const messages = [{ role: 'system', content: sys }, { role: 'user', content: user }];
@@ -402,7 +442,6 @@ async function generateStory(tag, userPrompt, useSearch = false, replaceBlock = 
             showToast('✅ 重说成功', 'success', 1500);
         }
 
-        // 🔄 注册针对主线剧情的“重说”钩子：自动撤销这一条并重新生成
         G._lastRegenerate = async () => {
             if (createdEntry) {
                 const idx = G.storyHistory.findIndex(h => h._id === createdEntry._id);
@@ -428,7 +467,7 @@ async function generateStory(tag, userPrompt, useSearch = false, replaceBlock = 
 }
 
 // ============================================================
-// ✏️ 编辑内容弹窗（新增支持删除单条私信、剧情或记忆）
+// ✏️ 编辑内容弹窗
 // ============================================================
 function refreshStoryBlockDOM(entry) {
     const block = dom.storyArea ? dom.storyArea.querySelector(`.story-block[data-story-id="${entry._id}"]`) : document.querySelector(`.story-block[data-story-id="${entry._id}"]`);
@@ -440,15 +479,6 @@ function refreshStoryBlockDOM(entry) {
 function buildUnifiedAIEntryHTML(item) {
     const pureText = stripThought(item.text || '').trim();
     const preview = escapeHtml(pureText.slice(0, 70)) + (pureText.length > 70 ? '...' : '');
-    let thoughtHtml = '';
-    const thinkMatch = item.text ? item.text.match(/<(think|thought|reasoning)>([\s\S]*?)<\/\1>/i) : null;
-    if (thinkMatch && thinkMatch[2].trim()) {
-        thoughtHtml = `
-        <details style="margin:6px 0 10px;padding:6px 10px;background:rgba(0,0,0,0.03);border:1px dashed #ccc;border-radius:8px;font-size:12px;color:#666;">
-            <summary style="cursor:pointer;color:#888;font-weight:600;">💭 点击展开思维链</summary>
-            <div style="margin-top:6px;line-height:1.5;white-space:pre-wrap;color:#555;">${escapeHtml(thinkMatch[2].trim())}</div>
-        </details>`;
-    }
 
     return `
     <div class="edit-entry" data-id="${item._id}" data-type="${item._type}" data-npcid="${item._npcId || ''}" style="margin-bottom:8px;border:1px solid rgba(30,60,30,.10);border-radius:10px;overflow:hidden;background:#fff;">
@@ -460,7 +490,6 @@ function buildUnifiedAIEntryHTML(item) {
             <span class="chevron" style="margin-left:8px;color:#999;">▼</span>
         </div>
         <div class="edit-entry-body" style="display:none;padding:10px 12px;border-top:1px solid rgba(30,60,30,.06);">
-            ${thoughtHtml}
             <textarea class="edit-textarea" style="width:100%;min-height:110px;padding:8px;border-radius:8px;border:2px solid rgba(30,60,30,.10);background:#f9fcf9;color:var(--text);font-size:13px;font-family:inherit;resize:vertical;">${escapeHtml(pureText)}</textarea>
             <div class="btn-row" style="margin-top:8px;display:flex;gap:6px;justify-content:flex-end;">
                 <button class="btn-secondary edit-del-btn" style="color:#e53935;border-color:#ffcdd2;background:#ffebee;padding:6px 12px;font-size:12px;margin-right:auto;">🗑️ 删除此条</button>
@@ -567,7 +596,6 @@ function openEditContentModal(defaultTab = 'allAI') {
             chevron.textContent = '▼';
         });
 
-        // 🗑️ 删除此条记录事件
         el.querySelector('.edit-del-btn')?.addEventListener('click', (e) => {
             e.stopPropagation();
             const id = el.dataset.id;
@@ -585,7 +613,7 @@ function openEditContentModal(defaultTab = 'allAI') {
                 if (G.chatHistory && G.chatHistory[npcId]) {
                     const cIdx = G.chatHistory[npcId].findIndex(m => m._id === id);
                     if (cIdx !== -1) G.chatHistory[npcId].splice(cIdx, 1);
-                    if (G.currentChatNpc === npcId) renderSocialPanel();
+                    if (G.currentChatNpc === npcId && typeof renderSocialPanel === 'function') renderSocialPanel();
                 }
             } else if (type === 'summary') {
                 if (G.memorySummaries) {
@@ -597,7 +625,6 @@ function openEditContentModal(defaultTab = 'allAI') {
             el.remove();
             showToast('🗑️ 该条记录已成功删除', 'info', 1500);
 
-            // 更新弹窗顶部数量提示
             const curAiLeft = aiTab.querySelectorAll('.edit-entry').length;
             const curSumLeft = summaryTab.querySelectorAll('.edit-entry').length;
             const countEl = document.getElementById('aiContentCount');
@@ -611,7 +638,6 @@ function openEditContentModal(defaultTab = 'allAI') {
             autoSaveGame();
         });
 
-        // 💾 保存修改事件
         el.querySelector('.edit-save-btn')?.addEventListener('click', (e) => {
             e.stopPropagation();
             const id = el.dataset.id;
@@ -627,7 +653,7 @@ function openEditContentModal(defaultTab = 'allAI') {
                 const msg = (G.chatHistory[npcId] || []).find(m => m._id === id);
                 if (msg) {
                     msg.text = newText;
-                    if (G.currentChatNpc === npcId) renderSocialPanel();
+                    if (G.currentChatNpc === npcId && typeof renderSocialPanel === 'function') renderSocialPanel();
                 }
             } else if (type === 'summary') {
                 const sm = (G.memorySummaries || []).find(m => (m.id || m._id) === id);
@@ -676,7 +702,6 @@ async function maybeAutoSummarize() {
             { role: 'user', content: userMsg },
         ], { maxTokens: 600, temperature: 0.35 });
 
-        const lastEntry = toSummarize[toSummarize.length - 1];
         addGlobalMemoryRecord(summaryText.trim());
 
         const idsToArchive = new Set(toSummarize.map(h => h._id));
@@ -695,8 +720,6 @@ async function maybeAutoSummarize() {
     }
 }
 
-// 左侧“🧠 记忆”按钮总入口绑定到全新记忆模态框
 $('memorySummaryBtn')?.addEventListener('click', () => {
-    openMemoryModal();
+    if (typeof openMemoryModal === 'function') openMemoryModal();
 });
-// ============================================================
