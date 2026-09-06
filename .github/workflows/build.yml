@@ -296,6 +296,8 @@ jobs:
                   s.setAllowFileAccess(true);
                   s.setAllowContentAccess(true);
                   s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+                  s.setUseWideViewPort(true);
+                  s.setLoadWithOverviewMode(true);
 
                   webView.addJavascriptInterface(new NativeDeviceSecurityBridge(), "NativeDeviceBridge");
                   webView.setWebViewClient(new WebViewClient());
