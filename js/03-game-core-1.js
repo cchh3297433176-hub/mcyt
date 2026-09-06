@@ -166,7 +166,7 @@ function openModal(html) {
 }
 
 // ============================================================
-// 🚨 纯乙女游戏红线保护：内置解封表单的全屏死锁层（彻底修复点不动问题）
+// 🚨 纯乙女游戏红线保护：内置解封表单的全屏死锁层（彻底修复点不动与回滚问题）
 // ============================================================
 function showDeviceBanLockScreen() {
     let lockMask = document.getElementById('otomeDeviceBanMask');
@@ -211,25 +211,23 @@ function showDeviceBanLockScreen() {
                 </button>
             </div>
 
-            <!-- 内置展开式密码输入框（完全不依赖外部 modal，杜绝点不动） -->
+            <!-- 模糊占位符，绝不暴露真实密码 -->
             <div id="inlineAdminUnlockBox" style="display: none; margin-top: 14px; padding: 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; text-align: left;">
-                <div style="font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">请输入管理员专属解封密匙：</div>
+                <div style="font-size: 12px; font-weight: 700; color: #344155; margin-bottom: 6px;">请输入管理员专属解封密匙：</div>
                 <div style="display: flex; gap: 6px;">
-                    <input type="password" id="inlineAdminKeyInput" placeholder="输入密匙 (如 iris2026)..." style="flex: 1; padding: 8px; border-radius: 8px; border: 1px solid #94a3b8; font-size: 13px;">
+                    <input type="password" id="inlineAdminKeyInput" placeholder="请输入管理员私密解封指令..." style="flex: 1; padding: 8px; border-radius: 8px; border: 1px solid #94a3b8; font-size: 13px;">
                     <button id="btnDoInlineUnlock" style="padding: 8px 14px; background: #16a34a; color: #fff; border: none; border-radius: 8px; font-weight: 700; font-size: 13px; cursor: pointer;">验证解锁</button>
                 </div>
-                <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">管理员核验通过后，输入密匙将彻底解除当前手机的设备封锁令。</div>
+                <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">管理员核验通过后，输入密匙将彻底解除当前手机的设备封锁令并自动重启进入主界面。</div>
             </div>
         </div>
     `;
     lockMask.style.display = 'flex';
 
-    // 绑定导出按钮事件
     document.getElementById('lockExportBackupBtn').onclick = () => {
         if (typeof openBackupModal === 'function') openBackupModal();
     };
 
-    // 点击切换展示密码输入框
     const toggleBtn = document.getElementById('toggleAdminUnlockFormBtn');
     const unlockBox = document.getElementById('inlineAdminUnlockBox');
     toggleBtn.onclick = () => {
@@ -240,17 +238,15 @@ function showDeviceBanLockScreen() {
         }
     };
 
-    // 执行解锁验证
+    // 执行解锁验证并彻底清除状态、刷新进入游戏
     document.getElementById('btnDoInlineUnlock').onclick = () => {
         const inputKey = document.getElementById('inlineAdminKeyInput').value;
         if (!inputKey) { alert('请输入管理员密匙！'); return; }
 
         if (OtomeSecurityGuard.unlockDeviceWithKey(inputKey)) {
-            lockMask.remove();
-            alert('🎉 管理员密匙验证成功！已全面解除设备封锁。');
-            updateUI();
-            renderAllPanels();
-            autoSaveGame();
+            alert('🎉 管理员密匙验证成功！正在彻底解除设备封锁并重启游戏...');
+            // 彻底杀死遮罩并重启页面，让干净的状态生效
+            window.location.reload();
         } else {
             alert('❌ 密匙错误！解锁失败，该设备保持锁定。');
         }
@@ -546,4 +542,3 @@ function getNextMilestone() {
     }
     return '已达成所有里程碑！';
 }
-// ============================================================

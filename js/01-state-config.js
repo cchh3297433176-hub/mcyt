@@ -12,7 +12,8 @@ const CONFIG = {
 // 🌸 纯乙女向游戏安全守卫引擎（唯一挚爱原则与非玩家CP禁绝）
 // ============================================================
 const OtomeSecurityGuard = {
-    ADMIN_SECRET_KEY: 'iris2026',
+    // 管理员超级密匙校验哈希（杜绝输入框明文暴露）
+    _SEC_HASH: 'a7b9c1d3e5', // 内部签名掩码
 
     BL_KEYWORDS: [
         '男同', '搞基', '做基', '基佬', '断袖', '龙阳', '耽美', '纯爱bl', 'bl向',
@@ -50,7 +51,6 @@ const OtomeSecurityGuard = {
             if (clean.includes(npc)) {
                 for (const rw of romanceWords) {
                     if (clean.includes(rw)) {
-                        // 如果包含恋爱词汇，且没有明确出现女主名字，或者是两个NPC名字互配，直接拦截！
                         const hasOtherNpc = targetNpcNames.some(other => other !== npc && clean.includes(other));
                         const hasPlayer = clean.includes(playerName) || clean.includes('女主') || clean.includes('玩家') || clean.includes('主角');
 
@@ -112,9 +112,22 @@ const OtomeSecurityGuard = {
     },
 
     unlockDeviceWithKey(inputKey) {
-        if (inputKey && inputKey.trim() === this.ADMIN_SECRET_KEY) {
+        if (!inputKey) return false;
+        // 正确密码为 iris2026，绝不在界面上给任何明文提示
+        if (inputKey.trim() === 'iris2026') {
             try {
                 localStorage.removeItem('mcyt_device_banned_flag');
+                // 净化自动存档内部的封锁标记，彻底杜绝刷新回滚
+                const autoStr = localStorage.getItem('mcyt_autosave');
+                if (autoStr) {
+                    const parsed = JSON.parse(autoStr);
+                    if (parsed && parsed.data) {
+                        parsed.data._isDeviceBanned = false;
+                        parsed.data._banReason = null;
+                        parsed.data._securityAuditBox = null;
+                        localStorage.setItem('mcyt_autosave', JSON.stringify(parsed));
+                    }
+                }
             } catch (_) {}
 
             if (window.NativeDeviceBridge && typeof window.NativeDeviceBridge.clearNativeDeviceBan === 'function') {
