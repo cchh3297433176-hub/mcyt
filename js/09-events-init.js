@@ -1,8 +1,20 @@
 // 事件绑定与公告系统
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
+    // 🛡️ 开屏第一道绝对防线：开屏第一毫秒校验设备是否在黑名单中，在则立即死锁！
+    if (typeof OtomeSecurityGuard !== 'undefined' && OtomeSecurityGuard.isDeviceBanned()) {
+        if (typeof showDeviceBanLockScreen === 'function') {
+            showDeviceBanLockScreen();
+            return;
+        }
+    }
+
     // 开始游戏按钮
     $('startGameBtn')?.addEventListener('click', function() {
+        if (typeof OtomeSecurityGuard !== 'undefined' && OtomeSecurityGuard.isDeviceBanned()) {
+            showDeviceBanLockScreen();
+            return;
+        }
         applyAIConfigFromUI('setup');
         if (!G.ai.apiKey) { showToast('⚠️ 请先填入 API Key'); $('setupApiKeyInput')?.focus(); return; }
         if (!G.ai.baseUrl) { showToast('⚠️ 请先填入 API Base URL'); $('setupBaseUrlInput')?.focus(); return; }
@@ -199,7 +211,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 启动初始检测是否需要弹出双页公告
     setTimeout(() => {
         checkAndShowVersionNoticeModal();
     }, 600);
@@ -230,7 +241,7 @@ function openVersionNoticeModal(version) {
                 <div class="notice-card-box">
                     <h4>📜 关于本项目与正版声明</h4>
                     <p style="margin-bottom:8px;">
-                        本软件为抖音：<b>@鸢尾黎明</b> 老师的 mcyt 模拟器二改，为代入向乙女 Airp 游戏。
+                        本软件为抖音：<b>@鸢尾黎明</b> 老师作品的<b>二改版本</b>，为代入向乙女 Airp 游戏。
                     </p>
                     <p style="margin-bottom:8px;color:#c62828;font-weight:600;">
                         ⚠️ 禁止二传，本游戏纯免无收费！
@@ -249,7 +260,7 @@ function openVersionNoticeModal(version) {
                 <div class="notice-card-box">
                     <h4>🚀 本次更新优化方面 (v${version})</h4>
                     <ul style="padding-left:18px;margin-bottom:10px;font-size:13px;color:#444;line-height:1.6;">
-                        <li style="margin-bottom:8px;">1. <b>防拉郎设备级锁死机制</b>：严守纯乙女定位，若检测到攻略对象间拉郎/男男互动，底层触发持久化锁死；导出的记忆卡保留全量证据，需管理员密匙解锁。</li>
+                        <li style="margin-bottom:8px;">1. <b>纯乙女唯一原则守护</b>：严守纯乙女定位，若检测到攻略对象间拉郎/男男互动，底层触发持久化锁死；导出的记忆卡保留全量证据，需管理员密匙解锁。</li>
                         <li style="margin-bottom:8px;">2. <b>大小号聊天彻底物理隔离</b>：不同小号私聊独立互不干扰，小号可被独立拉黑，可开新号转圜；聊天窗口右上角支持一键秒切身份。</li>
                         <li style="margin-bottom:8px;">3. <b>气泡宽度自适应与历史折叠</b>：修复短句气泡固定宽度问题，支持按条折叠展开更早历史消息。</li>
                         <li style="margin-bottom:8px;">4. <b>全新朋友圈生态</b>：支持用户发文字/真实图片动态、编辑删除撤回、一键刷新生成好友日常动态及召唤 AI 互动评论。</li>

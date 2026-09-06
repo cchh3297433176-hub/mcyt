@@ -67,7 +67,6 @@ function showLoading() {
 function hideLoading() { const el = document.getElementById('loadingIndicator'); if (el) el.remove(); }
 
 function updateUI() {
-    // 🛡️ 设备安全校验：若处于封禁状态直接呼出死锁层
     if (typeof OtomeSecurityGuard !== 'undefined' && OtomeSecurityGuard.isDeviceBanned()) {
         showDeviceBanLockScreen();
         return;
@@ -90,7 +89,6 @@ function updateUI() {
     }
     if (followerEl) followerEl.textContent = `❤️ ${G.player.followers}`;
     
-    // 头部头像更新
     if (G.player.avatar && dom.headerAvatarImg) {
         dom.headerAvatarImg.src = G.player.avatar;
         dom.headerAvatarImg.style.display = 'block';
@@ -168,7 +166,7 @@ function openModal(html) {
 }
 
 // ============================================================
-// 🚨 纯乙女游戏红线保护：设备封禁锁死与证据黑匣子取证界面
+// 🚨 纯乙女游戏红线保护：内置解封表单的全屏死锁层（彻底修复点不动问题）
 // ============================================================
 function showDeviceBanLockScreen() {
     let lockMask = document.getElementById('otomeDeviceBanMask');
@@ -177,94 +175,88 @@ function showDeviceBanLockScreen() {
         lockMask.id = 'otomeDeviceBanMask';
         lockMask.style.cssText = `
             position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: rgba(15, 23, 15, 0.96); z-index: 999999; display: flex;
+            background: rgba(15, 23, 15, 0.96); z-index: 9999999; display: flex;
             align-items: center; justify-content: center; padding: 20px; box-sizing: border-box;
             backdrop-filter: blur(8px);
         `;
         document.body.appendChild(lockMask);
     }
 
-    const audit = G._securityAuditBox || {};
-    const reasonText = G._banReason || audit.violationReason || '违规在乙女向专属游戏中进行攻略对象拉郎/男男互动';
+    const audit = (window.G && window.G._securityAuditBox) || {};
+    const reasonText = (window.G && window.G._banReason) || audit.violationReason || '违规在乙女向游戏中进行攻略对象拉郎/男男互动';
+    const offendingText = audit.offendingText ? escapeHtml(audit.offendingText) : '';
 
     lockMask.innerHTML = `
-        <div style="background: #fff; border-radius: 16px; padding: 24px; max-width: 420px; width: 100%; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; border: 2px solid #ef4444;">
-            <div style="font-size: 52px; margin-bottom: 10px;">⚠️</div>
-            <h2 style="color: #dc2626; margin: 0 0 10px; font-size: 20px;">设备与存档已被安全封锁</h2>
-            <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 12px; font-size: 13px; color: #991b1b; text-align: left; line-height: 1.6; margin-bottom: 16px;">
+        <div style="background: #fff; border-radius: 16px; padding: 22px; max-width: 430px; width: 100%; box-shadow: 0 12px 36px rgba(0,0,0,0.6); text-align: center; border: 2px solid #ef4444; max-height: 90vh; overflow-y: auto;">
+            <div style="font-size: 48px; margin-bottom: 8px;">⚠️</div>
+            <h2 style="color: #dc2626; margin: 0 0 10px; font-size: 19px; font-weight: 800;">设备与存档已被安全封锁</h2>
+            <div style="background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 12px; font-size: 13px; color: #991b1b; text-align: left; line-height: 1.6; margin-bottom: 14px;">
                 <div><b>📜 封禁原因：</b>${escapeHtml(reasonText)}</div>
-                <div style="margin-top: 6px; font-size: 12px; color: #7f1d1d;">
-                    <b>平台声明：</b>本游戏为 <b>@鸢尾黎明</b> 老师作品，是纯正的<b>乙女向 Airp 养成游戏</b>，严禁在攻略对象之间搞男同拉郎配对。
+                ${offendingText ? `<div style="margin-top:4px;font-size:11px;color:#b91c1c;background:#fff;padding:4px 8px;border-radius:4px;word-break:break-word;"><b>触发原话：</b>${offendingText}</div>` : ''}
+                <div style="margin-top: 6px; font-size: 12px; color: #7f1d1d; border-top: 1px dashed #fca5a5; padding-top: 6px;">
+                    <b>平台正版声明：</b>本软件为抖音 <b>@鸢尾黎明</b> 老师作品的<b>二改版本</b>，为代入向纯乙女 Airp 游戏，严禁在攻略对象之间搞男同拉郎配对。
                 </div>
             </div>
-            <p style="font-size: 12px; color: #6b7280; line-height: 1.6; margin-bottom: 20px;">
+            <p style="font-size: 12px; color: #6b7280; line-height: 1.6; margin-bottom: 16px;">
                 当前设备所有生成与游玩按键已被全面锁死。<br>
-                <b>【全量取证机制】</b>：导出的记忆卡已<b>完整打包你被封前的所有历史对话、剧情与违规证据</b>。<br>
-                请点击下方按钮导出卡片并联系管理员审核，核验误判后管理员将为你解除封禁。
+                <b>【全量取证机制】</b>：导出的记忆卡已<b>完整保留你被封前的所有历史对话与全部游戏记录</b>。<br>
+                请点击下方按钮导出卡片并联系管理员审核，核验确属误判后将为你解除封禁。
             </p>
-            <div style="display: flex; flex-direction: column; gap: 10px;">
-                <button onclick="openBackupModal()" style="padding: 12px; font-size: 14px; font-weight: 700; border: none; border-radius: 10px; background: #dc2626; color: #fff; cursor: pointer;">
-                    📥 导出全量取证记忆卡 (发送给管理员)
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+                <button id="lockExportBackupBtn" style="padding: 12px; font-size: 14px; font-weight: 700; border: none; border-radius: 10px; background: #dc2626; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                    <span>📥</span> 导出全量取证记忆卡 (发送给管理员)
                 </button>
-                <button onclick="openAdminUnlockAuditModal()" style="padding: 10px; font-size: 13px; border: 1px solid #ccc; border-radius: 10px; background: #f9fafb; color: #374151; cursor: pointer;">
+                <button id="toggleAdminUnlockFormBtn" style="padding: 10px; font-size: 13px; font-weight: 700; border: 1px solid #ccc; border-radius: 10px; background: #f9fafb; color: #374151; cursor: pointer;">
                     🔐 管理员密匙解锁入口
                 </button>
+            </div>
+
+            <!-- 内置展开式密码输入框（完全不依赖外部 modal，杜绝点不动） -->
+            <div id="inlineAdminUnlockBox" style="display: none; margin-top: 14px; padding: 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; text-align: left;">
+                <div style="font-size: 12px; font-weight: 700; color: #334155; margin-bottom: 6px;">请输入管理员专属解封密匙：</div>
+                <div style="display: flex; gap: 6px;">
+                    <input type="password" id="inlineAdminKeyInput" placeholder="输入密匙 (如 iris2026)..." style="flex: 1; padding: 8px; border-radius: 8px; border: 1px solid #94a3b8; font-size: 13px;">
+                    <button id="btnDoInlineUnlock" style="padding: 8px 14px; background: #16a34a; color: #fff; border: none; border-radius: 8px; font-weight: 700; font-size: 13px; cursor: pointer;">验证解锁</button>
+                </div>
+                <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">管理员核验通过后，输入密匙将彻底解除当前手机的设备封锁令。</div>
             </div>
         </div>
     `;
     lockMask.style.display = 'flex';
-}
-window.showDeviceBanLockScreen = showDeviceBanLockScreen;
 
-// 管理员输入密匙核验证据与一键解封弹窗
-function openAdminUnlockAuditModal() {
-    const audit = G._securityAuditBox || {};
-    const offendingText = audit.offendingText ? escapeHtml(audit.offendingText) : '（未捕获到具体指令文本）';
+    // 绑定导出按钮事件
+    document.getElementById('lockExportBackupBtn').onclick = () => {
+        if (typeof openBackupModal === 'function') openBackupModal();
+    };
 
-    openModal(`
-        <div style="text-align: left; padding: 4px 0;">
-            <h3 style="margin-top: 0; color: #1f2937;">🔐 管理员取证与解锁中心</h3>
-            <div style="background: #f3f4f6; border-radius: 8px; padding: 10px; font-size: 12px; color: #4b5563; margin-bottom: 12px; line-height: 1.6;">
-                <div><b>违规记录时间：</b>${escapeHtml(audit.bannedAt || '未知')}</div>
-                <div><b>触发命中理由：</b>${escapeHtml(audit.violationReason || G._banReason || '男男拉郎违规')}</div>
-                <div style="margin-top: 4px; padding-top: 4px; border-top: 1px dashed #d1d5db; color: #dc2626;">
-                    <b>用户触发时的原话：</b><br>
-                    <span style="background: #fff; padding: 2px 6px; border-radius: 4px; display: inline-block; margin-top: 2px;">${offendingText}</span>
-                </div>
-            </div>
-            <p style="font-size: 12px; color: #6b7280; margin-bottom: 8px;">
-                管理员可翻看该存档以前的所有私聊/剧情历史。若核验确认是误判，输入专属超级密匙即可彻底解除设备封锁，还原正常游玩。
-            </p>
-            <div class="form-group" style="margin-bottom: 12px;">
-                <label style="font-size: 12px;">请输入管理员专属解封密匙：</label>
-                <input type="password" id="adminSecretKeyInput" placeholder="输入超级密匙..." style="width: 100%; padding: 8px 10px; border-radius: 8px; border: 1px solid #ccc; font-size: 13px;">
-            </div>
-            <div class="btn-row" style="display: flex; gap: 8px;">
-                <button class="btn-secondary" onclick="closeModal()" style="flex: 1;">返回锁屏</button>
-                <button class="btn-primary" id="btnConfirmAdminUnlock" style="flex: 1.5; background: #16a34a;">✅ 确认误判并解封</button>
-            </div>
-        </div>
-    `);
+    // 点击切换展示密码输入框
+    const toggleBtn = document.getElementById('toggleAdminUnlockFormBtn');
+    const unlockBox = document.getElementById('inlineAdminUnlockBox');
+    toggleBtn.onclick = () => {
+        const isHidden = unlockBox.style.display === 'none';
+        unlockBox.style.display = isHidden ? 'block' : 'none';
+        if (isHidden) {
+            document.getElementById('inlineAdminKeyInput')?.focus();
+        }
+    };
 
-    document.getElementById('btnConfirmAdminUnlock').onclick = () => {
-        const inputKey = document.getElementById('adminSecretKeyInput').value;
-        if (!inputKey) { showToast('⚠️ 请输入密匙', 'error'); return; }
+    // 执行解锁验证
+    document.getElementById('btnDoInlineUnlock').onclick = () => {
+        const inputKey = document.getElementById('inlineAdminKeyInput').value;
+        if (!inputKey) { alert('请输入管理员密匙！'); return; }
 
         if (OtomeSecurityGuard.unlockDeviceWithKey(inputKey)) {
-            closeModal();
-            const lockMask = document.getElementById('otomeDeviceBanMask');
-            if (lockMask) lockMask.remove();
-
-            showToast('🎉 管理员密匙验证成功！已全面解除设备封锁。', 'success', 3500);
+            lockMask.remove();
+            alert('🎉 管理员密匙验证成功！已全面解除设备封锁。');
             updateUI();
             renderAllPanels();
             autoSaveGame();
         } else {
-            showToast('❌ 密匙错误！解锁失败，该设备依然保持锁定。', 'error', 3000);
+            alert('❌ 密匙错误！解锁失败，该设备保持锁定。');
         }
     };
 }
-window.openAdminUnlockAuditModal = openAdminUnlockAuditModal;
+window.showDeviceBanLockScreen = showDeviceBanLockScreen;
 
 // ============================================================
 // 每日视频自然增长
