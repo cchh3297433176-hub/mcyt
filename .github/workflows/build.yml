@@ -51,73 +51,21 @@ jobs:
           echo "APP_VER=$APP_VER" >> $GITHUB_ENV
           echo "VER_CODE=$VER_CODE" >> $GITHUB_ENV
 
-          # 🔑 永久恒定固化 RSA 私钥与自签证书（纯文本无损，OpenSSL合成标准签名，彻底根治覆盖安装签名冲突）
-          cat << 'EOF' > proj/key.pem
-          -----BEGIN RSA PRIVATE KEY-----
-          MIIEowIBAAKCAQEAw7Yq8v+1d5sJ6j2t7b6B/c+Q9P+1v0j2r3k4m5n6o7p8q9r0
-          s1t2u3v4w5x6y7z8A9B0C1D2E3F4G5H6I7J8K9L0M1N2O3P4Q5R6S7T8U9V0W1X2
-          Y3Z4a5b6c7d8e9f0g1h2i3j4k5m6n7o8p9q0r1s2t3u4v5w6x7y8z9A0B1C2D3E4
-          F5G6H7I8J9K0L1M2N3O4P5Q6R7S8T9U0V1W2X3Y4Z5a6b7c8d9e0f1g2h3i4j5k6
-          m7n8o9p0q1r2s3t4u5v6w7x8y9z0A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q7R8
-          S9T0U1V2W3X4Y5Z6a7b8c9d0e1f2g3h4i5j6k7m8n9o0p1q2r3s4t5u6v7w8x9y0
-          AgMBAAECggEBAKx3V8y1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3
-          x4y5z6A7B8C9D0E1F2G3H4I5J6K7L8M9N0O1P2Q3R4S5T6U7V8W9X0Y1Z2a3b4c5
-          d6e7f8g9h0i1j2k3l4m5n6o7p8q9r0s1t2u3v4w5x6y7z8A9B0C1D2E3F4G5H6I7
-          J8K9L0M1N2O3P4Q5R6S7T8U9V0W1X2Y3Z4a5b6c7d8e9f0g1h2i3j4k5m6n7o8p9
-          q0r1s2t3u4v5w6x7y8z9A0B1C2D3E4F5G6H7I8J9K0L1M2N3O4P5Q6R7S8T9U0V1
-          W2X3Y4Z5a6b7c8d9e0f1g2h3i4j5k6m7n8o9p0q1r2s3t4u5v6w7x8y9z0A1B2C3
-          AoGBAP/1v0j2r3k4m5n6o7p8q9r0s1t2u3v4w5x6y7z8A9B0C1D2E3F4G5H6I7J8
-          K9L0M1N2O3P4Q5R6S7T8U9V0W1X2Y3Z4a5b6c7d8e9f0g1h2i3j4k5m6n7o8p9q0
-          r1s2t3u4v5w6x7y8z9A0B1C2D3E4F5G6H7I8J9K0L1M2N3O4P5Q6R7S8T9U0V1W2
-          AoGBAMP2KvL/tXebCeo9re2+gf3PkPT/tb9I9q95OJ5/y9y8x7w6v5u4t3s2r1q0
-          p9o8n7m6l5k4j3i2h1g0f9e8d7c6b5a4Z3Y2X1W0V9U8T7S6R5Q4P3O2N1M0L9K8
-          J7I6H5G4F3E2D1C0B9A8z7y6x5w4v3u2t1s0r9q8p7o6n5m4l3k2j1i0h9g8f7e6
-          AoGAf/v6x7y8z9A0B1C2D3E4F5G6H7I8J9K0L1M2N3O4P5Q6R7S8T9U0V1W2X3Y4
-          Z5a6b7c8d9e0f1g2h3i4j5k6m7n8o9p0q1r2s3t4u5v6w7x8y9z0A1B2C3D4E5F6
-          G7H8I9J0K1L2M3N4O5P6Q7R8S9T0U1V2W3X4Y5Z6a7b8c9d0e1f2g3h4i5j6k7m8
-          AoGAAMK2KvL/tXebCeo9re2+gf3PkPT/tb9I9q95OJ5/y9y8x7w6v5u4t3s2r1q0
-          p9o8n7m6l5k4j3i2h1g0f9e8d7c6b5a4Z3Y2X1W0V9U8T7S6R5Q4P3O2N1M0L9K8
-          J7I6H5G4F3E2D1C0B9A8z7y6x5w4v3u2t1s0r9q8p7o6n5m4l3k2j1i0h9g8f7e6
-          AoGBAI/2KvL/tXebCeo9re2+gf3PkPT/tb9I9q95OJ5/y9y8x7w6v5u4t3s2r1q0
-          p9o8n7m6l5k4j3i2h1g0f9e8d7c6b5a4Z3Y2X1W0V9U8T7S6R5Q4P3O2N1M0L9K8
-          J7I6H5G4F3E2D1C0B9A8z7y6x5w4v3u2t1s0r9q8p7o6n5m4l3k2j1i0h9g8f7e6
-          -----END RSA PRIVATE KEY-----
-          EOF
-
-          cat << 'EOF' > proj/cert.pem
-          -----BEGIN CERTIFICATE-----
-          MIIDhzCCAm+gAwIBAgIUQzmcyt202609060000000001MA0GCSqGSIb3DQEBCwUA
-          MIGNMQswCQYDVQQGEwJDTjELMAkGA1UECBMCU1QxCzAJBgNVBAcTAkJKMQ0wCwYD
-          VQQKEwRtY3l0MQ0wCwYDVQQLEwRnYW1lMQ0wCwYDVQQDEwRtY3l0MSkwJwYJKoZI
-          hvcNAQkBFhptY3l0c2ltdWxhdG9yQG1jeXRnYW1lLmNvbTAeFw0yNjA5MDYxMjAw
-          MDBaFw03NjA4MjQxMjAwMDBaMIGNMQswCQYDVQQGEwJDTjELMAkGA1UECBMCU1Qx
-          CzAJBgNVBAcTAkJKMQ0wCwYDVQQKEwRtY3l0MQ0wCwYDVQQLEwRnYW1lMQ0wCwYD
-          VQQDEwRtY3l0MSkwJwYJKoZIhvcNAQkBFhptY3l0c2ltdWxhdG9yQG1jeXRnYW1l
-          LmNvbTCCASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAMHWKvL/tXebCeo9
-          re2+gf3PkPT/tb9I9q95OJ5/y9y8x7w6v5u4t3s2r1q0p9o8n7m6l5k4j3i2h1g0
-          f9e8d7c6b5a4Z3Y2X1W0V9U8T7S6R5Q4P3O2N1M0L9K8J7I6H5G4F3E2D1C0B9A8
-          z7y6x5w4v3u2t1s0r9q8p7o6n5m4l3k2j1i0h9g8f7e6x7y8z9A0B1C2D3E4F5G6
-          H7I8J9K0L1M2N3O4P5Q6R7S8T9U0V1W2X3Y4Z5a6b7c8d9e0f1g2h3i4j5k6m7n8
-          o9p0q1r2s3t4u5v6w7x8y9z0A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q7R8S9T0
-          U1V2W3X4Y5Z6a7b8c9d0e1f2g3h4i5j6k7m8n9o0p1q2r3s4t5u6v7w8x9y0AgMB
-          AAGjUzBRMB0GA1UdDgQWBBRlV+5k6P7n0Xk2y7iMv30Xy+zB2DAfBgNVHSMEGDAW
-          gBRlV+5k6P7n0Xk2y7iMv30Xy+zB2DAPBgNVHRMBAf8EBTADAQH/MA0GCSqGSIb3
-          DQEBCwUAA4IBAQCOr7w3x5y7z9A0B1C2D3E4F5G6H7I8J9K0L1M2N3O4P5Q6R7S8
-          T9U0V1W2X3Y4Z5a6b7c8d9e0f1g2h3i4j5k6m7n8o9p0q1r2s3t4u5v6w7x8y9z0
-          A1B2C3D4E5F6G7H8I9J0K1L2M3N4O5P6Q7R8S9T0U1V2W3X4Y5Z6a7b8c9d0e1f2
-          g3h4i5j6k7m8n9o0p1q2r3s4t5u6v7w8x9y0z1A2B3C4D5E6F7G8H9I0J1K2L3M4
-          N5O6P7Q8R9S0T1U2V3W4X5Y6Z7a8b9c0d1e2f3g4h5i6j7k8m9n0o1p2q3r4s5t6
-          u7v8w9x0y1z2
-          -----END CERTIFICATE-----
-          EOF
-
-          # 使用标准 OpenSSL 将纯文本固定私钥与证书转化为 PKCS12 密钥库
-          openssl pkcs12 -export \
-            -in proj/cert.pem \
-            -inkey proj/key.pem \
-            -out proj/release.jks \
-            -name mcyt \
-            -passout pass:mcyt123456
+          # 🔑 签名凭证处理：如果仓库自带 release.jks 则直接复用，否则生成标准兼容签名
+          if [ -f "release.jks" ]; then
+            cp release.jks proj/release.jks
+          else
+            keytool -genkeypair \
+              -keystore proj/release.jks \
+              -alias mcyt \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 36500 \
+              -storepass mcyt123456 \
+              -keypass mcyt123456 \
+              -dname "CN=mcyt, OU=game, O=mcyt, L=BJ, ST=BJ, C=CN" \
+              -J"-Duser.language=en"
+          fi
 
           cat << EOF > proj/app/build.gradle
           apply plugin: 'com.android.application'
@@ -130,7 +78,6 @@ jobs:
                       storePassword 'mcyt123456'
                       keyAlias 'mcyt'
                       keyPassword 'mcyt123456'
-                      storeType 'PKCS12'
                   }
               }
               defaultConfig {
