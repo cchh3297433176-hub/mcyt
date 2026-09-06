@@ -416,53 +416,81 @@ if (!window.G.momentsFilterNpcId) window.G.momentsFilterNpcId = null;
 if (!window.G._chatShowFullHistory) window.G._chatShowFullHistory = {};
 if (!window.G._behindScreenActive) window.G._behindScreenActive = {};
 
+// Android WebView 兼容的长按/单击绑定。
+// 某些 APK WebView 在 touchstart/touchend + click 混用时不会可靠地产生合成 click，
+// 旧版因此出现“长按能用、轻触完全没反应”。这里在 touchend 上主动补发一次普通点击，
+// 同时用 suppressNextClick 防止浏览器随后再派发 click 导致执行两次。
 function bindLongPressEvent(el, onLongPress, onClick) {
     if (!el) return;
     const LONG_PRESS_MS = 480;
     const MOVE_TOLERANCE = 12;
     let pressTimer = null;
     let isLongPressFired = false;
+    let moved = false;
+    let suppressNextClick = false;
     let startX = 0, startY = 0;
 
-    const clearTimer = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
+    const clearTimer = () => {
+        if (pressTimer) {
+            clearTimeout(pressTimer);
+            pressTimer = null;
+        }
+    };
+
+    const fireLongPress = () => {
+        isLongPressFired = true;
+        clearTimer();
+        try { if (navigator && typeof navigator.vibrate === 'function') navigator.vibrate(35); } catch (_) {}
+        if (typeof onLongPress === 'function') onLongPress();
+    };
 
     el.addEventListener('touchstart', e => {
+        const t = e.touches && e.touches[0];
         isLongPressFired = false;
-        const t = e.touches[0];
+        moved = false;
         if (t) { startX = t.clientX; startY = t.clientY; }
         clearTimer();
-        pressTimer = setTimeout(() => {
-            isLongPressFired = true;
-            try { if (navigator && typeof navigator.vibrate === 'function') navigator.vibrate(35); } catch (_) {}
-            if (typeof onLongPress === 'function') onLongPress();
-        }, LONG_PRESS_MS);
+        pressTimer = setTimeout(fireLongPress, LONG_PRESS_MS);
     }, { passive: true });
 
     el.addEventListener('touchmove', e => {
-        const t = e.touches[0];
-        if (t && (Math.abs(t.clientX - startX) > MOVE_TOLERANCE || Math.abs(t.clientY - startY) > MOVE_TOLERANCE)) {
+        const t = e.touches && e.touches[0];
+        if (t && (Math.abs(t.clientX - startX) > MOVE_TOLERANCE ||
+                  Math.abs(t.clientY - startY) > MOVE_TOLERANCE)) {
+            moved = true;
             clearTimer();
         }
     }, { passive: true });
 
-    el.addEventListener('touchend', () => {
+    el.addEventListener('touchend', e => {
+        const shouldClick = !isLongPressFired && !moved;
         clearTimer();
-    });
+        if (shouldClick && typeof onClick === 'function') {
+            suppressNextClick = true;
+            onClick(e);
+            // 某些 WebView 不会产生 click，另一些会晚一点产生；只抑制紧随其后的那一次。
+            setTimeout(() => { suppressNextClick = false; }, 700);
+        }
+    }, { passive: true });
 
-    el.addEventListener('touchcancel', clearTimer);
+    el.addEventListener('touchcancel', () => {
+        moved = true;
+        clearTimer();
+    }, { passive: true });
 
     el.addEventListener('mousedown', e => {
         isLongPressFired = false;
+        moved = false;
         startX = e.clientX; startY = e.clientY;
         clearTimer();
-        pressTimer = setTimeout(() => {
-            isLongPressFired = true;
-            if (typeof onLongPress === 'function') onLongPress();
-        }, LONG_PRESS_MS);
+        pressTimer = setTimeout(fireLongPress, LONG_PRESS_MS);
     });
 
     el.addEventListener('mousemove', e => {
-        if (pressTimer && (Math.abs(e.clientX - startX) > MOVE_TOLERANCE || Math.abs(e.clientY - startY) > MOVE_TOLERANCE)) {
+        if (pressTimer &&
+            (Math.abs(e.clientX - startX) > MOVE_TOLERANCE ||
+             Math.abs(e.clientY - startY) > MOVE_TOLERANCE)) {
+            moved = true;
             clearTimer();
         }
     });
@@ -471,16 +499,40 @@ function bindLongPressEvent(el, onLongPress, onClick) {
     el.addEventListener('mouseleave', clearTimer);
     el.addEventListener('contextmenu', e => e.preventDefault());
 
-    // 🌟 原生 click 拦截长按触发：只要没有触发长按，普通点击无阻碍执行！
-    el.addEventListener('click', (e) => {
+    el.addEventListener('click', e => {
+        if (suppressNextClick) {
+            suppressNextClick = false;
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+        }
         if (isLongPressFired) {
             e.preventDefault();
             e.stopPropagation();
             return;
         }
-        if (typeof onClick === 'function') {
-            onClick(e);
+        if (typeof onClick === 'function') onClick(e);
+    });
+}
+
+// 对普通按钮也使用同一套 Android WebView 可靠点击策略。
+function bindReliableTap(el, handler) {
+    if (!el || typeof handler !== 'function') return;
+    let suppressClick = false;
+    const run = e => {
+        suppressClick = true;
+        handler(e);
+        setTimeout(() => { suppressClick = false; }, 700);
+    };
+    el.addEventListener('touchend', e => run(e), { passive: true });
+    el.addEventListener('click', e => {
+        if (suppressClick) {
+            suppressClick = false;
+            e.preventDefault();
+            e.stopPropagation();
+            return;
         }
+        handler(e);
     });
 }
 
@@ -609,7 +661,7 @@ function renderPhoneApp(container) {
             </div>
             <div style="display:flex;gap:6px;">
                 <button onclick="openClockSettingsModal()" style="border:1px solid #cce3cc;background:#fff;padding:2px 7px;border-radius:12px;font-size:11px;cursor:pointer;color:#555;">🕒 时钟设置</button>
-                <button onclick="openAccountManagerModal()" style="border:1px solid #b8dbb8;background:#fff;padding:2px 7px;border-radius:12px;font-size:11px;cursor:pointer;color:#2e7d32;font-weight:700;">🔀 切号</button>
+                <button id="phoneAccountManagerBtn" style="border:1px solid #b8dbb8;background:#fff;padding:2px 7px;border-radius:12px;font-size:11px;cursor:pointer;color:#2e7d32;font-weight:700;">🔀 切号</button>
             </div>
         </div>
 
@@ -630,8 +682,18 @@ function renderPhoneApp(container) {
     `;
     container.innerHTML = html;
 
-    document.getElementById('phoneNavChatsBtn').onclick = () => { window.G.phoneNav = 'chats'; renderSocialPanel(); };
-    document.getElementById('phoneNavMomentsBtn').onclick = () => { window.G.phoneNav = 'moments'; window.G.momentsFilterNpcId = null; renderSocialPanel(); };
+    bindReliableTap(document.getElementById('phoneNavChatsBtn'), () => {
+        window.G.phoneNav = 'chats';
+        renderSocialPanel();
+    });
+    bindReliableTap(document.getElementById('phoneNavMomentsBtn'), () => {
+        window.G.phoneNav = 'moments';
+        window.G.momentsFilterNpcId = null;
+        renderSocialPanel();
+    });
+
+    // 顶部“切号”按钮在 Android WebView 中也不要依赖 inline onclick。
+    bindReliableTap(container.querySelector('#phoneAccountManagerBtn'), openAccountManagerModal);
 
     if (!isMoments) {
         bindChatListEvents(container);
@@ -741,9 +803,19 @@ function bindChatListEvents(container) {
     const btnGroup = document.getElementById('tabGroupBtn');
     const addBtn = document.getElementById('addChatTargetBtn');
 
-    if (btnDirect) btnDirect.onclick = () => { window.G.chatActiveTab = 'direct'; renderSocialPanel(); };
-    if (btnGroup) btnGroup.onclick = () => { window.G.chatActiveTab = 'group'; renderSocialPanel(); };
-    if (addBtn) addBtn.onclick = () => openAddChatTargetModal();
+    bindReliableTap(btnDirect, () => {
+        window.G.currentChatNpc = null;
+        window.G.currentChatGroup = null;
+        window.G.chatActiveTab = 'direct';
+        renderSocialPanel();
+    });
+    bindReliableTap(btnGroup, () => {
+        window.G.currentChatNpc = null;
+        window.G.currentChatGroup = null;
+        window.G.chatActiveTab = 'group';
+        renderSocialPanel();
+    });
+    bindReliableTap(addBtn, openAddChatTargetModal);
 
     // 🌟 核心：为每个私聊联系人绑定清晰的“单击开聊”与“长按编辑人设”
     container.querySelectorAll('.chat-item').forEach(el => {

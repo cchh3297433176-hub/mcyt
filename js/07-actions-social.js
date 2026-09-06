@@ -283,6 +283,7 @@ function openAo3Reader(id) {
 function buildAo3ReadHTML(id) {
     ensureBrowserIntegrity();
     const work = (G.fanworks || []).find(w => w._id === id);
+    if (work) normalizeAo3Work(work);
     if (!work) {
         return `<div style="padding:30px;text-align:center;color:#888;">找不到该作品 <button onclick="G.browserState.view='ao3';renderBrowserPanel();">返回列表</button></div>`;
     }
@@ -808,6 +809,66 @@ function openCreateCustomBookModal() {
     };
 }
 
+// AO3 AI 输出清洗与容错解析：兼容带 <think>、Markdown 代码围栏、中文冒号，
+// 以及模型漏写结束标签的情况，避免整段提示词/标签被塞进章节标题和正文。
+function cleanAo3AIOutput(raw) {
+    let s = String(raw || '');
+    // 去掉常见推理块；非贪婪处理，避免影响正文。
+    s = s.replace(/<think>[\s\S]*?<\/think>/gi, '');
+    s = s.replace(/<analysis>[\s\S]*?<\/analysis>/gi, '');
+    s = s.replace(/```(?:text|markdown)?\s*/gi, '').replace(/```/g, '');
+    return s.trim();
+}
+
+function grabAo3Tag(raw, tag) {
+    const s = cleanAo3AIOutput(raw);
+    const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // 标准：[TAG]内容[/TAG]
+    let m = s.match(new RegExp(`\\[${escaped}\\]\\s*([\\s\\S]*?)\\s*\\[\\/${escaped}\\]`, 'i'));
+    if (m) return m[1].trim();
+    // 容错：[TAG]: 内容 或 [TAG] 内容；遇到下一个已知字段即停止。
+    const known = ['TITLE','PAIRING','TAGS','SUMMARY','CHAPTER_TITLE','CONTENT'];
+    m = s.match(new RegExp(`\\[${escaped}\\]\\s*[:：]?\\s*([\\s\\S]*?)(?=\\s*\\[(?:${known.join('|')})\\]\\s*[:：]?|$)`, 'i'));
+    return m ? m[1].trim() : '';
+}
+
+function normalizeAo3Work(work) {
+    if (!work || !Array.isArray(work.chapters) || !work.chapters.length) return work;
+    const ch = work.chapters[0];
+    const rawCandidate = `${ch.title || ''}\n${ch.content || ''}`;
+    const looksBroken = /(?:<think>|<\/think>|\[TITLE\]|\[CHAPTER_TITLE\]|\[CONTENT\]|To be written)/i.test(rawCandidate);
+    if (!looksBroken) return work;
+
+    const title = grabAo3Tag(rawCandidate, 'TITLE');
+    const pairing = grabAo3Tag(rawCandidate, 'PAIRING');
+    const tags = grabAo3Tag(rawCandidate, 'TAGS');
+    const summary = grabAo3Tag(rawCandidate, 'SUMMARY');
+    const chapterTitle = grabAo3Tag(rawCandidate, 'CHAPTER_TITLE');
+    const content = grabAo3Tag(rawCandidate, 'CONTENT');
+
+    if (title) work.title = title;
+    if (pairing) work.pairing = pairing;
+    if (tags) work.tags = tags.split(/[,，、\s]+/).filter(Boolean);
+    if (summary) work.summary = summary;
+    if (chapterTitle) ch.title = chapterTitle;
+    if (content) ch.content = content;
+    else {
+        // 至少清除已经泄漏进正文的元数据；若模型真的没有正文，明确标记而不是显示整坨原始标签。
+        let cleaned = cleanAo3AIOutput(ch.content || '');
+        cleaned = cleaned
+            .replace(/\[TITLE\][\s\S]*?(?=\[PAIRING\]|\[CHAPTER_TITLE\]|\[CONTENT\]|$)/gi, '')
+            .replace(/\[PAIRING\][\s\S]*?(?=\[TAGS\]|\[SUMMARY\]|\[CHAPTER_TITLE\]|\[CONTENT\]|$)/gi, '')
+            .replace(/\[TAGS\][\s\S]*?(?=\[SUMMARY\]|\[CHAPTER_TITLE\]|\[CONTENT\]|$)/gi, '')
+            .replace(/\[SUMMARY\][\s\S]*?(?=\[CHAPTER_TITLE\]|\[CONTENT\]|$)/gi, '')
+            .replace(/\[CHAPTER_TITLE\][\s\S]*?(?=\[CONTENT\]|$)/gi, '')
+            .trim();
+        if (cleaned) ch.content = cleaned;
+    }
+    if (ch.title) ch.title = cleanAo3AIOutput(ch.title).replace(/^\s*[:：]+\s*/, '').trim();
+    if (ch.content) ch.content = cleanAo3AIOutput(ch.content);
+    return work;
+}
+
 async function generateNewBookFromAI(params = {}) {
     if (G.isGenerating) { showToast('⏳ 正在生成中，请稍候'); return; }
     G.isGenerating = true;
@@ -863,13 +924,13 @@ async function generateNewBookFromAI(params = {}) {
             { role: 'user', content: '请创作新书第1章。' }
         ], { maxTokens: 10000, temperature: 0.95 });
 
-        const grab = (tag) => { const m = raw.match(new RegExp(`\\[${tag}\\]([\\s\\S]*?)\\[/${tag}\\]`)); return m ? m[1].trim() : ''; };
+        const grab = (tag) => grabAo3Tag(raw, tag);
         const title = params.customTitle || grab('TITLE') || 'MC世界奇幻之旅';
         const pairing = params.pairing || grab('PAIRING') || `${p.ytName} & 好友`;
         const tags = params.tags || (grab('TAGS') || '同人, MC, 冒险').split(/[,，、\s]+/).filter(Boolean);
         const summary = params.customSummary || grab('SUMMARY') || '在方块世界中展开的全新篇章。';
         const chTitle = grab('CHAPTER_TITLE') || '初遇与启程';
-        const content = grab('CONTENT') || raw.trim();
+        const content = grab('CONTENT') || cleanAo3AIOutput(raw).trim();
 
         const workId = 'ao3_' + Date.now();
         const newWork = {
@@ -942,9 +1003,9 @@ async function urgeContinueBookChapter(workId) {
             { role: 'user', content: `请续写第 ${nextChapterNum} 章。` }
         ], { maxTokens: 10000, temperature: 0.95 });
 
-        const grab = (tag) => { const m = raw.match(new RegExp(`\\[${tag}\\]([\\s\\S]*?)\\[/${tag}\\]`)); return m ? m[1].trim() : ''; };
+        const grab = (tag) => grabAo3Tag(raw, tag);
         const chTitle = grab('CHAPTER_TITLE') || `第 ${nextChapterNum} 章`;
-        const content = grab('CONTENT') || raw.trim();
+        const content = grab('CONTENT') || cleanAo3AIOutput(raw).trim();
 
         work.chapters.push({
             chapterNum: nextChapterNum,
