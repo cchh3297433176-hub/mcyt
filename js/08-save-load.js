@@ -1,7 +1,7 @@
 // js/08-save-load.js
-// 存档/读档/初始化模块（v1.605 全量数据保护、开局表单防清空、彻底抹除旧档复活 Bug 版）
+// 存档/读档/初始化模块（v1.606 全量数据保护、同人/油管防丢、开局表单防清空版）
 // ============================================================
-const CURRENT_APP_VERSION = '1.605';
+const CURRENT_APP_VERSION = '1.606';
 
 let _gameInitialized = false;
 let _skipStartChoiceOnce = false;
@@ -664,17 +664,19 @@ function serializeGameState() {
         _activeBanTime: g._activeBanTime || null,
         _securityAuditBox: g._securityAuditBox || null,
         _pardonCertificate: g._pardonCertificate || null,
+        browserState: g.browserState,
+        fanworks: g.fanworks,
+        ao3User: g.ao3User,
+        ytState: g.ytState,
+        ytUser: g.ytUser,
+        ytExternalVideos: g.ytExternalVideos,
+        ytCustomChannels: g.ytCustomChannels,
         groups: g.groups,
         groupChatHistory: g.groupChatHistory,
         groupMemories: g.groupMemories,
         friendRequests: g.friendRequests,
         groupInvites: g.groupInvites || [],
         feed: g.feed,
-        fanworks: g.fanworks,
-        ao3User: g.ao3User,
-        ytUser: g.ytUser,
-        ytExternalVideos: g.ytExternalVideos,
-        ytCustomChannels: g.ytCustomChannels,
         collections: g.collections,
         memoir: g.memoir,
         unlockedAchievements: g.unlockedAchievements,
@@ -733,6 +735,15 @@ function applyDeserializedGameState(data) {
         } catch (_) {}
     }
 
+    if (data.browserState) g.browserState = Object.assign({}, g.browserState, data.browserState);
+    if (Array.isArray(data.fanworks)) g.fanworks = data.fanworks;
+    if (data.ao3User) g.ao3User = Object.assign({}, g.ao3User, data.ao3User);
+
+    if (data.ytState) g.ytState = Object.assign({}, g.ytState, data.ytState);
+    if (data.ytUser) g.ytUser = Object.assign({}, g.ytUser, data.ytUser);
+    if (Array.isArray(data.ytExternalVideos)) g.ytExternalVideos = data.ytExternalVideos;
+    if (Array.isArray(data.ytCustomChannels)) g.ytCustomChannels = data.ytCustomChannels;
+
     if (!g.groups) g.groups = {};
     if (data.groups) g.groups = Object.assign({}, g.groups, data.groups);
 
@@ -753,11 +764,6 @@ function applyDeserializedGameState(data) {
     if (Array.isArray(data.friendRequests)) g.friendRequests = data.friendRequests;
     if (Array.isArray(data.groupInvites)) g.groupInvites = data.groupInvites;
     if (Array.isArray(data.feed)) g.feed = data.feed;
-    if (Array.isArray(data.fanworks)) g.fanworks = data.fanworks;
-    if (data.ao3User) g.ao3User = data.ao3User;
-    if (data.ytUser) g.ytUser = data.ytUser;
-    if (Array.isArray(data.ytExternalVideos)) g.ytExternalVideos = data.ytExternalVideos;
-    if (Array.isArray(data.ytCustomChannels)) g.ytCustomChannels = data.ytCustomChannels;
     if (data.collections) g.collections = data.collections;
     if (Array.isArray(data.memoir)) g.memoir = data.memoir;
     if (Array.isArray(data.unlockedAchievements)) g.unlockedAchievements = data.unlockedAchievements;
