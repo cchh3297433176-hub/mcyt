@@ -2424,8 +2424,16 @@ ${behindScreenPrompt}
 // 👥 群聊系统
 // ============================================================
 function openGroupChat(gid) {
+    if (!G.groups || !G.groups[gid]) return;
+    G.currentChatNpc = null;
     G.currentChatGroup = gid;
-    renderSocialPanel();
+    G.chatActiveTab = 'group';
+    G.phoneNav = 'chats';
+    if (typeof switchTab === 'function') {
+        switchTab('social');
+    } else {
+        renderSocialPanel();
+    }
 }
 
 function closeGroupChat() {
@@ -3175,8 +3183,26 @@ function openGroupSettingsModal(gid) {
     };
 }
 
-function openChat(npcId) { G.currentChatNpc = npcId; renderSocialPanel(); }
-function closeChat() { G.currentChatNpc = null; renderSocialPanel(); }
+function openChat(npcId) {
+    // 从通讯录/其他页面进入聊天时，必须同时切到手机社交页。
+    // 旧版合并时漏掉了这一层，所以点击联系人虽然修改了状态，
+    // 但画面仍停留在原来的 dataTab，看起来就像“点了没反应”。
+    if (!G.npcs || !G.npcs[npcId]) return;
+    G.currentChatGroup = null;
+    G.currentChatNpc = npcId;
+    G.chatActiveTab = 'direct';
+    G.phoneNav = 'chats';
+    if (typeof switchTab === 'function') {
+        switchTab('social');
+    } else {
+        renderSocialPanel();
+    }
+}
+function closeChat() {
+    G.currentChatNpc = null;
+    renderSocialPanel();
+}
+
 
 // ============================================================
 // 🧠 记忆总结模态框
@@ -3518,6 +3544,11 @@ function renderMemoir() {
 }
 
 // 暴露全局
+window.renderSocialPanel = renderSocialPanel;
+window.openChat = openChat;
+window.closeChat = closeChat;
+window.openGroupChat = openGroupChat;
+window.closeGroupChat = closeGroupChat;
 window.openAccountManagerModal = openAccountManagerModal;
 window.switchAccount = switchAccount;
 window.deleteAltAccount = deleteAltAccount;
