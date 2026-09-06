@@ -1,5 +1,5 @@
 // js/09-events-init.js
-// 事件绑定与公告系统（v1.603 全量大版本更新说明、开局直通优化版）
+// 事件绑定与公告系统（v1.604 更新说明与正版声明）
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
     // 开始游戏按钮（直达开局，不再强行拦截弹窗清空人设）
@@ -13,7 +13,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!G.ai.baseUrl) { showToast('⚠️ 请先填入 API Base URL'); $('setupBaseUrlInput')?.focus(); return; }
         if (!G.ai.model) { showToast('⚠️ 请先选择或填写模型'); $('setupModelInput')?.focus(); return; }
 
-        // 如果检测到有未完成的自动存档，给玩家一个明确的覆盖确认，确定后直接进入新游戏
         const autoInfo = (typeof getAutoSaveInfo === 'function') ? getAutoSaveInfo() : null;
         if (autoInfo && autoInfo.data && !_skipStartChoiceOnce) {
             if (!confirm(`检测到此前有保存的进度（第 ${autoInfo.day} 天 · ${autoInfo.data?.player?.ytName || '主播'}）。\n\n确定以当前新填人设开始「全新游戏」并覆盖自动存档吗？`)) {
@@ -222,10 +221,10 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ============================================================
-// 📢 双页滑动公告系统（v1.603 纯正声明与12项重磅优化）
+// 📢 双页滑动公告系统（v1.604 纯正声明与最新优化记录）
 // ============================================================
 function checkAndShowVersionNoticeModal(forceOpen = false) {
-    const ver = window.CURRENT_APP_VERSION || '1.603';
+    const ver = window.CURRENT_APP_VERSION || '1.604';
     const dismissedVersion = localStorage.getItem('mcyt_dismissed_notice_ver');
 
     if (forceOpen || dismissedVersion !== ver) {
@@ -241,7 +240,7 @@ function openVersionNoticeModal(version) {
 
     <div class="notice-slider-wrap">
         <div class="notice-slider-track" id="noticeSliderTrack">
-            <!-- 第 1 页：主公告 -->
+            <!-- 第 1 页：主公告与正版声明（仅向玩家展示，不注入给AI） -->
             <div class="notice-slide-page">
                 <div class="notice-card-box">
                     <h4>📜 关于本项目与正版声明</h4>
@@ -257,23 +256,30 @@ function openVersionNoticeModal(version) {
                 </div>
             </div>
 
-            <!-- 第 2 页：更新优化方面 -->
+            <!-- 第 2 页：v1.604 最新更新与修复说明 -->
             <div class="notice-slide-page">
                 <div class="notice-card-box" style="max-height:60vh;overflow-y:auto;">
-                    <h4>🚀 预告更新优化方面 (v${version})</h4>
-                    <ol style="padding-left:18px;margin-bottom:10px;font-size:12.5px;color:#333;line-height:1.7;">
-                        <li><b>优化聊天的动态功能</b>：现在你可以看到通讯录里的角色发动态啦，点击刷新即可生成新动态，你也可以发布动态获得好友评论。</li>
-                        <li><b>连发与时差体验</b>：角色不再一次只发一条消息，可以连发多条短消息，更加真实模拟聊天打字效果，并且增加了真实时差感。</li>
-                        <li><b>好感度系统修正</b>：修复了好感条不动 Bug，优化好感度增减逻辑与生疏度控制（杜绝好感低时的不合理自来熟）。</li>
-                        <li><b>好友与社交生态</b>：你需要获得主播们的好友申请，他们才会出现在你的联系人里，你也会收到群聊邀请！热度与粉丝越高越容易引起注意；聊得太过分可能会被拉黑，可开小号挽回（骚扰）。</li>
-                        <li><b>国内搜索引擎集成</b>：考虑到 Tavily 平台门槛，新增<b>博查 (Bocha)</b>、<b>秘塔 (Metaso)</b> 等多个国内搜索引擎，支持 AI 主动上网了解角色与模组！</li>
-                        <li><b>表情包斗图功能</b>：内置了一定数量的猪猪可爱表情包，也可自行通过图床格式（『描述——链接』）添加，或投稿提供新表情。</li>
-                        <li><b>全局追踪重说</b>：重说不再局限于固定主线，而是自动追踪并撤回“最近一次 AI 生成的内容”，私聊也可以重说了！</li>
-                        <li><b>消息撤回与编辑</b>：聊天界面可以撤回消息了（对方有可能已经看到了呢~笑），以及静默编辑或删除发错的消息。</li>
-                        <li><b>聊天历史折叠</b>：防止聊天记录过多卡顿，支持仅展示最近若干条，更早记录一键折叠展开。</li>
-                        <li><b>高版本安卓存储修复</b>：优化了部分手机（如 vivo 等机型）因 Android 系统过高导致无法下载导出存档到本地的 Bug。</li>
-                        <li><b>智能自启续玩</b>：优化了后台退出后需退回首页恢复进度的繁琐操作，启动时自动无缝秒回上次进度。</li>
-                        <li><b>屏幕那边的 TA</b>：去除了聊天气泡内出戏的动作括号描写，增添独立的「屏幕那边的TA」动作感知框——开启后即可窥见屏幕那边的他线下正在做什么！</li>
+                    <h4 style="color:#2e7d32;margin-bottom:8px;">🚀 v${version} 修复与优化内容</h4>
+                    
+                    <div style="font-size:13px;font-weight:700;color:#1e293b;margin-top:6px;">🛠️ Bug 修复与功能恢复：</div>
+                    <ol style="padding-left:18px;margin:4px 0 8px;font-size:12px;color:#334155;line-height:1.7;">
+                        <li><b>恢复角色与玩家人设编辑</b>：
+                            <div style="font-size:11.5px;color:#64748b;margin-top:2px;">
+                                • 轻点（单击）：打开角色资料名片，查看好感与专属记忆；<br>
+                                • 长按（按住 0.45 秒）：带有手机微震反馈，立即弹出《✏️ 编辑角色资料与人设》弹窗，可自由调整角色姓名、自定义上传头像、修改人设性格、皮肤形象、口头禅与赛道；左上角头像亦支持全能修改。
+                            </div>
+                        </li>
+                        <li><b>删除冗余废弃选项</b>：移除了聊天加号菜单中冗余的旁白选项，防止误导他人，全面由「屏幕那边的TA」感知系统接管。</li>
+                        <li><b>修复串号覆盖恶性 Bug</b>：修复了查房及重开游戏时可能导致他人角色记忆串号残留的严重问题。</li>
+                        <li><b>修复好友申请卡顿 Bug</b>：彻底修复了社交中心点击添加好友/群邀请卡住无反应的异常。</li>
+                        <li><b>解决签名冲突问题</b>：固定统一签名密钥，后续更新版本均可直接覆盖安装，无需卸载旧版。</li>
+                    </ol>
+
+                    <div style="font-size:13px;font-weight:700;color:#1e293b;margin-top:10px;">✨ 体验优化方面：</div>
+                    <ol style="padding-left:18px;margin:4px 0 6px;font-size:12px;color:#334155;line-height:1.7;">
+                        <li><b>编辑管理功能全能升级</b>：不仅能修改通知，还能重新编辑 AO3 小说正文、油管长文与剧情，不喜欢的剧情随时改！</li>
+                        <li><b>导出记忆卡 Key 隐私保护开关</b>：新增连带导出 API Key 选项（默认关闭），防止导出记忆卡发给他人时泄露个人密匙。</li>
+                        <li><b>提示词世界观深度隔离</b>：彻底将作者公告与现实信息从大模型提示词中剥离，严禁网友和 NPC 打破第四面墙，防止愚蠢的 AI 把玩家和世界观认错！</li>
                     </ol>
                 </div>
             </div>
@@ -291,7 +297,7 @@ function openVersionNoticeModal(version) {
             <span>本次版本不再提示</span>
         </label>
         <div style="display:flex;gap:6px;">
-            <button class="btn-secondary small" id="noticeNavSlideBtn" style="padding:5px 12px;font-weight:700;">下一页：更新公告 ➡️</button>
+            <button class="btn-secondary small" id="noticeNavSlideBtn" style="padding:5px 12px;font-weight:700;">下一页：更新说明 ➡️</button>
             <button class="btn-primary small" id="noticeCloseBtn" style="margin:0;padding:5px 14px;">关 闭</button>
         </div>
     </div>
@@ -315,7 +321,7 @@ function openVersionNoticeModal(version) {
             dot1.classList.toggle('active', currentPage === 1);
         }
         if (navBtn) {
-            navBtn.textContent = currentPage === 0 ? '下一页：更新公告 ➡️' : '⬅️ 返回主公告';
+            navBtn.textContent = currentPage === 0 ? '下一页：更新说明 ➡️' : '⬅️ 返回主公告';
         }
     };
 

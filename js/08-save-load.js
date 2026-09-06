@@ -1,7 +1,7 @@
 // js/08-save-load.js
-// 存档/读档/初始化模块（v1.603 全量数据保护、开局表单防清空、取证卡近10次生成裁剪版）
+// 存档/读档/初始化模块（v1.604 全量数据保护、开局表单防清空、取证卡近10次生成裁剪版）
 // ============================================================
-const CURRENT_APP_VERSION = '1.603';
+const CURRENT_APP_VERSION = '1.604';
 
 let _gameInitialized = false;
 let _skipStartChoiceOnce = false;
@@ -444,7 +444,6 @@ function resumeAutoSave() {
     }, 400);
 }
 
-// 首次打开有存档时的欢迎选择弹窗（绝不清空输入框）
 function showStartChoiceModal(skipCheck = false) {
     const autoInfo = getAutoSaveInfo();
     openModal(`
@@ -475,7 +474,6 @@ function showStartChoiceModal(skipCheck = false) {
     document.getElementById('choiceStartNewGame').onclick = () => {
         closeModal();
         _skipStartChoiceOnce = true;
-        // 关闭弹窗让用户在设置页填写或确认，绝不清空输入框
         showToast('✨ 请填写或确认主播人设，点击下方开始游戏！', 'info', 2000);
     };
 

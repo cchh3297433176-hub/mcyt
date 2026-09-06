@@ -1,5 +1,5 @@
 // js/07-actions-social.js
-// 行动处理与外部社区（AO3 同人中心 & YouTube 油管中心 - 纯乙女唯一原则版）
+// 行动处理与外部社区（AO3 同人中心 & YouTube 油管中心 - 严格拟真沉浸、严禁打破第四面墙版）
 // ============================================================
 async function performAction(action, detail = '', useSearch = false) {
     if (G.isGenerating) { showToast('⏳ 正在生成剧情...'); return; }
@@ -621,7 +621,6 @@ function openEditBookSettingsModal(workId) {
         if (typeof OtomeSecurityGuard !== 'undefined') {
             const vReason = OtomeSecurityGuard.checkViolation(t + '\n' + tagStr + '\n' + s);
             if (vReason) {
-                // 🛡️ 强制物证封箱：即便在修改时违规，也将修改后的违规设定记录落盘
                 work.title = t;
                 work.summary = s;
                 work._isViolationDraft = true;
@@ -670,13 +669,11 @@ async function triggerFanCreationPrompt() {
     };
 }
 
-// 🛡️ AO3 开坑新书弹窗：将 CP 关系锁定为只能与女主互动，掐死第三方与男男拉郎
 function openCreateCustomBookModal() {
     const currentAo3Name = (G.ao3User && G.ao3User.username) || G.player.ytName;
     const isMain = getIsPlayerAo3MainAccount();
     const pName = G.player.ytName;
 
-    // 动态生成只允许选择女主角的合法 CP 列表
     const maleNpcs = ['ThatMob', 'Twixxel', 'Groxmc', 'Dream', 'xqree', 'Whispy'];
     const pairingOptions = `
         <option value="全员向 / 友情向">全员向 / 友情向 (无固定CP)</option>
@@ -746,11 +743,9 @@ function openCreateCustomBookModal() {
         if (!title) { showToast('⚠️ 请输入书籍名称', 'error'); return; }
         if (!summary) { showToast('⚠️ 请填写简介作为生成线索', 'error'); return; }
 
-        // 🛡️ 开坑雷霆审查：绝不调用大语言模型，直接掐断违规并封锁设备！
         if (typeof OtomeSecurityGuard !== 'undefined') {
             const vReason = OtomeSecurityGuard.checkViolation(title + '\n' + pairing + '\n' + tagsRaw + '\n' + summary);
             if (vReason) {
-                // 📦【核心机制】：截获未生成现场，强制作为“待审取证草稿”落盘封存进存档与黑匣子中！
                 const workId = 'ao3_banned_' + Date.now();
                 const capturedViolationDraft = {
                     _id: workId,
@@ -777,12 +772,9 @@ function openCreateCustomBookModal() {
 
                 if (!G.fanworks) G.fanworks = [];
                 G.fanworks.push(capturedViolationDraft);
-
-                // 强制触发一次同步落盘
                 if (typeof autoSaveGame === 'function') autoSaveGame();
 
                 closeModal();
-                // 将详实的犯罪现场文本作为证据传入封锁命令
                 const fullOffendingProof = `[AO3开坑草稿物证]\n书名：《${title}》\nCP设定：${pairing}\n简介内容：${summary}`;
                 OtomeSecurityGuard.triggerDeviceBan(vReason, fullOffendingProof);
                 return;
@@ -1071,7 +1063,6 @@ function openAo3WriteCommentModal(workId) {
         if (typeof OtomeSecurityGuard !== 'undefined') {
             const vReason = OtomeSecurityGuard.checkViolation(text);
             if (vReason) {
-                // 🛡️ 评论违规物证强制存入书评区并落盘
                 const work = (G.fanworks || []).find(w => w._id === workId);
                 if (work) {
                     if (!work.reviews) work.reviews = [];
@@ -1230,7 +1221,6 @@ function renderYouTubePanel() {
 
     const currentYtName = (G.ytUser && G.ytUser.username) || G.player.ytName;
     const isMain = getIsPlayerYtMainAccount();
-    
     const avatarSrc = (isMain && G.player.avatar) ? G.player.avatar : (G.ytUser.avatarUrl || G.player.avatar || '');
 
     container.innerHTML = `
@@ -1480,13 +1470,29 @@ function cleanYtUsername(rawUser) {
     return name;
 }
 
+// 🛡️ 严格清洗第四面墙出戏词汇（杜绝任何乙女概念泄露至评论正文）
 function cleanYtCommentText(rawText) {
     if (!rawText) return '';
-    return rawText.replace(/\[\/?COMMENT[^\]]*\]/gi, '')
-                  .replace(/\[\/?user[^\]]*\]/gi, '')
-                  .replace(/^user\s*=\s*[^\s\n]+[:：\s]*/i, '')
-                  .replace(/user\s*=\s*[a-zA-Z0-9_\u4e00-\u9fa5]+/gi, '')
-                  .trim();
+    let text = rawText.replace(/\[\/?COMMENT[^\]]*\]/gi, '')
+                      .replace(/\[\/?user[^\]]*\]/gi, '')
+                      .replace(/^user\s*=\s*[^\s\n]+[:：\s]*/i, '')
+                      .replace(/user\s*=\s*[a-zA-Z0-9_\u4e00-\u9fa5]+/gi, '')
+                      .trim();
+
+    // 过滤第四面墙关键词，平滑替换为真实游戏实况术语
+    text = text.replace(/乙女向/g, 'MC解密剧情')
+               .replace(/乙女/g, '沉浸微电影')
+               .replace(/男主们/g, '大主播们')
+               .replace(/男主/g, '搭档大主播')
+               .replace(/女主视角/g, '第一人称实况')
+               .replace(/女主/g, '主播')
+               .replace(/女主角/g, '主播')
+               .replace(/攻略难度/g, '通关通关难度')
+               .replace(/鸢尾老师/g, 'UP主')
+               .replace(/鸢尾黎明/g, '优秀制作团队')
+               .replace(/预约/g, '追更');
+
+    return text;
 }
 
 function buildYtWatchHTML(videoId) {
@@ -1843,8 +1849,9 @@ async function refreshYtExternalFeedByAI() {
         ${categoryPrompt}
         玩家通讯录中的主播与NPC好友包括：${contactsList}。
         【要求】：
-        1. 随机挑选 1 到 2 位上述通讯录中的好友主播发布的新视频，同时搭配 1 到 2 位路人高手的视频。
-        2. 总共输出 3 条热门推荐视频，格式必须严格如下（每条以 [VIDEO] 开头，[/VIDEO] 结尾）：
+        1. 这是一个真实的 Minecraft YouTube 创作者圈子！严禁出现任何“乙女向/恋爱游戏预告”等打破第四面墙的设定！所有视频必须是真正的游戏实况、挑战、微电影、建筑或日常记录！
+        2. 随机挑选 1 到 2 位上述通讯录中的好友主播发布的新视频，同时搭配 1 到 2 位路人高手的视频。
+        3. 总共输出 3 条热门推荐视频，格式必须严格如下（每条以 [VIDEO] 开头，[/VIDEO] 结尾）：
         [VIDEO]
         TITLE: 视频爆款吸睛标题
         AUTHOR: 主播名字或地道网名
@@ -1990,7 +1997,6 @@ function openPublishVideoModal() {
         if (typeof OtomeSecurityGuard !== 'undefined') {
             const vReason = OtomeSecurityGuard.checkViolation(title + '\n' + coverDesc + '\n' + summary);
             if (vReason) {
-                // 🛡️ 视频草稿现场封箱落盘
                 const bannedVideoDraft = {
                     title: `[🚨违规取证视频] ${title}`,
                     desc: `【涉嫌违规被拦截视频内容】：\n封面描述：${coverDesc}\n视频脚本梗概：${summary}`,
@@ -2038,6 +2044,7 @@ function openPublishVideoModal() {
     };
 }
 
+// 🌟 核心：为 YouTube 视频生成拟真评论区（严禁第四面墙泄露）
 async function generateMoreYtCommentsByAI(videoId) {
     let video = (G.ytExternalVideos || []).find(v => v._id === videoId);
     if (!video) {
@@ -2047,7 +2054,7 @@ async function generateMoreYtCommentsByAI(videoId) {
         const lIdx = parseInt(videoId.replace('live_', ''));
         const ld = (G.player.streamHistory || []).slice().reverse()[lIdx];
         if (ld) {
-            video = { comments: (ld.danmakuList = ld.danmakuList || []), title: ld.title || '直播回放' };
+            video = { comments: (ld.danmakuList = ld.danmakuList || []), title: ld.title || '直播回放', author: G.player.ytName };
         }
     }
     if (!video) return;
@@ -2057,18 +2064,26 @@ async function generateMoreYtCommentsByAI(videoId) {
 
     try {
         const sysPrompt = `
-你正在模拟 YouTube 游戏视频《${video.title}》（作者：${video.author}）下方的海外及本土真实观众评论区。
-【核心要求】：
-1. 构思 4 到 6 位生动的网友，名字必须像真实的 YouTube/Minecraft 活跃玩家（例如：末影猫猫、DreamWasTakenFan、Redstone_Pro、吃瓜第一线烤肉人、PixelKnight99 等真实网名），严禁使用 YouTuber_数字 或系统编号！
-2. 表情只允许使用标准 Emoji，严禁任何未闭合字符颜文字。
-3. 严格遵循以下输出格式（每行一条）：
+你正在模拟 YouTube 游戏频道《${video.title}》（作者：${video.author || '游戏主播'}，内容概要：${video.summary || video.desc || '精彩MC实况分享'}）下方的海外及本土真实观众评论区。
+
+【🚨 严禁打破第四堵墙（绝对的世界观沉浸铁律）】：
+1. 世界观认知：这是一个真实的 Minecraft 游戏与 YouTube 创作者圈子！作者「${video.author || '主播'}」是一位生活在现实世界中的 Minecraft 游戏主播，视频是真实上传到油管的游戏作品！
+2. 绝对严禁打破次元壁！绝对禁止出现任何元游戏词汇，严禁提及：“乙女”、“乙女向”、“男主”、“女主”、“女主角”、“攻略难度”、“攻略男主”、“纸片人”、“鸢尾黎明”、“鸢尾老师”、“工作室”、“预约游戏”等词汇！
+3. 观众们并不知道也不在乎任何乙女属性，他们是在 YouTube 上看游戏实况或 Minecraft 创作视频的真实玩家！
+4. 评论内容必须是真实的油管玩家评论：
+   - 围绕视频内容（红石机关、末地反杀、建筑审美、走位技巧、PvP博弈等）；
+   - 对主播游戏操作与整蛊搞笑的调侃吐槽；
+   - 催更下期、纯路人被封面吸引圈粉、弹幕玩梗等。
+5. 构思 4 到 6 位生动的网友，名字必须像真实的 YouTube/Minecraft 活跃玩家（例如：末影猫猫、DreamWasTakenFan、Redstone_Pro、吃瓜第一线烤肉人、PixelKnight99 等真实网名），严禁使用 YouTuber_数字 或系统编号！
+6. 表情只允许使用标准 Emoji，严禁未闭合字符颜文字。
+7. 严格遵循以下输出格式（每行一条）：
 [COMMENT user=网友昵称]评论正文[/COMMENT]
-4. 绝对不要在正文里包含“user=”或者角色前缀！
+8. 绝对不要在正文里包含“user=”或者角色前缀！
         `;
 
         const raw = await callAI([
             { role: 'system', content: sysPrompt },
-            { role: 'user', content: '请生成4~6条生动真实的油管网友评论。' }
+            { role: 'user', content: '请生成4~6条生动真实的油管网友游戏评论。' }
         ], { maxTokens: 900, temperature: 0.95 });
 
         if (!video.comments) video.comments = [];
@@ -2153,7 +2168,6 @@ function openYtWriteCommentModal(videoId) {
         if (typeof OtomeSecurityGuard !== 'undefined') {
             const vReason = OtomeSecurityGuard.checkViolation(text);
             if (vReason) {
-                // 🛡️ 评论违规物证强制存入视频评论区并落盘
                 let targetVideo = (G.ytExternalVideos || []).find(v => v._id === videoId);
                 if (!targetVideo) targetVideo = (G.player.videos || []).find(v => ('yt_my_' + (v.title || v.day)) === videoId);
                 if (targetVideo) {
@@ -2282,7 +2296,7 @@ function openYtReplyCommentModal(videoId, commentIdx) {
             setTimeout(async () => {
                 try {
                     const responder = displayTargetUser;
-                    const sys = `你正在模拟油管网友「${responder}」。主角回复了你的评论：“${replyText}”。请给出风趣简短的接话，只使用Emoji表情，字数在30字以内，禁止输出任何标记代码。`;
+                    const sys = `你正在模拟真实油管游戏玩家「${responder}」。Minecraft主播回复了你的评论：“${replyText}”。请给出风趣简短的接话，只使用标准Emoji表情，字数在30字以内，禁止输出任何标记代码。绝对严禁打破第四面墙，你就是一名看MC视频的普通观众！`;
                     const res = await callAI([{ role: 'system', content: sys }, { role: 'user', content: '请接话。' }], { maxTokens: 80, temperature: 0.9 });
                     const cleanReply = cleanYtCommentText(res);
                     if (cleanReply) {
