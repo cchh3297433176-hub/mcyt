@@ -287,8 +287,8 @@ function openAccountManagerModal() {
                 </div>
             </div>
             <div style="display:flex;gap:6px;align-items:center;">
-                ${isCurrentThisAlt ? '<span style="font-size:11px;color:#2e7d32;font-weight:700;padding:4px 6px;">● 使用中</span>' : `<button class="upload-btn" onclick="switchAccount('${alt.id}');openAccountManagerModal();" style="padding:4px 8px;font-size:11px;cursor:pointer;">使用</button>`}
-                <button class="upload-btn" onclick="deleteAltAccount('${alt.id}')" style="padding:4px 6px;font-size:11px;background:#e53935;cursor:pointer;">🗑️</button>
+                ${isCurrentThisAlt ? '<span style="font-size:11px;color:#2e7d32;font-weight:700;padding:4px 6px;">● 使用中</span>' : `<button class="upload-btn account-switch-btn" data-account-id="${escapeHtml(String(alt.id))}" style="padding:4px 8px;font-size:11px;cursor:pointer;">使用</button>`}
+                <button class="upload-btn account-delete-btn" data-account-id="${escapeHtml(String(alt.id))}" style="padding:4px 6px;font-size:11px;background:#e53935;cursor:pointer;">🗑️</button>
             </div>
         </div>`;
     });
@@ -309,7 +309,7 @@ function openAccountManagerModal() {
                         <div style="font-size:10px;color:#666;">粉丝 ${G.player?.followers || 0} · 官方认证</div>
                     </div>
                 </div>
-                ${isCurrentMain ? '<span style="font-size:11px;color:#2e7d32;font-weight:700;padding:4px 6px;">● 使用中</span>' : `<button class="upload-btn" onclick="switchAccount('main');openAccountManagerModal();" style="padding:4px 8px;font-size:11px;cursor:pointer;">使用</button>`}
+                ${isCurrentMain ? '<span style="font-size:11px;color:#2e7d32;font-weight:700;padding:4px 6px;">● 使用中</span>' : `<button class="upload-btn account-switch-btn" data-account-id="main" style="padding:4px 8px;font-size:11px;cursor:pointer;">使用</button>`}
             </div>
 
             <div style="font-weight:700;font-size:13px;margin:12px 0 6px;">🎭 注册的小号列表</div>
@@ -322,10 +322,20 @@ function openAccountManagerModal() {
         </div>
     `);
 
-    document.getElementById('btnRegisterNewAlt').onclick = () => {
+    bindReliableTap(document.getElementById('btnRegisterNewAlt'), () => {
         closeModal();
         openCreateAltAccountModal();
-    };
+    });
+
+    document.querySelectorAll('.account-switch-btn').forEach(btn => {
+        bindReliableTap(btn, () => {
+            switchAccount(btn.dataset.accountId);
+            openAccountManagerModal();
+        });
+    });
+    document.querySelectorAll('.account-delete-btn').forEach(btn => {
+        bindReliableTap(btn, () => deleteAltAccount(btn.dataset.accountId));
+    });
 }
 
 function openCreateAltAccountModal() {
@@ -345,7 +355,7 @@ function openCreateAltAccountModal() {
         </div>
     `);
 
-    document.getElementById('btnConfirmCreateAlt').onclick = () => {
+    bindReliableTap(document.getElementById('btnConfirmCreateAlt'), () => {
         const name = document.getElementById('altNameInput').value.trim();
         const bio = document.getElementById('altBioInput').value.trim();
         if (!name) { showToast('⚠️ 请填写小号名称', 'error'); return; }
@@ -365,7 +375,7 @@ function openCreateAltAccountModal() {
         closeModal();
         renderSocialPanel();
         autoSaveGame();
-    };
+    });
 }
 
 function deleteAltAccount(altId) {
@@ -425,10 +435,11 @@ function bindLongPressEvent(el, onLongPress, onClick) {
     const LONG_PRESS_MS = 480;
     const MOVE_TOLERANCE = 12;
     let pressTimer = null;
-    let isLongPressFired = false;
+    let longPressed = false;
     let moved = false;
-    let suppressNextClick = false;
+    let suppressClickUntil = 0;
     let startX = 0, startY = 0;
+    let activePointerId = null;
 
     const clearTimer = () => {
         if (pressTimer) {
@@ -438,75 +449,66 @@ function bindLongPressEvent(el, onLongPress, onClick) {
     };
 
     const fireLongPress = () => {
-        isLongPressFired = true;
+        if (moved) return;
+        longPressed = true;
+        suppressClickUntil = Date.now() + 700;
         clearTimer();
         try { if (navigator && typeof navigator.vibrate === 'function') navigator.vibrate(35); } catch (_) {}
         if (typeof onLongPress === 'function') onLongPress();
     };
 
-    el.addEventListener('touchstart', e => {
-        const t = e.touches && e.touches[0];
-        isLongPressFired = false;
+    // 统一使用 Pointer Events。Android WebView 对 pointerup 的兼容性比
+    // touchend + 合成 click 更稳定，同时避免同一次触摸被执行两遍。
+    el.addEventListener('pointerdown', e => {
+        if (e.isPrimary === false) return;
+        activePointerId = e.pointerId;
+        longPressed = false;
         moved = false;
-        if (t) { startX = t.clientX; startY = t.clientY; }
+        startX = e.clientX;
+        startY = e.clientY;
         clearTimer();
         pressTimer = setTimeout(fireLongPress, LONG_PRESS_MS);
     }, { passive: true });
 
-    el.addEventListener('touchmove', e => {
-        const t = e.touches && e.touches[0];
-        if (t && (Math.abs(t.clientX - startX) > MOVE_TOLERANCE ||
-                  Math.abs(t.clientY - startY) > MOVE_TOLERANCE)) {
+    el.addEventListener('pointermove', e => {
+        if (activePointerId !== e.pointerId) return;
+        if (Math.abs(e.clientX - startX) > MOVE_TOLERANCE ||
+            Math.abs(e.clientY - startY) > MOVE_TOLERANCE) {
             moved = true;
             clearTimer();
         }
     }, { passive: true });
 
-    el.addEventListener('touchend', e => {
-        const shouldClick = !isLongPressFired && !moved;
+    el.addEventListener('pointerup', e => {
+        if (activePointerId !== e.pointerId) return;
+        activePointerId = null;
+        const shouldClick = !longPressed && !moved;
         clearTimer();
         if (shouldClick && typeof onClick === 'function') {
-            suppressNextClick = true;
+            // 阻止 Android WebView 随后再派发一次 click。
+            suppressClickUntil = Date.now() + 700;
+            try { e.preventDefault(); } catch (_) {}
+            try { e.stopPropagation(); } catch (_) {}
             onClick(e);
-            // 某些 WebView 不会产生 click，另一些会晚一点产生；只抑制紧随其后的那一次。
-            setTimeout(() => { suppressNextClick = false; }, 700);
         }
-    }, { passive: true });
+    }, { passive: false });
 
-    el.addEventListener('touchcancel', () => {
+    el.addEventListener('pointercancel', () => {
+        activePointerId = null;
         moved = true;
         clearTimer();
     }, { passive: true });
 
-    el.addEventListener('mousedown', e => {
-        isLongPressFired = false;
-        moved = false;
-        startX = e.clientX; startY = e.clientY;
-        clearTimer();
-        pressTimer = setTimeout(fireLongPress, LONG_PRESS_MS);
-    });
+    el.addEventListener('pointerleave', () => {
+        // 鼠标移出时取消长按；触摸 pointerleave 不影响已经完成的 tap。
+        if (activePointerId !== null) clearTimer();
+    }, { passive: true });
 
-    el.addEventListener('mousemove', e => {
-        if (pressTimer &&
-            (Math.abs(e.clientX - startX) > MOVE_TOLERANCE ||
-             Math.abs(e.clientY - startY) > MOVE_TOLERANCE)) {
-            moved = true;
-            clearTimer();
-        }
-    });
-
-    el.addEventListener('mouseup', clearTimer);
-    el.addEventListener('mouseleave', clearTimer);
     el.addEventListener('contextmenu', e => e.preventDefault());
 
+    // 桌面浏览器/部分旧 WebView 没有按预期走 pointerup 时，保留 click 兜底。
     el.addEventListener('click', e => {
-        if (suppressNextClick) {
-            suppressNextClick = false;
-            e.preventDefault();
-            e.stopPropagation();
-            return;
-        }
-        if (isLongPressFired) {
+        if (Date.now() < suppressClickUntil || longPressed) {
             e.preventDefault();
             e.stopPropagation();
             return;
@@ -515,25 +517,33 @@ function bindLongPressEvent(el, onLongPress, onClick) {
     });
 }
 
-// 对普通按钮也使用同一套 Android WebView 可靠点击策略。
 function bindReliableTap(el, handler) {
     if (!el || typeof handler !== 'function') return;
-    let suppressClick = false;
+    let suppressClickUntil = 0;
+    let lastPointerId = null;
+
     const run = e => {
-        suppressClick = true;
-        handler(e);
-        setTimeout(() => { suppressClick = false; }, 700);
-    };
-    el.addEventListener('touchend', e => run(e), { passive: true });
-    el.addEventListener('click', e => {
-        if (suppressClick) {
-            suppressClick = false;
-            e.preventDefault();
-            e.stopPropagation();
+        if (e && e.isPrimary === false) return;
+        if (e && e.type === 'pointerup') {
+            lastPointerId = e.pointerId;
+            suppressClickUntil = Date.now() + 700;
+            try { e.preventDefault(); } catch (_) {}
+            try { e.stopPropagation(); } catch (_) {}
+            handler(e);
             return;
         }
-        handler(e);
-    });
+        if (e && e.type === 'click') {
+            if (Date.now() < suppressClickUntil) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+            handler(e);
+        }
+    };
+
+    el.addEventListener('pointerup', run, { passive: false });
+    el.addEventListener('click', run);
 }
 
 function renderAvatarBadge(obj, size = 44) {
@@ -684,10 +694,15 @@ function renderPhoneApp(container) {
 
     bindReliableTap(document.getElementById('phoneNavChatsBtn'), () => {
         window.G.phoneNav = 'chats';
+        // 从朋友圈回到消息时，明确回到消息列表，不恢复一个旧的聊天窗口。
+        window.G.currentChatNpc = null;
+        window.G.currentChatGroup = null;
         renderSocialPanel();
     });
     bindReliableTap(document.getElementById('phoneNavMomentsBtn'), () => {
         window.G.phoneNav = 'moments';
+        window.G.currentChatNpc = null;
+        window.G.currentChatGroup = null;
         window.G.momentsFilterNpcId = null;
         renderSocialPanel();
     });
@@ -2317,7 +2332,11 @@ window.openNpcProfileCardModal = openNpcProfileCardModal;
 // 10. 群聊窗口与事件绑定
 // ============================================================
 function openGroupChat(gid) {
+    if (!window.G.groups || !window.G.groups[gid]) return;
+    window.G.currentChatNpc = null;
     window.G.currentChatGroup = gid;
+    window.G.chatActiveTab = 'group';
+    window.G.phoneNav = 'chats';
     renderSocialPanel();
 }
 
@@ -2520,12 +2539,12 @@ function openAddChatTargetModal() {
         </div>
     `);
 
-    document.getElementById('btnOpenCreateCustomNpc')?.addEventListener('click', () => {
+    bindReliableTap(document.getElementById('btnOpenCreateCustomNpc'), () => {
         closeModal();
         openCreateCustomNpcModal();
     });
 
-    document.getElementById('btnOpenCreateCustomGroup')?.addEventListener('click', () => {
+    bindReliableTap(document.getElementById('btnOpenCreateCustomGroup'), () => {
         closeModal();
         openCreateGroupModal();
     });
@@ -2619,7 +2638,7 @@ function openCreateCustomNpcModal() {
         </div>
     `);
 
-    document.getElementById('btnConfirmCreateNpc').onclick = () => {
+    bindReliableTap(document.getElementById('btnConfirmCreateNpc'), () => {
         const name = document.getElementById('newNpcNameInput').value.trim();
         const persona = document.getElementById('newNpcPersonaInput').value.trim();
         const skin = document.getElementById('newNpcSkinInput').value.trim();
@@ -2651,7 +2670,7 @@ function openCreateCustomNpcModal() {
         showToast(`🎉 好友「${name}」已添加进通讯录！`, 'success', 2500);
         renderSocialPanel();
         autoSaveGame();
-    };
+    });
 }
 window.openCreateCustomNpcModal = openCreateCustomNpcModal;
 
@@ -2691,7 +2710,7 @@ function openCreateGroupModal() {
         </div>
     `);
 
-    document.getElementById('btnConfirmCreateGroup').onclick = () => {
+    bindReliableTap(document.getElementById('btnConfirmCreateGroup'), () => {
         const name = document.getElementById('newGroupNameInput').value.trim();
         const desc = document.getElementById('newGroupDescInput').value.trim();
         const checked = document.querySelectorAll('.create-group-member-check:checked');
@@ -2723,7 +2742,7 @@ function openCreateGroupModal() {
         window.G.chatActiveTab = 'group';
         renderSocialPanel();
         autoSaveGame();
-    };
+    });
 }
 window.openCreateGroupModal = openCreateGroupModal;
 
@@ -2804,7 +2823,14 @@ async function triggerGroupAIReply(gid) {
     }
 }
 
-function openChat(npcId) { window.G.currentChatNpc = npcId; renderSocialPanel(); }
+function openChat(npcId) {
+    if (!window.G.npcs || !window.G.npcs[npcId]) return;
+    window.G.currentChatGroup = null;
+    window.G.currentChatNpc = npcId;
+    window.G.chatActiveTab = 'direct';
+    window.G.phoneNav = 'chats';
+    renderSocialPanel();
+}
 function closeChat() { window.G.currentChatNpc = null; renderSocialPanel(); }
 
 // ============================================================
