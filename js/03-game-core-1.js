@@ -166,7 +166,7 @@ function openModal(html) {
 }
 
 // ============================================================
-// 🚨 纯乙女游戏红线保护：内置解封表单的全屏死锁层（彻底修复点不动与回滚问题）
+// 🚨 纯乙女游戏红线保护：内置查房与彻底解封系统
 // ============================================================
 function showDeviceBanLockScreen() {
     let lockMask = document.getElementById('otomeDeviceBanMask');
@@ -211,14 +211,14 @@ function showDeviceBanLockScreen() {
                 </button>
             </div>
 
-            <!-- 模糊占位符，绝不暴露真实密码 -->
+            <!-- 严格保密输入框，不给出任何密码提示 -->
             <div id="inlineAdminUnlockBox" style="display: none; margin-top: 14px; padding: 12px; background: #f8fafc; border: 1px solid #cbd5e1; border-radius: 10px; text-align: left;">
                 <div style="font-size: 12px; font-weight: 700; color: #344155; margin-bottom: 6px;">请输入管理员专属解封密匙：</div>
                 <div style="display: flex; gap: 6px;">
                     <input type="password" id="inlineAdminKeyInput" placeholder="请输入管理员私密解封指令..." style="flex: 1; padding: 8px; border-radius: 8px; border: 1px solid #94a3b8; font-size: 13px;">
-                    <button id="btnDoInlineUnlock" style="padding: 8px 14px; background: #16a34a; color: #fff; border: none; border-radius: 8px; font-weight: 700; font-size: 13px; cursor: pointer;">验证解锁</button>
+                    <button id="btnDoInlineUnlock" style="padding: 8px 14px; background: #16a34a; color: #fff; border: none; border-radius: 8px; font-weight: 700; font-size: 13px; cursor: pointer;">验证并查房</button>
                 </div>
-                <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">管理员核验通过后，输入密匙将彻底解除当前手机的设备封锁令并自动重启进入主界面。</div>
+                <div style="font-size: 11px; color: #64748b; margin-top: 4px;">管理员核验通过后，将撤销遮罩进入查房模式，可翻阅全部历史记录并决定是否最终解封。</div>
             </div>
         </div>
     `;
@@ -238,15 +238,59 @@ function showDeviceBanLockScreen() {
         }
     };
 
-    // 执行解锁验证并彻底清除状态、刷新进入游戏
+    // 验证密匙成功后，开启“管理员查房模式”
     document.getElementById('btnDoInlineUnlock').onclick = () => {
         const inputKey = document.getElementById('inlineAdminKeyInput').value;
         if (!inputKey) { alert('请输入管理员密匙！'); return; }
 
-        if (OtomeSecurityGuard.unlockDeviceWithKey(inputKey)) {
-            alert('🎉 管理员密匙验证成功！正在彻底解除设备封锁并重启游戏...');
-            // 彻底杀死遮罩并重启页面，让干净的状态生效
-            window.location.reload();
+        if (inputKey.trim() === OtomeSecurityGuard.ADMIN_SECRET_KEY) {
+            // 开启管理员查房放行状态
+            window._isAdminAuditing = true;
+            lockMask.remove();
+
+            // 在游戏顶部注入醒目的查房操作栏
+            let adminBanner = document.getElementById('adminAuditStatusBar');
+            if (!adminBanner) {
+                adminBanner = document.createElement('div');
+                adminBanner.id = 'adminAuditStatusBar';
+                adminBanner.style.cssText = `
+                    position: fixed; top: 0; left: 0; width: 100vw; background: #166534;
+                    color: #fff; z-index: 999999; padding: 8px 14px; font-size: 12px;
+                    display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 10px rgba(0,0,0,0.3);
+                `;
+                document.body.appendChild(adminBanner);
+            }
+
+            adminBanner.innerHTML = `
+                <div style="display:flex;align-items:center;gap:6px;">
+                    <span style="font-size:16px;">🔍</span>
+                    <span><b>管理员查房模式</b>：已放行操作，你可翻阅此存档所有历史对话取证。</span>
+                </div>
+                <div style="display:flex;gap:8px;">
+                    <button id="btnAdminConfirmUnlockAll" style="background:#22c55e;color:#fff;border:none;padding:5px 12px;border-radius:6px;font-weight:700;font-size:12px;cursor:pointer;">✅ 确认误判并彻底解封导出</button>
+                    <button id="btnAdminRejectBanKeep" style="background:#dc2626;color:#fff;border:none;padding:5px 12px;border-radius:6px;font-weight:700;font-size:12px;cursor:pointer;">❌ 确属恶意违规，维持封禁</button>
+                </div>
+            `;
+
+            // 按钮 A：确认误判并彻底拔除硬件锁
+            document.getElementById('btnAdminConfirmUnlockAll').onclick = () => {
+                window._isAdminAuditing = false;
+                OtomeSecurityGuard.unlockDeviceWithKey('iris2026');
+                adminBanner.remove();
+                alert('🎉 已彻底清除设备底层封锁令！现在为您自动打开备份弹窗，导出解封后的纯净角色卡发还给用户即可。');
+                openBackupModal();
+            };
+
+            // 按钮 B：确认是故意男同违规，恢复封死
+            document.getElementById('btnAdminRejectBanKeep').onclick = () => {
+                window._isAdminAuditing = false;
+                adminBanner.remove();
+                showDeviceBanLockScreen();
+            };
+
+            alert('🔍 密匙正确！已进入管理员查房模式。你现在可以点进私聊、同人、朋友圈任意查阅历史。查验完毕后点击顶部绿色按钮即可彻底解封导出！');
+            updateUI();
+            renderAllPanels();
         } else {
             alert('❌ 密匙错误！解锁失败，该设备保持锁定。');
         }

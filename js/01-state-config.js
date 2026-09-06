@@ -12,8 +12,7 @@ const CONFIG = {
 // 🌸 纯乙女向游戏安全守卫引擎（唯一挚爱原则与非玩家CP禁绝）
 // ============================================================
 const OtomeSecurityGuard = {
-    // 管理员超级密匙校验哈希（杜绝输入框明文暴露）
-    _SEC_HASH: 'a7b9c1d3e5', // 内部签名掩码
+    ADMIN_SECRET_KEY: 'iris2026',
 
     BL_KEYWORDS: [
         '男同', '搞基', '做基', '基佬', '断袖', '龙阳', '耽美', '纯爱bl', 'bl向',
@@ -74,6 +73,9 @@ const OtomeSecurityGuard = {
     },
 
     isDeviceBanned() {
+        // 如果管理员正在当场查房，暂时放行
+        if (window._isAdminAuditing) return false;
+
         try {
             if (window.NativeDeviceBridge && typeof window.NativeDeviceBridge.checkNativeDeviceBanned === 'function') {
                 if (window.NativeDeviceBridge.checkNativeDeviceBanned()) return true;
@@ -111,13 +113,15 @@ const OtomeSecurityGuard = {
         }
     },
 
+    // 彻底全盘解封逻辑
     unlockDeviceWithKey(inputKey) {
         if (!inputKey) return false;
-        // 正确密码为 iris2026，绝不在界面上给任何明文提示
-        if (inputKey.trim() === 'iris2026') {
+        if (inputKey.trim() === this.ADMIN_SECRET_KEY) {
             try {
+                // 1. 清除标记
                 localStorage.removeItem('mcyt_device_banned_flag');
-                // 净化自动存档内部的封锁标记，彻底杜绝刷新回滚
+
+                // 2. 清洗自动存档
                 const autoStr = localStorage.getItem('mcyt_autosave');
                 if (autoStr) {
                     const parsed = JSON.parse(autoStr);
@@ -128,17 +132,34 @@ const OtomeSecurityGuard = {
                         localStorage.setItem('mcyt_autosave', JSON.stringify(parsed));
                     }
                 }
+
+                // 3. 清洗手动槽位 1~3，彻底防止残留
+                for (let i = 1; i <= 3; i++) {
+                    const slotStr = localStorage.getItem('mcyt_slot_' + i);
+                    if (slotStr) {
+                        const parsed = JSON.parse(slotStr);
+                        if (parsed && parsed.data) {
+                            parsed.data._isDeviceBanned = false;
+                            parsed.data._banReason = null;
+                            parsed.data._securityAuditBox = null;
+                            localStorage.setItem('mcyt_slot_' + i, JSON.stringify(parsed));
+                        }
+                    }
+                }
             } catch (_) {}
 
+            // 4. 原生底层删除公共目录封印文件
             if (window.NativeDeviceBridge && typeof window.NativeDeviceBridge.clearNativeDeviceBan === 'function') {
                 try { window.NativeDeviceBridge.clearNativeDeviceBan(); } catch (_) {}
             }
 
+            // 5. 内存状态彻底重置
             if (window.G) {
                 window.G._isDeviceBanned = false;
                 window.G._banReason = null;
                 window.G._securityAuditBox = null;
             }
+
             if (typeof autoSaveGame === 'function') autoSaveGame();
             return true;
         }
