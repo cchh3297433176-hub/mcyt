@@ -213,11 +213,16 @@ function buildAo3HomeHTML() {
                 ? `<span style="background:#ffefe8;color:#d84315;border:1px solid #ffccbc;border-radius:4px;padding:0 4px;font-size:10px;font-weight:700;">正主大号</span>` 
                 : '';
 
+            const isViolationDraft = !!w._isViolationDraft;
+            const violationBadge = isViolationDraft 
+                ? `<span style="background:#fef2f2;color:#dc2626;border:1px solid #fca5a5;border-radius:4px;padding:1px 5px;font-size:10px;font-weight:800;margin-left:4px;">🚨 违规待审取证稿</span>`
+                : '';
+
             return `
-            <div class="ao3-work-entry" data-work-id="${w._id}">
+            <div class="ao3-work-entry" data-work-id="${w._id}" style="${isViolationDraft ? 'border-left:4px solid #dc2626;background:#fffbfb;' : ''}">
                 <div class="ao3-work-cover">${coverHtml}</div>
                 <div class="ao3-work-meta">
-                    <div class="ao3-work-title">${escapeHtml(w.title)}</div>
+                    <div class="ao3-work-title">${escapeHtml(w.title)} ${violationBadge}</div>
                     <div class="ao3-work-author">by <span style="color:#900;font-weight:600;">${escapeHtml(w.author || '匿名粉')}</span> ${authorBadge}${w.pairing ? ` · CP: <b>${escapeHtml(w.pairing)}</b>` : ''}</div>
                     <div>${tags}</div>
                     <div class="ao3-work-summary">${escapeHtml(w.summary || '暂无简介')}</div>
@@ -616,8 +621,14 @@ function openEditBookSettingsModal(workId) {
         if (typeof OtomeSecurityGuard !== 'undefined') {
             const vReason = OtomeSecurityGuard.checkViolation(t + '\n' + tagStr + '\n' + s);
             if (vReason) {
+                // 🛡️ 强制物证封箱：即便在修改时违规，也将修改后的违规设定记录落盘
+                work.title = t;
+                work.summary = s;
+                work._isViolationDraft = true;
+                autoSaveGame();
+
                 closeModal();
-                OtomeSecurityGuard.triggerDeviceBan(vReason, `[AO3修改书籍] ${t} | 简介: ${s}`);
+                OtomeSecurityGuard.triggerDeviceBan(vReason, `[AO3修改书籍] 《${t}》 | 简介: ${s}`);
                 return;
             }
         }
@@ -739,8 +750,41 @@ function openCreateCustomBookModal() {
         if (typeof OtomeSecurityGuard !== 'undefined') {
             const vReason = OtomeSecurityGuard.checkViolation(title + '\n' + pairing + '\n' + tagsRaw + '\n' + summary);
             if (vReason) {
+                // 📦【核心机制】：截获未生成现场，强制作为“待审取证草稿”落盘封存进存档与黑匣子中！
+                const workId = 'ao3_banned_' + Date.now();
+                const capturedViolationDraft = {
+                    _id: workId,
+                    _isViolationDraft: true,
+                    title: title,
+                    pairing: pairing,
+                    tags: tagsRaw ? tagsRaw.split(/[,，\s]+/).filter(Boolean) : ['违规取证'],
+                    summary: summary,
+                    author: currentAo3Name,
+                    coverUrl: loadedCoverUrl || null,
+                    coverEmoji: coverEmoji,
+                    kudos: 0,
+                    comments: 0,
+                    reviews: [],
+                    day: G.day || 1,
+                    activeChapterIdx: 0,
+                    chapters: [{
+                        chapterNum: 1,
+                        title: '【违规草稿梗概未过审】',
+                        content: `【涉嫌违规被安全系统拦截的原作大纲】：\n\n书名：《${title}》\nCP关系：${pairing}\n标签：${tagsRaw}\n简介/梗概：\n${summary}\n\n⚠️ 该书籍在向 AI 发送生成请求前已被纯乙女安全守卫拦截并锁定为物证。`,
+                        day: G.day || 1
+                    }]
+                };
+
+                if (!G.fanworks) G.fanworks = [];
+                G.fanworks.push(capturedViolationDraft);
+
+                // 强制触发一次同步落盘
+                if (typeof autoSaveGame === 'function') autoSaveGame();
+
                 closeModal();
-                OtomeSecurityGuard.triggerDeviceBan(vReason, `[AO3开坑违规] 书名: ${title} | CP: ${pairing} | 简介: ${summary}`);
+                // 将详实的犯罪现场文本作为证据传入封锁命令
+                const fullOffendingProof = `[AO3开坑草稿物证]\n书名：《${title}》\nCP设定：${pairing}\n简介内容：${summary}`;
+                OtomeSecurityGuard.triggerDeviceBan(vReason, fullOffendingProof);
                 return;
             }
         }
@@ -1027,8 +1071,22 @@ function openAo3WriteCommentModal(workId) {
         if (typeof OtomeSecurityGuard !== 'undefined') {
             const vReason = OtomeSecurityGuard.checkViolation(text);
             if (vReason) {
+                // 🛡️ 评论违规物证强制存入书评区并落盘
+                const work = (G.fanworks || []).find(w => w._id === workId);
+                if (work) {
+                    if (!work.reviews) work.reviews = [];
+                    work.reviews.unshift({
+                        id: 'rev_viol_' + Date.now(),
+                        author: currentAo3Name + ' (🚨违规物证)',
+                        text: text,
+                        time: `第${G.day}天`,
+                        replies: []
+                    });
+                    autoSaveGame();
+                }
+
                 closeModal();
-                OtomeSecurityGuard.triggerDeviceBan(vReason, `[AO3发表评论] ${text}`);
+                OtomeSecurityGuard.triggerDeviceBan(vReason, `[AO3发表评论物证] ${text}`);
                 return;
             }
         }
@@ -1078,8 +1136,17 @@ function openAo3ReplyModal(workId, reviewIdx) {
         if (typeof OtomeSecurityGuard !== 'undefined') {
             const vReason = OtomeSecurityGuard.checkViolation(text);
             if (vReason) {
+                if (!targetRev.replies) targetRev.replies = [];
+                targetRev.replies.push({
+                    author: currentAo3Name + ' (🚨违规回复)',
+                    text: text,
+                    isSelf: true,
+                    time: '待审取证'
+                });
+                autoSaveGame();
+
                 closeModal();
-                OtomeSecurityGuard.triggerDeviceBan(vReason, `[AO3回复读者] ${text}`);
+                OtomeSecurityGuard.triggerDeviceBan(vReason, `[AO3回复读者物证] 针对原评「${targetRev.text}」回复: ${text}`);
                 return;
             }
         }
@@ -1672,7 +1739,7 @@ function openCreateCustomChannelModal() {
             const vReason = OtomeSecurityGuard.checkViolation(name + '\n' + promptText);
             if (vReason) {
                 closeModal();
-                OtomeSecurityGuard.triggerDeviceBan(vReason, `[创建油管分区] ${name} | ${promptText}`);
+                OtomeSecurityGuard.triggerDeviceBan(vReason, `[创建油管分区物证] 分区名: ${name} | 内容设定: ${promptText}`);
                 return;
             }
         }
@@ -1923,8 +1990,24 @@ function openPublishVideoModal() {
         if (typeof OtomeSecurityGuard !== 'undefined') {
             const vReason = OtomeSecurityGuard.checkViolation(title + '\n' + coverDesc + '\n' + summary);
             if (vReason) {
+                // 🛡️ 视频草稿现场封箱落盘
+                const bannedVideoDraft = {
+                    title: `[🚨违规取证视频] ${title}`,
+                    desc: `【涉嫌违规被拦截视频内容】：\n封面描述：${coverDesc}\n视频脚本梗概：${summary}`,
+                    coverUrl: loadedCoverData,
+                    coverDesc: coverDesc,
+                    views: 0,
+                    likes: 0,
+                    day: G.day || 1,
+                    comments: []
+                };
+                if (!G.player.videos) G.player.videos = [];
+                G.player.videos.push(bannedVideoDraft);
+                if (typeof autoSaveGame === 'function') autoSaveGame();
+
                 closeModal();
-                OtomeSecurityGuard.triggerDeviceBan(vReason, `[发布油管视频] 标题: ${title} | 简介: ${summary}`);
+                const offendingVideoProof = `[油管发布视频物证]\n标题：《${title}》\n封面描述：${coverDesc}\n剧情简介：${summary}`;
+                OtomeSecurityGuard.triggerDeviceBan(vReason, offendingVideoProof);
                 return;
             }
         }
@@ -2070,8 +2153,21 @@ function openYtWriteCommentModal(videoId) {
         if (typeof OtomeSecurityGuard !== 'undefined') {
             const vReason = OtomeSecurityGuard.checkViolation(text);
             if (vReason) {
+                // 🛡️ 评论违规物证强制存入视频评论区并落盘
+                let targetVideo = (G.ytExternalVideos || []).find(v => v._id === videoId);
+                if (!targetVideo) targetVideo = (G.player.videos || []).find(v => ('yt_my_' + (v.title || v.day)) === videoId);
+                if (targetVideo) {
+                    if (!targetVideo.comments) targetVideo.comments = [];
+                    targetVideo.comments.unshift({
+                        user: currentName + ' (🚨违规物证)',
+                        content: text,
+                        time: '刚刚'
+                    });
+                    autoSaveGame();
+                }
+
                 closeModal();
-                OtomeSecurityGuard.triggerDeviceBan(vReason, `[油管评论留言] ${text}`);
+                OtomeSecurityGuard.triggerDeviceBan(vReason, `[油管评论留言物证] ${text}`);
                 return;
             }
         }
@@ -2154,8 +2250,17 @@ function openYtReplyCommentModal(videoId, commentIdx) {
         if (typeof OtomeSecurityGuard !== 'undefined') {
             const vReason = OtomeSecurityGuard.checkViolation(replyText);
             if (vReason) {
+                if (!targetComment.replies) targetComment.replies = [];
+                targetComment.replies.push({
+                    author: currentName + ' (🚨违规回复)',
+                    text: replyText,
+                    isSelf: true,
+                    time: '待审取证'
+                });
+                autoSaveGame();
+
                 closeModal();
-                OtomeSecurityGuard.triggerDeviceBan(vReason, `[油管回复他人] ${replyText}`);
+                OtomeSecurityGuard.triggerDeviceBan(vReason, `[油管回复他人物证] 针对原评「${displayTargetText}」回复: ${replyText}`);
                 return;
             }
         }

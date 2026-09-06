@@ -1,3 +1,4 @@
+// js/09-events-init.js
 // 事件绑定与公告系统
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
