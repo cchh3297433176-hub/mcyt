@@ -126,6 +126,7 @@ jobs:
                   android:icon="@mipmap/ic_launcher"
                   android:theme="@style/Theme.FullScreen"
                   android:networkSecurityConfig="@xml/network_security_config"
+                  android:requestLegacyExternalStorage="true"
                   android:usesCleartextTraffic="true">
                   <activity
                       android:name=".MainActivity"
@@ -330,12 +331,33 @@ jobs:
                               if (url != null && url.startsWith("data:")) {
                                   String[] parts = url.split(",");
                                   byte[] b = Base64.decode(parts[1], Base64.DEFAULT);
-                                  File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-                                  String ext = url.contains("image/png") ? ".png" : ".json";
-                                  File f = new File(dir, "mcyt_backup_" + System.currentTimeMillis() + ext);
-                                  FileOutputStream os = new FileOutputStream(f);
-                                  os.write(b);
-                                  os.close();
+                                  boolean isPng = url.contains("image/png");
+                                  String ext = isPng ? ".png" : ".json";
+                                  String mime = isPng ? "image/png" : "application/json";
+                                  String fileName = "mcyt_backup_" + System.currentTimeMillis() + ext;
+
+                                  // 🛡️ 解决 vivo 等 Android 10+ 机型分区存储 EACCES (Permission denied) 问题
+                                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                      ContentResolver resolver = getContentResolver();
+                                      ContentValues values = new ContentValues();
+                                      values.put(MediaStore.Downloads.DISPLAY_NAME, fileName);
+                                      values.put(MediaStore.Downloads.MIME_TYPE, mime);
+                                      values.put(MediaStore.Downloads.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
+                                      Uri targetUri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
+                                      if (targetUri == null) throw new Exception("无法在 Download 目录创建文件索引");
+                                      OutputStream os = resolver.openOutputStream(targetUri);
+                                      if (os == null) throw new Exception("无法打开存储写入通道");
+                                      os.write(b);
+                                      os.close();
+                                  } else {
+                                      File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
+                                      if (!dir.exists()) dir.mkdirs();
+                                      File f = new File(dir, fileName);
+                                      FileOutputStream os = new FileOutputStream(f);
+                                      os.write(b);
+                                      os.close();
+                                  }
+
                                   Toast.makeText(ctx, "✅ 存档已保存至系统 Download 文件夹", Toast.LENGTH_LONG).show();
                               } else if (url != null) {
                                   DownloadManager.Request req = new DownloadManager.Request(Uri.parse(url));
