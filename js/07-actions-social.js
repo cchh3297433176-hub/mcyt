@@ -1,5 +1,5 @@
 // js/07-actions-social.js
-// 行动处理与外部社区（AO3 同人中心 & YouTube 油管中心 - 纯乙女防线版）
+// 行动处理与外部社区（AO3 同人中心 & YouTube 油管中心 - 纯乙女唯一原则版）
 // ============================================================
 async function performAction(action, detail = '', useSearch = false) {
     if (G.isGenerating) { showToast('⏳ 正在生成剧情...'); return; }
@@ -251,7 +251,7 @@ function buildAo3HomeHTML() {
             </div>
         </div>
         <div style="font-size:11px;color:#888;padding:5px 12px;background:#fff8ee;border-bottom:1px dashed #e8d8c8;">
-            💡 提示：纯乙女向游戏严禁在攻略对象之间搞拉郎男同配对；长按可编辑或删除违规作品。
+            🌸 <b>纯乙女向原则</b>：所有恋爱与CP仅限指向女主本人，严禁男男拉郎或角色与非玩家配对！
         </div>
         <div class="ao3-work-list">
             ${worksListHtml}
@@ -499,7 +499,7 @@ function openAo3AccountSettingsModal() {
         const eq = val === G.player.ytName.trim();
         hint.style.color = eq ? '#2e7d32' : '#8a5a00';
         hint.innerHTML = eq 
-            ? '🌟 <b>主播大号模式</b>：名字与你的 YouTube 频道完全一致。AI 和读者将直接认出是你本人！'
+            ? '🌟 <b>主播大号模式</b>：名字与你的 YouTube 频道完全一致。AI 和读者将直接认出是你本人！' 
             : '🎭 <b>披皮小号模式</b>：名字与主播不同。读者不知道是你，但可能偶发掉马怀疑。';
     };
 
@@ -566,10 +566,6 @@ function openEditBookSettingsModal(workId) {
             <input type="text" id="editBookTitle" value="${escapeHtml(work.title)}">
         </div>
         <div class="form-group">
-            <label>涉及 CP / 关系</label>
-            <input type="text" id="editBookPairing" value="${escapeHtml(work.pairing || '')}">
-        </div>
-        <div class="form-group">
             <label>标签 Tags（逗号隔开）</label>
             <input type="text" id="editBookTags" value="${escapeHtml((work.tags || []).join(', '))}">
         </div>
@@ -611,25 +607,22 @@ function openEditBookSettingsModal(workId) {
 
     document.getElementById('saveEditBookBtn').onclick = () => {
         const t = document.getElementById('editBookTitle').value.trim();
-        const p = document.getElementById('editBookPairing').value.trim();
         const tagStr = document.getElementById('editBookTags').value.trim();
         const em = document.getElementById('editCoverEmoji').value.trim() || '📖';
         const s = document.getElementById('editBookSummary').value.trim();
 
         if (!t) { showToast('⚠️ 标题不能为空', 'error'); return; }
 
-        // 🛡️ 编辑修改时同样执行严苛的乙女安全拦截
         if (typeof OtomeSecurityGuard !== 'undefined') {
-            const vReason = OtomeSecurityGuard.checkViolation(t + '\n' + p + '\n' + tagStr + '\n' + s);
+            const vReason = OtomeSecurityGuard.checkViolation(t + '\n' + tagStr + '\n' + s);
             if (vReason) {
                 closeModal();
-                OtomeSecurityGuard.triggerDeviceBan(vReason, `[AO3修改书籍] ${t} | CP: ${p} | 简介: ${s}`);
+                OtomeSecurityGuard.triggerDeviceBan(vReason, `[AO3修改书籍] ${t} | 简介: ${s}`);
                 return;
             }
         }
 
         work.title = t;
-        work.pairing = p;
         work.tags = tagStr ? tagStr.split(/[,，\s]+/).filter(Boolean) : [];
         work.coverUrl = newCoverUrl;
         work.coverEmoji = em;
@@ -666,9 +659,18 @@ async function triggerFanCreationPrompt() {
     };
 }
 
+// 🛡️ AO3 开坑新书弹窗：将 CP 关系锁定为只能与女主互动，掐死第三方与男男拉郎
 function openCreateCustomBookModal() {
     const currentAo3Name = (G.ao3User && G.ao3User.username) || G.player.ytName;
     const isMain = getIsPlayerAo3MainAccount();
+    const pName = G.player.ytName;
+
+    // 动态生成只允许选择女主角的合法 CP 列表
+    const maleNpcs = ['ThatMob', 'Twixxel', 'Groxmc', 'Dream', 'xqree', 'Whispy'];
+    const pairingOptions = `
+        <option value="全员向 / 友情向">全员向 / 友情向 (无固定CP)</option>
+        ${maleNpcs.map(n => `<option value="${n} × ${escapeHtml(pName)}">${n} × ${escapeHtml(pName)} (独宠专一向)</option>`).join('')}
+    `;
 
     openModal(`
         <h3>➕ AO3 开坑新书</h3>
@@ -680,12 +682,14 @@ function openCreateCustomBookModal() {
             <input type="text" id="newBookTitle" placeholder="如：《下界回响：红石冒险录》">
         </div>
         <div class="form-group">
-            <label>涉及 CP / 角色关系</label>
-            <input type="text" id="newBookPairing" placeholder="如：${G.player.ytName} & Dream（严禁攻略对象之间互配）">
+            <label>涉及 CP / 核心关系 <span style="font-size:11px;color:#2e7d32;">(🌸纯乙女原则：仅限女主)</span></label>
+            <select id="newBookPairingSelect" style="width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;background:#fff;font-size:13px;">
+                ${pairingOptions}
+            </select>
         </div>
         <div class="form-group">
             <label>标签 Tags（用逗号隔开）</label>
-            <input type="text" id="newBookTags" placeholder="如：冒险, 生存, 团宠, 甜宠日常">
+            <input type="text" id="newBookTags" placeholder="如：冒险, 团宠, 甜文, 互宠日常">
         </div>
         <div class="form-group">
             <label>封面设置（本地相册上传 / Emoji）</label>
@@ -700,7 +704,7 @@ function openCreateCustomBookModal() {
         </div>
         <div class="form-group">
             <label>故事简介与梗概 <span class="required">*</span></label>
-            <textarea id="newBookSummary" rows="3" placeholder="写写这本书的主线设定，AI 将依据简介生成首章..."></textarea>
+            <textarea id="newBookSummary" rows="3" placeholder="写写这本书的主线设定（纯乙女向，严禁描写男主与非玩家角色恋爱）..."></textarea>
         </div>
         <div class="btn-row">
             <button class="btn-secondary" onclick="closeModal()">取消</button>
@@ -724,19 +728,19 @@ function openCreateCustomBookModal() {
     document.getElementById('startGenCustomBookBtn').onclick = async () => {
         const title = document.getElementById('newBookTitle').value.trim();
         const summary = document.getElementById('newBookSummary').value.trim();
-        const pairing = document.getElementById('newBookPairing').value.trim();
+        const pairing = document.getElementById('newBookPairingSelect').value;
         const tagsRaw = document.getElementById('newBookTags').value.trim();
         const coverEmoji = document.getElementById('newBookEmoji').value.trim() || '📕';
 
         if (!title) { showToast('⚠️ 请输入书籍名称', 'error'); return; }
         if (!summary) { showToast('⚠️ 请填写简介作为生成线索', 'error'); return; }
 
-        // 🛡️ 开坑雷霆前置审查：如果发现男男拉郎，绝不调用大模型，直接触发封禁！
+        // 🛡️ 开坑雷霆审查：绝不调用大语言模型，直接掐断违规并封锁设备！
         if (typeof OtomeSecurityGuard !== 'undefined') {
             const vReason = OtomeSecurityGuard.checkViolation(title + '\n' + pairing + '\n' + tagsRaw + '\n' + summary);
             if (vReason) {
                 closeModal();
-                OtomeSecurityGuard.triggerDeviceBan(vReason, `[AO3开坑] 书名: ${title} | CP: ${pairing} | 简介: ${summary}`);
+                OtomeSecurityGuard.triggerDeviceBan(vReason, `[AO3开坑违规] 书名: ${title} | CP: ${pairing} | 简介: ${summary}`);
                 return;
             }
         }
@@ -768,9 +772,9 @@ async function generateNewBookFromAI(params = {}) {
 
         let accountIdentityPrompt = '';
         if (isAuthorMe) {
-            accountIdentityPrompt = `【重大背景】：本文是由著名 MC 主播「${p.ytName}」本人亲自以大号在 AO3 上实名开坑创作的！文章风格或字里行间带有正主主播的真实视角和生活痕迹。`;
+            accountIdentityPrompt = `【重大背景】：本文是由著名 MC 主播「${p.ytName}」本人亲自以大号在 AO3 上实名开坑创作的！`;
         } else {
-            accountIdentityPrompt = `【作者背景】：作者笔名为「${authorName}」，表面上是一名同人作者，但其实是主播「${p.ytName}」披着的小号。文风极其贴切。`;
+            accountIdentityPrompt = `【作者背景】：作者笔名为「${authorName}」，表面上是一名同人作者，但其实是主播「${p.ytName}」披着的小号。`;
         }
 
         let promptGuide = '';
@@ -779,7 +783,7 @@ async function generateNewBookFromAI(params = {}) {
             【书籍设定】
             书名：《${params.customTitle}》
             简介：${params.customSummary}
-            关系/CP：${params.pairing || '自由发展'}
+            关系/CP：${params.pairing || '独宠女主向'}
             标签：${(params.tags || []).join(', ')}
             请创作第 1 章节，字数 500-800 字。
             `;
@@ -796,9 +800,10 @@ async function generateNewBookFromAI(params = {}) {
         你是一名热爱 Minecraft 主播圈的资深同人文作者，正在 AO3 网站发布小说。
         ${accountIdentityPrompt}
         ${promptGuide}
+        【唯一挚爱纯乙女约束】：所有角色只能对女主角「${p.ytName}」产生爱意或友谊。严禁描写男男同性恋、BL拉郎、或攻略对象与其他任何非玩家角色的恋爱暧昧！
         请严格按以下标签输出：
         [TITLE]书籍标题[/TITLE]
-        [PAIRING]CP关系或角色组合[/PAIRING]
+        [PAIRING]CP关系或组合[/PAIRING]
         [TAGS]标签1, 标签2, 标签3[/TAGS]
         [SUMMARY]一段引人入胜的简介（100字左右）[/SUMMARY]
         [CHAPTER_TITLE]第1章标题[/CHAPTER_TITLE]
@@ -875,6 +880,7 @@ async function urgeContinueBookChapter(workId) {
 
         const sysPrompt = `
         你正在 AO3 网站上续写 MC 同人小说《${work.title}》（作者：${work.author}，CP: ${work.pairing || '无'}，简介: ${work.summary}）。
+        【乙女绝对规范】：坚守纯正乙女女主唯一定位，严禁攻略角色之间发生同性恋爱！
         上一章结尾片段如下：
         “${lastSlice}”
         读者正在疯狂催更！请续写【第 ${nextChapterNum} 章】，承接前文剧情，生动推进情节。
@@ -2216,4 +2222,3 @@ window.openEditBookSettingsModal = openEditBookSettingsModal;
 window.generateAo3ReviewsByAI = generateAo3ReviewsByAI;
 window.openAo3WriteCommentModal = openAo3WriteCommentModal;
 window.openAo3ReplyModal = openAo3ReplyModal;
-// ============================================================
