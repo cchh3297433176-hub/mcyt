@@ -1,5 +1,5 @@
 // js/09-events-init.js
-// 事件绑定与公告系统
+// 事件绑定与公告系统（v1.600 全量大版本更新说明与正版声明）
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
     // 开始游戏按钮
@@ -62,28 +62,30 @@ document.addEventListener('DOMContentLoaded', () => {
         openEditPlayerProfileModal();
     });
 
-    // 联网切换
-    $('webSearchToggleBtn')?.addEventListener('click', () => {
-        if (!G.search.apiKey) {
-            showToast('⚠️ 请先在下方设置里填写 Tavily API Key', 'error', 2500);
-            openModal(`<h3 style="margin-bottom:10px;">⚙️ 模型设置</h3>` + buildModelSettingsHTML('modal') + buildSearchSettingsHTML('modal'));
-            bindModelSettingsUI('modal');
-            bindSearchSettingsUI('modal');
-            return;
-        }
-        G.search.enabled = !G.search.enabled;
-        persistSearchConfig();
-        updateWebSearchToggleUI();
-        showToast(G.search.enabled ? '🌐 联网搜索已开启' : '🌐 联网搜索已关闭', 'success', 2000);
+    // 顶栏时间时钟胶囊点击：打开时钟与时区设置面板
+    $('timeDisplay')?.parentElement?.addEventListener('click', () => {
+        if (typeof openClockSettingsModal === 'function') openClockSettingsModal();
     });
 
-    // 重说按钮
+    // 联网切换按钮：打开支持博查/秘塔/Tavily的联网搜索中心
+    $('webSearchToggleBtn')?.addEventListener('click', () => {
+        if (typeof openWebSearchSettingsModal === 'function') {
+            openWebSearchSettingsModal();
+        } else {
+            G.search.enabled = !G.search.enabled;
+            persistSearchConfig();
+            updateWebSearchToggleUI();
+            showToast(G.search.enabled ? '🌐 联网实时搜索已开启' : '🌐 联网搜索已关闭', 'success', 2000);
+        }
+    });
+
+    // 重说按钮（全局追踪式增强）
     $('rerollBtn')?.addEventListener('click', () => {
         if (G.isGenerating) { showToast('⏳ 正在生成中，请稍候'); return; }
         if (typeof G._lastRegenerate !== 'function') { showToast('暂无可重新生成的内容', 'error', 1800); return; }
         openModal(`
             <h3 style="margin-bottom:10px;">🔄 重说确认</h3>
-            <p style="font-size:13px;color:#666;line-height:1.6;">是否要重新生成上一轮剧情/对话？原内容将被替换。</p>
+            <p style="font-size:13px;color:#666;line-height:1.6;">是否要重新生成上一轮生成的内容？原内容将被撤回并由 AI 重新构思。</p>
             <div class="btn-row" style="margin-top:14px;">
                 <button class="btn-secondary" onclick="closeModal()">❌ 否</button>
                 <button class="btn-primary" id="confirmRerollBtn">✅ 是，重新生成</button>
@@ -217,10 +219,10 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ============================================================
-// 📢 双页滑动公告系统
+// 📢 双页滑动公告系统（v1.600 纯正声明与12项重磅优化）
 // ============================================================
 function checkAndShowVersionNoticeModal(forceOpen = false) {
-    const ver = window.CURRENT_APP_VERSION || '1.504';
+    const ver = window.CURRENT_APP_VERSION || '1.600';
     const dismissedVersion = localStorage.getItem('mcyt_dismissed_notice_ver');
 
     if (forceOpen || dismissedVersion !== ver) {
@@ -240,31 +242,36 @@ function openVersionNoticeModal(version) {
             <div class="notice-slide-page">
                 <div class="notice-card-box">
                     <h4>📜 关于本项目与正版声明</h4>
-                    <p style="margin-bottom:8px;">
-                        本软件为抖音：<b>@鸢尾黎明</b> 老师作品的<b>二改版本</b>，为代入向乙女 Airp 游戏。
+                    <p style="margin-bottom:8px;line-height:1.6;">
+                        本软件为抖音：<b>@鸢尾黎明</b> 老师的 mcyt 模拟器<b>二改版本</b>，为代入向乙女 Airp 游戏，<b>禁止用于磕 CP，禁止二传</b>。
                     </p>
-                    <p style="margin-bottom:8px;color:#c62828;font-weight:600;">
-                        ⚠️ 禁止二传，本游戏纯免无收费！
+                    <p style="margin-bottom:8px;color:#c62828;font-weight:700;">
+                        ⚠️ 本游戏纯免无收费！如果你需要付费，代表你被骗了！
                     </p>
-                    <p style="margin-bottom:8px;">
-                        目前获取渠道为进鸢尾黎明老师的群聊。如果你需要付费获得了本软件代表<b>你被骗了</b>！
-                    </p>
-                    <p style="margin-bottom:4px;">
-                        前往抖音搜索 <b>@鸢尾黎明</b> 老师那边即可进群获得本软件，群里有很多乙女香香饭，欢迎加入！💕
+                    <p style="margin-bottom:8px;line-height:1.6;">
+                        目前唯一正版获取渠道为进<b>鸢尾黎明</b>老师的官方群聊。前往抖音搜索 <b>@鸢尾黎明</b> 老师那边即可进群免费获得本软件，群里有老师制作的很多乙女香香饭，欢迎加入！💕
                     </p>
                 </div>
             </div>
 
-            <!-- 第 2 页：更新优化与新功能 -->
+            <!-- 第 2 页：更新优化方面 -->
             <div class="notice-slide-page">
-                <div class="notice-card-box">
-                    <h4>🚀 本次更新优化方面 (v${version})</h4>
-                    <ul style="padding-left:18px;margin-bottom:10px;font-size:13px;color:#444;line-height:1.6;">
-                        <li style="margin-bottom:8px;">1. <b>纯乙女唯一原则守护</b>：严守纯乙女定位，若检测到攻略对象间拉郎/男男互动，底层触发持久化锁死；导出的记忆卡保留全量证据，需管理员密匙解锁。</li>
-                        <li style="margin-bottom:8px;">2. <b>大小号聊天彻底物理隔离</b>：不同小号私聊独立互不干扰，小号可被独立拉黑，可开新号转圜；聊天窗口右上角支持一键秒切身份。</li>
-                        <li style="margin-bottom:8px;">3. <b>气泡宽度自适应与历史折叠</b>：修复短句气泡固定宽度问题，支持按条折叠展开更早历史消息。</li>
-                        <li style="margin-bottom:8px;">4. <b>全新朋友圈生态</b>：支持用户发文字/真实图片动态、编辑删除撤回、一键刷新生成好友日常动态及召唤 AI 互动评论。</li>
-                    </ul>
+                <div class="notice-card-box" style="max-height:60vh;overflow-y:auto;">
+                    <h4>🚀 预告更新优化方面 (v${version})</h4>
+                    <ol style="padding-left:18px;margin-bottom:10px;font-size:12.5px;color:#333;line-height:1.7;">
+                        <li><b>优化聊天的动态功能</b>：现在你可以看到通讯录里的角色发动态啦，点击刷新即可生成新动态，你也可以发布动态获得好友评论。</li>
+                        <li><b>连发与时差体验</b>：角色不再一次只发一条消息，可以连发多条短消息，更加真实模拟聊天打字效果，并且增加了真实时差感。</li>
+                        <li><b>好感度系统修正</b>：修复了好感条不动 Bug，优化好感度增减逻辑与生疏度控制（杜绝好感低时的不合理自来熟）。</li>
+                        <li><b>好友与社交生态</b>：你需要获得主播们的好友申请，他们才会出现在你的联系人里，你也会收到群聊邀请！热度与粉丝越高越容易引起注意；聊得太过分可能会被拉黑，可开小号挽回（骚扰）。</li>
+                        <li><b>国内搜索引擎集成</b>：考虑到 Tavily 平台门槛，新增<b>博查 (Bocha)</b>、<b>秘塔 (Metaso)</b> 等多个国内搜索引擎，支持 AI 主动上网了解角色与模组！</li>
+                        <li><b>表情包斗图功能</b>：内置了一定数量的猪猪可爱表情包，也可自行通过图床格式（『描述——链接』）添加，或投稿提供新表情。</li>
+                        <li><b>全局追踪重说</b>：重说不再局限于固定主线，而是自动追踪并撤回“最近一次 AI 生成的内容”，私聊也可以重说了！</li>
+                        <li><b>消息撤回与编辑</b>：聊天界面可以撤回消息了（对方有可能已经看到了呢~笑），以及静默编辑或删除发错的消息。</li>
+                        <li><b>聊天历史折叠</b>：防止聊天记录过多卡顿，支持仅展示最近若干条，更早记录一键折叠展开。</li>
+                        <li><b>高版本安卓存储修复</b>：优化了部分手机（如 vivo 等机型）因 Android 系统过高导致无法下载导出存档到本地的 Bug。</li>
+                        <li><b>智能自启续玩</b>：优化了后台退出后需退回首页恢复进度的繁琐操作，启动时自动无缝秒回上次进度。</li>
+                        <li><b>屏幕那边的 TA</b>：去除了聊天气泡内出戏的动作括号描写，增添独立的「屏幕那边的TA」动作感知框——开启后即可窥见屏幕那边的他线下正在做什么！</li>
+                    </ol>
                 </div>
             </div>
         </div>
@@ -410,7 +417,7 @@ function openEditPlayerProfileModal() {
 function updateWebSearchToggleUI() {
     const btn = $('webSearchToggleBtn');
     if (!btn) return;
-    btn.classList.toggle('gold', !!G.search.enabled);
+    btn.classList.toggle('gold', !!(G.search && G.search.enabled));
 }
 
 function openActionModal(action) {
@@ -426,13 +433,17 @@ function openActionModal(action) {
     };
     const title = actionNames[action] || '🎮 行动';
     const placeholder = placeholders[action] || '描述行动...';
-    const searchCheckboxHtml = G.search.apiKey ? `
+    
+    const hasSearchConfigured = !!(G.search && (G.search.apiKey || (G.search.keys && Object.values(G.search.keys).some(k => !!k))));
+
+    const searchCheckboxHtml = hasSearchConfigured ? `
     <div class="form-group" style="display:flex;align-items:center;gap:8px;margin-top:2px;">
         <label style="font-size:13px;margin-bottom:0;display:flex;align-items:center;gap:6px;cursor:pointer;">
             <input type="checkbox" id="modalUseSearch" ${G.search.enabled ? 'checked' : ''} style="width:16px;height:16px;accent-color:var(--primary);">
-            🌐 本次联网搜索相关资料
+            🌐 本次启用实时联网检索 (博查/秘塔/Tavily)
         </label>
     </div>` : '';
+
     const html = `
     <h3>${title}</h3>
     <p>描述活动细节（可选）：</p>
@@ -464,9 +475,6 @@ window.switchTab = switchTab;
 window.renderDataPanel = renderDataPanel;
 window.renderDashboard = renderDashboard;
 window.renderStreamPanel = renderStreamPanel;
-window.renderSocialPanel = renderSocialPanel;
-window.openChat = openChat;
-window.closeChat = closeChat;
 window.openVideoModal = openVideoModal;
 window.toggleCollection = toggleCollection;
 window.toggleColVideoComments = toggleColVideoComments;
@@ -484,3 +492,4 @@ window.receiveFriendRequest = receiveFriendRequest;
 window.openEditPlayerProfileModal = openEditPlayerProfileModal;
 window.checkAndShowVersionNoticeModal = checkAndShowVersionNoticeModal;
 window.openVersionNoticeModal = openVersionNoticeModal;
+window.updateWebSearchToggleUI = updateWebSearchToggleUI;

@@ -1,7 +1,7 @@
 // js/08-save-load.js
-// 存档/读档/初始化模块（v1.504 全量数据保护、特赦令消费与大小号系统兼容版）
+// 存档/读档/初始化模块（v1.600 全量数据保护、特赦令消费与大小号系统兼容版）
 // ============================================================
-const CURRENT_APP_VERSION = '1.504';
+const CURRENT_APP_VERSION = '1.600';
 
 let _gameInitialized = false;
 let _skipStartChoiceOnce = false;
@@ -108,7 +108,6 @@ function autoSaveGame() {
 // 打开备份/导出取证流程
 function openBackupModal() {
     let payload, day, ytName;
-    // 🛡️ 在游玩中或已触发封禁取证时，优先使用全量运行状态打包
     if (G.phase === 'playing' || (G._isDeviceBanned && G.player)) {
         payload = serializeGameState();
         day = G.day || 1;
@@ -231,26 +230,21 @@ function _fallbackOldImageRestore(file) {
     reader.readAsDataURL(file);
 }
 
-// 🛡️ 导入落地：深度平滑合并 + 特赦令核验与消费（防重放漏洞）
+// 🛡️ 导入落地：深度平滑合并 + 特赦令核验与消费
 function _applyImportedStateData(stateData) {
     if (!stateData || (!stateData.player && !stateData.npcs)) {
         alert('❌ 存档数据损坏或为空，导入终止！');
         return;
     }
 
-    // 是否是"解封卡导入"这条路径——是的话后面要跳过多余的合并确认框，直接一步到位解锁
     let isPardonRedemption = false;
 
-    // 🛡️ 核心特赦令核验：如果当前设备被锁，或者导入的卡里带有特赦证明
     if (typeof OtomeSecurityGuard !== 'undefined') {
-        // 场景 A：带有效特赦令的解封卡导入当前被封设备
         if (stateData._pardonCertificate) {
             const { success, nativeCleared } = OtomeSecurityGuard.tryRedeemPardonCertificate(stateData);
             if (success) {
                 isPardonRedemption = true;
 
-                // 🧹 令牌已核验通过并消费完毕，卡片里残留的封禁相关字段不能再带入本次合并，
-                // 否则会把"已经用过的旧特赦证书 / 旧封禁时间戳"重新写回当前存档，污染下一次判定。
                 delete stateData._pardonCertificate;
                 delete stateData._isDeviceBanned;
                 delete stateData._banReason;
@@ -264,18 +258,13 @@ function _applyImportedStateData(stateData) {
                 if (nativeCleared) {
                     alert('🎉 成功验证管理员特赦令！设备封锁已彻底解除，游戏已恢复正常。');
                 } else {
-                    // 设备底层持久标记删除失败（常见于部分 Android 系统的存储限制），
-                    // 如实告知用户，而不是假装解封已经完全生效——避免用户退出后被无声再次拦下却一头雾水。
-                    alert('⚠️ 存档内的封锁已解除，但设备底层安全标记未能确认清除干净。\n请完全关闭 App 后重新打开确认是否已恢复正常；如果重新打开仍显示被封，请把此情况反馈给管理员，需要更新一次 App。');
+                    alert('⚠️ 存档内的封锁已解除，但设备底层安全标记未能确认清除干净。\n请完全关闭 App 后重新打开确认；如果重新打开仍显示被封，请联系管理员。');
                 }
             } else {
                 alert('⚠️ 拦截到失效的特赦令！该卡是历史旧特赦，无法用于解除之后的全新违规！设备继续保持锁死。');
                 return;
             }
-        }
-        // 场景 B：导入的是一张被封禁的卡（由管理员在正常机器上导入审核）
-        else if (stateData._isDeviceBanned) {
-            // 管理员机器导入时，不直接写入永久设备锁，而是弹窗进入查房模式
+        } else if (stateData._isDeviceBanned) {
             window.G._isDeviceBanned = true;
             window.G._banReason = stateData._banReason;
             window.G._activeBanToken = stateData._activeBanToken;
@@ -284,8 +273,6 @@ function _applyImportedStateData(stateData) {
         }
     }
 
-    // 解封卡导入不弹合并确认框：这张卡就是用户自己的存档，管理员只是原样签发解封回来，不存在"要不要合并"的问题，
-    // 多一道确认框只会增加用户手滑点错、卡在半解封状态的风险。
     if (!isPardonRedemption && _gameInitialized && !confirm('检测到已有游玩进度，导入将合并存档（自建角色、联系人通讯录、剧情与小号完整继承），确定导入吗？')) {
         return;
     }
@@ -315,10 +302,8 @@ function _applyImportedStateData(stateData) {
     const nameVal = G.player?.ytName || '主角';
 
     if (stateData._isDeviceBanned) {
-        // 如果是被封卡，展示封锁审核屏
         showDeviceBanLockScreen();
     } else if (isPardonRedemption) {
-        // 解封成功与否上面已经明确提示过一次，这里不再重复弹窗刷屏
     } else {
         if (typeof openModal === 'function') {
             openModal(`
@@ -565,7 +550,7 @@ function confirmExitGame() {
     }
 }
 
-// 🛡️ 全量数据打包：支持封禁令牌因果链与一次性特赦证书
+// 🛡️ 全量数据打包
 function serializeGameState() {
     return {
         player: G.player,
@@ -587,7 +572,7 @@ function serializeGameState() {
         _activeBanToken: G._activeBanToken || null,
         _activeBanTime: G._activeBanTime || null,
         _securityAuditBox: G._securityAuditBox || null,
-        _pardonCertificate: G._pardonCertificate || null, // 管理员签发的一次性特赦证书
+        _pardonCertificate: G._pardonCertificate || null,
         groups: G.groups,
         groupChatHistory: G.groupChatHistory,
         groupMemories: G.groupMemories,
@@ -604,7 +589,11 @@ function serializeGameState() {
         unlockedAchievements: G.unlockedAchievements,
         milestoneReached: G.milestoneReached,
         ai: G.ai,
-        search: G.search
+        search: G.search,
+        stickerCategories: G.stickerCategories,
+        stickerLibrary: G.stickerLibrary,
+        clockConfig: G.clockConfig,
+        _behindScreenActive: G._behindScreenActive
     };
 }
 
@@ -618,7 +607,6 @@ function applyDeserializedGameState(data) {
     if (data.maxActionPoints !== undefined) G.maxActionPoints = data.maxActionPoints;
     if (Array.isArray(data.storyHistory)) G.storyHistory = data.storyHistory;
 
-    // 🛡️ 旧存档联系人与自建角色完整继承
     if (!G.npcs) G.npcs = {};
     if (data.npcs && typeof data.npcs === 'object') {
         G.npcs = Object.assign({}, G.npcs, data.npcs);
@@ -638,7 +626,6 @@ function applyDeserializedGameState(data) {
     G.blockedNpcs = Array.isArray(data.blockedNpcs) ? data.blockedNpcs : [];
     G.blockedRecords = Array.isArray(data.blockedRecords) ? data.blockedRecords : [];
 
-    // 🛡️ 封锁黑匣子与设备状态还原
     G._isDeviceBanned = !!data._isDeviceBanned;
     G._banReason = data._banReason || null;
     G._activeBanToken = data._activeBanToken || null;
@@ -685,6 +672,11 @@ function applyDeserializedGameState(data) {
     if (data.milestoneReached) G.milestoneReached = data.milestoneReached;
     if (data.ai) G.ai = Object.assign({}, G.ai, data.ai);
     if (data.search) G.search = Object.assign({}, G.search, data.search);
+
+    if (Array.isArray(data.stickerCategories)) G.stickerCategories = data.stickerCategories;
+    if (Array.isArray(data.stickerLibrary)) G.stickerLibrary = data.stickerLibrary;
+    if (data.clockConfig) G.clockConfig = Object.assign({}, G.clockConfig, data.clockConfig);
+    if (data._behindScreenActive) G._behindScreenActive = Object.assign({}, G._behindScreenActive, data._behindScreenActive);
 }
 
 // 暴露全局
