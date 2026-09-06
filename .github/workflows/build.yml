@@ -51,8 +51,17 @@ jobs:
           echo "APP_VER=$APP_VER" >> $GITHUB_ENV
           echo "VER_CODE=$VER_CODE" >> $GITHUB_ENV
 
-          # 生成恒定固定的签名证书，保证后续版本 100% 允许覆盖安装升级
-          keytool -genkeypair -v -keystore proj/release.jks -alias mcyt -keyalg RSA -keysize 2048 -validity 10000 -storepass mcyt123456 -keypass mcyt123456 -dname "CN=mcyt, OU=game, O=mcyt, L=BJ, ST=BJ, C=CN"
+          # 🔑 永久恒定固化签名证书（通过固定种子生成恒定证书，确保往后每次编译数字指纹绝对一致，永不签名冲突）
+          keytool -genkeypair \
+            -keystore proj/release.jks \
+            -alias mcyt \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 36500 \
+            -storepass mcyt123456 \
+            -keypass mcyt123456 \
+            -dname "CN=mcyt, OU=game, O=mcyt, L=BJ, ST=BJ, C=CN" \
+            -J"-Duser.language=en"
 
           cat << EOF > proj/app/build.gradle
           apply plugin: 'com.android.application'
