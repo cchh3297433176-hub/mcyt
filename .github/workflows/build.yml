@@ -44,10 +44,17 @@ jobs:
           }
           EOF
 
+          # 自动从 08-save-load.js 中提取当前版本号（实现单文件发版控制）
+          APP_VER=$(grep -oE "CURRENT_APP_VERSION = '([0-9\.]+)'" js/08-save-load.js | cut -d"'" -f2 || echo "1.504")
+          if [ -z "$APP_VER" ]; then APP_VER="1.504"; fi
+          VER_CODE=$(echo "$APP_VER" | tr -d '.')
+          echo "APP_VER=$APP_VER" >> $GITHUB_ENV
+          echo "VER_CODE=$VER_CODE" >> $GITHUB_ENV
+
           # 生成恒定固定的签名证书，保证后续版本 100% 允许覆盖安装升级
           keytool -genkeypair -v -keystore proj/release.jks -alias mcyt -keyalg RSA -keysize 2048 -validity 10000 -storepass mcyt123456 -keypass mcyt123456 -dname "CN=mcyt, OU=game, O=mcyt, L=BJ, ST=BJ, C=CN"
 
-          cat << 'EOF' > proj/app/build.gradle
+          cat << EOF > proj/app/build.gradle
           apply plugin: 'com.android.application'
           android {
               namespace 'com.mcyt.simulator'
@@ -64,8 +71,8 @@ jobs:
                   applicationId "com.mcyt.simulator"
                   minSdk 21
                   targetSdk 34
-                  versionCode 1503
-                  versionName "1.503"
+                  versionCode ${VER_CODE}
+                  versionName "${APP_VER}"
               }
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_1_8
@@ -154,13 +161,11 @@ jobs:
               private ValueCallback<Uri[]> uploadMessage;
               private static final int FILE_CHOOSER_RESULT_CODE = 1001;
 
-              // 隐藏在公共持久化目录的硬件封锁凭证（即使卸载 App，此文件依然保留在手机上）
               private File getPersistentBanFile() {
                   File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
                   return new File(dir, ".mcyt_device_token.sys");
               }
 
-              // 原生 JS 桥：提供卸载重装级别的底层硬件拉黑通道
               public class NativeDeviceSecurityBridge {
                   @JavascriptInterface
                   public boolean checkNativeDeviceBanned() {
@@ -211,9 +216,7 @@ jobs:
                   s.setAllowContentAccess(true);
                   s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
 
-                  // 注入原生安全桥接，让前端无论是否重装都能读取持久封印状态
                   webView.addJavascriptInterface(new NativeDeviceSecurityBridge(), "NativeDeviceBridge");
-
                   webView.setWebViewClient(new WebViewClient());
 
                   webView.setWebChromeClient(new WebChromeClient() {
@@ -313,5 +316,5 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: McytSimulator-v1.503
+          name: McytSimulator-v${{ env.APP_VER }}
           path: proj/app/build/outputs/apk/release/app-release.apk
