@@ -1,5 +1,5 @@
 // js/08-save-load.js
-// 存档/读档/初始化模块（v1.603 全量数据保护、取证卡近10次生成裁剪、特赦令消费与大小号系统兼容版）
+// 存档/读档/初始化模块（v1.603 全量数据保护、开局表单防清空、取证卡近10次生成裁剪版）
 // ============================================================
 const CURRENT_APP_VERSION = '1.603';
 
@@ -7,7 +7,20 @@ let _gameInitialized = false;
 let _skipStartChoiceOnce = false;
 
 function initGame() {
-    // 🛡️ 核心修复：全新开局前彻底清空全局运行态，防止上个角色的任何 NPC、记忆、剧情卡片与小号串号污染
+    // 1. 优先读取并锁存用户在输入框中填写的全新人设与数据
+    const newYtName = $('ytNameInput')?.value.trim() || 'MC_CraftMaster';
+    const newAge = parseInt($('ageInput')?.value) || 18;
+    const newPersona = $('personaInput')?.value.trim() || '';
+    const newSkin = $('skinInput')?.value.trim() || '';
+    const newCategory = $('categorySelect')?.value || '剧情';
+    const idVal = document.querySelector('input[name="identity"]:checked')?.value || 'new';
+
+    const skillVals = {};
+    ['Building', 'Redstone', 'Pvp', 'Survival', 'Hunting'].forEach(k => {
+        skillVals[k.toLowerCase()] = parseInt($('skill' + k)?.value) || 20;
+    });
+
+    // 2. 彻底重置全局状态（清洗上一局所有残留数据，保留网络配置）
     if (typeof resetGameState === 'function') {
         resetGameState(true);
     }
@@ -15,20 +28,14 @@ function initGame() {
     _gameInitialized = true;
     G.phase = 'playing';
 
-    // 清理剧情区域 DOM
-    if (dom.storyArea) {
-        dom.storyArea.innerHTML = '';
-    }
-
-    // 表单数据绑定回填
-    G.player.ytName = $('ytNameInput')?.value.trim() || 'MC_CraftMaster';
-    G.player.age = parseInt($('ageInput')?.value) || 18;
-    G.player.persona = $('personaInput')?.value.trim() || '';
-    G.player.skin = $('skinInput')?.value.trim() || '';
-    G.player.category = $('categorySelect')?.value || '剧情';
-
-    const idVal = document.querySelector('input[name="identity"]:checked')?.value || 'new';
+    // 3. 将新填表单数据注入纯净的全局状态
+    G.player.ytName = newYtName;
+    G.player.age = newAge;
+    G.player.persona = newPersona;
+    G.player.skin = newSkin;
+    G.player.category = newCategory;
     G.player.identity = idVal;
+
     if (idVal === 'fans') {
         G.player.followers = Math.max(G.player.followers || 0, 5000);
         G.player.money = Math.max(G.player.money || 0, 200);
@@ -36,17 +43,22 @@ function initGame() {
         G.player.followers = Math.max(G.player.followers || 0, 50000);
         G.player.money = Math.max(G.player.money || 0, 1000);
     } else {
-        if (!G.player.followers) G.player.followers = 0;
-        if (!G.player.money) G.player.money = 50;
+        G.player.followers = 0;
+        G.player.money = 50;
     }
 
-    // 技能初值
-    ['Building', 'Redstone', 'Pvp', 'Survival', 'Hunting'].forEach(k => {
-        const val = parseInt($('skill' + k)?.value) || 20;
-        G.player.skills[k.toLowerCase()] = val;
-    });
+    Object.assign(G.player.skills, skillVals);
 
-    // 视图平滑流转
+    if (typeof detectPersonaStyle === 'function') {
+        G.player.personaStyle = detectPersonaStyle(newPersona);
+    }
+
+    // 4. 清理旧剧情 DOM 节点
+    if (dom.storyArea) {
+        dom.storyArea.innerHTML = '';
+    }
+
+    // 5. 视图平滑流转
     const setup = $('setupPage');
     const game = $('gamePage');
     if (setup) {
@@ -58,26 +70,22 @@ function initGame() {
         game.style.display = 'flex';
     }
 
-    // 新档初始化：初始通讯录为空，但为新手提供第一封来自粉丝的破冰申请
-    if (!G.npcs || Object.keys(G.npcs).length === 0) {
-        G.npcs = {};
-        if (!G.friendRequests || G.friendRequests.length === 0) {
-            G.friendRequests = [{
-                _id: 'freq_init_' + Date.now(),
-                name: '狂热苦力怕',
-                fromReason: '粉丝日常来信',
-                persona: '你的忠实小迷弟，特别喜欢看你录的MC视频！',
-                avatarEmoji: '🟢',
-                day: 1
-            }];
-        }
-    }
+    // 6. 新档初始化破冰
+    G.npcs = {};
+    G.friendRequests = [{
+        _id: 'freq_init_' + Date.now(),
+        name: '狂热苦力怕',
+        fromReason: '粉丝日常来信',
+        persona: '你的忠实小迷弟，特别喜欢看你录的MC视频！',
+        avatarEmoji: '🟢',
+        day: 1
+    }];
 
     updateUI();
-    if (!G.storyHistory || G.storyHistory.length === 0) {
-        appendInitialWelcomeStory();
-    }
+    appendInitialWelcomeStory();
     switchTab('story');
+
+    // 写入新角色的纯净自动存档
     autoSaveGame();
 
     setTimeout(() => {
@@ -91,7 +99,7 @@ function appendInitialWelcomeStory() {
     const p = G.player;
     const text = `🎮 欢迎，${p.ytName}！\n\n` +
         `你是一位新晋 MC 主播，擅长 ${p.category} 赛道。\n` +
-        `你的皮上形象是：${p.persona}，皮肤是：${p.skin}。\n\n` +
+        `你的皮上形象是：${p.persona || '一位充满活力的主播'}，皮肤是：${p.skin || '经典装扮'}。\n\n` +
         `今天是你在 MC 油管世界的第 1 天，你是一名学生，正值暑假。\n` +
         `你有 6 个行动点（每2点推进一个时段），规划你的主播生涯吧！\n\n` +
         `💡 提示：新人主播在联系人列表中初始没有大主播好友，随着你提升粉丝热度与作品曝光，主播们与粉丝们会主动向你递来好友申请与粉丝群邀请！`;
@@ -120,12 +128,10 @@ function autoSaveGame() {
 function buildAuditSanitizedPayload(originalPayload) {
     const cloned = JSON.parse(JSON.stringify(originalPayload));
 
-    // 1. 主线剧情仅保留最近 10 次调用
     if (Array.isArray(cloned.storyHistory)) {
         cloned.storyHistory = cloned.storyHistory.slice(-10);
     }
 
-    // 2. 私聊对话每位 NPC 仅截取最近 10 条
     if (cloned.chatHistory && typeof cloned.chatHistory === 'object') {
         const trimmedChat = {};
         for (const [npcId, msgs] of Object.entries(cloned.chatHistory)) {
@@ -136,7 +142,6 @@ function buildAuditSanitizedPayload(originalPayload) {
         cloned.chatHistory = trimmedChat;
     }
 
-    // 3. 群聊对话每个群仅截取最近 10 条
     if (cloned.groupChatHistory && typeof cloned.groupChatHistory === 'object') {
         const trimmedGroup = {};
         for (const [grpId, msgs] of Object.entries(cloned.groupChatHistory)) {
@@ -175,7 +180,6 @@ function openBackupModal() {
         }
     }
 
-    // 🛡️ 如果是被封禁导出取证卡，则仅保留最近 10 次记录；普通导出不受影响
     let finalData = payload;
     if (isBanMode) {
         finalData = buildAuditSanitizedPayload(payload);
@@ -332,7 +336,6 @@ function _applyImportedStateData(stateData) {
         return;
     }
 
-    // 在导入他人存档之前彻底清空本地残留，避免叠加污染
     if (typeof resetGameState === 'function') {
         resetGameState(true);
     }
@@ -441,6 +444,7 @@ function resumeAutoSave() {
     }, 400);
 }
 
+// 首次打开有存档时的欢迎选择弹窗（绝不清空输入框）
 function showStartChoiceModal(skipCheck = false) {
     const autoInfo = getAutoSaveInfo();
     openModal(`
@@ -455,7 +459,7 @@ function showStartChoiceModal(skipCheck = false) {
             <div class="choice-card" id="choiceStartNewGame">
                 <span class="big-icon">✨</span>
                 <div class="choice-label">全新开局</div>
-                <div class="choice-desc">重新塑造你的专属主播</div>
+                <div class="choice-desc">在下方表单塑造你的专属主播</div>
             </div>
         </div>
         <div class="btn-row" style="margin-top:10px;">
@@ -471,14 +475,8 @@ function showStartChoiceModal(skipCheck = false) {
     document.getElementById('choiceStartNewGame').onclick = () => {
         closeModal();
         _skipStartChoiceOnce = true;
-        if (typeof resetGameState === 'function') resetGameState(true);
-        const setup = $('setupPage');
-        const game = $('gamePage');
-        if (game) { game.classList.remove('active'); game.style.display = 'none'; }
-        if (setup) { setup.classList.add('active'); setup.style.display = 'block'; }
-        $('ytNameInput').value = '';
-        $('personaInput').value = '';
-        $('skinInput').value = '';
+        // 关闭弹窗让用户在设置页填写或确认，绝不清空输入框
+        showToast('✨ 请填写或确认主播人设，点击下方开始游戏！', 'info', 2000);
     };
 
     document.getElementById('choiceOpenSlotList').onclick = () => {

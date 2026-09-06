@@ -1,8 +1,8 @@
 // js/09-events-init.js
-// 事件绑定与公告系统（v1.600 全量大版本更新说明、正版声明与个人人设资料全能编辑）
+// 事件绑定与公告系统（v1.603 全量大版本更新说明、开局直通优化版）
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
-    // 开始游戏按钮
+    // 开始游戏按钮（直达开局，不再强行拦截弹窗清空人设）
     $('startGameBtn')?.addEventListener('click', function() {
         if (typeof OtomeSecurityGuard !== 'undefined' && OtomeSecurityGuard.isDeviceBanned()) {
             if (typeof showDeviceBanLockScreen === 'function') showDeviceBanLockScreen();
@@ -12,12 +12,16 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!G.ai.apiKey) { showToast('⚠️ 请先填入 API Key'); $('setupApiKeyInput')?.focus(); return; }
         if (!G.ai.baseUrl) { showToast('⚠️ 请先填入 API Base URL'); $('setupBaseUrlInput')?.focus(); return; }
         if (!G.ai.model) { showToast('⚠️ 请先选择或填写模型'); $('setupModelInput')?.focus(); return; }
-        if (_skipStartChoiceOnce || !hasAnySaveData()) {
-            _skipStartChoiceOnce = false;
-            initGame();
-        } else {
-            showStartChoiceModal(false);
+
+        // 如果检测到有未完成的自动存档，给玩家一个明确的覆盖确认，确定后直接进入新游戏
+        const autoInfo = (typeof getAutoSaveInfo === 'function') ? getAutoSaveInfo() : null;
+        if (autoInfo && autoInfo.data && !_skipStartChoiceOnce) {
+            if (!confirm(`检测到此前有保存的进度（第 ${autoInfo.day} 天 · ${autoInfo.data?.player?.ytName || '主播'}）。\n\n确定以当前新填人设开始「全新游戏」并覆盖自动存档吗？`)) {
+                return;
+            }
         }
+        _skipStartChoiceOnce = false;
+        initGame();
     });
 
     // 顶部 Tab 栏切换
@@ -206,7 +210,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // 确保全部 DOM 事件绑定完毕后，再检查是否需要弹出封禁遮罩
     setTimeout(() => {
         if (typeof OtomeSecurityGuard !== 'undefined' && OtomeSecurityGuard.isDeviceBanned()) {
             if (typeof showDeviceBanLockScreen === 'function') {
@@ -219,10 +222,10 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ============================================================
-// 📢 双页滑动公告系统（v1.600 纯正声明与12项重磅优化）
+// 📢 双页滑动公告系统（v1.603 纯正声明与12项重磅优化）
 // ============================================================
 function checkAndShowVersionNoticeModal(forceOpen = false) {
-    const ver = window.CURRENT_APP_VERSION || '1.600';
+    const ver = window.CURRENT_APP_VERSION || '1.603';
     const dismissedVersion = localStorage.getItem('mcyt_dismissed_notice_ver');
 
     if (forceOpen || dismissedVersion !== ver) {
@@ -449,7 +452,6 @@ function openEditPlayerProfileModal() {
             G.player.personaStyle = detectPersonaStyle(newPersona);
         }
 
-        // 同步历史记忆，让 AI 主动接纳新人设
         if (!G.memorySummaries) G.memorySummaries = [];
 
         if (nameChanged) {
