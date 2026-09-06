@@ -78,7 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof G._lastRegenerate !== 'function') { showToast('暂无可重新生成的内容', 'error', 1800); return; }
         openModal(`
             <h3 style="margin-bottom:10px;">🔄 重说确认</h3>
-            <p style="font-size:13px;color:#666;line-height:1.6;">是否要重新生成上一轮剧情？原内容将被替换。</p>
+            <p style="font-size:13px;color:#666;line-height:1.6;">是否要重新生成上一轮剧情/对话？原内容将被替换。</p>
             <div class="btn-row" style="margin-top:14px;">
                 <button class="btn-secondary" onclick="closeModal()">❌ 否</button>
                 <button class="btn-primary" id="confirmRerollBtn">✅ 是，重新生成</button>
@@ -209,7 +209,7 @@ document.addEventListener('DOMContentLoaded', () => {
 // 📢 双页滑动公告系统（主公告 + 更新优化与新功能）
 // ============================================================
 function checkAndShowVersionNoticeModal(forceOpen = false) {
-    const ver = window.CURRENT_APP_VERSION || '1.501';
+    const ver = window.CURRENT_APP_VERSION || '1.502';
     const dismissedVersion = localStorage.getItem('mcyt_dismissed_notice_ver');
 
     if (forceOpen || dismissedVersion !== ver) {
@@ -249,10 +249,10 @@ function openVersionNoticeModal(version) {
                 <div class="notice-card-box">
                     <h4>🚀 本次更新优化方面 (v${version})</h4>
                     <ul style="padding-left:18px;margin-bottom:10px;font-size:13px;color:#444;line-height:1.6;">
-                        <li style="margin-bottom:8px;">1. <b>修复闪电按钮与微信式连发</b>：修复私聊界面 ⚡ 按钮无反应问题，即便无记录也会破冰搭话；AI 回复模拟真实手机聊天，一次生成按节奏连发 1~3 条短气泡。</li>
-                        <li style="margin-bottom:8px;">2. <b>好感度机制恢复</b>：修复私聊好感度不增长 Bug，角色回复后根据互动质量与性格平稳增加 1~3 点好感，带有即时反馈。</li>
-                        <li style="margin-bottom:8px;">3. <b>真实好友与粉丝群申请</b>：新存档通讯录不再直接塞满主播，随着玩家制作视频、开播等累积粉丝热度，各路大主播与粉丝会主动递来好友申请与后援群邀请函！旧存档已完整保护不坏档。</li>
-                        <li style="margin-bottom:8px;">4. <b>触怒拉黑与大小号系统</b>：聊天过度冒犯会被主播拒收拉黑。支持一键注册与切换小号、发表评论；使用小号添加主播聊天说情诚恳道歉，可成功解除大号拉黑！</li>
+                        <li style="margin-bottom:8px;">1. <b>修复闪电按钮与多条气泡连发</b>：彻底修复私聊 ⚡ 闪电无反应问题，即便无记录也会破冰搭话；AI 回复模拟真实微信聊天，连珠炮式连发 3~5 条短气泡。</li>
+                        <li style="margin-bottom:8px;">2. <b>好感度机制恢复</b>：修复私聊好感度不增长 Bug，角色回复后根据互动质量与性格平稳增加 1~3 点好感。</li>
+                        <li style="margin-bottom:8px;">3. <b>消息长按操作菜单</b>：长按自己发出的消息支持【撤回】（概率被看到）、【编辑】与【删除】。</li>
+                        <li style="margin-bottom:8px;">4. <b>管理删除与重说智能化</b>：在左侧编辑弹窗中可一键删除某条错误消息；重说功能会自动撤回最近一次 AI 生成并重新发起。</li>
                     </ul>
                 </div>
             </div>
