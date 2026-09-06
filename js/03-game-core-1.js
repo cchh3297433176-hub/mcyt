@@ -185,7 +185,7 @@ function showDeviceBanLockScreen() {
     const audit = (window.G && window.G._securityAuditBox) || {};
     const reasonText = (window.G && window.G._banReason) || audit.violationReason || '违规在乙女向游戏中进行攻略对象拉郎/男男互动';
     const offendingText = audit.offendingText ? escapeHtml(audit.offendingText) : '';
-    const banToken = (window.G && window.G._activeBanToken) || audit.banToken || '未知编号';
+    const banToken = (window.G && window.G._activeBanToken) || audit.banToken || '当前封锁令';
 
     lockMask.innerHTML = `
         <div style="background: #fff; border-radius: 16px; padding: 22px; max-width: 430px; width: 100%; box-shadow: 0 12px 36px rgba(0,0,0,0.6); text-align: center; border: 2px solid #ef4444; max-height: 90vh; overflow-y: auto;">
@@ -225,13 +225,22 @@ function showDeviceBanLockScreen() {
     `;
     lockMask.style.display = 'flex';
 
-    document.getElementById('lockExportBackupBtn').onclick = () => {
-        if (typeof openBackupModal === 'function') openBackupModal();
+    // 绑定导出按钮事件（直调备份模块，百分百保证弹窗）
+    document.getElementById('lockExportBackupBtn').onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof openBackupModal === 'function') {
+            openBackupModal();
+        } else {
+            alert('正在准备存档数据...');
+        }
     };
 
     const toggleBtn = document.getElementById('toggleAdminUnlockFormBtn');
     const unlockBox = document.getElementById('inlineAdminUnlockBox');
-    toggleBtn.onclick = () => {
+    toggleBtn.onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         const isHidden = unlockBox.style.display === 'none';
         unlockBox.style.display = isHidden ? 'block' : 'none';
         if (isHidden) {
@@ -239,7 +248,10 @@ function showDeviceBanLockScreen() {
         }
     };
 
-    document.getElementById('btnDoInlineUnlock').onclick = () => {
+    // 验证密匙成功后，开启“管理员查房模式”并真正切入游戏主界面
+    document.getElementById('btnDoInlineUnlock').onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         const inputKey = document.getElementById('inlineAdminKeyInput').value;
         if (!inputKey) { alert('请输入管理员密匙！'); return; }
 
@@ -247,6 +259,16 @@ function showDeviceBanLockScreen() {
             window._isAdminAuditing = true;
             lockMask.remove();
 
+            // 顺利切入游戏界面，让管理员能真实点击进入私聊、朋友圈
+            _gameInitialized = true;
+            G.phase = 'playing';
+
+            const setup = $('setupPage');
+            const game = $('gamePage');
+            if (setup) { setup.classList.remove('active'); setup.style.display = 'none'; }
+            if (game) { game.classList.add('active'); game.style.display = 'flex'; }
+
+            // 挂载顶部查房栏
             let adminBanner = document.getElementById('adminAuditStatusBar');
             if (!adminBanner) {
                 adminBanner = document.createElement('div');
@@ -270,11 +292,9 @@ function showDeviceBanLockScreen() {
                 </div>
             `;
 
-            // 管理员确认误判，生成专属特赦令并弹出备份下载
             document.getElementById('btnAdminConfirmUnlockAll').onclick = () => {
                 window._isAdminAuditing = false;
                 OtomeSecurityGuard.adminAuthorizePardon('iris2026');
-                // 彻底清除当前管理员机器上的所有锁
                 OtomeSecurityGuard.purgeAllDeviceBans();
                 adminBanner.remove();
 

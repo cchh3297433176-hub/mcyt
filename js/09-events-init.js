@@ -1,18 +1,10 @@
 // 事件绑定与公告系统
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
-    // 🛡️ 开屏第一道绝对防线：开屏第一毫秒校验设备是否在黑名单中，在则立即死锁！
-    if (typeof OtomeSecurityGuard !== 'undefined' && OtomeSecurityGuard.isDeviceBanned()) {
-        if (typeof showDeviceBanLockScreen === 'function') {
-            showDeviceBanLockScreen();
-            return;
-        }
-    }
-
     // 开始游戏按钮
     $('startGameBtn')?.addEventListener('click', function() {
         if (typeof OtomeSecurityGuard !== 'undefined' && OtomeSecurityGuard.isDeviceBanned()) {
-            showDeviceBanLockScreen();
+            if (typeof showDeviceBanLockScreen === 'function') showDeviceBanLockScreen();
             return;
         }
         applyAIConfigFromUI('setup');
@@ -211,13 +203,20 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    // 🛡️ 确保全部 DOM 事件绑定完毕后，再检查是否需要弹出封禁遮罩
     setTimeout(() => {
+        if (typeof OtomeSecurityGuard !== 'undefined' && OtomeSecurityGuard.isDeviceBanned()) {
+            if (typeof showDeviceBanLockScreen === 'function') {
+                showDeviceBanLockScreen();
+                return;
+            }
+        }
         checkAndShowVersionNoticeModal();
-    }, 600);
+    }, 400);
 });
 
 // ============================================================
-// 📢 双页滑动公告系统（主公告 + 更新优化与新功能）
+// 📢 双页滑动公告系统
 // ============================================================
 function checkAndShowVersionNoticeModal(forceOpen = false) {
     const ver = window.CURRENT_APP_VERSION || '1.504';
