@@ -166,7 +166,7 @@ function openModal(html) {
 }
 
 // ============================================================
-// 🚨 纯乙女游戏红线保护：锁死遮罩与管理员查房解密工作流
+// 🚨 纯乙女游戏红线保护：锁死遮罩、特赦解封卡导入与查房解密工作流
 // ============================================================
 function showDeviceBanLockScreen() {
     let lockMask = document.getElementById('otomeDeviceBanMask');
@@ -201,12 +201,14 @@ function showDeviceBanLockScreen() {
             </div>
             <p style="font-size: 12px; color: #6b7280; line-height: 1.6; margin-bottom: 16px;">
                 当前设备所有生成与游玩按键已被全面锁死。<br>
-                <b>【全量取证机制】</b>：导出的记忆卡已<b>完整保留你被封前的所有历史对话与全部游戏记录</b>。<br>
-                请点击下方按钮导出卡片并联系管理员审核，核验确属误判后将为你提供专属特赦解封卡。
+                <b>【解封流程】</b>：点击下方红色按钮导出卡片发给管理员审核；拿到管理员发还的解密卡后，点击下方绿色按钮导入即可解除设备锁并恢复全部进度！
             </p>
             <div style="display: flex; flex-direction: column; gap: 8px;">
                 <button id="lockExportBackupBtn" style="padding: 12px; font-size: 14px; font-weight: 700; border: none; border-radius: 10px; background: #dc2626; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
-                    <span>📥</span> 导出全量取证记忆卡 (发送给管理员)
+                    <span>📤</span> 导出全量取证记忆卡 (发送给管理员)
+                </button>
+                <button id="lockImportPardonCardBtn" style="padding: 12px; font-size: 14px; font-weight: 700; border: none; border-radius: 10px; background: #16a34a; color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                    <span>📥</span> 导入管理员解封卡 (解除封禁)
                 </button>
                 <button id="toggleAdminUnlockFormBtn" style="padding: 10px; font-size: 13px; font-weight: 700; border: 1px solid #ccc; border-radius: 10px; background: #f9fafb; color: #374151; cursor: pointer;">
                     🔐 管理员密匙核验入口
@@ -225,17 +227,25 @@ function showDeviceBanLockScreen() {
     `;
     lockMask.style.display = 'flex';
 
-    // 绑定导出按钮事件（直调备份模块，百分百保证弹窗）
+    // 1. 导出取证卡按钮
     document.getElementById('lockExportBackupBtn').onclick = (e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (typeof openBackupModal === 'function') {
-            openBackupModal();
+        if (typeof openBackupModal === 'function') openBackupModal();
+    };
+
+    // 2. 🌟 导入管理员解封卡按钮（用户解封通道）
+    document.getElementById('lockImportPardonCardBtn').onclick = (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof openRestoreModal === 'function') {
+            openRestoreModal();
         } else {
-            alert('正在准备存档数据...');
+            alert('请稍候，正在唤起文件管理器...');
         }
     };
 
+    // 3. 管理员密匙核验抽屉
     const toggleBtn = document.getElementById('toggleAdminUnlockFormBtn');
     const unlockBox = document.getElementById('inlineAdminUnlockBox');
     toggleBtn.onclick = (e) => {
@@ -248,7 +258,7 @@ function showDeviceBanLockScreen() {
         }
     };
 
-    // 验证密匙成功后，开启“管理员查房模式”并真正切入游戏主界面
+    // 4. 管理员查房进入
     document.getElementById('btnDoInlineUnlock').onclick = (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -259,7 +269,6 @@ function showDeviceBanLockScreen() {
             window._isAdminAuditing = true;
             lockMask.remove();
 
-            // 顺利切入游戏界面，让管理员能真实点击进入私聊、朋友圈
             _gameInitialized = true;
             G.phase = 'playing';
 
@@ -268,7 +277,6 @@ function showDeviceBanLockScreen() {
             if (setup) { setup.classList.remove('active'); setup.style.display = 'none'; }
             if (game) { game.classList.add('active'); game.style.display = 'flex'; }
 
-            // 挂载顶部查房栏
             let adminBanner = document.getElementById('adminAuditStatusBar');
             if (!adminBanner) {
                 adminBanner = document.createElement('div');
@@ -287,8 +295,8 @@ function showDeviceBanLockScreen() {
                     <span><b>管理员查房模式</b>：已放行，你可翻阅该存档所有历史取证。</span>
                 </div>
                 <div style="display:flex;gap:8px;">
-                    <button id="btnAdminConfirmUnlockAll" style="background:#22c55e;color:#fff;border:none;padding:5px 12px;border-radius:6px;font-weight:700;font-size:12px;cursor:pointer;">✅ 签发一次性特赦卡并导出</button>
-                    <button id="btnAdminRejectBanKeep" style="background:#dc2626;color:#fff;border:none;padding:5px 12px;border-radius:6px;font-weight:700;font-size:12px;cursor:pointer;">❌ 确属恶意违规，维持锁死</button>
+                    <button id="btnAdminConfirmUnlockAll" style="background:#22c55e;color:#fff;border:none;padding:5px 12px;border-radius:6px;font-weight:700;font-size:12px;cursor:pointer;">✅ 签发特赦卡并导出</button>
+                    <button id="btnAdminRejectBanKeep" style="background:#dc2626;color:#fff;border:none;padding:5px 12px;border-radius:6px;font-weight:700;font-size:12px;cursor:pointer;">❌ 确属违规维持锁死</button>
                 </div>
             `;
 
@@ -298,7 +306,7 @@ function showDeviceBanLockScreen() {
                 OtomeSecurityGuard.purgeAllDeviceBans();
                 adminBanner.remove();
 
-                alert('🎉 管理员特赦令已签发！现在为您打开导出弹窗，将这张解密记忆卡发还给用户，用户手机导入后即可解除当次封禁！');
+                alert('🎉 管理员特赦令已签发！现在为您打开导出弹窗，将导出的解密记忆卡发还给用户，用户在手机上点击绿色按钮导入即可解除封锁恢复进度！');
                 openBackupModal();
             };
 
