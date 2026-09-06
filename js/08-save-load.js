@@ -1,3 +1,4 @@
+// js/08-save-load.js
 // 存档/读档/初始化模块（v1.504 全量数据保护、特赦令消费与大小号系统兼容版）
 // ============================================================
 const CURRENT_APP_VERSION = '1.504';
@@ -104,22 +105,28 @@ function autoSaveGame() {
     }
 }
 
-// 打开备份流程
+// 打开备份/导出取证流程
 function openBackupModal() {
     let payload, day, ytName;
-    if (G.phase === 'playing') {
+    // 🛡️ 在游玩中或已触发封禁取证时，优先使用全量运行状态打包
+    if (G.phase === 'playing' || (G._isDeviceBanned && G.player)) {
         payload = serializeGameState();
-        day = G.day;
-        ytName = G.player?.ytName;
+        day = G.day || 1;
+        ytName = G.player?.ytName || '主角';
     } else {
         const info = getAutoSaveInfo();
-        if (!info || !info.data) {
+        if (info && info.data) {
+            payload = info.data;
+            day = info.day || 1;
+            ytName = info.data.player?.ytName || '主角';
+        } else if (G._isDeviceBanned) {
+            payload = serializeGameState();
+            day = G.day || 1;
+            ytName = G.player?.ytName || '主角';
+        } else {
             showToast('⚠️ 未找到可导出的存档数据', 'error');
             return;
         }
-        payload = info.data;
-        day = info.day;
-        ytName = info.data.player?.ytName;
     }
 
     const exportPayload = {

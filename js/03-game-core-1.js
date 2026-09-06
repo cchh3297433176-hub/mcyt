@@ -1,3 +1,4 @@
+// js/03-game-core-1.js
 // 核心游戏函数
 // ============================================================
 function appendStory(text, tag = '📖 剧情', extra = {}, opts = {}) {
@@ -227,11 +228,15 @@ function showDeviceBanLockScreen() {
     `;
     lockMask.style.display = 'flex';
 
-    // 1. 导出取证卡按钮
+    // 1. 导出取证卡按钮（支持 PNG 隐写与 JSON 双轨，层级已提至最顶层）
     document.getElementById('lockExportBackupBtn').onclick = (e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (typeof openBackupModal === 'function') openBackupModal();
+        if (typeof openBackupModal === 'function') {
+            openBackupModal();
+        } else {
+            alert('正在准备导出模块，请稍候重试...');
+        }
     };
 
     // 2. 🌟 导入管理员解封卡按钮（用户解封通道）
