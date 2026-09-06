@@ -1,4 +1,5 @@
-// AI 模型设置模块（统一的 OpenAI 兼容接口配置 / 拉取模型 / 多档案 / 纯乙女安全门禁）
+// js/02-ai-network.js
+// AI 模型设置模块（统一的 OpenAI 兼容接口配置 / 拉取模型 / 多档案 / 多模态视觉支持 / 纯乙女安全门禁）
 // ============================================================
 function escapeHtml(str) {
     return String(str == null ? '' : str).replace(/[&<>"']/g, c => ({
@@ -133,7 +134,7 @@ function buildModelSettingsHTML(prefix) {
                 <div class="form-group" style="margin-bottom:8px;">
                     <label style="font-size:13px;">🌐 API Base URL <span class="required">*</span></label>
                     <input type="text" id="${prefix}BaseUrlInput" placeholder="如 https://api.openai.com/v1 或 https://api.deepseek.com/v1" value="${escapeHtml(G.ai.baseUrl)}">
-                    <div style="font-size:11px;color:#999;margin-top:3px;line-height:1.5;">支持 OpenAI 兼容接口，填到 /v1 即可</div>
+                    <div style="font-size:11px;color:#999;margin-top:3px;line-height:1.5;">支持 OpenAI 兼容接口，填到 /v1 即可（支持 Gemini / GPT-4o 等视觉多模态）</div>
                 </div>
                 <div class="form-group" style="margin-bottom:8px;">
                     <label style="font-size:13px;">🔑 API Key <span class="required">*</span></label>
@@ -142,7 +143,7 @@ function buildModelSettingsHTML(prefix) {
                 <div class="form-group" style="margin-bottom:6px;">
                     <label style="font-size:13px;">🤖 当前模型 <span class="required">*</span></label>
                     <div style="display:flex;gap:6px;">
-                        <input type="text" id="${prefix}ModelInput" placeholder="例如 gpt-4o-mini / deepseek-chat" value="${escapeHtml(G.ai.model)}" style="flex:1;">
+                        <input type="text" id="${prefix}ModelInput" placeholder="例如 gpt-4o-mini / gemini-2.5-flash / deepseek-chat" value="${escapeHtml(G.ai.model)}" style="flex:1;">
                         <button type="button" class="upload-btn" id="${prefix}PullBtn" style="white-space:nowrap;padding:0 12px;">🔄 拉取模型</button>
                         <button type="button" class="upload-btn" id="${prefix}TestBtn" style="white-space:nowrap;padding:0 12px;">🔌 测试连接</button>
                     </div>
@@ -154,7 +155,7 @@ function buildModelSettingsHTML(prefix) {
                 <div class="form-group" style="margin-bottom:8px;">
                     <label style="font-size:13px;">💾 保存为模型档案</label>
                     <div style="display:flex;gap:6px;">
-                        <input type="text" id="${prefix}ProfileNameInput" placeholder="备注名，例如「主力DeepSeek」" style="flex:1;">
+                        <input type="text" id="${prefix}ProfileNameInput" placeholder="备注名，例如「主力Gemini」或「主力DeepSeek」" style="flex:1;">
                         <button type="button" class="upload-btn" id="${prefix}SaveProfileBtn" style="white-space:nowrap;padding:0 12px;">💾 保存</button>
                     </div>
                 </div>
@@ -452,7 +453,24 @@ function hideGlobalAILoadingIndicator() {
 }
 
 // ============================================================
-// API 调用（集成全模块乙女安全门禁、违规立斩封禁、全局加载动画与思维链整合）
+// 提取多模态或纯文本消息中的文本串（专为安全扫描设计）
+// ============================================================
+function extractTextFromMessageContent(content) {
+    if (typeof content === 'string') return content;
+    if (Array.isArray(content)) {
+        return content
+            .map(part => {
+                if (typeof part === 'string') return part;
+                if (part && part.type === 'text') return part.text || '';
+                return '';
+            })
+            .join(' ');
+    }
+    return '';
+}
+
+// ============================================================
+// API 调用（集成全模块乙女安全门禁、多模态视觉识图支持、违规立斩封禁、全局加载动画与思维链整合）
 // ============================================================
 async function callAI(messages, options = {}) {
     // 🛡️ 第 1 道防线：底层设备封禁检测（若已封禁，直接掐断所有 API）
@@ -461,10 +479,10 @@ async function callAI(messages, options = {}) {
         throw new Error('该设备因严重违规已被全面封锁，无法调用 AI。');
     }
 
-    // 🛡️ 第 2 道防线：用户发送内容强制雷霆扫描（输入即审，违规立斩）
+    // 🛡️ 第 2 道防线：用户发送内容强制雷霆扫描（输入即审，违规立斩，兼容多模态数组）
     if (typeof OtomeSecurityGuard !== 'undefined' && Array.isArray(messages)) {
         const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
-        const userText = lastUserMsg ? lastUserMsg.content : '';
+        const userText = lastUserMsg ? extractTextFromMessageContent(lastUserMsg.content) : '';
 
         // 同时合并检查玩家当前的人设是否刻意设定为男性搞同性接触
         const playerPersona = (window.G && window.G.player && window.G.player.persona) || '';
@@ -472,7 +490,7 @@ async function callAI(messages, options = {}) {
 
         if (violationReason) {
             console.error('🚨 触发乙女向安全红线，立即执行设备封锁：', violationReason);
-            OtomeSecurityGuard.triggerDeviceBan(violationReason, userText, messages.map(m => `[${m.role}]: ${m.content}`));
+            OtomeSecurityGuard.triggerDeviceBan(violationReason, userText, messages.map(m => `[${m.role}]: ${extractTextFromMessageContent(m.content)}`));
             throw new Error(`【严重违规被封禁】：${violationReason}`);
         }
     }
@@ -484,13 +502,18 @@ async function callAI(messages, options = {}) {
     if (!baseUrl) { showToast('⚠️ 请先在「⚙️ 模型」设置中填写 API Base URL'); throw new Error('未配置 Base URL'); }
     if (!model) { showToast('⚠️ 请先在「⚙️ 模型」设置中选择或填写模型'); throw new Error('未配置模型'); }
 
-    // 🛡️ 自动在系统提示词末尾注入绝对乙女向铁律约束
+    // 🛡️ 自动在系统提示词末尾注入绝对乙女向铁律约束（保持原对象结构）
     const finalMessages = messages.map(m => {
         if (m.role === 'system') {
-            return {
-                role: 'system',
-                content: m.content + '\n\n【乙女向绝对铁律约束】：本作是由 @鸢尾黎明 老师作品二改的代入向纯乙女Airp游戏，女主为全员唯一核心。所有剧情与互动严禁出现任何男男同性恋爱、BL耽美、攻略角色互配拉郎或男男亲昵性张力，坚决捍卫纯正乙女向定位！'
-            };
+            const extraIronRule = '\n\n【乙女向绝对铁律约束】：本作是由 @鸢尾黎明 老师作品二改的代入向纯乙女Airp游戏，女主为全员唯一核心。所有剧情与互动严禁出现任何男男同性恋爱、BL耽美、攻略角色互配拉郎或男男亲昵性张力，坚决捍卫纯正乙女向定位！';
+            if (typeof m.content === 'string') {
+                return { role: 'system', content: m.content + extraIronRule };
+            } else if (Array.isArray(m.content)) {
+                return {
+                    role: 'system',
+                    content: [...m.content, { type: 'text', text: extraIronRule }]
+                };
+            }
         }
         return m;
     });
@@ -535,7 +558,8 @@ async function callAI(messages, options = {}) {
             const outViolation = OtomeSecurityGuard.checkViolation(stripThought(content));
             if (outViolation) {
                 const lastUser = [...messages].reverse().find(m => m.role === 'user');
-                OtomeSecurityGuard.triggerDeviceBan(`诱导生成男男拉郎内容（${outViolation}）`, lastUser ? lastUser.content : '未知指令', messages.map(m => `[${m.role}]: ${m.content}`));
+                const lastUserText = lastUser ? extractTextFromMessageContent(lastUser.content) : '未知指令';
+                OtomeSecurityGuard.triggerDeviceBan(`诱导生成男男拉郎内容（${outViolation}）`, lastUserText, messages.map(m => `[${m.role}]: ${extractTextFromMessageContent(m.content)}`));
                 throw new Error('生成的回复触犯纯乙女红线，已阻断呈现。');
             }
         }
