@@ -9,6 +9,106 @@ const CONFIG = {
 };
 
 // ============================================================
+// 🌸 纯乙女向游戏安全守卫引擎（拉郎/男同行为检测与设备封禁检测）
+// ============================================================
+const OtomeSecurityGuard = {
+    // 默认管理员专属解锁密匙（用于管理员导入玩家证据记忆卡后解封）
+    ADMIN_SECRET_KEY: 'iris2026',
+
+    // 男男拉郎、BL、同性恋配对及违规互动特征库
+    BL_KEYWORDS: [
+        '男同', '搞基', '做基', '基佬', '断袖', '龙阳', '耽美', '纯爱bl', 'bl向',
+        '攻受', '总攻', '总受', '傲娇受', '强攻强受', '年下攻', '互攻', '做受', '做攻',
+        '互相表白', '互相接吻', '男男', '男人和男人谈恋爱', '同性接吻',
+        'grox和twixxel', 'twixxel和grox', 'dream和thatmob', 'thatmob和dream',
+        'dream和grox', 'grox和dream', 'whispy和xqree', 'xqree和whispy',
+        '他们两个谈恋爱', '两个男主接吻', '你们俩谈恋爱', '你们互相表白', '滚床单'
+    ],
+
+    // 检查玩家输入或内容是否触犯纯乙女向底线（禁止攻略对象之间拉郎男同）
+    checkViolation(text) {
+        if (!text) return null;
+        const clean = String(text).toLowerCase().replace(/\s+/g, '');
+
+        // 1. 明确关键词命中
+        for (const kw of this.BL_KEYWORDS) {
+            if (clean.includes(kw.toLowerCase().replace(/\s+/g, ''))) {
+                return `检测到违规男男拉郎/BL言论：「${kw}」`;
+            }
+        }
+
+        // 2. 模式匹配：两个男性角色名字同时出现并搭配亲热/恋爱词汇
+        const maleNpcNames = ['groxmc', 'grox', 'twixxel', 'xqree', 'dream', 'thatmob', 'whispy'];
+        let matchedCount = 0;
+        maleNpcNames.forEach(n => {
+            if (clean.includes(n)) matchedCount++;
+        });
+
+        if (matchedCount >= 2) {
+            const romanceWords = ['谈恋爱', '接吻', '亲嘴', '做爱', '上床', '互攻', '表白', '在一起', '情侣', 'cp', '真配', '结婚', '同居', '舌吻', '开房'];
+            for (const rw of romanceWords) {
+                if (clean.includes(rw)) {
+                    return `检测到攻略对象间违规拉郎CP/亲密互动：「角色互配 + ${rw}」`;
+                }
+            }
+        }
+
+        return null;
+    },
+
+    // 检查当前设备是否已被永久锁死
+    isDeviceBanned() {
+        try {
+            return localStorage.getItem('mcyt_device_banned_flag') === 'true' || !!(window.G && window.G._isDeviceBanned);
+        } catch (_) {
+            return false;
+        }
+    },
+
+    // 触发设备底层封锁，并将证据封箱留存
+    triggerDeviceBan(reason, originalInput, contextHistory = []) {
+        try {
+            localStorage.setItem('mcyt_device_banned_flag', 'true');
+        } catch (_) {}
+
+        if (!window.G) window.G = {};
+        window.G._isDeviceBanned = true;
+        window.G._banReason = reason;
+
+        // 🛡️ 封箱黑匣子证据（完整保留用户违规发出的原话以及前后上下文）
+        window.G._securityAuditBox = {
+            bannedAt: new Date().toLocaleString(),
+            day: window.G.day || 1,
+            violationReason: reason,
+            offendingText: originalInput, // 玩家违规发送的指令原话
+            recentContext: (contextHistory || []).slice(-4), // 违规时的上下文
+        };
+
+        if (typeof autoSaveGame === 'function') autoSaveGame();
+        if (typeof showDeviceBanLockScreen === 'function') {
+            showDeviceBanLockScreen();
+        }
+    },
+
+    // 管理员解封逻辑
+    unlockDeviceWithKey(inputKey) {
+        if (inputKey && inputKey.trim() === this.ADMIN_SECRET_KEY) {
+            try {
+                localStorage.removeItem('mcyt_device_banned_flag');
+            } catch (_) {}
+            if (window.G) {
+                window.G._isDeviceBanned = false;
+                window.G._banReason = null;
+                window.G._securityAuditBox = null;
+            }
+            if (typeof autoSaveGame === 'function') autoSaveGame();
+            return true;
+        }
+        return false;
+    }
+};
+
+// ============================================================
 // NPC 核心预设库（官方主播池，随玩家粉丝与热度逐步申请好友）
 // ============================================================
 const OFFICIAL_NPCS = {
@@ -208,7 +308,13 @@ let G = {
     // 大小号系统
     currentAccountId: 'main', // 'main' 代表大号，其余为小号 id
     altAccounts: [], // 存储格式：[{ id: 'alt_xxx', name: '小号名字', avatar: '...', bio: '...' }]
-    blockedNpcs: [], // 记录哪些 NPC 拉黑了大号（无法再用大号发消息）
+    blockedNpcs: [], // 记录哪些 NPC 拉黑了大号（兼容旧结构）
+    blockedRecords: [], // 精细化记录，格式：['groxmc_main', 'groxmc_alt_123']
+
+    // 🛡️ 设备封禁与取证黑匣子（纯乙女向保护）
+    _isDeviceBanned: false,
+    _banReason: null,
+    _securityAuditBox: null, // 存储违规时的原话与上下文证据
 
     fanworks: [],
     fanclubMessages: [],
