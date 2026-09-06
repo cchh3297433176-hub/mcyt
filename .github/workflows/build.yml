@@ -64,8 +64,8 @@ jobs:
                   applicationId "com.mcyt.simulator"
                   minSdk 21
                   targetSdk 34
-                  versionCode 1500
-                  versionName "1.500"
+                  versionCode 1502
+                  versionName "1.502"
               }
               compileOptions {
                   sourceCompatibility JavaVersion.VERSION_1_8
@@ -262,5 +262,5 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: McytSimulator-v1.500
+          name: McytSimulator-v1.502
           path: proj/app/build/outputs/apk/release/app-release.apk
