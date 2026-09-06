@@ -1,5 +1,5 @@
 // js/07-actions-social.js
-// 行动处理与外部社区（AO3 同人中心 & YouTube 油管中心 - 严格拟真沉浸、严禁打破第四面墙版）
+// 行动处理与外部社区（AO3 同人中心 & YouTube 油管中心 - 状态防丢失与严格沉浸版）
 // ============================================================
 async function performAction(action, detail = '', useSearch = false) {
     if (G.isGenerating) { showToast('⏳ 正在生成剧情...'); return; }
@@ -85,28 +85,33 @@ async function handleSubAction(detail, useSearch = false) {
 // ============================================================
 // 🌐 浏览器 App & AO3 同人中心
 // ============================================================
-if (!G.browserState) {
-    G.browserState = {
-        view: 'home',
-        activeWorkId: null,
-        urlText: 'browser://bookmarks'
-    };
+function ensureBrowserIntegrity() {
+    if (!G.browserState) {
+        G.browserState = {
+            view: 'home',
+            activeWorkId: null,
+            urlText: 'browser://bookmarks'
+        };
+    }
+    if (!G.fanworks) G.fanworks = [];
+    if (!G.ao3User) {
+        G.ao3User = {
+            username: (G.player && G.player.ytName) || 'MC_CraftMaster',
+            avatarEmoji: '📖'
+        };
+    }
 }
-if (!G.fanworks) G.fanworks = [];
-if (!G.ao3User) {
-    G.ao3User = {
-        username: (G.player && G.player.ytName) || 'MC_CraftMaster',
-        avatarEmoji: '📖'
-    };
-}
+ensureBrowserIntegrity();
 
 function getIsPlayerAo3MainAccount() {
+    ensureBrowserIntegrity();
     return G.ao3User && G.player && (G.ao3User.username.trim() === G.player.ytName.trim());
 }
 
 function renderBrowserPanel() {
     const container = document.getElementById('browserTab');
     if (!container) return;
+    ensureBrowserIntegrity();
     const st = G.browserState;
 
     let bodyHtml = '';
@@ -168,6 +173,7 @@ function renderBrowserPanel() {
 }
 
 function handleBrowserBack() {
+    ensureBrowserIntegrity();
     const st = G.browserState;
     if (st.view === 'ao3_read') {
         st.view = 'ao3';
@@ -181,11 +187,13 @@ function handleBrowserBack() {
 }
 
 function openAo3Home() {
+    ensureBrowserIntegrity();
     G.browserState.view = 'ao3';
     renderBrowserPanel();
 }
 
 function buildAo3HomeHTML() {
+    ensureBrowserIntegrity();
     const works = [...(G.fanworks || [])].reverse();
     const isMain = getIsPlayerAo3MainAccount();
     const currentAo3Name = (G.ao3User && G.ao3User.username) || G.player.ytName;
@@ -266,12 +274,14 @@ function buildAo3HomeHTML() {
 }
 
 function openAo3Reader(id) {
+    ensureBrowserIntegrity();
     G.browserState.view = 'ao3_read';
     G.browserState.activeWorkId = id;
     renderBrowserPanel();
 }
 
 function buildAo3ReadHTML(id) {
+    ensureBrowserIntegrity();
     const work = (G.fanworks || []).find(w => w._id === id);
     if (!work) {
         return `<div style="padding:30px;text-align:center;color:#888;">找不到该作品 <button onclick="G.browserState.view='ao3';renderBrowserPanel();">返回列表</button></div>`;
@@ -470,6 +480,7 @@ function bindBrowserPanelEvents(container) {
 }
 
 function openAo3AccountSettingsModal() {
+    ensureBrowserIntegrity();
     const currentAo3Name = (G.ao3User && G.ao3User.username) || G.player.ytName;
     const isMain = currentAo3Name.trim() === G.player.ytName.trim();
 
@@ -670,6 +681,7 @@ async function triggerFanCreationPrompt() {
 }
 
 function openCreateCustomBookModal() {
+    ensureBrowserIntegrity();
     const currentAo3Name = (G.ao3User && G.ao3User.username) || G.player.ytName;
     const isMain = getIsPlayerAo3MainAccount();
     const pName = G.player.ytName;
@@ -1043,6 +1055,7 @@ async function generateAo3ReviewsByAI(workId) {
 }
 
 function openAo3WriteCommentModal(workId) {
+    ensureBrowserIntegrity();
     const currentAo3Name = (G.ao3User && G.ao3User.username) || G.player.ytName;
     openModal(`
         <h3>✍️ 发表书评</h3>
@@ -1101,6 +1114,7 @@ function openAo3WriteCommentModal(workId) {
 }
 
 function openAo3ReplyModal(workId, reviewIdx) {
+    ensureBrowserIntegrity();
     const work = (G.fanworks || []).find(w => w._id === workId);
     if (!work || !work.reviews || !work.reviews[reviewIdx]) return;
     const targetRev = work.reviews[reviewIdx];
@@ -1176,34 +1190,39 @@ function getRandomRealisticNetName() {
 // ============================================================
 // ▶️ 油管 (YouTube) App 独立平台系统
 // ============================================================
-if (!G.ytState) {
-    G.ytState = {
-        view: 'feed',
-        activeVideoId: null,
-        activeChannelId: 'all'
-    };
+function ensureYtIntegrity() {
+    if (!G.ytState) {
+        G.ytState = {
+            view: 'feed',
+            activeVideoId: null,
+            activeChannelId: 'all'
+        };
+    }
+    if (!G.ytUser) {
+        G.ytUser = {
+            username: (G.player && G.player.ytName) || 'MC_CraftMaster',
+            avatarUrl: null
+        };
+    }
+    if (!G.ytExternalVideos) G.ytExternalVideos = [];
+    if (!G.ytCustomChannels) {
+        G.ytCustomChannels = [
+            { id: 'ch_funny', name: '日常搞笑', prompt: '搞笑整活、沙雕操作、MC日常互怼' },
+            { id: 'ch_tech', name: '红石黑科技', prompt: '高深红石电脑、自动化农场、黑科技机关' }
+        ];
+    }
 }
-if (!G.ytUser) {
-    G.ytUser = {
-        username: (G.player && G.player.ytName) || 'MC_CraftMaster',
-        avatarUrl: null
-    };
-}
-if (!G.ytExternalVideos) G.ytExternalVideos = [];
-if (!G.ytCustomChannels) {
-    G.ytCustomChannels = [
-        { id: 'ch_funny', name: '日常搞笑', prompt: '搞笑整活、沙雕操作、MC日常互怼' },
-        { id: 'ch_tech', name: '红石黑科技', prompt: '高深红石电脑、自动化农场、黑科技机关' }
-    ];
-}
+ensureYtIntegrity();
 
 function getIsPlayerYtMainAccount() {
+    ensureYtIntegrity();
     return G.ytUser && G.player && (G.ytUser.username.trim() === G.player.ytName.trim());
 }
 
 function renderYouTubePanel() {
     const container = document.getElementById('youtubeTab');
     if (!container) return;
+    ensureYtIntegrity();
     const st = G.ytState;
 
     if (!G.ytExternalVideos.length) {
@@ -1221,6 +1240,7 @@ function renderYouTubePanel() {
 
     const currentYtName = (G.ytUser && G.ytUser.username) || G.player.ytName;
     const isMain = getIsPlayerYtMainAccount();
+    
     const avatarSrc = (isMain && G.player.avatar) ? G.player.avatar : (G.ytUser.avatarUrl || G.player.avatar || '');
 
     container.innerHTML = `
@@ -1293,6 +1313,7 @@ function initDefaultYtFeed() {
 }
 
 function buildYtFeedHTML() {
+    ensureYtIntegrity();
     const activeChId = G.ytState.activeChannelId || 'all';
 
     let chipsHtml = `
@@ -1387,6 +1408,7 @@ function buildYtFeedHTML() {
 }
 
 function buildYtChannelHTML() {
+    ensureYtIntegrity();
     const isMain = getIsPlayerYtMainAccount();
     const p = G.player;
     const currentName = (G.ytUser && G.ytUser.username) || p.ytName;
@@ -1470,7 +1492,6 @@ function cleanYtUsername(rawUser) {
     return name;
 }
 
-// 🛡️ 严格清洗第四面墙出戏词汇（杜绝任何乙女概念泄露至评论正文）
 function cleanYtCommentText(rawText) {
     if (!rawText) return '';
     let text = rawText.replace(/\[\/?COMMENT[^\]]*\]/gi, '')
@@ -1479,7 +1500,6 @@ function cleanYtCommentText(rawText) {
                       .replace(/user\s*=\s*[a-zA-Z0-9_\u4e00-\u9fa5]+/gi, '')
                       .trim();
 
-    // 过滤第四面墙关键词，平滑替换为真实游戏实况术语
     text = text.replace(/乙女向/g, 'MC解密剧情')
                .replace(/乙女/g, '沉浸微电影')
                .replace(/男主们/g, '大主播们')
@@ -1487,7 +1507,7 @@ function cleanYtCommentText(rawText) {
                .replace(/女主视角/g, '第一人称实况')
                .replace(/女主/g, '主播')
                .replace(/女主角/g, '主播')
-               .replace(/攻略难度/g, '通关通关难度')
+               .replace(/攻略难度/g, '通关难度')
                .replace(/鸢尾老师/g, 'UP主')
                .replace(/鸢尾黎明/g, '优秀制作团队')
                .replace(/预约/g, '追更');
@@ -1496,6 +1516,7 @@ function cleanYtCommentText(rawText) {
 }
 
 function buildYtWatchHTML(videoId) {
+    ensureYtIntegrity();
     let video = null;
     let isLivePlayback = false;
     let liveData = null;
@@ -1685,6 +1706,7 @@ function bindYtPanelEvents(container) {
 }
 
 function openYtUserQuickMenuModal() {
+    ensureYtIntegrity();
     const isMain = getIsPlayerYtMainAccount();
     const currentName = (G.ytUser && G.ytUser.username) || G.player.ytName;
 
@@ -1767,6 +1789,7 @@ function openCreateCustomChannelModal() {
 }
 
 function openYtAccountModal() {
+    ensureYtIntegrity();
     const currentName = (G.ytUser && G.ytUser.username) || G.player.ytName;
     const isMain = currentName.trim() === G.player.ytName.trim();
 
@@ -1827,6 +1850,7 @@ async function refreshYtExternalFeedByAI() {
     G.isGenerating = true;
 
     try {
+        ensureYtIntegrity();
         const activeChId = G.ytState.activeChannelId || 'all';
         const curCh = (G.ytCustomChannels || []).find(c => c.id === activeChId);
 
@@ -1913,6 +1937,7 @@ async function refreshYtExternalFeedByAI() {
 }
 
 function openPublishVideoModal() {
+    ensureYtIntegrity();
     const isMain = getIsPlayerYtMainAccount();
     const currentName = (G.ytUser && G.ytUser.username) || G.player.ytName;
 
@@ -2044,8 +2069,8 @@ function openPublishVideoModal() {
     };
 }
 
-// 🌟 核心：为 YouTube 视频生成拟真评论区（严禁第四面墙泄露）
 async function generateMoreYtCommentsByAI(videoId) {
+    ensureYtIntegrity();
     let video = (G.ytExternalVideos || []).find(v => v._id === videoId);
     if (!video) {
         video = (G.player.videos || []).find(v => ('yt_my_' + (v.title || v.day)) === videoId);
@@ -2146,6 +2171,7 @@ async function generateMoreYtCommentsByAI(videoId) {
 }
 
 function openYtWriteCommentModal(videoId) {
+    ensureYtIntegrity();
     const currentName = (G.ytUser && G.ytUser.username) || G.player.ytName;
     const isMain = getIsPlayerYtMainAccount();
 
@@ -2224,6 +2250,7 @@ function openYtWriteCommentModal(videoId) {
 }
 
 function openYtReplyCommentModal(videoId, commentIdx) {
+    ensureYtIntegrity();
     let video = (G.ytExternalVideos || []).find(v => v._id === videoId);
     if (!video) {
         video = (G.player.videos || []).find(v => ('yt_my_' + (v.title || v.day)) === videoId);

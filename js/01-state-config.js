@@ -360,7 +360,7 @@ const OFFICIAL_NPCS = {
 const DEFAULT_NPCS = OFFICIAL_NPCS;
 
 // ============================================================
-// 全新纯净初始状态工厂函数
+// 全新纯净初始状态工厂函数（包含同人浏览器与油管完整结构）
 // ============================================================
 function createDefaultGameState() {
     return {
@@ -432,10 +432,37 @@ function createDefaultGameState() {
         _securityAuditBox: null,
         _pardonCertificate: null,
 
+        // 🌐 浏览器同人中心
+        browserState: {
+            view: 'home',
+            activeWorkId: null,
+            urlText: 'browser://bookmarks'
+        },
         fanworks: [],
+        ao3User: {
+            username: 'MC_CraftMaster',
+            avatarEmoji: '📖'
+        },
         fanclubMessages: [],
         _fanworkId: 0,
         _fanclubMsgId: 0,
+
+        // ▶️ 油管中心
+        ytState: {
+            view: 'feed',
+            activeVideoId: null,
+            activeChannelId: 'all'
+        },
+        ytUser: {
+            username: 'MC_CraftMaster',
+            avatarUrl: null
+        },
+        ytExternalVideos: [],
+        ytCustomChannels: [
+            { id: 'ch_funny', name: '日常搞笑', prompt: '搞笑整活、沙雕操作、MC日常互怼' },
+            { id: 'ch_tech', name: '红石黑科技', prompt: '高深红石电脑、自动化农场、黑科技机关' }
+        ],
+
         currentChatNpc: null,
         currentChatGroup: null,
         chatActiveTab: 'direct',
@@ -462,7 +489,7 @@ function createDefaultGameState() {
     };
 }
 
-// 🛡️ 核心修复：原地深度重置，保持同一内存引用，彻底解决闭包与跨文件引用不一致
+// 🛡️ 核心修复：原地深度重置，保持同一内存引用
 function resetGameState(keepAIConfig = true) {
     const fresh = createDefaultGameState();
     let preservedAI = null;
@@ -497,7 +524,6 @@ function resetGameState(keepAIConfig = true) {
     return window.G;
 }
 
-// 初始化全局挂载
 window.G = createDefaultGameState();
 var G = window.G;
 
