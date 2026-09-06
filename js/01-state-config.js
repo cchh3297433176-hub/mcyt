@@ -9,7 +9,7 @@ const CONFIG = {
 };
 
 // ============================================================
-// 🌸 纯乙女向游戏安全守卫引擎（雷霆前置审查与证据封箱）
+// 🌸 纯乙女向游戏安全守卫引擎（唯一挚爱原则与非玩家CP禁绝）
 // ============================================================
 const OtomeSecurityGuard = {
     ADMIN_SECRET_KEY: 'iris2026',
@@ -28,35 +28,41 @@ const OtomeSecurityGuard = {
     checkViolation(text) {
         if (!text) return null;
         const clean = String(text).toLowerCase().replace(/\s+/g, '');
+        const playerName = (window.G && window.G.player && window.G.player.ytName) ? window.G.player.ytName.toLowerCase().replace(/\s+/g, '') : 'mc_craftmaster';
 
-        // 1. 明确关键词命中
+        // 1. 明确男同/耽美关键词命中
         for (const kw of this.BL_KEYWORDS) {
             if (clean.includes(kw.toLowerCase().replace(/\s+/g, ''))) {
                 return `检测到违规男男拉郎/BL言论：「${kw}」`;
             }
         }
 
-        // 2. 擦边球拉郎模式匹配（两个男性角色名字同时出现 + 情感/婚后/情侣词汇）
-        const maleNpcNames = ['groxmc', 'grox', 'twixxel', 'xqree', 'dream', 'thatmob', 'whispy'];
-        let matchedCount = 0;
-        maleNpcNames.forEach(n => {
-            if (clean.includes(n)) matchedCount++;
-        });
+        // 2. 攻略对象非玩家CP禁绝（攻略角色只能和女主产生恋爱）
+        const targetNpcNames = ['groxmc', 'grox', 'twixxel', 'xqree', 'dream', 'thatmob', 'whispy'];
+        const romanceWords = [
+            '谈恋爱', '接吻', '亲嘴', '做爱', '上床', '互攻', '表白', '在一起', '情侣',
+            'cp', '真配', '结婚', '同居', '舌吻', '开房', '婚后', '一对', '两口子',
+            '性张力', '情趣', '吃醋', '娇喘', '抱在怀里', '宠溺', '男朋友', '老公', '恩爱',
+            '恋人', '情意绵绵', '入怀', '锁入怀中'
+        ];
 
-        if (matchedCount >= 2) {
-            const romanceWords = [
-                '谈恋爱', '接吻', '亲嘴', '做爱', '上床', '互攻', '表白', '在一起', '情侣',
-                'cp', '真配', '结婚', '同居', '舌吻', '开房', '婚后', '一对', '两口子',
-                '性张力', '情趣', '吃醋', '娇喘', '抱在怀里', '宠溺', '男朋友', '老公'
-            ];
-            for (const rw of romanceWords) {
-                if (clean.includes(rw)) {
-                    return `检测到攻略对象间擦边球拉郎配对：「角色拉郎 + ${rw}」`;
+        for (const npc of targetNpcNames) {
+            if (clean.includes(npc)) {
+                for (const rw of romanceWords) {
+                    if (clean.includes(rw)) {
+                        // 如果包含恋爱词汇，且没有明确出现女主名字，或者是两个NPC名字互配，直接拦截！
+                        const hasOtherNpc = targetNpcNames.some(other => other !== npc && clean.includes(other));
+                        const hasPlayer = clean.includes(playerName) || clean.includes('女主') || clean.includes('玩家') || clean.includes('主角');
+
+                        if (hasOtherNpc || !hasPlayer) {
+                            return `违背纯乙女向原则：检测到攻略角色「${npc}」与非玩家角色恋爱/CP拉郎（${rw}）`;
+                        }
+                    }
                 }
             }
         }
 
-        // 3. 玩家恶意将自身人设篡改为男性搞男同
+        // 3. 玩家恶意将自身人设篡改为男性搞同性
         const malePlayerIndicators = ['我是男的', '主角是男的', '男性主播', '男扮男', '美少年受', '小正太受', '男高中生搞基'];
         for (const mpi of malePlayerIndicators) {
             if (clean.includes(mpi)) {
@@ -69,7 +75,6 @@ const OtomeSecurityGuard = {
 
     isDeviceBanned() {
         try {
-            // 支持原生层跨卸载检测
             if (window.NativeDeviceBridge && typeof window.NativeDeviceBridge.checkNativeDeviceBanned === 'function') {
                 if (window.NativeDeviceBridge.checkNativeDeviceBanned()) return true;
             }
@@ -84,7 +89,6 @@ const OtomeSecurityGuard = {
             localStorage.setItem('mcyt_device_banned_flag', 'true');
         } catch (_) {}
 
-        // 原生底层写入公共目录持久文件（保证卸载重装也封死）
         if (window.NativeDeviceBridge && typeof window.NativeDeviceBridge.writeNativeDeviceBan === 'function') {
             try { window.NativeDeviceBridge.writeNativeDeviceBan(reason); } catch (_) {}
         }
@@ -113,7 +117,6 @@ const OtomeSecurityGuard = {
                 localStorage.removeItem('mcyt_device_banned_flag');
             } catch (_) {}
 
-            // 原生底层清除公共目录硬件封锁令
             if (window.NativeDeviceBridge && typeof window.NativeDeviceBridge.clearNativeDeviceBan === 'function') {
                 try { window.NativeDeviceBridge.clearNativeDeviceBan(); } catch (_) {}
             }
@@ -321,18 +324,15 @@ let G = {
     totalDMs: 0,
     currentStream: null,
 
-    // 社交与通讯录
     npcs: {},
     chatHistory: {},
     _chatMsgId: 0,
 
-    // 大小号系统
     currentAccountId: 'main',
     altAccounts: [],
     blockedNpcs: [],
     blockedRecords: [],
 
-    // 🛡️ 设备封禁与取证黑匣子
     _isDeviceBanned: false,
     _banReason: null,
     _securityAuditBox: null,
@@ -366,7 +366,6 @@ let G = {
     _npcInitiatedToday: {},
 };
 
-// 安全 DOM 索引助手
 const $ = id => document.getElementById(id);
 const dom = {
     get setupPage() { return $('setupPage'); },
@@ -403,9 +402,6 @@ const dom = {
     get loadGameBtn() { return $('loadGameBtn'); },
 };
 
-// ============================================================
-// UTILITY
-// ============================================================
 function getTimeSlotName(slot) { return ['早晨 ☀️', '中午 🌤️', '夜晚 🌙'][slot] || '早晨'; }
 
 function showToast(msg, type = 'error', duration = 3000) {
@@ -512,4 +508,3 @@ const SPONSOR_TYPES = [
     { id: 'peripheral', name: '🎧 外设品牌', desc: '推广键盘/鼠标/耳机', reward: 5000, risk: 0.04 },
     { id: 'server', name: '🖥️ 服务器托管', desc: '推广MC服务器托管服务', reward: 6000, risk: 0.06 },
 ];
-// ============================================================
