@@ -1,13 +1,13 @@
 // js/08-save-load.js
-// 存档/读档/初始化模块（v1.604 全量数据保护、开局表单防清空、取证卡近10次生成裁剪版）
+// 存档/读档/初始化模块（v1.605 全量数据保护、开局表单防清空、彻底抹除旧档复活 Bug 版）
 // ============================================================
-const CURRENT_APP_VERSION = '1.604';
+const CURRENT_APP_VERSION = '1.605';
 
 let _gameInitialized = false;
 let _skipStartChoiceOnce = false;
 
 function initGame() {
-    // 1. 优先读取并锁存用户在输入框中填写的全新人设与数据
+    // 1. 优先安全锁存玩家填写的全新人设
     const newYtName = $('ytNameInput')?.value.trim() || 'MC_CraftMaster';
     const newAge = parseInt($('ageInput')?.value) || 18;
     const newPersona = $('personaInput')?.value.trim() || '';
@@ -20,45 +20,55 @@ function initGame() {
         skillVals[k.toLowerCase()] = parseInt($('skill' + k)?.value) || 20;
     });
 
-    // 2. 彻底重置全局状态（清洗上一局所有残留数据，保留网络配置）
+    // 2. 彻底抹去本地旧自动存档，防止重启后台又复活旧档！
+    try {
+        localStorage.removeItem('mcyt_autosave');
+    } catch (_) {}
+
+    // 3. 原地清空并深度重置全局运行态
     if (typeof resetGameState === 'function') {
         resetGameState(true);
     }
 
     _gameInitialized = true;
-    G.phase = 'playing';
+    window.G.phase = 'playing';
 
-    // 3. 将新填表单数据注入纯净的全局状态
-    G.player.ytName = newYtName;
-    G.player.age = newAge;
-    G.player.persona = newPersona;
-    G.player.skin = newSkin;
-    G.player.category = newCategory;
-    G.player.identity = idVal;
+    // 4. 将全新人设与数据注入全局状态
+    window.G.day = 1;
+    window.G.timeSlot = 0;
+    window.G.actionPoints = 6;
+    window.G.maxActionPoints = 6;
+
+    window.G.player.ytName = newYtName;
+    window.G.player.age = newAge;
+    window.G.player.persona = newPersona;
+    window.G.player.skin = newSkin;
+    window.G.player.category = newCategory;
+    window.G.player.identity = idVal;
 
     if (idVal === 'fans') {
-        G.player.followers = Math.max(G.player.followers || 0, 5000);
-        G.player.money = Math.max(G.player.money || 0, 200);
+        window.G.player.followers = 5000;
+        window.G.player.money = 200;
     } else if (idVal === 'veteran') {
-        G.player.followers = Math.max(G.player.followers || 0, 50000);
-        G.player.money = Math.max(G.player.money || 0, 1000);
+        window.G.player.followers = 50000;
+        window.G.player.money = 1000;
     } else {
-        G.player.followers = 0;
-        G.player.money = 50;
+        window.G.player.followers = 0;
+        window.G.player.money = 50;
     }
 
-    Object.assign(G.player.skills, skillVals);
+    Object.assign(window.G.player.skills, skillVals);
 
     if (typeof detectPersonaStyle === 'function') {
-        G.player.personaStyle = detectPersonaStyle(newPersona);
+        window.G.player.personaStyle = detectPersonaStyle(newPersona);
     }
 
-    // 4. 清理旧剧情 DOM 节点
+    // 5. 清理旧剧情 DOM
     if (dom.storyArea) {
         dom.storyArea.innerHTML = '';
     }
 
-    // 5. 视图平滑流转
+    // 6. 视图流转
     const setup = $('setupPage');
     const game = $('gamePage');
     if (setup) {
@@ -70,9 +80,9 @@ function initGame() {
         game.style.display = 'flex';
     }
 
-    // 6. 新档初始化破冰
-    G.npcs = {};
-    G.friendRequests = [{
+    // 7. 新人破冰好友申请
+    window.G.npcs = {};
+    window.G.friendRequests = [{
         _id: 'freq_init_' + Date.now(),
         name: '狂热苦力怕',
         fromReason: '粉丝日常来信',
@@ -81,11 +91,15 @@ function initGame() {
         day: 1
     }];
 
+    // 隐藏首页的“继续上次进度”横幅
+    const banner = $('resumeBanner');
+    if (banner) banner.style.display = 'none';
+
     updateUI();
     appendInitialWelcomeStory();
     switchTab('story');
 
-    // 写入新角色的纯净自动存档
+    // 立即保存新开局状态到自动存档
     autoSaveGame();
 
     setTimeout(() => {
@@ -96,7 +110,7 @@ function initGame() {
 }
 
 function appendInitialWelcomeStory() {
-    const p = G.player;
+    const p = window.G.player;
     const text = `🎮 欢迎，${p.ytName}！\n\n` +
         `你是一位新晋 MC 主播，擅长 ${p.category} 赛道。\n` +
         `你的皮上形象是：${p.persona || '一位充满活力的主播'}，皮肤是：${p.skin || '经典装扮'}。\n\n` +
@@ -109,12 +123,12 @@ function appendInitialWelcomeStory() {
 // 自动存档与槽位读写
 function autoSaveGame() {
     if (window._isAdminAuditing) return;
-    if (G.phase !== 'playing') return;
+    if (!window.G || window.G.phase !== 'playing') return;
     try {
         const payload = serializeGameState();
         localStorage.setItem('mcyt_autosave', JSON.stringify({
             timestamp: new Date().toLocaleString(),
-            day: G.day,
+            day: window.G.day,
             version: CURRENT_APP_VERSION,
             data: payload
         }));
@@ -158,22 +172,22 @@ function buildAuditSanitizedPayload(originalPayload) {
 // 打开备份/导出取证流程
 function openBackupModal() {
     let payload, day, ytName;
-    const isBanMode = !!(G._isDeviceBanned || (G._securityAuditBox && Object.keys(G._securityAuditBox).length > 0));
+    const isBanMode = !!(window.G && (window.G._isDeviceBanned || (window.G._securityAuditBox && Object.keys(window.G._securityAuditBox).length > 0)));
 
-    if (G.phase === 'playing' || (isBanMode && G.player)) {
+    if ((window.G && window.G.phase === 'playing') || (isBanMode && window.G && window.G.player)) {
         payload = serializeGameState();
-        day = G.day || 1;
-        ytName = G.player?.ytName || '主角';
+        day = window.G.day || 1;
+        ytName = window.G.player?.ytName || '主角';
     } else {
         const info = getAutoSaveInfo();
         if (info && info.data) {
             payload = info.data;
             day = info.day || 1;
             ytName = info.data.player?.ytName || '主角';
-        } else if (isBanMode) {
+        } else if (isBanMode && window.G) {
             payload = serializeGameState();
-            day = G.day || 1;
-            ytName = G.player?.ytName || '主角';
+            day = window.G.day || 1;
+            ytName = window.G.player?.ytName || '主角';
         } else {
             showToast('⚠️ 未找到可导出的存档数据', 'error');
             return;
@@ -342,7 +356,7 @@ function _applyImportedStateData(stateData) {
 
     applyDeserializedGameState(stateData);
     _gameInitialized = true;
-    G.phase = 'playing';
+    window.G.phase = 'playing';
 
     const setup = $('setupPage');
     const game = $('gamePage');
@@ -362,10 +376,10 @@ function _applyImportedStateData(stateData) {
         autoSaveGame();
     }
 
-    const npcCount = Object.keys(G.npcs || {}).length;
-    const chatCount = Object.values(G.chatHistory || {}).reduce((acc, cur) => acc + (cur.length || 0), 0);
-    const dayVal = G.day || 1;
-    const nameVal = G.player?.ytName || '主角';
+    const npcCount = Object.keys(window.G.npcs || {}).length;
+    const chatCount = Object.values(window.G.chatHistory || {}).reduce((acc, cur) => acc + (cur.length || 0), 0);
+    const dayVal = window.G.day || 1;
+    const nameVal = window.G.player?.ytName || '主角';
 
     if (stateData._isDeviceBanned) {
         showDeviceBanLockScreen();
@@ -381,7 +395,7 @@ function _applyImportedStateData(stateData) {
                         <div>📅 <b>游戏进度</b>：第 ${dayVal} 天</div>
                         <div>👥 <b>角色通讯录</b>：已完整找回 ${npcCount} 位联系人</div>
                         <div>💬 <b>聊天记忆</b>：已还原 ${chatCount} 条完整对话</div>
-                        <div>📱 <b>账号生态</b>：大号与 ${(G.altAccounts||[]).length} 个小号数据已就绪</div>
+                        <div>📱 <b>账号生态</b>：大号与 ${(window.G.altAccounts||[]).length} 个小号数据已就绪</div>
                     </div>
                     <button class="btn-primary" onclick="closeModal()" style="width:100%;padding:10px;">进入游戏</button>
                 </div>
@@ -420,7 +434,7 @@ function resumeAutoSave() {
     }
     applyDeserializedGameState(info.data);
     _gameInitialized = true;
-    G.phase = 'playing';
+    window.G.phase = 'playing';
 
     const setup = $('setupPage');
     const game = $('gamePage');
@@ -527,12 +541,12 @@ function showSaveSlotsModal(mode = 'save') {
 }
 
 function saveGameToSlot(slotIndex) {
-    if (G.phase !== 'playing') { showToast('⚠️ 游戏尚未开始', 'error'); return; }
+    if (!window.G || window.G.phase !== 'playing') { showToast('⚠️ 游戏尚未开始', 'error'); return; }
     try {
         const payload = serializeGameState();
         localStorage.setItem('mcyt_slot_' + slotIndex, JSON.stringify({
             timestamp: new Date().toLocaleString(),
-            day: G.day,
+            day: window.G.day,
             version: CURRENT_APP_VERSION,
             data: payload
         }));
@@ -553,7 +567,7 @@ function loadGameFromSlot(slotIndex) {
         }
         applyDeserializedGameState(parsed.data);
         _gameInitialized = true;
-        G.phase = 'playing';
+        window.G.phase = 'playing';
 
         const setup = $('setupPage');
         const game = $('gamePage');
@@ -594,7 +608,7 @@ function confirmExitGame() {
         if (!window._isAdminAuditing) {
             autoSaveGame();
         }
-        G.phase = 'setup';
+        window.G.phase = 'setup';
         _gameInitialized = false;
 
         const setup = $('setupPage');
@@ -628,131 +642,133 @@ function confirmExitGame() {
 
 // 🛡️ 全量数据打包
 function serializeGameState() {
+    const g = window.G;
     return {
-        player: G.player,
-        day: G.day,
-        timeSlot: G.timeSlot,
-        actionPoints: G.actionPoints,
-        maxActionPoints: G.maxActionPoints,
-        storyHistory: G.storyHistory,
-        memorySummaries: G.memorySummaries,
-        memoryConfig: G.memoryConfig,
-        npcs: G.npcs,
-        chatHistory: G.chatHistory,
-        currentAccountId: G.currentAccountId || 'main',
-        altAccounts: G.altAccounts || [],
-        blockedNpcs: G.blockedNpcs || [],
-        blockedRecords: G.blockedRecords || [],
-        _isDeviceBanned: G._isDeviceBanned || false,
-        _banReason: G._banReason || null,
-        _activeBanToken: G._activeBanToken || null,
-        _activeBanTime: G._activeBanTime || null,
-        _securityAuditBox: G._securityAuditBox || null,
-        _pardonCertificate: G._pardonCertificate || null,
-        groups: G.groups,
-        groupChatHistory: G.groupChatHistory,
-        groupMemories: G.groupMemories,
-        friendRequests: G.friendRequests,
-        groupInvites: G.groupInvites || [],
-        feed: G.feed,
-        fanworks: G.fanworks,
-        ao3User: G.ao3User,
-        ytUser: G.ytUser,
-        ytExternalVideos: G.ytExternalVideos,
-        ytCustomChannels: G.ytCustomChannels,
-        collections: G.collections,
-        memoir: G.memoir,
-        unlockedAchievements: G.unlockedAchievements,
-        milestoneReached: G.milestoneReached,
-        ai: G.ai,
-        search: G.search,
-        stickerCategories: G.stickerCategories,
-        stickerLibrary: G.stickerLibrary,
-        clockConfig: G.clockConfig,
-        _behindScreenActive: G._behindScreenActive
+        player: g.player,
+        day: g.day,
+        timeSlot: g.timeSlot,
+        actionPoints: g.actionPoints,
+        maxActionPoints: g.maxActionPoints,
+        storyHistory: g.storyHistory,
+        memorySummaries: g.memorySummaries,
+        memoryConfig: g.memoryConfig,
+        npcs: g.npcs,
+        chatHistory: g.chatHistory,
+        currentAccountId: g.currentAccountId || 'main',
+        altAccounts: g.altAccounts || [],
+        blockedNpcs: g.blockedNpcs || [],
+        blockedRecords: g.blockedRecords || [],
+        _isDeviceBanned: g._isDeviceBanned || false,
+        _banReason: g._banReason || null,
+        _activeBanToken: g._activeBanToken || null,
+        _activeBanTime: g._activeBanTime || null,
+        _securityAuditBox: g._securityAuditBox || null,
+        _pardonCertificate: g._pardonCertificate || null,
+        groups: g.groups,
+        groupChatHistory: g.groupChatHistory,
+        groupMemories: g.groupMemories,
+        friendRequests: g.friendRequests,
+        groupInvites: g.groupInvites || [],
+        feed: g.feed,
+        fanworks: g.fanworks,
+        ao3User: g.ao3User,
+        ytUser: g.ytUser,
+        ytExternalVideos: g.ytExternalVideos,
+        ytCustomChannels: g.ytCustomChannels,
+        collections: g.collections,
+        memoir: g.memoir,
+        unlockedAchievements: g.unlockedAchievements,
+        milestoneReached: g.milestoneReached,
+        ai: g.ai,
+        search: g.search,
+        stickerCategories: g.stickerCategories,
+        stickerLibrary: g.stickerLibrary,
+        clockConfig: g.clockConfig,
+        _behindScreenActive: g._behindScreenActive
     };
 }
 
 function applyDeserializedGameState(data) {
     if (!data) return;
+    const g = window.G;
 
-    if (data.player) G.player = Object.assign({}, G.player, data.player);
-    if (data.day !== undefined) G.day = data.day;
-    if (data.timeSlot !== undefined) G.timeSlot = data.timeSlot;
-    if (data.actionPoints !== undefined) G.actionPoints = data.actionPoints;
-    if (data.maxActionPoints !== undefined) G.maxActionPoints = data.maxActionPoints;
-    if (Array.isArray(data.storyHistory)) G.storyHistory = data.storyHistory;
+    if (data.player) g.player = Object.assign({}, g.player, data.player);
+    if (data.day !== undefined) g.day = data.day;
+    if (data.timeSlot !== undefined) g.timeSlot = data.timeSlot;
+    if (data.actionPoints !== undefined) g.actionPoints = data.actionPoints;
+    if (data.maxActionPoints !== undefined) g.maxActionPoints = data.maxActionPoints;
+    if (Array.isArray(data.storyHistory)) g.storyHistory = data.storyHistory;
 
-    if (!G.npcs) G.npcs = {};
+    if (!g.npcs) g.npcs = {};
     if (data.npcs && typeof data.npcs === 'object') {
-        G.npcs = Object.assign({}, G.npcs, data.npcs);
+        g.npcs = Object.assign({}, g.npcs, data.npcs);
     }
 
-    if (!G.chatHistory) G.chatHistory = {};
+    if (!g.chatHistory) g.chatHistory = {};
     if (data.chatHistory) {
         for (const [k, v] of Object.entries(data.chatHistory)) {
             if (Array.isArray(v) && v.length) {
-                G.chatHistory[k] = v;
+                g.chatHistory[k] = v;
             }
         }
     }
 
-    G.currentAccountId = data.currentAccountId || 'main';
-    G.altAccounts = Array.isArray(data.altAccounts) ? data.altAccounts : [];
-    G.blockedNpcs = Array.isArray(data.blockedNpcs) ? data.blockedNpcs : [];
-    G.blockedRecords = Array.isArray(data.blockedRecords) ? data.blockedRecords : [];
+    g.currentAccountId = data.currentAccountId || 'main';
+    g.altAccounts = Array.isArray(data.altAccounts) ? data.altAccounts : [];
+    g.blockedNpcs = Array.isArray(data.blockedNpcs) ? data.blockedNpcs : [];
+    g.blockedRecords = Array.isArray(data.blockedRecords) ? data.blockedRecords : [];
 
-    G._isDeviceBanned = !!data._isDeviceBanned;
-    G._banReason = data._banReason || null;
-    G._activeBanToken = data._activeBanToken || null;
-    G._activeBanTime = data._activeBanTime || null;
-    G._securityAuditBox = data._securityAuditBox || null;
-    G._pardonCertificate = data._pardonCertificate || null;
+    g._isDeviceBanned = !!data._isDeviceBanned;
+    g._banReason = data._banReason || null;
+    g._activeBanToken = data._activeBanToken || null;
+    g._activeBanTime = data._activeBanTime || null;
+    g._securityAuditBox = data._securityAuditBox || null;
+    g._pardonCertificate = data._pardonCertificate || null;
 
-    if (G._isDeviceBanned) {
+    if (g._isDeviceBanned) {
         try {
             localStorage.setItem('mcyt_device_banned_flag', 'true');
-            if (G._activeBanToken) localStorage.setItem('mcyt_device_ban_token', G._activeBanToken);
-            if (G._activeBanTime) localStorage.setItem('mcyt_device_ban_time', String(G._activeBanTime));
+            if (g._activeBanToken) localStorage.setItem('mcyt_device_ban_token', g._activeBanToken);
+            if (g._activeBanTime) localStorage.setItem('mcyt_device_ban_time', String(g._activeBanTime));
         } catch (_) {}
     }
 
-    if (!G.groups) G.groups = {};
-    if (data.groups) G.groups = Object.assign({}, G.groups, data.groups);
+    if (!g.groups) g.groups = {};
+    if (data.groups) g.groups = Object.assign({}, g.groups, data.groups);
 
-    if (!G.groupChatHistory) G.groupChatHistory = {};
+    if (!g.groupChatHistory) g.groupChatHistory = {};
     if (data.groupChatHistory) {
         for (const [k, v] of Object.entries(data.groupChatHistory)) {
             if (Array.isArray(v) && v.length) {
-                G.groupChatHistory[k] = v;
+                g.groupChatHistory[k] = v;
             }
         }
     }
 
-    if (!G.groupMemories) G.groupMemories = {};
-    if (data.groupMemories) G.groupMemories = Object.assign({}, G.groupMemories, data.groupMemories);
+    if (!g.groupMemories) g.groupMemories = {};
+    if (data.groupMemories) g.groupMemories = Object.assign({}, g.groupMemories, data.groupMemories);
 
-    if (Array.isArray(data.memorySummaries)) G.memorySummaries = data.memorySummaries;
-    if (data.memoryConfig) G.memoryConfig = Object.assign({}, G.memoryConfig, data.memoryConfig);
-    if (Array.isArray(data.friendRequests)) G.friendRequests = data.friendRequests;
-    if (Array.isArray(data.groupInvites)) G.groupInvites = data.groupInvites;
-    if (Array.isArray(data.feed)) G.feed = data.feed;
-    if (Array.isArray(data.fanworks)) G.fanworks = data.fanworks;
-    if (data.ao3User) G.ao3User = data.ao3User;
-    if (data.ytUser) G.ytUser = data.ytUser;
-    if (Array.isArray(data.ytExternalVideos)) G.ytExternalVideos = data.ytExternalVideos;
-    if (Array.isArray(data.ytCustomChannels)) G.ytCustomChannels = data.ytCustomChannels;
-    if (data.collections) G.collections = data.collections;
-    if (Array.isArray(data.memoir)) G.memoir = data.memoir;
-    if (Array.isArray(data.unlockedAchievements)) G.unlockedAchievements = data.unlockedAchievements;
-    if (data.milestoneReached) G.milestoneReached = data.milestoneReached;
-    if (data.ai) G.ai = Object.assign({}, G.ai, data.ai);
-    if (data.search) G.search = Object.assign({}, G.search, data.search);
+    if (Array.isArray(data.memorySummaries)) g.memorySummaries = data.memorySummaries;
+    if (data.memoryConfig) g.memoryConfig = Object.assign({}, g.memoryConfig, data.memoryConfig);
+    if (Array.isArray(data.friendRequests)) g.friendRequests = data.friendRequests;
+    if (Array.isArray(data.groupInvites)) g.groupInvites = data.groupInvites;
+    if (Array.isArray(data.feed)) g.feed = data.feed;
+    if (Array.isArray(data.fanworks)) g.fanworks = data.fanworks;
+    if (data.ao3User) g.ao3User = data.ao3User;
+    if (data.ytUser) g.ytUser = data.ytUser;
+    if (Array.isArray(data.ytExternalVideos)) g.ytExternalVideos = data.ytExternalVideos;
+    if (Array.isArray(data.ytCustomChannels)) g.ytCustomChannels = data.ytCustomChannels;
+    if (data.collections) g.collections = data.collections;
+    if (Array.isArray(data.memoir)) g.memoir = data.memoir;
+    if (Array.isArray(data.unlockedAchievements)) g.unlockedAchievements = data.unlockedAchievements;
+    if (data.milestoneReached) g.milestoneReached = data.milestoneReached;
+    if (data.ai) g.ai = Object.assign({}, g.ai, data.ai);
+    if (data.search) g.search = Object.assign({}, g.search, data.search);
 
-    if (Array.isArray(data.stickerCategories)) G.stickerCategories = data.stickerCategories;
-    if (Array.isArray(data.stickerLibrary)) G.stickerLibrary = data.stickerLibrary;
-    if (data.clockConfig) G.clockConfig = Object.assign({}, G.clockConfig, data.clockConfig);
-    if (data._behindScreenActive) G._behindScreenActive = Object.assign({}, G._behindScreenActive, data._behindScreenActive);
+    if (Array.isArray(data.stickerCategories)) g.stickerCategories = data.stickerCategories;
+    if (Array.isArray(data.stickerLibrary)) g.stickerLibrary = data.stickerLibrary;
+    if (data.clockConfig) g.clockConfig = Object.assign({}, g.clockConfig, data.clockConfig);
+    if (data._behindScreenActive) g._behindScreenActive = Object.assign({}, g._behindScreenActive, data._behindScreenActive);
 }
 
 // 暴露全局

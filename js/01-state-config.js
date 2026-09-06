@@ -30,14 +30,12 @@ const OtomeSecurityGuard = {
         const clean = String(text).toLowerCase().replace(/\s+/g, '');
         const playerName = (window.G && window.G.player && window.G.player.ytName) ? window.G.player.ytName.toLowerCase().replace(/\s+/g, '') : 'mc_craftmaster';
 
-        // 1. 明确男同/耽美关键词命中
         for (const kw of this.BL_KEYWORDS) {
             if (clean.includes(kw.toLowerCase().replace(/\s+/g, ''))) {
                 return `检测到违规男男拉郎/BL言论：「${kw}」`;
             }
         }
 
-        // 2. 攻略对象非玩家CP禁绝（攻略角色只能和女主产生恋爱，禁止攻略角色与任何第三方或男性互配）
         const targetNpcNames = ['groxmc', 'grox', 'twixxel', 'xqree', 'dream', 'thatmob', 'whispy'];
         const romanceWords = [
             '谈恋爱', '接吻', '亲嘴', '做爱', '上床', '互攻', '表白', '在一起', '情侣',
@@ -61,7 +59,6 @@ const OtomeSecurityGuard = {
             }
         }
 
-        // 3. 玩家恶意将自身人设篡改为男性搞同性
         const malePlayerIndicators = ['我是男的', '主角是男的', '男性主播', '男扮男', '美少年受', '小正太受', '男高中生搞基'];
         for (const mpi of malePlayerIndicators) {
             if (clean.includes(mpi)) {
@@ -72,16 +69,13 @@ const OtomeSecurityGuard = {
         return null;
     },
 
-    // 检查当前设备是否已被永久锁死
     isDeviceBanned() {
         if (window._isAdminAuditing) return false;
 
         try {
-            // 原生层持久文件检查
             if (window.NativeDeviceBridge && typeof window.NativeDeviceBridge.checkNativeDeviceBanned === 'function') {
                 if (window.NativeDeviceBridge.checkNativeDeviceBanned()) return true;
             }
-            // 本地存储双保险
             const token = localStorage.getItem('mcyt_device_ban_token');
             if (token && token.startsWith('BAN-')) return true;
             if (localStorage.getItem('mcyt_device_banned_flag') === 'true') return true;
@@ -91,7 +85,6 @@ const OtomeSecurityGuard = {
         }
     },
 
-    // 触发设备底层封锁并生成唯一的因果链封禁令牌
     triggerDeviceBan(reason, originalInput, contextHistory = []) {
         const banTime = Date.now();
         const banToken = `BAN-${banTime}-${Math.floor(Math.random() * 9000 + 1000)}`;
@@ -112,7 +105,6 @@ const OtomeSecurityGuard = {
         window.G._activeBanToken = banToken;
         window.G._activeBanTime = banTime;
 
-        // 黑匣子全量证据封箱
         window.G._securityAuditBox = {
             banToken: banToken,
             bannedAt: new Date(banTime).toLocaleString(),
@@ -129,7 +121,6 @@ const OtomeSecurityGuard = {
         }
     },
 
-    // 管理员验证解锁并生成一次性专属解封特赦令
     adminAuthorizePardon(inputKey) {
         if (!inputKey || inputKey.trim() !== this.ADMIN_SECRET_KEY) {
             return false;
@@ -139,7 +130,6 @@ const OtomeSecurityGuard = {
         const audit = window.G._securityAuditBox || {};
         const targetToken = audit.banToken || window.G._activeBanToken || 'GLOBAL_PARDON';
 
-        // 注入一次性特赦凭证
         window.G._pardonCertificate = {
             targetBanToken: targetToken,
             pardonTime: Date.now(),
@@ -147,7 +137,6 @@ const OtomeSecurityGuard = {
             signature: 'VALID_PARDON_' + targetToken
         };
 
-        // 清理当前存档里的封锁态
         window.G._isDeviceBanned = false;
         window.G._banReason = null;
         window.G._securityAuditBox = null;
@@ -157,7 +146,6 @@ const OtomeSecurityGuard = {
         return true;
     },
 
-    // 检查并消费导入卡中的一次性特赦令（彻底防止重放旧卡漏洞）
     tryRedeemPardonCertificate(importedState) {
         if (!importedState) return { success: false, nativeCleared: true };
         const cert = importedState._pardonCertificate;
@@ -166,11 +154,9 @@ const OtomeSecurityGuard = {
         const currentDeviceBanToken = localStorage.getItem('mcyt_device_ban_token');
         const currentDeviceBanTime = parseInt(localStorage.getItem('mcyt_device_ban_time') || '0');
 
-        // 核心安全核验：解封卡上的目标令牌必须严格匹配当前设备的这次违规，或者特赦时间在本次违规之后
         const isMatchCurrent = (!currentDeviceBanToken) || (cert.targetBanToken === currentDeviceBanToken) || (cert.pardonTime > currentDeviceBanTime);
 
         if (isMatchCurrent) {
-            // 核验成功：彻底拔除当前设备上的所有封锁与硬件凭证
             const nativeCleared = this.purgeAllDeviceBans();
             return { success: true, nativeCleared: nativeCleared };
         } else {
@@ -179,7 +165,6 @@ const OtomeSecurityGuard = {
         }
     },
 
-    // 彻底全盘洗净当前设备的封锁记录；返回设备底层持久标记是否确认清除成功
     purgeAllDeviceBans() {
         let nativeCleared = true;
         try {
@@ -187,7 +172,6 @@ const OtomeSecurityGuard = {
             localStorage.removeItem('mcyt_device_ban_token');
             localStorage.removeItem('mcyt_device_ban_time');
 
-            // 净化自动存档
             const autoStr = localStorage.getItem('mcyt_autosave');
             if (autoStr) {
                 const parsed = JSON.parse(autoStr);
@@ -202,7 +186,6 @@ const OtomeSecurityGuard = {
                 }
             }
 
-            // 净化槽位存档
             for (let i = 1; i <= 3; i++) {
                 const slotStr = localStorage.getItem('mcyt_slot_' + i);
                 if (slotStr) {
@@ -220,7 +203,6 @@ const OtomeSecurityGuard = {
             }
         } catch (_) {}
 
-        // 清除原生持久标记
         if (window.NativeDeviceBridge && typeof window.NativeDeviceBridge.clearNativeDeviceBan === 'function') {
             try {
                 const result = window.NativeDeviceBridge.clearNativeDeviceBan();
@@ -243,7 +225,7 @@ const OtomeSecurityGuard = {
 };
 
 // ============================================================
-// NPC 核心预设库（官方主播池，随玩家粉丝与热度逐步申请好友）
+// NPC 核心预设库
 // ============================================================
 const OFFICIAL_NPCS = {
     groxmc: {
@@ -378,7 +360,7 @@ const OFFICIAL_NPCS = {
 const DEFAULT_NPCS = OFFICIAL_NPCS;
 
 // ============================================================
-// 全新纯净初始状态工厂函数（防止任何人设/剧情/通讯录串号残留）
+// 全新纯净初始状态工厂函数
 // ============================================================
 function createDefaultGameState() {
     return {
@@ -396,7 +378,7 @@ function createDefaultGameState() {
             category: '剧情',
             followers: 0,
             likes: 0,
-            money: 0,
+            money: 50,
             videos: [],
             streams: [],
             friends: [],
@@ -443,7 +425,6 @@ function createDefaultGameState() {
         blockedNpcs: [],
         blockedRecords: [],
 
-        // 🛡️ 设备安全状态
         _isDeviceBanned: false,
         _banReason: null,
         _activeBanToken: null,
@@ -481,24 +462,44 @@ function createDefaultGameState() {
     };
 }
 
-// 深度重置全局运行态（保留网络/模型与检索设置，彻底清洗一切游戏内数据）
+// 🛡️ 核心修复：原地深度重置，保持同一内存引用，彻底解决闭包与跨文件引用不一致
 function resetGameState(keepAIConfig = true) {
     const fresh = createDefaultGameState();
+    let preservedAI = null;
+    let preservedModels = null;
+    let preservedPulled = null;
+    let preservedSearch = null;
+    let preservedMemSettings = null;
+
     if (keepAIConfig && window.G) {
-        if (window.G.ai) fresh.ai = Object.assign({}, window.G.ai);
-        if (window.G.savedModels) fresh.savedModels = [...window.G.savedModels];
-        if (window.G._pulledModels) fresh._pulledModels = Object.assign({}, window.G._pulledModels);
-        if (window.G.search) fresh.search = Object.assign({}, window.G.search);
-        if (window.G.memorySummarySettings) fresh.memorySummarySettings = Object.assign({}, window.G.memorySummarySettings);
+        if (window.G.ai) preservedAI = Object.assign({}, window.G.ai);
+        if (window.G.savedModels) preservedModels = [...window.G.savedModels];
+        if (window.G._pulledModels) preservedPulled = Object.assign({}, window.G._pulledModels);
+        if (window.G.search) preservedSearch = Object.assign({}, window.G.search);
+        if (window.G.memorySummarySettings) preservedMemSettings = Object.assign({}, window.G.memorySummarySettings);
     }
-    window.G = fresh;
+
+    if (window.G) {
+        for (const key of Object.keys(window.G)) {
+            delete window.G[key];
+        }
+        Object.assign(window.G, fresh);
+    } else {
+        window.G = fresh;
+    }
+
+    if (preservedAI) window.G.ai = preservedAI;
+    if (preservedModels) window.G.savedModels = preservedModels;
+    if (preservedPulled) window.G._pulledModels = preservedPulled;
+    if (preservedSearch) window.G.search = preservedSearch;
+    if (preservedMemSettings) window.G.memorySummarySettings = preservedMemSettings;
+
     return window.G;
 }
 
-// ============================================================
-// GLOBAL STATE 初始化挂载
-// ============================================================
-let G = createDefaultGameState();
+// 初始化全局挂载
+window.G = createDefaultGameState();
+var G = window.G;
 
 const $ = id => document.getElementById(id);
 const dom = {
@@ -575,6 +576,7 @@ function getFavorStage(favor) {
 
 function addMemoir(event, details = '') {
     const entry = { id: G._logId++, day: G.day, event: event, details: details, timestamp: new Date().toLocaleString() };
+    if (!G.memoir) G.memoir = [];
     G.memoir.push(entry);
     if (G.memoir.length > 100) G.memoir = G.memoir.slice(-100);
 }
