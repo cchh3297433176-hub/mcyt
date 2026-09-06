@@ -231,15 +231,36 @@ function _applyImportedStateData(stateData) {
         return;
     }
 
+    // 是否是"解封卡导入"这条路径——是的话后面要跳过多余的合并确认框，直接一步到位解锁
+    let isPardonRedemption = false;
+
     // 🛡️ 核心特赦令核验：如果当前设备被锁，或者导入的卡里带有特赦证明
     if (typeof OtomeSecurityGuard !== 'undefined') {
         // 场景 A：带有效特赦令的解封卡导入当前被封设备
         if (stateData._pardonCertificate) {
-            const success = OtomeSecurityGuard.tryRedeemPardonCertificate(stateData);
+            const { success, nativeCleared } = OtomeSecurityGuard.tryRedeemPardonCertificate(stateData);
             if (success) {
+                isPardonRedemption = true;
+
+                // 🧹 令牌已核验通过并消费完毕，卡片里残留的封禁相关字段不能再带入本次合并，
+                // 否则会把"已经用过的旧特赦证书 / 旧封禁时间戳"重新写回当前存档，污染下一次判定。
+                delete stateData._pardonCertificate;
+                delete stateData._isDeviceBanned;
+                delete stateData._banReason;
+                delete stateData._activeBanToken;
+                delete stateData._activeBanTime;
+                delete stateData._securityAuditBox;
+
                 const lockMask = document.getElementById('otomeDeviceBanMask');
                 if (lockMask) lockMask.remove();
-                alert('🎉 成功验证管理员特赦令！设备封锁已彻底解除，游戏已恢复正常。');
+
+                if (nativeCleared) {
+                    alert('🎉 成功验证管理员特赦令！设备封锁已彻底解除，游戏已恢复正常。');
+                } else {
+                    // 设备底层持久标记删除失败（常见于部分 Android 系统的存储限制），
+                    // 如实告知用户，而不是假装解封已经完全生效——避免用户退出后被无声再次拦下却一头雾水。
+                    alert('⚠️ 存档内的封锁已解除，但设备底层安全标记未能确认清除干净。\n请完全关闭 App 后重新打开确认是否已恢复正常；如果重新打开仍显示被封，请把此情况反馈给管理员，需要更新一次 App。');
+                }
             } else {
                 alert('⚠️ 拦截到失效的特赦令！该卡是历史旧特赦，无法用于解除之后的全新违规！设备继续保持锁死。');
                 return;
@@ -256,7 +277,9 @@ function _applyImportedStateData(stateData) {
         }
     }
 
-    if (_gameInitialized && !confirm('检测到已有游玩进度，导入将合并存档（自建角色、联系人通讯录、剧情与小号完整继承），确定导入吗？')) {
+    // 解封卡导入不弹合并确认框：这张卡就是用户自己的存档，管理员只是原样签发解封回来，不存在"要不要合并"的问题，
+    // 多一道确认框只会增加用户手滑点错、卡在半解封状态的风险。
+    if (!isPardonRedemption && _gameInitialized && !confirm('检测到已有游玩进度，导入将合并存档（自建角色、联系人通讯录、剧情与小号完整继承），确定导入吗？')) {
         return;
     }
 
@@ -287,6 +310,8 @@ function _applyImportedStateData(stateData) {
     if (stateData._isDeviceBanned) {
         // 如果是被封卡，展示封锁审核屏
         showDeviceBanLockScreen();
+    } else if (isPardonRedemption) {
+        // 解封成功与否上面已经明确提示过一次，这里不再重复弹窗刷屏
     } else {
         if (typeof openModal === 'function') {
             openModal(`

@@ -152,15 +152,19 @@ const OtomeSecurityGuard = {
         window.G._banReason = null;
         window.G._securityAuditBox = null;
         window.G._activeBanToken = null;
+        window.G._activeBanTime = null;
 
         return true;
     },
 
     // 检查并消费导入卡中的一次性特赦令（彻底防止重放旧卡漏洞）
+    // 返回 { success, nativeCleared }：
+    //   success：令牌核验是否通过（决定要不要解封）
+    //   nativeCleared：设备底层持久标记是否已确认清除干净（决定要不要提示用户重启核实）
     tryRedeemPardonCertificate(importedState) {
-        if (!importedState) return false;
+        if (!importedState) return { success: false, nativeCleared: true };
         const cert = importedState._pardonCertificate;
-        if (!cert || !cert.targetBanToken) return false;
+        if (!cert || !cert.targetBanToken) return { success: false, nativeCleared: true };
 
         const currentDeviceBanToken = localStorage.getItem('mcyt_device_ban_token');
         const currentDeviceBanTime = parseInt(localStorage.getItem('mcyt_device_ban_time') || '0');
@@ -170,16 +174,17 @@ const OtomeSecurityGuard = {
 
         if (isMatchCurrent) {
             // 核验成功：彻底拔除当前设备上的所有封锁与硬件凭证
-            this.purgeAllDeviceBans();
-            return true;
+            const nativeCleared = this.purgeAllDeviceBans();
+            return { success: true, nativeCleared: nativeCleared };
         } else {
             console.warn('⚠️ 拦截到过期的旧解封卡！该卡无法解封之后的全新违规！');
-            return false;
+            return { success: false, nativeCleared: true };
         }
     },
 
-    // 彻底全盘洗净当前设备的封锁记录
+    // 彻底全盘洗净当前设备的封锁记录；返回设备底层持久标记是否确认清除成功
     purgeAllDeviceBans() {
+        let nativeCleared = true;
         try {
             localStorage.removeItem('mcyt_device_banned_flag');
             localStorage.removeItem('mcyt_device_ban_token');
@@ -194,6 +199,7 @@ const OtomeSecurityGuard = {
                     parsed.data._banReason = null;
                     parsed.data._securityAuditBox = null;
                     parsed.data._activeBanToken = null;
+                    parsed.data._activeBanTime = null;
                     parsed.data._pardonCertificate = null;
                     localStorage.setItem('mcyt_autosave', JSON.stringify(parsed));
                 }
@@ -209,6 +215,7 @@ const OtomeSecurityGuard = {
                         parsed.data._banReason = null;
                         parsed.data._securityAuditBox = null;
                         parsed.data._activeBanToken = null;
+                        parsed.data._activeBanTime = null;
                         parsed.data._pardonCertificate = null;
                         localStorage.setItem('mcyt_slot_' + i, JSON.stringify(parsed));
                     }
@@ -216,9 +223,14 @@ const OtomeSecurityGuard = {
             }
         } catch (_) {}
 
-        // 清除原生文件
+        // 清除原生持久标记，并如实记录清除是否真的成功（不再无条件假定成功）
         if (window.NativeDeviceBridge && typeof window.NativeDeviceBridge.clearNativeDeviceBan === 'function') {
-            try { window.NativeDeviceBridge.clearNativeDeviceBan(); } catch (_) {}
+            try {
+                const result = window.NativeDeviceBridge.clearNativeDeviceBan();
+                nativeCleared = (result !== false);
+            } catch (_) {
+                nativeCleared = false;
+            }
         }
 
         if (window.G) {
@@ -226,7 +238,10 @@ const OtomeSecurityGuard = {
             window.G._banReason = null;
             window.G._securityAuditBox = null;
             window.G._activeBanToken = null;
+            window.G._activeBanTime = null;
         }
+
+        return nativeCleared;
     }
 };
 
