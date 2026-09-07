@@ -1137,53 +1137,138 @@ function bindChatListEvents(container) {
     if (groupBtn) groupBtn.onclick = (e) => { e.preventDefault(); e.stopPropagation(); G.chatActiveTab = 'group'; G.currentChatNpc = null; G.currentChatGroup = null; renderSocialPanel(); };
     if (addBtn) addBtn.onclick = (e) => { e.preventDefault(); e.stopPropagation(); openAddChatTargetModal(); };
 
-    // Android WebView 兼容：点击与长按由同一个 Pointer Events 状态机处理。
-    // 不再等待浏览器额外生成 click，避免私聊列表出现“群聊能进、私聊点不动”。
-    const bindListItem = (el, onClick, onLongPress) => {
-        if (!el) return;
-        let timer = null, longPressed = false, moved = false;
+    // 私聊联系人：不要依赖 Pointer Events。
+    // Android WebView/部分内嵌浏览器可能对动态 innerHTML 元素的 pointerup 处理不一致，
+    // 这会造成“群聊能点、私聊不能点”。这里改为原生 click + touch 长按的独立机制。
+    const bindDirectItem = (el, id) => {
+        if (!el || !id) return;
+        let timer = null;
+        let longPressed = false;
+        let moved = false;
+        let suppressClickUntil = 0;
         let sx = 0, sy = 0;
-        const clear = () => { if (timer) { clearTimeout(timer); timer = null; } };
-        el.style.touchAction = 'manipulation';
-        el.oncontextmenu = (e) => { e.preventDefault(); if (e.pointerType === 'mouse' && onLongPress) onLongPress(); };
-        el.onpointerdown = (e) => {
-            if (e.pointerType === 'mouse' && e.button !== 0) return;
-            sx = e.clientX || 0; sy = e.clientY || 0; moved = false; longPressed = false; clear();
-            try { el.setPointerCapture(e.pointerId); } catch (_) {}
-            timer = setTimeout(() => {
-                timer = null;
-                if (!moved) { longPressed = true; if (onLongPress) onLongPress(); }
-            }, 550);
-        };
-        el.onpointermove = (e) => {
-            if (Math.abs((e.clientX || 0) - sx) > 14 || Math.abs((e.clientY || 0) - sy) > 14) { moved = true; clear(); }
-        };
-        el.onpointerup = (e) => {
-            clear();
-            try { el.releasePointerCapture(e.pointerId); } catch (_) {}
-            if (!moved && !longPressed && onClick) { e.preventDefault(); e.stopPropagation(); onClick(); }
-            longPressed = false;
-        };
-        el.onpointercancel = () => { clear(); moved = true; longPressed = false; };
-    };
 
-    container.querySelectorAll('.chat-item').forEach(el => {
-        const id = el.dataset.id;
-        if (!id) return;
-        bindListItem(el, () => {
-            // 直接从元素进入，避免被当前账号/页面状态拦截。
+        const clear = () => {
+            if (timer) { clearTimeout(timer); timer = null; }
+        };
+        const enterChat = () => {
+            if (Date.now() < suppressClickUntil) return;
             G.currentChatGroup = null;
             G.currentChatNpc = String(id);
             G.chatActiveTab = 'direct';
             G.phoneNav = 'chats';
             renderSocialPanel();
-        }, () => openEditNpcModal(id));
+        };
+        const editNpc = () => {
+            suppressClickUntil = Date.now() + 700;
+            openEditNpcModal(String(id));
+        };
+
+        // 普通鼠标/浏览器点击的唯一入口
+        el.onclick = (e) => {
+            if (Date.now() < suppressClickUntil) {
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+            if (longPressed) {
+                longPressed = false;
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+            enterChat();
+        };
+
+        // Android 触屏：短按直接进入，长按打开编辑。
+        el.addEventListener('touchstart', (e) => {
+            const t = e.touches && e.touches[0];
+            if (!t) return;
+            sx = t.clientX; sy = t.clientY;
+            moved = false;
+            longPressed = false;
+            clear();
+            timer = setTimeout(() => {
+                timer = null;
+                if (!moved) {
+                    longPressed = true;
+                    suppressClickUntil = Date.now() + 700;
+                    editNpc();
+                }
+            }, 550);
+        }, { passive: true });
+
+        el.addEventListener('touchmove', (e) => {
+            const t = e.touches && e.touches[0];
+            if (!t) return;
+            if (Math.abs(t.clientX - sx) > 12 || Math.abs(t.clientY - sy) > 12) {
+                moved = true;
+                clear();
+            }
+        }, { passive: true });
+
+        el.addEventListener('touchend', (e) => {
+            clear();
+            if (moved) return;
+            if (longPressed) {
+                suppressClickUntil = Date.now() + 700;
+                return;
+            }
+            // 某些 WebView 不派发 click，因此短按在 touchend 再提供一次兜底入口。
+            suppressClickUntil = Date.now() + 350;
+            enterChat();
+        }, { passive: true });
+
+        el.addEventListener('touchcancel', () => {
+            clear();
+            moved = true;
+            longPressed = false;
+        }, { passive: true });
+
+        // 桌面端长按/右键编辑人设
+        el.addEventListener('contextmenu', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            editNpc();
+        });
+
+        el.addEventListener('mousedown', (e) => {
+            if (e.button !== 0) return;
+            sx = e.clientX; sy = e.clientY;
+            moved = false;
+            longPressed = false;
+            clear();
+            timer = setTimeout(() => {
+                timer = null;
+                if (!moved) {
+                    longPressed = true;
+                    suppressClickUntil = Date.now() + 700;
+                    editNpc();
+                }
+            }, 550);
+        });
+        el.addEventListener('mousemove', (e) => {
+            if (Math.abs(e.clientX - sx) > 12 || Math.abs(e.clientY - sy) > 12) {
+                moved = true;
+                clear();
+            }
+        });
+        el.addEventListener('mouseup', () => {
+            clear();
+            if (longPressed) suppressClickUntil = Date.now() + 700;
+        });
+        el.addEventListener('mouseleave', clear);
+    };
+
+    container.querySelectorAll('.chat-item').forEach(el => {
+        bindDirectItem(el, el.dataset.id);
     });
 
+    // 群聊继续使用现有机制；群聊本身已经可以正常进入。
     container.querySelectorAll('.group-item').forEach(el => {
         const gid = el.dataset.gid;
         if (!gid) return;
-        bindListItem(el, () => openGroupChat(gid), () => openGroupSettingsModal(gid));
+        bindLongPressEvent(el, () => openGroupSettingsModal(gid), () => openGroupChat(gid));
     });
 }
 
