@@ -1,5 +1,5 @@
 // js/04-game-core-2.js
-// 成就系统、商店、数据面板、手机社交(多模态识图、时差推导、朋友圈互怼吃醋、私聊动态贯通、微信式连发)
+// 成就系统、商店、数据面板、主页Dashboard、多层记忆中枢、手机社交(私聊、群聊、朋友圈Moments、好友/群邀请处理、表情包系统)
 // ============================================================
 
 // 🐷 内置默认表情包源数据
@@ -52,18 +52,19 @@ ensureStickersLoaded();
 // ============================================================
 function checkAchievements() {
     if (!G.unlockedAchievements) G.unlockedAchievements = [];
+    if (typeof ACHIEVEMENTS === 'undefined') return;
     for (const ach of ACHIEVEMENTS) {
         if (G.unlockedAchievements.includes(ach.id)) continue;
-        if (ach.check()) unlockAchievement(ach);
+        if (typeof ach.check === 'function' && ach.check()) unlockAchievement(ach);
     }
 }
 
 function unlockAchievement(ach) {
     G.unlockedAchievements.push(ach.id);
-    G.player.money += ach.reward;
+    G.player.money = (G.player.money || 0) + (ach.reward || 0);
     const toast = document.getElementById('achievementToast');
     if (toast) {
-        toast.innerHTML = `<span class="ach-icon">${ach.icon}</span> 解锁成就：${ach.name}！获得 ${ach.reward} 金币！`;
+        toast.innerHTML = `<span class="ach-icon">${ach.icon || '🏆'}</span> 解锁成就：${ach.name}！获得 ${ach.reward} 金币！`;
         toast.className = 'achievement-unlock-toast show';
         clearTimeout(toast._hide);
         toast._hide = setTimeout(() => { toast.className = 'achievement-unlock-toast'; }, 5000);
@@ -79,21 +80,22 @@ function unlockAchievement(ach) {
 function renderAchievements() {
     const container = (dom && dom.achievementsTab) || document.getElementById('achievementsTab');
     if (!container) return;
+    const achList = (typeof ACHIEVEMENTS !== 'undefined') ? ACHIEVEMENTS : [];
     let html = `
-    <div style="font-weight:700;font-size:17px;margin-bottom:10px;">🏆 成就 (${G.unlockedAchievements ? G.unlockedAchievements.length : 0}/${ACHIEVEMENTS.length})</div>
+    <div style="font-weight:700;font-size:17px;margin-bottom:10px;">🏆 成就 (${G.unlockedAchievements ? G.unlockedAchievements.length : 0}/${achList.length})</div>
     <div style="font-size:13px;color:var(--text2);margin-bottom:12px;">完成成就获得金币奖励！</div>
     <div class="achievement-grid">
     `;
     const categories = { fans: '👥 粉丝里程碑', video: '🎬 视频创作', stream: '📺 直播成就', social: '💕 社交成就' };
     for (const [catKey, catLabel] of Object.entries(categories)) {
-        const items = ACHIEVEMENTS.filter(a => a.category === catKey);
+        const items = achList.filter(a => a.category === catKey);
         if (items.length === 0) continue;
         html += `<div style="grid-column:1/-1;font-weight:700;font-size:15px;color:var(--text);margin-top:6px;">${catLabel}</div>`;
         for (const ach of items) {
             const unlocked = G.unlockedAchievements && G.unlockedAchievements.includes(ach.id);
             html += `
             <div class="achievement-card ${unlocked ? '' : 'locked'}">
-                <div class="ach-icon">${ach.icon}</div>
+                <div class="ach-icon">${ach.icon || '🏆'}</div>
                 <div class="ach-name">${ach.name}</div>
                 <div class="ach-desc">${ach.desc}</div>
                 <div class="ach-reward">💰 ${ach.reward}</div>
@@ -110,9 +112,10 @@ function renderAchievements() {
 // 赞助商/广告商系统
 // ============================================================
 function generateSponsorOffer() {
-    if (G.player.followers < 10000) return;
+    if ((G.player.followers || 0) < 10000) return;
     if (G.sponsorCooldown > 0) { G.sponsorCooldown--; return; }
     if (G.sponsorOffers && G.sponsorOffers.length > 0) return;
+    if (typeof SPONSOR_TYPES === 'undefined') return;
     if (Math.random() < 0.15) {
         const type = pick(SPONSOR_TYPES);
         G.sponsorOffers = [{ ...type, expires: G.day + 5, accepted: false }];
@@ -157,18 +160,18 @@ function renderShop() {
     const equipCosts = [0, 500, 1500, 4000, 8000, 15000];
     const equipMultipliers = [1.0, 1.2, 1.5, 2.0, 2.8, 4.0];
     const items = [
-        { id: 'hot1', label: '🔥 热度小包', desc: '一次性增加 5,000 粉丝', cost: 1000, effect: () => { G.player.followers += 5000; checkSocialRequestsTrigger(); } },
-        { id: 'hot2', label: '🔥 热度中包', desc: '一次性增加 20,000 粉丝', cost: 3500, effect: () => { G.player.followers += 20000; checkSocialRequestsTrigger(); } },
-        { id: 'hot3', label: '🔥 热度大包', desc: '一次性增加 50,000 粉丝', cost: 8000, effect: () => { G.player.followers += 50000; checkSocialRequestsTrigger(); } },
+        { id: 'hot1', label: '🔥 热度小包', desc: '一次性增加 5,000 粉丝', cost: 1000, effect: () => { G.player.followers = (G.player.followers || 0) + 5000; checkSocialRequestsTrigger(); } },
+        { id: 'hot2', label: '🔥 热度中包', desc: '一次性增加 20,000 粉丝', cost: 3500, effect: () => { G.player.followers = (G.player.followers || 0) + 20000; checkSocialRequestsTrigger(); } },
+        { id: 'hot3', label: '🔥 热度大包', desc: '一次性增加 50,000 粉丝', cost: 8000, effect: () => { G.player.followers = (G.player.followers || 0) + 50000; checkSocialRequestsTrigger(); } },
     ];
     let html = `
     <h3>🛒 商店</h3>
-    <div style="margin-bottom:12px;"><div style="font-weight:600;font-size:16px;">💰 当前金币：${p.money}</div></div>
+    <div style="margin-bottom:12px;"><div style="font-weight:600;font-size:16px;">💰 当前金币：${p.money || 0}</div></div>
     <div style="font-weight:600;font-size:15px;margin-bottom:6px;">📦 热度道具</div>
     <div class="shop-grid">
     `;
     for (const item of items) {
-        const canBuy = p.money >= item.cost;
+        const canBuy = (p.money || 0) >= item.cost;
         html += `
         <div class="shop-item">
             <div class="info"><div class="name">${item.label}</div><div class="desc">${item.desc}</div></div>
@@ -178,15 +181,15 @@ function renderShop() {
     html += `</div>
     <div style="font-weight:600;font-size:15px;margin:14px 0 6px;">🎥 直播设备 (等级 ${equipLevel}/${equipMax})</div>
     <div style="background:var(--card);border-radius:var(--radius);padding:12px;box-shadow:var(--shadow);">
-        <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:6px;">
             <span>当前等级系数：<strong>${equipMultipliers[equipLevel].toFixed(1)}x</strong></span>
             <span>下一级：<strong>${equipMultipliers[equipLevel+1] ? equipMultipliers[equipLevel+1].toFixed(1)+'x' : '已满级'}</strong></span>
-            ${equipLevel < equipMax ? `<button class="buy-btn" onclick="window.upgradeEquip()" ${p.money >= equipCosts[equipLevel] ? '' : 'disabled'}>升级 (💰 ${equipCosts[equipLevel]})</button>` : '<span>已满级</span>'}
+            ${equipLevel < equipMax ? `<button class="buy-btn" onclick="window.upgradeEquip()" ${(p.money || 0) >= equipCosts[equipLevel] ? '' : 'disabled'}>升级 (💰 ${equipCosts[equipLevel]})</button>` : '<span>已满级</span>'}
         </div>
     </div>
     <div style="font-weight:600;font-size:15px;margin:14px 0 6px;">📢 合作邀约</div>`;
     
-    if (G.player.followers < 10000) {
+    if ((G.player.followers || 0) < 10000) {
         html += `<div style="color:var(--text2);font-size:13px;padding:8px 0;">粉丝达到 10,000 后解锁赞助合作。</div>`;
     } else if (G.sponsorOffers && G.sponsorOffers.length > 0) {
         for (let i = 0; i < G.sponsorOffers.length; i++) {
@@ -213,12 +216,12 @@ function renderShop() {
 
 window.buyShopItem = function(id) {
     const items = [
-        { id: 'hot1', label: '🔥 热度小包', cost: 1000, effect: () => { G.player.followers += 5000; checkSocialRequestsTrigger(); } },
-        { id: 'hot2', label: '🔥 热度中包', cost: 3500, effect: () => { G.player.followers += 20000; checkSocialRequestsTrigger(); } },
-        { id: 'hot3', label: '🔥 热度大包', cost: 8000, effect: () => { G.player.followers += 50000; checkSocialRequestsTrigger(); } },
+        { id: 'hot1', label: '🔥 热度小包', cost: 1000, effect: () => { G.player.followers = (G.player.followers || 0) + 5000; checkSocialRequestsTrigger(); } },
+        { id: 'hot2', label: '🔥 热度中包', cost: 3500, effect: () => { G.player.followers = (G.player.followers || 0) + 20000; checkSocialRequestsTrigger(); } },
+        { id: 'hot3', label: '🔥 热度大包', cost: 8000, effect: () => { G.player.followers = (G.player.followers || 0) + 50000; checkSocialRequestsTrigger(); } },
     ];
     const item = items.find(i => i.id === id);
-    if (!item || G.player.money < item.cost) { showToast('金币不足', 'error'); return; }
+    if (!item || (G.player.money || 0) < item.cost) { showToast('金币不足', 'error'); return; }
     G.player.money -= item.cost;
     item.effect();
     updateUI(); renderShop(); showToast('✅ 购买成功！', 'success');
@@ -230,7 +233,7 @@ window.upgradeEquip = function() {
     const level = G.player.equipmentLevel || 1;
     if (level >= 5) { showToast('已满级', 'error'); return; }
     const cost = equipCosts[level];
-    if (G.player.money < cost) { showToast('金币不足', 'error'); return; }
+    if ((G.player.money || 0) < cost) { showToast('金币不足', 'error'); return; }
     G.player.money -= cost;
     G.player.equipmentLevel = level + 1;
     updateUI(); renderShop(); showToast(`🎥 设备升级至 ${G.player.equipmentLevel} 级！`, 'success');
@@ -240,13 +243,208 @@ window.upgradeEquip = function() {
 window.acceptSponsor = acceptSponsor;
 
 // ============================================================
+// 主页看板 (Dashboard) 与视频收藏评论系统
+// ============================================================
+if (!G.collections) G.collections = { videos: [], moments: [] };
+
+function renderDashboard() {
+    const container = (dom && dom.dashboardTab) || document.getElementById('dashboardTab');
+    if (!container) return;
+    ensureNpcIntegrity();
+    const p = G.player || {};
+    const videos = p.videos || [];
+    const totalViews = videos.reduce((sum, v) => sum + (v.views || 0), 0);
+    const totalLikes = (p.likes || 0);
+    const equipMultipliers = [1.0, 1.2, 1.5, 2.0, 2.8, 4.0];
+    const equipLevel = p.equipmentLevel || 1;
+
+    let videosHtml = '';
+    if (videos.length === 0) {
+        videosHtml = `
+        <div style="text-align:center;padding:26px 12px;background:#f9fbf9;border-radius:12px;color:#888;font-size:13px;border:1px dashed #d0e0d0;">
+            🎬 暂未发布任何视频，前往左侧行动栏点击<b>「录制视频」</b>开启创作吧！
+        </div>`;
+    } else {
+        [...videos].reverse().forEach((v, revIdx) => {
+            const realIdx = videos.length - 1 - revIdx;
+            const isCol = G.collections.videos && G.collections.videos.includes(realIdx);
+            const showCom = !!v._showComments;
+            const comList = v.comments || [];
+
+            let commentsHtml = '';
+            if (showCom) {
+                let itemsStr = '';
+                if (comList.length === 0) {
+                    itemsStr = '<div style="font-size:12px;color:#999;padding:6px 0;">暂无观众留言。</div>';
+                } else {
+                    comList.forEach((c, cIdx) => {
+                        const repliesStr = (c.replies && c.replies.length) ? c.replies.map(r => `
+                            <div style="margin-top:3px;padding:3px 6px;background:#f0f5f0;border-radius:4px;font-size:11.5px;">
+                                <b>${escapeHtml(r.author || '你')}:</b> ${escapeHtml(r.text)}
+                            </div>
+                        `).join('') : '';
+
+                        itemsStr += `
+                        <div style="border-bottom:1px solid #eee;padding:6px 0;">
+                            <div style="display:flex;justify-content:space-between;font-size:12px;">
+                                <span style="font-weight:700;color:#333;">${escapeHtml(c.user || '粉丝')}</span>
+                                <span style="font-size:10px;color:#bbb;">${c.time || '刚刚'}</span>
+                            </div>
+                            <div style="font-size:12px;color:#444;margin:2px 0;">${escapeHtml(c.text)}</div>
+                            ${repliesStr}
+                            <div style="margin-top:4px;">
+                                <button onclick="window.sendReply(${realIdx}, ${cIdx})" style="border:none;background:none;color:var(--primary);font-size:11px;cursor:pointer;padding:0;">💬 回复</button>
+                            </div>
+                        </div>`;
+                    });
+                }
+
+                commentsHtml = `
+                <div style="margin-top:10px;background:#fafcfa;border-radius:8px;padding:10px;border:1px solid #e2ece2;">
+                    <div style="font-weight:700;font-size:12.5px;margin-bottom:6px;display:flex;justify-content:space-between;">
+                        <span>💬 观众评论区 (${comList.length})</span>
+                    </div>
+                    ${itemsStr}
+                </div>`;
+            }
+
+            videosHtml += `
+            <div style="background:#fff;border-radius:12px;padding:12px;margin-bottom:10px;box-shadow:0 2px 8px rgba(0,0,0,0.04);border:1px solid #edf2ed;">
+                <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;">
+                    <div>
+                        <div style="font-weight:700;font-size:14.5px;color:var(--text);">${escapeHtml(v.title)}</div>
+                        <div style="font-size:12px;color:#666;margin:4px 0 6px;">${escapeHtml(v.desc || '精彩MC游玩内容剪辑')}</div>
+                    </div>
+                    <button onclick="window.toggleCollection('video', ${realIdx})" style="border:none;background:none;font-size:16px;cursor:pointer;" title="${isCol ? '已收藏' : '收藏'}">${isCol ? '⭐' : '☆'}</button>
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;color:#888;flex-wrap:wrap;gap:6px;padding-top:4px;border-top:1px dashed #f0f0f0;">
+                    <span>👀 ${v.views || 0} 播放 · 👍 ${v.likes || 0} 点赞 · 📅 第${v.day || 1}天</span>
+                    <button onclick="window.toggleColVideoComments(${realIdx})" style="border:1px solid #d2e4d2;background:#f8fbf8;color:var(--primary);padding:3px 9px;border-radius:12px;font-size:11.5px;cursor:pointer;">
+                        ${showCom ? '收起评论 ▴' : `评论(${comList.length}) ▾`}
+                    </button>
+                </div>
+                ${commentsHtml}
+            </div>`;
+        });
+    }
+
+    const html = `
+    <div style="display:flex;flex-direction:column;gap:12px;">
+        <!-- 频道数据顶部卡片 -->
+        <div style="background:linear-gradient(135deg, #e8f5e9 0%, #ffffff 100%);border-radius:14px;padding:14px;box-shadow:var(--shadow);border:1px solid #d8ebd8;">
+            <div style="display:flex;align-items:center;gap:12px;">
+                <div style="flex-shrink:0;">${renderAvatarBadge({ isPlayer: true }, 52)}</div>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-weight:700;font-size:16px;color:var(--text);display:flex;align-items:center;gap:6px;">
+                        <span>${escapeHtml(p.ytName || 'MC创作者')}</span>
+                        <span style="font-size:11px;background:#e8f5e9;color:#2e7d32;padding:1px 6px;border-radius:6px;font-weight:normal;">Lv.${equipLevel} 设备</span>
+                    </div>
+                    <div style="font-size:12px;color:#666;margin-top:3px;">
+                        📅 第 <b>${G.day || 1}</b> 天【${getTimeSlotName(G.timeSlot)}】 · ⚡ 行动点 <b>${G.actionPoints !== undefined ? G.actionPoints : 6}/6</b>
+                    </div>
+                </div>
+            </div>
+            <div class="data-grid" style="margin-top:12px;">
+                <div class="ditem"><div class="val">${p.followers || 0}</div><div class="lbl">❤️ 粉丝订阅</div></div>
+                <div class="ditem"><div class="val">💰 ${p.money || 0}</div><div class="lbl">可用金币</div></div>
+                <div class="ditem"><div class="val">${totalViews}</div><div class="lbl">👀 总播放量</div></div>
+                <div class="ditem"><div class="val">${totalLikes}</div><div class="lbl">👍 频道点赞</div></div>
+            </div>
+        </div>
+
+        <!-- 快捷操作直通车 -->
+        <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:8px;">
+            <button onclick="window.switchTab('story')" style="border:none;background:#fff;border-radius:10px;padding:10px;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,0.04);cursor:pointer;border:1px solid #edf2ed;">
+                <div style="font-size:20px;margin-bottom:3px;">📖</div>
+                <div style="font-size:12px;font-weight:700;color:#333;">主线剧情</div>
+            </button>
+            <button onclick="window.switchTab('stream')" style="border:none;background:#fff;border-radius:10px;padding:10px;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,0.04);cursor:pointer;border:1px solid #edf2ed;">
+                <div style="font-size:20px;margin-bottom:3px;">🔴</div>
+                <div style="font-size:12px;font-weight:700;color:#333;">联机开播</div>
+            </button>
+            <button onclick="window.switchTab('social')" style="border:none;background:#fff;border-radius:10px;padding:10px;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,0.04);cursor:pointer;border:1px solid #edf2ed;">
+                <div style="font-size:20px;margin-bottom:3px;">💬</div>
+                <div style="font-size:12px;font-weight:700;color:#333;">手机社交</div>
+            </button>
+        </div>
+
+        <!-- 频道作品列表 -->
+        <div>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                <div style="font-weight:700;font-size:15px;color:var(--text);">🎬 频道视频作品 (${videos.length})</div>
+            </div>
+            ${videosHtml}
+        </div>
+    </div>
+    `;
+    container.innerHTML = html;
+}
+
+window.toggleCollection = function(type, id) {
+    if (!G.collections) G.collections = { videos: [], moments: [] };
+    if (type === 'video') {
+        if (!G.collections.videos) G.collections.videos = [];
+        const idx = G.collections.videos.indexOf(id);
+        if (idx !== -1) {
+            G.collections.videos.splice(idx, 1);
+            showToast('已取消收藏视频', 'info', 1200);
+        } else {
+            G.collections.videos.push(id);
+            showToast('⭐ 视频已加入收藏！', 'success', 1500);
+        }
+    }
+    renderDashboard();
+    autoSaveGame();
+};
+
+window.toggleColVideoComments = function(videoIdx) {
+    const v = G.player?.videos?.[videoIdx];
+    if (!v) return;
+    v._showComments = !v._showComments;
+    renderDashboard();
+};
+
+window.sendReply = function(videoIdx, commentIdx) {
+    const v = G.player?.videos?.[videoIdx];
+    if (!v || !v.comments?.[commentIdx]) return;
+    const targetCom = v.comments[commentIdx];
+    
+    openModal(`
+        <h3>💬 回复评论</h3>
+        <div style="background:#f5f8f5;padding:8px 10px;border-radius:8px;font-size:12px;color:#555;margin-bottom:10px;">
+            <b>${escapeHtml(targetCom.user)}:</b> ${escapeHtml(targetCom.text)}
+        </div>
+        <div class="form-group">
+            <textarea id="replyCommentInput" rows="3" placeholder="回复观众..." style="width:100%;padding:8px;font-size:13px;"></textarea>
+        </div>
+        <div class="btn-row">
+            <button class="btn-secondary" onclick="closeModal()">取消</button>
+            <button class="btn-primary" id="btnConfirmSendReply">发送回复</button>
+        </div>
+    `);
+
+    document.getElementById('btnConfirmSendReply').onclick = () => {
+        const text = document.getElementById('replyCommentInput').value.trim();
+        if (!text) { showToast('内容不能为空', 'error'); return; }
+        if (!targetCom.replies) targetCom.replies = [];
+        targetCom.replies.push({ author: G.player.ytName || '主播', text, time: '刚刚' });
+        closeModal();
+        showToast('✅ 回复成功！', 'success', 1500);
+        renderDashboard();
+        autoSaveGame();
+    };
+};
+
+window.renderDashboard = renderDashboard;
+
+// ============================================================
 // 数据面板
 // ============================================================
 function renderDataPanel() {
     const container = (dom && dom.dataTab) || document.getElementById('dataTab');
     if (!container) return;
     ensureNpcIntegrity();
-    const p = G.player;
+    const p = G.player || {};
     const s = p.skills || {};
     const totalViews = (p.videos || []).reduce((sum, v) => sum + (v.views || 0), 0);
     const skillNames = { building: '🏗️ 建筑', redstone: '🔧 红石', pvp: '⚔️ PvP', survival: '🌲 生存', hunting: '🏹 追杀' };
@@ -304,7 +502,7 @@ function renderDataPanel() {
             </div>`;
         }
     }
-    const nextMs = getNextMilestone();
+    const nextMs = (typeof getNextMilestone === 'function') ? getNextMilestone() : '10,000 粉丝';
     html += `
     <div style="background:var(--card);border-radius:12px;padding:10px;margin-top:10px;box-shadow:var(--shadow);border-left:3px solid var(--gold);">
         <div style="font-size:13px;color:var(--text2);">🎯 下一个里程碑：<strong>${nextMs}</strong></div>
@@ -435,7 +633,6 @@ window.switchAccount = function(accId) {
 };
 
 window.openAccountManagerModal = function() {
-    const mainAcc = { name: G.player.ytName, id: 'main' };
     const currentId = G.currentAccountId || 'main';
     let altsHtml = '';
     (G.altAccounts || []).forEach(alt => {
@@ -519,7 +716,7 @@ function checkSocialRequestsTrigger() {
         if (G.npcs[id] || G.friendRequests.some(r => r.npcOfficialId === id || r.name === npc.name)) continue;
         const threshold = npc.minFollowers || 5000;
         if (followers >= threshold && Math.random() < (followers > threshold * 2 ? 0.8 : 0.45)) {
-            G.friendRequests.push({ _id: 'freq_' + id + '_' + Date.now(), npcOfficialId: id, name: npc.name, fromReason: `关注到你的作品`, persona: npc.persona, avatarEmoji: npc.avatarEmoji || '👤', avatarUrl: null, day: G.day });
+            G.friendRequests.push({ _id: 'freq_' + id + '_' + Date.now(), npcOfficialId: id, name: npc.name, fromReason: `在油管关注到你的作品`, persona: npc.persona, avatarEmoji: npc.avatarEmoji || '👤', avatarUrl: npc.avatarUrl || null, day: G.day });
             showToast(`📬 顶级主播「${npc.name}」向你发来了好友申请！`, 'success', 3500);
             addGlobalMemoryRecord(`【社交突破】：知名MC主播「${npc.name}」关注到主角，主动递来好友申请。`);
         }
@@ -547,7 +744,7 @@ function formatNpcTimezoneContext() {
 }
 
 // ============================================================
-// 📱 手机社交中心 UI 与事件 (基于纯净 onclick 与 oncontextmenu)
+// 📱 手机社交中心 UI 与事件
 // ============================================================
 if (!G.phoneNav) G.phoneNav = 'chats';
 if (!G.chatActiveTab) G.chatActiveTab = 'direct';
@@ -555,6 +752,7 @@ if (!G.groups) G.groups = {};
 if (!G.groupChatHistory) G.groupChatHistory = {};
 if (!G.friendRequests) G.friendRequests = [];
 if (!G.groupInvites) G.groupInvites = [];
+if (!G.feed) G.feed = [];
 if (!G.momentsFilterNpcId) G.momentsFilterNpcId = null;
 if (!G._chatShowFullHistory) G._chatShowFullHistory = {};
 let _stickerDrawerOpen = false;
@@ -632,7 +830,6 @@ function buildChatListHTML() {
                 const time = lastMsg ? (lastMsg.time || '') : '';
                 const isBlocked = isAccountBlockedByNpc(id, currentAcc.id);
                 
-                // 彻底原生化：短按调用 openChat，长按触发 oncontextmenu 调用 openEditNpcModal
                 itemsHtml += `
                 <div class="chat-item" onclick="window.openChat('${id}')" oncontextmenu="event.preventDefault(); window.openEditNpcModal('${id}'); return false;" style="display:flex;align-items:center;padding:10px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;background:#fff;border:1px solid #f0f4f0;">
                     <div style="margin-right:12px;flex-shrink:0;">${renderAvatarBadge(npc, 44)}</div>
@@ -721,7 +918,869 @@ window.closeGroupChat = function() {
 };
 
 // ============================================================
-// 💬 私聊窗口渲染（包含屏幕那边的TA、表情包，无旁白）
+// 🌟 朋友圈 (Moments) 子系统实现
+// ============================================================
+function buildMomentsHTML() {
+    if (!G.feed) G.feed = [];
+    const activeAcc = getActiveAccountInfo();
+    const filterNpcId = G.momentsFilterNpcId;
+    const filterNpc = filterNpcId ? G.npcs[filterNpcId] : null;
+
+    let filterBanner = '';
+    if (filterNpc) {
+        filterBanner = `
+        <div style="background:#e8f5e9;padding:8px 12px;font-size:12px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #c8e6c9;">
+            <span>📸 正在查看 <b>${escapeHtml(filterNpc.name)}</b> 的朋友圈空间</span>
+            <button onclick="window.G.momentsFilterNpcId = null; window.renderSocialPanel();" style="border:none;background:#2e7d32;color:#fff;padding:2px 8px;border-radius:10px;font-size:11px;cursor:pointer;">查看全部</button>
+        </div>`;
+    }
+
+    let feedList = G.feed;
+    if (filterNpcId) {
+        feedList = feedList.filter(f => f.npcId === filterNpcId || f.author === filterNpc.name);
+    }
+
+    let cardsHtml = '';
+    if (!feedList.length) {
+        cardsHtml = `
+        <div style="text-align:center;color:#999;padding:50px 16px;font-size:13px;line-height:1.8;">
+            <div style="font-size:32px;margin-bottom:6px;">🍃</div>
+            这里还没有任何朋友圈动态。<br>
+            点击右上角<b>「📷 发动态」</b>或<b>「✨ 刷新好友动态」</b>打破沉默吧！
+        </div>`;
+    } else {
+        feedList.forEach(m => {
+            const isSelf = m.isPlayer || (m.author === G.player.ytName) || (G.altAccounts || []).some(a => a.name === m.author);
+            const isLiked = !!m.liked;
+            const comments = m.comments || [];
+
+            let commentsBoxHtml = '';
+            if (comments.length > 0) {
+                const comLines = comments.map((c, cIdx) => `
+                    <div style="font-size:12px;line-height:1.5;margin-bottom:3px;">
+                        <span style="color:#2e7d32;font-weight:700;cursor:pointer;" onclick="window.replyMomentComment(${m.id}, '${escapeHtml(c.name || '好友')}')">${escapeHtml(c.name || '好友')}:</span>
+                        <span style="color:#333;">${escapeHtml(c.text)}</span>
+                    </div>
+                `).join('');
+                commentsBoxHtml = `
+                <div style="background:#f4f7f4;border-radius:6px;padding:6px 10px;margin-top:8px;border:1px solid #e9f0e9;">
+                    ${commentsBoxHtml}${comLines}
+                </div>`;
+            }
+
+            cardsHtml += `
+            <div class="moment-card" data-id="${m.id}" style="background:#fff;border-radius:12px;padding:12px;margin-bottom:10px;border:1px solid #f0f4f0;box-shadow:0 1px 4px rgba(0,0,0,0.03);">
+                <div style="display:flex;align-items:flex-start;gap:10px;">
+                    <div style="flex-shrink:0;">${renderAvatarBadge({ isPlayer: isSelf, avatarUrl: m.avatar, avatarEmoji: m.avatarEmoji || '👤' }, 40)}</div>
+                    <div style="flex:1;min-width:0;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <div style="font-weight:700;font-size:14px;color:var(--text);">${escapeHtml(m.author || '神秘好友')}</div>
+                            <div style="font-size:11px;color:#bbb;">${m.time || '刚刚'}</div>
+                        </div>
+                        <div style="font-size:13.5px;color:#222;margin:6px 0;line-height:1.5;word-break:break-word;">
+                            ${escapeHtml(m.body || '').replace(/\n/g, '<br>')}
+                        </div>
+                        ${m.image ? `<div style="margin:6px 0;"><img src="${m.image}" style="max-width:100%;max-height:180px;border-radius:8px;object-fit:cover;"></div>` : ''}
+                        
+                        <!-- 底部互动操作栏 -->
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:6px;border-top:1px dashed #f2f5f2;font-size:12px;">
+                            <div style="display:flex;gap:12px;align-items:center;">
+                                <button onclick="window.toggleMomentLike(${m.id})" style="border:none;background:none;color:${isLiked ? '#e53935' : '#777'};cursor:pointer;display:flex;align-items:center;gap:3px;font-size:12.5px;padding:0;">
+                                    <span>${isLiked ? '❤️' : '🤍'}</span> <span>${m.likes || 0}</span>
+                                </button>
+                                <button onclick="window.addMomentComment(${m.id})" style="border:none;background:none;color:#666;cursor:pointer;display:flex;align-items:center;gap:3px;font-size:12.5px;padding:0;">
+                                    <span>💬</span> <span>评论</span>
+                                </button>
+                                <button onclick="window.triggerAiCommentForMoment(${m.id})" title="召唤好友NPC在评论区互动" style="border:none;background:none;color:#2e7d32;cursor:pointer;font-size:12px;padding:0;">
+                                    🤖 互动
+                                </button>
+                                <button onclick="window.openShareMomentModal(${m.id})" title="转发给好友私聊" style="border:none;background:none;color:#555;cursor:pointer;font-size:12px;padding:0;">
+                                    ↗️ 转发
+                                </button>
+                            </div>
+                            ${isSelf ? `
+                            <div style="display:flex;gap:6px;">
+                                <button onclick="window.openEditMomentModalById(${m.id})" style="border:none;background:none;color:#1976d2;font-size:11.5px;cursor:pointer;padding:0;">编辑</button>
+                                <button onclick="window.recallMoment(${m.id})" style="border:none;background:none;color:#e53935;font-size:11.5px;cursor:pointer;padding:0;">撤回</button>
+                            </div>` : ''}
+                        </div>
+                        ${commentsBoxHtml}
+                    </div>
+                </div>
+            </div>`;
+        });
+    }
+
+    return `
+    <div style="display:flex;flex-direction:column;height:100%;">
+        <!-- 朋友圈个性背景顶部栏 -->
+        <div style="background:linear-gradient(135deg, #a8e6cf 0%, #dcedc1 100%);padding:16px 14px 12px;position:relative;flex-shrink:0;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-end;">
+                <div>
+                    <div style="font-weight:700;font-size:17px;color:#264e36;">🌟 游戏圈动态</div>
+                    <div style="font-size:11.5px;color:#4a7c59;margin-top:2px;">记录主播们的MC日常与趣事八卦</div>
+                </div>
+                <div style="display:flex;gap:6px;">
+                    <button onclick="window.triggerGenerateFriendsFeed()" style="border:1px solid #7cb342;background:rgba(255,255,255,0.9);color:#2e7d32;padding:4px 9px;border-radius:14px;font-size:11.5px;font-weight:700;cursor:pointer;box-shadow:0 2px 4px rgba(0,0,0,0.05);">✨ 刷出动态</button>
+                    <button onclick="window.openPostMomentModal()" style="border:none;background:var(--primary);color:#fff;padding:4px 10px;border-radius:14px;font-size:11.5px;font-weight:700;cursor:pointer;box-shadow:0 2px 4px rgba(0,0,0,0.1);">📷 发动态</button>
+                </div>
+            </div>
+        </div>
+        ${filterBanner}
+        <div style="flex:1;overflow-y:auto;padding:10px;background:#f7f9f7;">
+            ${cardsHtml}
+        </div>
+    </div>`;
+}
+
+window.openPostMomentModal = function() {
+    const curAcc = getActiveAccountInfo();
+    openModal(`
+        <h3>📷 发表朋友圈动态</h3>
+        <p style="font-size:12px;color:#666;margin-bottom:8px;">以当前身份「${escapeHtml(curAcc.name)}」发布动态：</p>
+        <div class="form-group">
+            <textarea id="postMomentBody" rows="4" placeholder="分享此刻的MC游玩心情、直播预告或趣事..." style="width:100%;padding:8px;font-size:13.5px;"></textarea>
+        </div>
+        <div class="form-group">
+            <label style="font-size:12px;">附带配图链接 (可选)：</label>
+            <input type="text" id="postMomentImgUrl" placeholder="如：https://imgbed.heliar.top/i/...">
+        </div>
+        <div class="btn-row">
+            <button class="btn-secondary" onclick="closeModal()">取消</button>
+            <button class="btn-primary" id="btnConfirmPublishMoment">发布</button>
+        </div>
+    `);
+
+    document.getElementById('btnConfirmPublishMoment').onclick = () => {
+        const body = document.getElementById('postMomentBody').value.trim();
+        const img = document.getElementById('postMomentImgUrl').value.trim();
+        if (!body) { showToast('请填写动态内容', 'error'); return; }
+        if (!G.feed) G.feed = [];
+        const newMoment = {
+            id: Date.now() + rand(100, 999),
+            author: curAcc.name,
+            avatar: curAcc.avatar,
+            isPlayer: true,
+            body,
+            image: img || null,
+            time: '刚刚',
+            liked: false,
+            likes: 0,
+            comments: []
+        };
+        G.feed.unshift(newMoment);
+        closeModal();
+        showToast('🎉 动态已成功发布！', 'success', 2000);
+        addGlobalMemoryRecord(`【玩家朋友圈】：主角发布了动态「${body.slice(0, 20)}...」`);
+        renderSocialPanel();
+        autoSaveGame();
+    };
+};
+
+window.openEditMomentModal = function(item) {
+    if (!item) return;
+    openModal(`
+        <h3>✏️ 编辑朋友圈动态</h3>
+        <div class="form-group">
+            <textarea id="editMomentBody" rows="4" style="width:100%;padding:8px;font-size:13.5px;">${escapeHtml(item.body || '')}</textarea>
+        </div>
+        <div class="form-group">
+            <label style="font-size:12px;">配图链接：</label>
+            <input type="text" id="editMomentImgUrl" value="${escapeHtml(item.image || '')}">
+        </div>
+        <div class="btn-row">
+            <button class="btn-secondary" onclick="closeModal()">取消</button>
+            <button class="btn-primary" id="btnConfirmSaveMomentEdit">💾 保存修改</button>
+        </div>
+    `);
+
+    document.getElementById('btnConfirmSaveMomentEdit').onclick = () => {
+        const body = document.getElementById('editMomentBody').value.trim();
+        const img = document.getElementById('editMomentImgUrl').value.trim();
+        if (!body) { showToast('内容不能为空', 'error'); return; }
+        item.body = body;
+        item.image = img || null;
+        closeModal();
+        showToast('✅ 动态已修改', 'success', 1500);
+        renderSocialPanel();
+        autoSaveGame();
+    };
+};
+
+window.addMomentComment = function(momentId) {
+    const curAcc = getActiveAccountInfo();
+    openModal(`
+        <h3>💬 评论动态</h3>
+        <div class="form-group">
+            <textarea id="momentCommentInput" rows="3" placeholder="写下你的评论..." style="width:100%;padding:8px;font-size:13px;"></textarea>
+        </div>
+        <div class="btn-row">
+            <button class="btn-secondary" onclick="closeModal()">取消</button>
+            <button class="btn-primary" id="btnConfirmSendMomentComment">发表评论</button>
+        </div>
+    `);
+
+    document.getElementById('btnConfirmSendMomentComment').onclick = () => {
+        const text = document.getElementById('momentCommentInput').value.trim();
+        if (!text) { showToast('评论不能为空', 'error'); return; }
+        const item = (G.feed || []).find(f => f.id === momentId);
+        if (item) {
+            if (!item.comments) item.comments = [];
+            item.comments.push({ name: curAcc.name, text, time: '刚刚' });
+            closeModal();
+            showToast('✅ 评论已发表！', 'success', 1200);
+            renderSocialPanel();
+            autoSaveGame();
+        }
+    };
+};
+
+window.replyMomentComment = function(momentId, replyToName) {
+    const curAcc = getActiveAccountInfo();
+    openModal(`
+        <h3>💬 回复 @${escapeHtml(replyToName)}</h3>
+        <div class="form-group">
+            <textarea id="momentReplyInput" rows="3" placeholder="回复 @${escapeHtml(replyToName)}..." style="width:100%;padding:8px;font-size:13px;"></textarea>
+        </div>
+        <div class="btn-row">
+            <button class="btn-secondary" onclick="closeModal()">取消</button>
+            <button class="btn-primary" id="btnConfirmSendMomentReply">发送回复</button>
+        </div>
+    `);
+
+    document.getElementById('btnConfirmSendMomentReply').onclick = () => {
+        const text = document.getElementById('momentReplyInput').value.trim();
+        if (!text) { showToast('内容不能为空', 'error'); return; }
+        const item = (G.feed || []).find(f => f.id === momentId);
+        if (item) {
+            if (!item.comments) item.comments = [];
+            item.comments.push({ name: curAcc.name, text: `回复 @${replyToName} : ${text}`, time: '刚刚' });
+            closeModal();
+            showToast('✅ 回复已发表！', 'success', 1200);
+            renderSocialPanel();
+            autoSaveGame();
+        }
+    };
+};
+
+window.openShareMomentModal = function(momentId) {
+    const item = (G.feed || []).find(f => f.id === momentId);
+    if (!item) return;
+    const npcs = Object.entries(G.npcs || {});
+    const groups = Object.entries(G.groups || {});
+
+    if (!npcs.length && !groups.length) {
+        showToast('暂无好友或群聊可供转发', 'info');
+        return;
+    }
+
+    let targetOptions = '';
+    npcs.forEach(([id, n]) => {
+        targetOptions += `<option value="single_${id}">👤 好友: ${escapeHtml(n.name)}</option>`;
+    });
+    groups.forEach(([gid, grp]) => {
+        targetOptions += `<option value="group_${gid}">👥 群聊: ${escapeHtml(grp.name)}</option>`;
+    });
+
+    openModal(`
+        <h3>↗️ 转发动态给好友</h3>
+        <div style="background:#f4f6f4;padding:8px 10px;border-radius:8px;font-size:12px;color:#555;margin-bottom:10px;">
+            <b>${escapeHtml(item.author)}:</b> ${escapeHtml(item.body.slice(0, 40))}...
+        </div>
+        <div class="form-group">
+            <label>选择接收目标：</label>
+            <select id="shareTargetSelect" style="width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;">
+                ${targetOptions}
+            </select>
+        </div>
+        <div class="btn-row">
+            <button class="btn-secondary" onclick="closeModal()">取消</button>
+            <button class="btn-primary" id="btnConfirmShareMoment">确认转发</button>
+        </div>
+    `);
+
+    document.getElementById('btnConfirmShareMoment').onclick = () => {
+        const val = document.getElementById('shareTargetSelect').value;
+        const curAcc = getActiveAccountInfo();
+        const msgObj = {
+            from: 'player',
+            senderAccount: curAcc.name,
+            sharedMoment: item,
+            text: `[转发了动态: ${item.body.slice(0, 20)}...]`,
+            time: new Date().toLocaleTimeString().slice(0, 5)
+        };
+
+        if (val.startsWith('single_')) {
+            const npcId = val.replace('single_', '');
+            pushChatMessageSafe(npcId, msgObj);
+            showToast(`✅ 已转发给 ${G.npcs[npcId]?.name}！`, 'success', 2000);
+        } else if (val.startsWith('group_')) {
+            const gid = val.replace('group_', '');
+            if (!G.groupChatHistory[gid]) G.groupChatHistory[gid] = [];
+            G.groupChatHistory[gid].push(msgObj);
+            showToast(`✅ 已转发至群聊！`, 'success', 2000);
+        }
+        closeModal();
+        autoSaveGame();
+    };
+};
+
+window.triggerGenerateFriendsFeed = async function() {
+    const npcList = Object.values(G.npcs || {});
+    if (!npcList.length) {
+        showToast('通讯录暂无好友，先添加好友才能刷出动态哦！', 'info', 2500);
+        return;
+    }
+    const pickedNpcs = npcList.sort(() => 0.5 - Math.random()).slice(0, rand(1, 2));
+    showToast('✨ 正在刷新好友朋友圈...', 'info', 1500);
+    try {
+        for (const n of pickedNpcs) {
+            const sys = `你正在扮演 Minecraft 主播/好友「${n.name}」（性格：${n.persona || '开朗同伴'}）。
+请为该角色生成一条真实、风趣、口语化的游戏朋友圈动态（30~60字）。可以涉及MC挖矿爆仓、被苦力怕偷袭、剪视频熬夜掉头发、或者吐槽打趣其他主播。
+仅输出动态正文，严禁括号动作和引号。`;
+            const raw = await callAI([{ role: 'system', content: sys }, { role: 'user', content: '发一条朋友圈动态' }], { maxTokens: 150, temperature: 0.9 });
+            const clean = stripThought(raw.trim());
+            if (clean) {
+                if (!G.feed) G.feed = [];
+                G.feed.unshift({
+                    id: Date.now() + rand(100, 999),
+                    npcId: n.id,
+                    author: n.name,
+                    avatar: n.avatarUrl,
+                    avatarEmoji: n.avatarEmoji || '👤',
+                    isPlayer: false,
+                    body: clean,
+                    time: '刚刚',
+                    liked: false,
+                    likes: rand(1, 15),
+                    comments: []
+                });
+            }
+        }
+        showToast('🎉 好友动态已刷新！', 'success', 1500);
+        renderSocialPanel();
+        autoSaveGame();
+    } catch(e) {
+        console.error('刷出朋友圈动态失败', e);
+        showToast('❌ 刷新朋友圈动态失败', 'error');
+    }
+};
+
+window.triggerAiCommentForMoment = async function(momentId) {
+    const item = (G.feed || []).find(f => f.id === momentId);
+    if (!item) return;
+    const npcList = Object.values(G.npcs || {});
+    if (!npcList.length) {
+        showToast('通讯录暂无好友接话', 'info');
+        return;
+    }
+    const candidates = npcList.filter(n => n.name !== item.author);
+    const speaker = candidates.length ? pick(candidates) : npcList[0];
+    showToast(`🤖 ${speaker.name} 正在赶来评论...`, 'info', 1200);
+
+    try {
+        const sys = `你正在扮演 Minecraft 主播「${speaker.name}」（性格：${speaker.persona || '好友'}，好感度：${speaker.favor || 50}）。
+现在好友「${item.author}」发了一条朋友圈：“${item.body}”。
+请根据你们的关系人设，发一句真实鲜活、极简接地气的评论（15~35字），可吐槽、调侃或关心。直接输出评论文字。`;
+        const raw = await callAI([{ role: 'system', content: sys }, { role: 'user', content: '写一条评论' }], { maxTokens: 100, temperature: 0.9 });
+        const clean = stripThought(raw.trim());
+        if (clean) {
+            if (!item.comments) item.comments = [];
+            item.comments.push({ name: speaker.name, text: clean, time: '刚刚' });
+            item.likes = (item.likes || 0) + 1;
+            showToast(`💬 ${speaker.name} 发表了评论！`, 'success', 1500);
+            renderSocialPanel();
+            autoSaveGame();
+        }
+    } catch(e) {
+        showToast('评论生成失败', 'error');
+    }
+};
+
+// ============================================================
+// 📬 社交通讯中枢：好友申请/群邀请处理/新建联系人/群设置
+// ============================================================
+window.openAddChatTargetModal = function() {
+    const reqs = G.friendRequests || [];
+    const grpInvs = G.groupInvites || [];
+
+    let reqsHtml = '';
+    if (reqs.length === 0 && grpInvs.length === 0) {
+        reqsHtml = '<div style="font-size:12px;color:#999;padding:10px 0;text-align:center;">暂无待处理的好友申请与群邀请。</div>';
+    } else {
+        reqs.forEach((r, idx) => {
+            reqsHtml += `
+            <div style="background:#f8faf8;border-radius:8px;padding:8px 10px;margin-bottom:6px;border:1px solid #e0ede0;display:flex;justify-content:space-between;align-items:center;">
+                <div style="flex:1;min-width:0;">
+                    <div style="font-weight:700;font-size:13px;color:#333;">${r.avatarEmoji || '👤'} ${escapeHtml(r.name)} <span style="font-size:10px;background:#e8f5e9;color:#2e7d32;padding:1px 5px;border-radius:4px;">好友申请</span></div>
+                    <div style="font-size:11.5px;color:#666;margin-top:2px;">理由: ${escapeHtml(r.fromReason || '慕名而来')}</div>
+                </div>
+                <div style="display:flex;gap:4px;">
+                    <button onclick="window.handleFriendRequestAction('${r._id}', 'accept')" style="border:none;background:#2e7d32;color:#fff;padding:4px 8px;border-radius:6px;font-size:11px;cursor:pointer;">接受</button>
+                    <button onclick="window.handleFriendRequestAction('${r._id}', 'reject')" style="border:none;background:#ccc;color:#333;padding:4px 8px;border-radius:6px;font-size:11px;cursor:pointer;">忽略</button>
+                </div>
+            </div>`;
+        });
+        grpInvs.forEach((gi, idx) => {
+            reqsHtml += `
+            <div style="background:#f8faf8;border-radius:8px;padding:8px 10px;margin-bottom:6px;border:1px solid #e0ede0;display:flex;justify-content:space-between;align-items:center;">
+                <div style="flex:1;min-width:0;">
+                    <div style="font-weight:700;font-size:13px;color:#333;">${gi.avatarEmoji || '👥'} ${escapeHtml(gi.name)} <span style="font-size:10px;background:#e3f2fd;color:#1565c0;padding:1px 5px;border-radius:4px;">群邀请</span></div>
+                    <div style="font-size:11.5px;color:#666;margin-top:2px;">${escapeHtml(gi.desc || '')}</div>
+                </div>
+                <div style="display:flex;gap:4px;">
+                    <button onclick="window.handleGroupInviteAction('${gi._id}', 'accept')" style="border:none;background:#1976d2;color:#fff;padding:4px 8px;border-radius:6px;font-size:11px;cursor:pointer;">加入</button>
+                    <button onclick="window.handleGroupInviteAction('${gi._id}', 'reject')" style="border:none;background:#ccc;color:#333;padding:4px 8px;border-radius:6px;font-size:11px;cursor:pointer;">忽略</button>
+                </div>
+            </div>`;
+        });
+    }
+
+    openModal(`
+        <h3>📬 社交通讯与新建</h3>
+        <div style="margin:10px 0;">
+            <div style="font-weight:700;font-size:13px;color:#444;margin-bottom:6px;">🔔 申请与邀请 (${reqs.length + grpInvs.length})</div>
+            ${reqsHtml}
+        </div>
+        <div style="border-top:1px dashed #ddd;padding-top:10px;margin-top:10px;">
+            <div style="font-weight:700;font-size:13px;color:#444;margin-bottom:8px;">➕ 自由新建</div>
+            <div class="btn-row" style="flex-direction:column;gap:8px;">
+                <button class="btn-primary" onclick="window.closeModal(); window.openCreateCustomNpcModal();" style="width:100%;">👤 手动添加新好友 (自定义NPC)</button>
+                <button class="btn-primary" onclick="window.closeModal(); window.openCreateGroupModal();" style="width:100%;background:#388e3c;">👥 建立主播多人讨论群</button>
+                <button class="btn-secondary" onclick="closeModal()" style="width:100%;">关闭</button>
+            </div>
+        </div>
+    `);
+};
+
+window.receiveFriendRequest = function(req) {
+    if (!G.friendRequests) G.friendRequests = [];
+    if (!req._id) req._id = 'freq_' + Date.now();
+    G.friendRequests.push(req);
+    showToast(`📬 收到来自 ${req.name} 的好友申请！`, 'info', 3000);
+    renderSocialPanel();
+    autoSaveGame();
+};
+
+window.handleFriendRequestAction = function(reqId, action) {
+    if (!G.friendRequests) return;
+    const reqIdx = G.friendRequests.findIndex(r => r._id === reqId);
+    if (reqIdx === -1) return;
+    const req = G.friendRequests[reqIdx];
+
+    if (action === 'accept') {
+        ensureNpcIntegrity();
+        let finalNpc = null;
+        if (req.npcOfficialId && typeof OFFICIAL_NPCS !== 'undefined' && OFFICIAL_NPCS[req.npcOfficialId]) {
+            const def = OFFICIAL_NPCS[req.npcOfficialId];
+            finalNpc = { ...def, id: req.npcOfficialId, favor: 50 };
+            G.npcs[req.npcOfficialId] = finalNpc;
+        } else {
+            const newId = 'npc_' + Date.now();
+            finalNpc = {
+                id: newId,
+                name: req.name || '好友',
+                persona: req.persona || '热情的同伴',
+                avatarEmoji: req.avatarEmoji || '👤',
+                avatarUrl: req.avatarUrl || null,
+                favor: 50,
+                skills: { building: 50, redstone: 50, pvp: 50, survival: 50, hunting: 50 },
+                isCustom: true
+            };
+            G.npcs[newId] = finalNpc;
+        }
+
+        // 推送一条初始打招呼消息
+        pushChatMessageSafe(finalNpc.id, {
+            from: 'npc',
+            text: `你好！我通过了你的好友验证，以后可以一起录视频玩MC啦！`,
+            time: new Date().toLocaleTimeString().slice(0, 5)
+        });
+
+        G.friendRequests.splice(reqIdx, 1);
+        showToast(`🎉 成功添加 ${finalNpc.name} 为好友！`, 'success', 2500);
+        addGlobalMemoryRecord(`【结识好友】：主角与主播「${finalNpc.name}」正式互加好友。`);
+    } else {
+        G.friendRequests.splice(reqIdx, 1);
+        showToast('已忽略该申请', 'info', 1200);
+    }
+    closeModal();
+    renderSocialPanel();
+    autoSaveGame();
+};
+
+window.handleGroupInviteAction = function(invId, action) {
+    if (!G.groupInvites) return;
+    const invIdx = G.groupInvites.findIndex(gi => gi._id === invId);
+    if (invIdx === -1) return;
+    const gi = G.groupInvites[invIdx];
+
+    if (action === 'accept') {
+        if (!G.groups) G.groups = {};
+        const gid = gi.gid || ('grp_' + Date.now());
+        const memberIds = Object.keys(G.npcs || {}).slice(0, 3);
+        G.groups[gid] = {
+            id: gid,
+            name: gi.name || '讨论群',
+            desc: gi.desc || '自由交流',
+            avatarEmoji: gi.avatarEmoji || '👑',
+            members: memberIds,
+            activeMembers: memberIds,
+            streamerMode: 'shared'
+        };
+        if (!G.groupChatHistory[gid]) G.groupChatHistory[gid] = [];
+        G.groupChatHistory[gid].push({
+            from: 'action',
+            text: `你已加入群聊「${gi.name}」`,
+            time: new Date().toLocaleTimeString().slice(0, 5)
+        });
+        G.groupInvites.splice(invIdx, 1);
+        showToast(`🎉 成功加入群聊「${gi.name}」！`, 'success', 2500);
+    } else {
+        G.groupInvites.splice(invIdx, 1);
+        showToast('已忽略群邀请', 'info', 1200);
+    }
+    closeModal();
+    renderSocialPanel();
+    autoSaveGame();
+};
+
+window.openCreateCustomNpcModal = function() {
+    openModal(`
+        <h3>➕ 自定义添加好友</h3>
+        <div class="form-group"><label>好友昵称 <span class="required">*</span></label><input type="text" id="custNpcName" placeholder="如：梦境猎手"></div>
+        <div class="form-group"><label>人设与性格口吻 <span class="required">*</span></label><textarea id="custNpcPersona" rows="3" placeholder="如：技术顶尖的高冷PvP大神，傲娇但关键时刻靠谱..."></textarea></div>
+        <div class="form-group"><label>头像 Emoji / 图标</label><input type="text" id="custNpcEmoji" value="🏹" placeholder="填一个 Emoji"></div>
+        <div class="form-group"><label>头像图片链接 (可选)</label><input type="text" id="custNpcAvatarUrl" placeholder="如：https://..."></div>
+        <div class="form-group"><label>初始好感度 (0~100)</label><input type="number" id="custNpcFavor" value="50" min="0" max="100"></div>
+        <div class="btn-row"><button class="btn-secondary" onclick="closeModal()">取消</button><button class="btn-primary" id="btnConfirmCreateNpc">完成添加</button></div>
+    `);
+
+    document.getElementById('btnConfirmCreateNpc').onclick = () => {
+        const name = document.getElementById('custNpcName').value.trim();
+        const persona = document.getElementById('custNpcPersona').value.trim();
+        if (!name || !persona) { showToast('⚠️ 昵称和人设为必填项', 'error'); return; }
+        const newId = 'custom_' + Date.now();
+        ensureNpcIntegrity();
+        G.npcs[newId] = {
+            id: newId,
+            name,
+            persona,
+            avatarEmoji: document.getElementById('custNpcEmoji').value.trim() || '👤',
+            avatarUrl: document.getElementById('custNpcAvatarUrl').value.trim() || null,
+            favor: parseInt(document.getElementById('custNpcFavor').value) || 50,
+            skills: { building: 50, redstone: 50, pvp: 60, survival: 50, hunting: 50 },
+            isCustom: true
+        };
+        showToast(`🎉 成功结识「${name}」！`, 'success', 2000);
+        closeModal();
+        renderSocialPanel();
+        autoSaveGame();
+    };
+};
+
+window.openEditNpcModal = function(npcId) {
+    const npc = G.npcs[npcId];
+    if (!npc) return;
+    const curAcc = getActiveAccountInfo();
+    const isBlocked = isAccountBlockedByNpc(npcId, curAcc.id);
+
+    openModal(`
+        <h3>⚙️ 编辑好友人设与关系</h3>
+        <div class="form-group"><label>昵称</label><input type="text" id="editNpcName" value="${escapeHtml(npc.name)}"></div>
+        <div class="form-group"><label>头像 Emoji</label><input type="text" id="editNpcEmoji" value="${escapeHtml(npc.avatarEmoji || '👤')}"></div>
+        <div class="form-group"><label>头像图片链接</label><input type="text" id="editNpcAvatarUrl" value="${escapeHtml(npc.avatarUrl || '')}"></div>
+        <div class="form-group"><label>性格与口吻设定</label><textarea id="editNpcPersona" rows="3">${escapeHtml(npc.persona || '')}</textarea></div>
+        <div class="form-group"><label>好感度 (当前: ${npc.favor || 0})</label><input type="number" id="editNpcFavor" value="${npc.favor || 0}" min="0" max="100"></div>
+        <div class="form-group">
+            <label>私聊长时记忆</label>
+            <textarea id="editNpcMemory" rows="3" placeholder="此处记录该角色的长期专属承诺与互动记忆...">${escapeHtml(npc.memorySummary || '')}</textarea>
+        </div>
+        <div style="background:#fef7f7;padding:8px 10px;border-radius:8px;margin:8px 0;border:1px solid #fed7d7;display:flex;justify-content:space-between;align-items:center;">
+            <span style="font-size:12px;color:#c53030;"><b>拉黑状态：</b>${isBlocked ? '对方已拉黑你当前账号' : '状态正常'}</span>
+            <button onclick="window.toggleNpcBlockStatus('${npcId}', '${curAcc.id}')" style="border:none;background:${isBlocked ? '#2e7d32' : '#e53935'};color:#fff;padding:3px 8px;border-radius:6px;font-size:11px;cursor:pointer;">
+                ${isBlocked ? '🔓 强制解除拉黑' : '🚫 设为拉黑当前账号'}
+            </button>
+        </div>
+        <div class="btn-row" style="margin-top:12px;">
+            <button class="btn-secondary" onclick="window.deleteNpcTarget('${npcId}')" style="color:#c62828;">🗑️ 删除联系人</button>
+            <button class="btn-primary" id="btnSaveEditNpc">💾 保存设定</button>
+        </div>
+    `);
+
+    document.getElementById('btnSaveEditNpc').onclick = () => {
+        npc.name = document.getElementById('editNpcName').value.trim() || npc.name;
+        npc.avatarEmoji = document.getElementById('editNpcEmoji').value.trim() || '👤';
+        npc.avatarUrl = document.getElementById('editNpcAvatarUrl').value.trim() || null;
+        npc.persona = document.getElementById('editNpcPersona').value.trim() || npc.persona;
+        npc.favor = parseInt(document.getElementById('editNpcFavor').value) || 0;
+        npc.memorySummary = document.getElementById('editNpcMemory').value.trim();
+        showToast('✅ 好友设定已更新！', 'success', 1500);
+        closeModal();
+        renderSocialPanel();
+        autoSaveGame();
+    };
+};
+
+window.toggleNpcBlockStatus = function(npcId, accId) {
+    if (!G.blockedRecords) G.blockedRecords = [];
+    const token = `${npcId}_${accId}`;
+    const idx = G.blockedRecords.indexOf(token);
+    if (idx !== -1) {
+        G.blockedRecords.splice(idx, 1);
+        showToast('🔓 已解除该账号的拉黑状态', 'success', 1500);
+    } else {
+        G.blockedRecords.push(token);
+        showToast('🚫 已拉黑该账号', 'info', 1500);
+    }
+    closeModal();
+    renderSocialPanel();
+    autoSaveGame();
+};
+
+window.deleteNpcTarget = function(npcId) {
+    if (!confirm(`确定要从通讯录删除「${G.npcs[npcId]?.name}」吗？历史私聊记录将被清除。`)) return;
+    delete G.npcs[npcId];
+    if (G.currentChatNpc === npcId) G.currentChatNpc = null;
+    showToast('🗑️ 联系人已删除', 'info', 1500);
+    closeModal();
+    renderSocialPanel();
+    autoSaveGame();
+};
+
+window.openCreateGroupModal = function() {
+    const npcEntries = Object.entries(G.npcs || {});
+    if (!npcEntries.length) {
+        showToast('通讯录暂无好友，无法建群', 'error');
+        return;
+    }
+
+    const memberCheckboxes = npcEntries.map(([id, n]) => `
+        <label style="display:inline-flex;align-items:center;gap:4px;font-size:12.5px;background:#f4f7f4;padding:4px 8px;border-radius:12px;margin:3px;">
+            <input type="checkbox" class="new-group-member-check" value="${id}" checked>
+            <span>${n.avatarEmoji || '👤'} ${escapeHtml(n.name)}</span>
+        </label>
+    `).join('');
+
+    openModal(`
+        <h3>👥 自建主播讨论群</h3>
+        <div class="form-group"><label>群聊名称 <span class="required">*</span></label><input type="text" id="newGrpName" placeholder="如：下界速通茶话会"></div>
+        <div class="form-group"><label>群简介 / 群规</label><input type="text" id="newGrpDesc" placeholder="如：严禁炸服，友好讨论..."></div>
+        <div class="form-group"><label>群图标 Emoji</label><input type="text" id="newGrpEmoji" value="🎮"></div>
+        <div class="form-group">
+            <label>邀请群成员：</label>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">${memberCheckboxes}</div>
+        </div>
+        <div class="btn-row"><button class="btn-secondary" onclick="closeModal()">取消</button><button class="btn-primary" id="btnConfirmCreateGrp">创建群聊</button></div>
+    `);
+
+    document.getElementById('btnConfirmCreateGrp').onclick = () => {
+        const name = document.getElementById('newGrpName').value.trim();
+        if (!name) { showToast('⚠️ 群名称必填', 'error'); return; }
+        const members = Array.from(document.querySelectorAll('.new-group-member-check:checked')).map(cb => cb.value);
+        const gid = 'grp_' + Date.now();
+        if (!G.groups) G.groups = {};
+        G.groups[gid] = {
+            id: gid,
+            name,
+            desc: document.getElementById('newGrpDesc').value.trim() || '自由讨论',
+            avatarEmoji: document.getElementById('newGrpEmoji').value.trim() || '👥',
+            members,
+            activeMembers: members,
+            streamerMode: 'shared'
+        };
+        if (!G.groupChatHistory[gid]) G.groupChatHistory[gid] = [];
+        G.groupChatHistory[gid].push({
+            from: 'action',
+            text: `群聊「${name}」已创建，开始热烈交流吧！`,
+            time: new Date().toLocaleTimeString().slice(0, 5)
+        });
+        showToast(`🎉 群聊「${name}」创建成功！`, 'success', 2000);
+        closeModal();
+        window.openGroupChat(gid);
+        autoSaveGame();
+    };
+};
+
+window.openGroupSettingsModal = function(gid) {
+    const grp = G.groups[gid];
+    if (!grp) return;
+    const npcEntries = Object.entries(G.npcs || {});
+
+    const memberCheckboxes = npcEntries.map(([id, n]) => {
+        const isMem = (grp.members || []).includes(id);
+        return `
+        <label style="display:inline-flex;align-items:center;gap:4px;font-size:12.5px;background:#f4f7f4;padding:4px 8px;border-radius:12px;margin:3px;">
+            <input type="checkbox" class="grp-edit-member-check" value="${id}" ${isMem ? 'checked' : ''}>
+            <span>${n.avatarEmoji || '👤'} ${escapeHtml(n.name)}</span>
+        </label>
+        `;
+    }).join('');
+
+    openModal(`
+        <h3>⚙️ 群聊管理与设置</h3>
+        <div class="form-group"><label>群名称</label><input type="text" id="editGrpName" value="${escapeHtml(grp.name)}"></div>
+        <div class="form-group"><label>群简介 / 公告</label><input type="text" id="editGrpDesc" value="${escapeHtml(grp.desc || '')}"></div>
+        <div class="form-group">
+            <label>群回复模式：</label>
+            <select id="editGrpMode" style="width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;">
+                <option value="shared" ${grp.streamerMode !== 'separate' ? 'selected' : ''}>全员大乱炖 (AI同时调度多名成员接话)</option>
+                <option value="separate" ${grp.streamerMode === 'separate' ? 'selected' : ''}>知名主播独立发言模式 (优先挑选个别主播单独回)</option>
+            </select>
+        </div>
+        <div class="form-group">
+            <label>群成员勾选管理：</label>
+            <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">${memberCheckboxes}</div>
+        </div>
+        <div class="form-group">
+            <label>群公共纪要记忆：</label>
+            <textarea id="editGrpMemory" rows="3" placeholder="记录群内发生的重大笑点与共同约定...">${escapeHtml(G.groupMemories[gid] || '')}</textarea>
+        </div>
+        <div class="btn-row" style="margin-top:12px;">
+            <button class="btn-secondary" onclick="window.dismissGroup('${gid}')" style="color:#c62828;">🗑️ 解散群聊</button>
+            <button class="btn-primary" id="btnSaveGrpSettings">💾 保存设置</button>
+        </div>
+    `);
+
+    document.getElementById('btnSaveGrpSettings').onclick = () => {
+        grp.name = document.getElementById('editGrpName').value.trim() || grp.name;
+        grp.desc = document.getElementById('editGrpDesc').value.trim() || grp.desc;
+        grp.streamerMode = document.getElementById('editGrpMode').value;
+        const newMembers = Array.from(document.querySelectorAll('.grp-edit-member-check:checked')).map(cb => cb.value);
+        grp.members = newMembers;
+        grp.activeMembers = newMembers;
+        G.groupMemories[gid] = document.getElementById('editGrpMemory').value.trim();
+        showToast('✅ 群聊配置已更新！', 'success', 1500);
+        closeModal();
+        renderGroupChatWindow(document.getElementById('socialTab'));
+        autoSaveGame();
+    };
+};
+
+window.dismissGroup = function(gid) {
+    if (!confirm('确定解散并删除这个群聊吗？')) return;
+    delete G.groups[gid];
+    delete G.groupChatHistory[gid];
+    delete G.groupMemories[gid];
+    if (G.currentChatGroup === gid) G.currentChatGroup = null;
+    showToast('🗑️ 群聊已解散', 'info', 1500);
+    closeModal();
+    renderSocialPanel();
+    autoSaveGame();
+};
+
+window.openEditGroupModal = window.openGroupSettingsModal;
+
+// ============================================================
+// 🧠 多层立体记忆中枢系统
+// ============================================================
+window.openMemoryModal = function() {
+    openModal(`
+        <h3>🧠 游戏多层长时记忆中枢</h3>
+        <p style="font-size:12px;color:#666;line-height:1.6;">本系统立体保存全盘重大事件、各NPC独立私聊承诺以及群聊认知，彻底拒绝AI失忆！</p>
+        <div id="memoryModalContentArea" style="max-height:360px;overflow-y:auto;margin:10px 0;border:1px solid #eee;border-radius:10px;padding:10px;background:#fafbfa;">
+            ${renderMemoryModalView()}
+        </div>
+        <div class="btn-row" style="flex-direction:column;gap:8px;">
+            <button class="btn-primary" onclick="window.openManualMemoryInputModal('global')" style="width:100%;">➕ 手动添加一条全局核心记忆</button>
+            <button class="btn-primary" onclick="window.executeManualAiSummary('global')" style="width:100%;background:#388e3c;">🤖 召唤小模型整理全局核心记忆</button>
+            <button class="btn-secondary" onclick="closeModal()" style="width:100%;">关闭</button>
+        </div>
+    `);
+};
+
+function renderMemoryModalView() {
+    let globalHtml = '';
+    const gmList = G.memorySummaries || [];
+    if (!gmList.length) {
+        globalHtml = '<div style="font-size:12px;color:#999;padding:4px 0;">暂无全局记忆事件。</div>';
+    } else {
+        gmList.forEach((gm, idx) => {
+            globalHtml += `
+            <div style="background:#fff;border-radius:6px;padding:6px 8px;margin-bottom:5px;border:1px solid #e5ebe5;font-size:12px;display:flex;justify-content:space-between;align-items:flex-start;">
+                <span style="flex:1;min-width:0;color:#333;">${escapeHtml(gm.text || '')}</span>
+                <button onclick="window.deleteGlobalMemoryItem(${idx})" style="border:none;background:none;color:#e53935;cursor:pointer;font-size:11px;margin-left:6px;">🗑️</button>
+            </div>`;
+        });
+    }
+
+    let npcsHtml = '';
+    Object.entries(G.npcs || {}).forEach(([id, n]) => {
+        npcsHtml += `
+        <div style="background:#fff;border-radius:8px;padding:8px;margin-bottom:6px;border:1px solid #e0ede0;">
+            <div style="display:flex;justify-content:space-between;align-items:center;font-weight:700;font-size:12.5px;">
+                <span>${n.avatarEmoji || '👤'} ${escapeHtml(n.name)}</span>
+                <button onclick="window.executeManualAiSummary('npc', '${id}')" style="border:none;background:#e8f5e9;color:#2e7d32;padding:2px 6px;border-radius:4px;font-size:10.5px;cursor:pointer;">🤖 提炼记忆</button>
+            </div>
+            <div style="font-size:11.5px;color:#555;margin-top:4px;">${escapeHtml(n.memorySummary || '暂无专属提炼记忆')}</div>
+        </div>`;
+    });
+
+    return `
+    <div style="font-weight:700;font-size:13px;color:#2e7d32;margin-bottom:6px;">🌐 全局重大纪实 (${gmList.length})</div>
+    ${globalHtml}
+    <div style="font-weight:700;font-size:13px;color:#1565c0;margin:12px 0 6px;">👥 好友私聊承诺专属库</div>
+    ${npcsHtml}
+    `;
+}
+
+window.deleteGlobalMemoryItem = function(idx) {
+    if (G.memorySummaries && G.memorySummaries[idx]) {
+        G.memorySummaries.splice(idx, 1);
+        const area = document.getElementById('memoryModalContentArea');
+        if (area) area.innerHTML = renderMemoryModalView();
+        showToast('已删除该条记忆', 'info', 1200);
+        autoSaveGame();
+    }
+};
+
+window.openManualMemoryInputModal = function(type, targetId) {
+    openModal(`
+        <h3>➕ 手动写入全局核心记忆</h3>
+        <p style="font-size:12px;color:#666;">记录玩家与MC世界的不可磨灭经历：</p>
+        <div class="form-group">
+            <textarea id="manualMemoryInput" rows="4" placeholder="如：第3天在下界堡垒救下Dream，建立了深厚信任..." style="width:100%;padding:8px;font-size:13px;"></textarea>
+        </div>
+        <div class="btn-row">
+            <button class="btn-secondary" onclick="window.openMemoryModal()">返回</button>
+            <button class="btn-primary" id="btnConfirmManualMemory">写入记忆</button>
+        </div>
+    `);
+
+    document.getElementById('btnConfirmManualMemory').onclick = () => {
+        const text = document.getElementById('manualMemoryInput').value.trim();
+        if (!text) { showToast('内容不能为空', 'error'); return; }
+        addGlobalMemoryRecord(text);
+        showToast('🧠 核心记忆已写入！', 'success', 1500);
+        window.openMemoryModal();
+        autoSaveGame();
+    };
+};
+
+window.executeManualAiSummary = async function(type, targetId) {
+    showToast('🤖 AI 正在整理记忆...', 'info', 2000);
+    try {
+        if (type === 'global') {
+            const stories = (G.storyHistory || []).slice(-10).map(s => s.text).join('\n');
+            const sys = `你是资深游戏纪事整理员。将以下近期主线剧情提炼为一条不超过120字的全局核心历史大事件摘要：直接输出纯正文。`;
+            const raw = await callMemoryAI([{ role: 'system', content: sys }, { role: 'user', content: stories || '暂无剧情' }], { maxTokens: 250 });
+            const clean = stripThought(raw.trim());
+            if (clean) addGlobalMemoryRecord(clean);
+            showToast('✅ 全局记忆提炼完成！', 'success', 2000);
+        } else if (type === 'npc') {
+            await checkNpcMemorySummarize(targetId);
+        }
+        const area = document.getElementById('memoryModalContentArea');
+        if (area) area.innerHTML = renderMemoryModalView();
+    } catch(e) {
+        showToast('❌ 记忆整理失败: ' + e.message, 'error');
+    }
+};
+
+window.renderMemoryModalView = renderMemoryModalView;
+
+// ============================================================
+// 💬 私聊窗口渲染
 // ============================================================
 function renderSingleChatWindow(container) {
     const npcId = window.G.currentChatNpc;
@@ -891,7 +1950,7 @@ window.doSendSingleChat = function(npcId) {
 };
 
 // ============================================================
-// 👥 群聊窗口渲染（包含表情包，无旁白）
+// 👥 群聊窗口渲染
 // ============================================================
 function renderGroupChatWindow(container) {
     const gid = G.currentChatGroup;
@@ -994,7 +2053,6 @@ window.doSendGroupChat = function(gid) {
     autoSaveGame();
 };
 
-// 移除旁白选项的菜单（仅保留合作视频和联机开播）
 window.openChatActionMenuModal = function(targetType, targetId) {
     const isGroup = targetType === 'group';
     const title = isGroup ? '👥 群聊互动与共创' : `🤝 与 ${escapeHtml(G.npcs[targetId]?.name || '好友')} 的互动`;
@@ -1010,7 +2068,6 @@ window.openChatActionMenuModal = function(targetType, targetId) {
     `);
 };
 
-// 消息长按撤回/编辑/删除操作
 window.showMessageActionSheet = function(msgId, targetType, targetId) {
     const list = targetType === 'single' ? getAccountChatHistory(targetId) : (G.groupChatHistory[targetId] || []);
     const msg = list.find(m => m._id === msgId);
@@ -1073,7 +2130,6 @@ window.showMessageActionSheet = function(msgId, targetType, targetId) {
     };
 };
 
-// 视频共创与联机开播
 window.openCollabVideoPublishModal = function(targetType, targetId) {
     const isGroup = targetType === 'group';
     let participants = [];
@@ -1124,7 +2180,7 @@ window.openCollabVideoPublishModal = function(targetType, targetId) {
         const partnerIds = Array.from(document.querySelectorAll('.collab-partner-check:checked')).map(cb => cb.value);
 
         if (!title || !summary || !partnerIds.length) { showToast('⚠️ 资料不全', 'error'); return; }
-        if (G.actionPoints < 2) { showToast('⚠️ 行动点不足 (需要 2 点)', 'error'); return; }
+        if ((G.actionPoints || 0) < 2) { showToast('⚠️ 行动点不足 (需要 2 点)', 'error'); return; }
         G.actionPoints -= 2;
 
         const partnerNames = partnerIds.map(id => G.npcs[id]?.name).filter(Boolean);
@@ -1145,14 +2201,15 @@ window.openCollabVideoPublishModal = function(targetType, targetId) {
             }
         });
 
-        G.player.followers += rand(250, 900) + partnerNames.length * 150;
-        G.player.money += rand(60, 180);
+        G.player.followers = (G.player.followers || 0) + rand(250, 900) + partnerNames.length * 150;
+        G.player.money = (G.player.money || 0) + rand(60, 180);
 
         closeModal();
         appendStory(`🎬 你与 ${partnerNames.join('、')} 发布了共创视频《${fullTitle}》！`, '🤜 合作共创');
         addGlobalMemoryRecord(`【共创发布】：与 ${partnerNames.join('、')} 合作发布了视频《${fullTitle}》。`);
         showToast(`🎉 发布成功！`, 'success', 2500);
-        advanceTimeSlot(); updateUI(); autoSaveGame(); renderSocialPanel(); checkSocialRequestsTrigger();
+        if (typeof advanceTimeSlot === 'function') advanceTimeSlot();
+        updateUI(); autoSaveGame(); renderSocialPanel(); checkSocialRequestsTrigger();
     };
 };
 
@@ -1246,6 +2303,12 @@ function splitIntoChatBubbles(rawText) {
     return [clean];
 }
 
+function findStickerByKeyword(kw) {
+    if (!kw || !window.G.stickerLibrary) return null;
+    const cleanKw = kw.trim().toLowerCase();
+    return window.G.stickerLibrary.find(s => s.desc.toLowerCase().includes(cleanKw)) || null;
+}
+
 window.triggerAIReplyForSingle = async function(npcId) {
     const npc = window.G.npcs[npcId];
     if (!npc) return;
@@ -1275,7 +2338,7 @@ window.triggerAIReplyForSingle = async function(npcId) {
     if (npc.knownGroupEvents) npcMemoryContext += `【群聊获悉事件】\n${npc.knownGroupEvents}\n`;
 
     const recentPlayerPosts = (window.G.feed || []).filter(f => f.isPlayer || f.author === window.G.player?.ytName).slice(-2);
-    let playerMomentsContext = recentPlayerPosts.length > 0 ? '【玩家最近发的朋友圈动态（可自然在私信中提起）】：\n' + recentPlayerPosts.map(p => `• "${p.body}" ${p.image ? '(附带图片)' : ''}${p.imageDesc ? `(配图: ${p.imageDesc})` : ''}`).join('\n') + '\n' : '';
+    let playerMomentsContext = recentPlayerPosts.length > 0 ? '【玩家最近发的朋友圈动态（可自然在私信中提起）】：\n' + recentPlayerPosts.map(p => `• "${p.body}" ${p.image ? '(附带图片)' : ''}`).join('\n') + '\n' : '';
 
     const tzContext = formatNpcTimezoneContext(npc.name);
     const availableStickers = (window.G.stickerLibrary || []).slice(0, 20).map(s => s.desc).join('、');
@@ -1340,6 +2403,7 @@ ${behindScreenPrompt}`;
             const cont = (dom && dom.socialTab) || document.getElementById('socialTab');
             if (window.G.currentChatNpc === npcId && cont) renderSingleChatWindow(cont);
         }
+        await checkNpcMemorySummarize(npcId);
         autoSaveGame();
     } catch (e) {
         if (typeof hideLoading === 'function') hideLoading();
@@ -1523,7 +2587,9 @@ window.triggerGroupAIReply = async function(gid) {
     }
 };
 
+// ============================================================
 // 🎨 表情包抽屉逻辑
+// ============================================================
 function buildStickerDrawerHTML(targetType, targetId) {
     ensureStickersLoaded();
     const cats = window.G.stickerCategories || ['猪猪', '默认'];
@@ -1669,7 +2735,7 @@ function openClockSettingsModal() {
 }
 
 window.toggleMomentLike = function(id) {
-    const item = G.feed.find(f => f.id === id);
+    const item = (G.feed || []).find(f => f.id === id);
     if (!item) return;
     item.liked = !item.liked;
     item.likes = (item.likes || 0) + (item.liked ? 1 : -1);
@@ -1679,7 +2745,7 @@ window.toggleMomentLike = function(id) {
 
 window.deleteMoment = function(id) {
     if (confirm('确定删除这条动态吗？')) {
-        G.feed = G.feed.filter(f => f.id !== id);
+        G.feed = (G.feed || []).filter(f => f.id !== id);
         showToast('🗑️ 动态已删除', 'info', 1200);
         renderSocialPanel();
         autoSaveGame();
@@ -1687,6 +2753,7 @@ window.deleteMoment = function(id) {
 };
 
 window.recallMoment = function(id) {
+    if (!G.feed) return;
     const itemIdx = G.feed.findIndex(f => f.id === id);
     if (itemIdx === -1) return;
     const item = G.feed[itemIdx];
@@ -1703,7 +2770,7 @@ window.recallMoment = function(id) {
 };
 
 window.openEditMomentModalById = function(id) {
-    const item = G.feed.find(f => f.id === id);
+    const item = (G.feed || []).find(f => f.id === id);
     if (item) openEditMomentModal(item);
 };
 
@@ -1729,7 +2796,9 @@ window.jumpToMomentCard = function(momentId) {
     }, 150);
 };
 
+// ============================================================
 // 暴露全部全局函数（保障跨文件调用绝不报错）
+// ============================================================
 window.renderSocialPanel = renderSocialPanel;
 window.openAccountManagerModal = openAccountManagerModal;
 window.receiveFriendRequest = receiveFriendRequest;
@@ -1752,3 +2821,15 @@ window.toggleColVideoComments = toggleColVideoComments;
 window.acceptSponsor = acceptSponsor;
 window.checkSocialRequestsTrigger = checkSocialRequestsTrigger;
 window.triggerAiCommentForMoment = triggerAiCommentForMoment;
+window.buildMomentsHTML = buildMomentsHTML;
+window.openPostMomentModal = openPostMomentModal;
+window.openEditMomentModal = openEditMomentModal;
+window.openShareMomentModal = openShareMomentModal;
+window.addMomentComment = addMomentComment;
+window.replyMomentComment = replyMomentComment;
+window.openMemoryModal = openMemoryModal;
+window.renderMemoryModalView = renderMemoryModalView;
+window.executeManualAiSummary = executeManualAiSummary;
+window.openManualMemoryInputModal = openManualMemoryInputModal;
+window.renderDashboard = renderDashboard;
+window.sendReply = sendReply;
