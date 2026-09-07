@@ -35,84 +35,17 @@ const DEFAULT_PIG_STICKERS = [
 
 function ensureStickersLoaded() {
     if (!window.G) window.G = {};
-    if (!window.G.stickerCategories || !Array.isArray(window.G.stickerCategories)) {
-        window.G.stickerCategories = ['猪猪', '默认'];
-    }
-    if (!window.G.stickerCategories.includes('猪猪')) {
-        window.G.stickerCategories.unshift('猪猪');
-    }
-    if (!window.G.activeStickerCategory) {
-        window.G.activeStickerCategory = '猪猪';
-    }
+    if (!window.G.stickerCategories || !Array.isArray(window.G.stickerCategories)) window.G.stickerCategories = ['猪猪', '默认'];
+    if (!window.G.stickerCategories.includes('猪猪')) window.G.stickerCategories.unshift('猪猪');
+    if (!window.G.activeStickerCategory) window.G.activeStickerCategory = '猪猪';
     if (!window.G.stickerLibrary || !Array.isArray(window.G.stickerLibrary) || window.G.stickerLibrary.length === 0) {
         window.G.stickerLibrary = [...DEFAULT_PIG_STICKERS];
     } else {
         const hasPig = window.G.stickerLibrary.some(s => s && s.category === '猪猪');
-        if (!hasPig) {
-            window.G.stickerLibrary.unshift(...DEFAULT_PIG_STICKERS);
-        }
+        if (!hasPig) window.G.stickerLibrary.unshift(...DEFAULT_PIG_STICKERS);
     }
 }
 ensureStickersLoaded();
-
-// ============================================================
-// 触控手势核心：短按立即触发，长按 500ms 触发编辑
-// ============================================================
-function bindCardPress(el, onShortClick, onLongPress) {
-    if (!el) return;
-    let timer = null;
-    let isLong = false;
-    let startX = 0, startY = 0;
-    let isMoved = false;
-
-    el.addEventListener('touchstart', function(e) {
-        if (!e.touches || e.touches.length !== 1) return;
-        isLong = false;
-        isMoved = false;
-        startX = e.touches[0].clientX;
-        startY = e.touches[0].clientY;
-        if (timer) clearTimeout(timer);
-        if (typeof onLongPress === 'function') {
-            timer = setTimeout(() => {
-                if (!isMoved) {
-                    isLong = true;
-                    if (navigator.vibrate) navigator.vibrate(40);
-                    onLongPress(e);
-                }
-            }, 500);
-        }
-    }, { passive: true });
-
-    el.addEventListener('touchmove', function(e) {
-        if (!e.touches || !e.touches[0]) return;
-        const dx = Math.abs(e.touches[0].clientX - startX);
-        const dy = Math.abs(e.touches[0].clientY - startY);
-        if (dx > 12 || dy > 12) {
-            isMoved = true;
-            if (timer) clearTimeout(timer);
-        }
-    }, { passive: true });
-
-    el.addEventListener('touchend', function(e) {
-        if (timer) clearTimeout(timer);
-        if (!isMoved && !isLong && typeof onShortClick === 'function') {
-            e.preventDefault();
-            onShortClick(e);
-        }
-    }, { passive: false });
-
-    el.addEventListener('touchcancel', function() {
-        if (timer) clearTimeout(timer);
-        isMoved = false;
-        isLong = false;
-    }, { passive: true });
-
-    // PC 端备用
-    el.addEventListener('click', function(e) {
-        if (isLong || isMoved) return;
-        if (typeof onShortClick === 'function') onShortClick(e);
-    });
-}
 
 // ============================================================
 // 成就系统
@@ -239,7 +172,7 @@ function renderShop() {
         html += `
         <div class="shop-item">
             <div class="info"><div class="name">${item.label}</div><div class="desc">${item.desc}</div></div>
-            <div style="display:flex;align-items:center;gap:6px;"><span class="price">💰 ${item.cost}</span><button class="buy-btn" data-item="${item.id}" ${canBuy ? '' : 'disabled'}>购买</button></div>
+            <div style="display:flex;align-items:center;gap:6px;"><span class="price">💰 ${item.cost}</span><button class="buy-btn" onclick="window.buyShopItem('${item.id}')" ${canBuy ? '' : 'disabled'}>购买</button></div>
         </div>`;
     }
     html += `</div>
@@ -248,7 +181,7 @@ function renderShop() {
         <div style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:6px;">
             <span>当前等级系数：<strong>${equipMultipliers[equipLevel].toFixed(1)}x</strong></span>
             <span>下一级：<strong>${equipMultipliers[equipLevel+1] ? equipMultipliers[equipLevel+1].toFixed(1)+'x' : '已满级'}</strong></span>
-            ${equipLevel < equipMax ? `<button class="buy-btn" id="upgradeEquip" ${p.money >= equipCosts[equipLevel] ? '' : 'disabled'}>升级 (💰 ${equipCosts[equipLevel]})</button>` : '<span>已满级</span>'}
+            ${equipLevel < equipMax ? `<button class="buy-btn" onclick="window.upgradeEquip()" ${p.money >= equipCosts[equipLevel] ? '' : 'disabled'}>升级 (💰 ${equipCosts[equipLevel]})</button>` : '<span>已满级</span>'}
         </div>
     </div>
     <div style="font-weight:600;font-size:15px;margin:14px 0 6px;">📢 合作邀约</div>`;
@@ -276,203 +209,35 @@ function renderShop() {
         html += `<div style="color:var(--text2);font-size:13px;padding:8px 0;">暂无合作邀约，稍后再来看看吧。</div>`;
     }
     container.innerHTML = html;
-    
-    container.querySelectorAll('.buy-btn[data-item]').forEach(btn => {
-        btn.onclick = function() {
-            const item = items.find(i => i.id === this.dataset.item);
-            if (!item || G.player.money < item.cost) { showToast('金币不足', 'error'); return; }
-            G.player.money -= item.cost;
-            item.effect();
-            updateUI(); renderShop(); showToast('✅ 购买成功！', 'success');
-            addMemoir('商店购买', `购买了 ${item.label}`); autoSaveGame();
-        };
-    });
-    
-    const upBtn = document.getElementById('upgradeEquip');
-    if (upBtn) {
-        upBtn.onclick = function() {
-            const level = G.player.equipmentLevel || 1;
-            if (level >= equipMax) { showToast('已满级', 'error'); return; }
-            const cost = equipCosts[level];
-            if (G.player.money < cost) { showToast('金币不足', 'error'); return; }
-            G.player.money -= cost;
-            G.player.equipmentLevel = level + 1;
-            updateUI(); renderShop(); showToast(`🎥 设备升级至 ${G.player.equipmentLevel} 级！`, 'success');
-            addMemoir('设备升级', `直播设备升级至 ${G.player.equipmentLevel} 级`); autoSaveGame();
-        };
-    }
 }
+
+window.buyShopItem = function(id) {
+    const items = [
+        { id: 'hot1', label: '🔥 热度小包', cost: 1000, effect: () => { G.player.followers += 5000; checkSocialRequestsTrigger(); } },
+        { id: 'hot2', label: '🔥 热度中包', cost: 3500, effect: () => { G.player.followers += 20000; checkSocialRequestsTrigger(); } },
+        { id: 'hot3', label: '🔥 热度大包', cost: 8000, effect: () => { G.player.followers += 50000; checkSocialRequestsTrigger(); } },
+    ];
+    const item = items.find(i => i.id === id);
+    if (!item || G.player.money < item.cost) { showToast('金币不足', 'error'); return; }
+    G.player.money -= item.cost;
+    item.effect();
+    updateUI(); renderShop(); showToast('✅ 购买成功！', 'success');
+    addMemoir('商店购买', `购买了 ${item.label}`); autoSaveGame();
+};
+
+window.upgradeEquip = function() {
+    const equipCosts = [0, 500, 1500, 4000, 8000, 15000];
+    const level = G.player.equipmentLevel || 1;
+    if (level >= 5) { showToast('已满级', 'error'); return; }
+    const cost = equipCosts[level];
+    if (G.player.money < cost) { showToast('金币不足', 'error'); return; }
+    G.player.money -= cost;
+    G.player.equipmentLevel = level + 1;
+    updateUI(); renderShop(); showToast(`🎥 设备升级至 ${G.player.equipmentLevel} 级！`, 'success');
+    addMemoir('设备升级', `直播设备升级至 ${G.player.equipmentLevel} 级`); autoSaveGame();
+};
+
 window.acceptSponsor = acceptSponsor;
-
-// ============================================================
-// 频道面板
-// ============================================================
-function renderDashboard() {
-    const container = (dom && dom.dashboardTab) || document.getElementById('dashboardTab');
-    if (!container) return;
-    const p = G.player;
-    const totalViews = p.videos.reduce((sum, v) => sum + (v.views || 0), 0);
-    let html = `
-    <div class="stats-grid">
-        <div class="stat-card"><div class="num">${p.followers}</div><div class="label">❤️ 粉丝</div></div>
-        <div class="stat-card"><div class="num">${p.videos.length}</div><div class="label">📹 视频</div></div>
-        <div class="stat-card"><div class="num">${totalViews}</div><div class="label">👀 总观看</div></div>
-    </div>
-    `;
-    const collectionNames = Object.keys(G.collections || {});
-    if (collectionNames.length > 0) {
-        html += `<div style="margin-bottom:10px;font-weight:700;font-size:15px;">📚 合集</div>`;
-        for (const name of collectionNames) {
-            const col = G.collections[name];
-            const colVideos = (col.videos || []).map(idx => G.player.videos[idx]).filter(v => v);
-            const totalViewsCol = col.totalViews || 0;
-            const totalLikesCol = col.totalLikes || 0;
-            const totalCommentsCol = col.totalComments || 0;
-            html += `
-            <div class="collection-card">
-                <div class="col-title">${name}</div>
-                <div class="col-stats">
-                    <span>📹 ${colVideos.length} 个视频</span>
-                    <span>👁️ ${totalViewsCol} 观看</span>
-                    <span>👍 ${totalLikesCol} 点赞</span>
-                    <span>💬 ${totalCommentsCol} 评论</span>
-                </div>
-                <button class="col-toggle" onclick="toggleCollection('${name}')">展开视频列表</button>
-                <div class="col-videos" id="col-${name}" style="display:none;">
-                    ${colVideos.map((v, i) => {
-                        const vidx = G.player.videos.indexOf(v);
-                        return `
-                        <div class="col-video-item">
-                            <span class="vtitle">第${i+1}集：${v.title}</span>
-                            <span class="vmeta">👁️ ${v.views} 👍 ${v.likes} 💬 ${v.comments ? v.comments.length : 0}</span>
-                            <button class="vcom-btn" onclick="toggleColVideoComments('${name}', ${vidx})">查看评论</button>
-                            <div class="col-video-comments" id="colcom-${name}-${vidx}"></div>
-                        </div>
-                        `;
-                    }).join('')}
-                </div>
-            </div>
-            `;
-        }
-    }
-    const singleVideos = (p.videos || []).filter(v => !v.collection);
-    html += `<div style="margin-top:12px;font-weight:700;font-size:15px;">🎬 单视频</div>`;
-    if (singleVideos.length === 0) {
-        html += `<div class="no-videos-msg">暂无单视频</div>`;
-    } else {
-        html += `<div class="video-list">`;
-        const sorted = [...singleVideos].reverse();
-        sorted.forEach((video) => {
-            const realIndex = p.videos.indexOf(video);
-            html += `
-            <div class="video-card" data-video-index="${realIndex}">
-                <div class="video-title">${escapeHtml(video.title)}</div>
-                <div class="video-meta">
-                    <span>📅 第${video.day}天</span>
-                    <span>👁️ ${video.views || 0} 次观看</span>
-                    <span>💬 ${video.comments ? video.comments.length : 0} 条评论</span>
-                </div>
-                <button class="toggle-comments-btn" data-index="${realIndex}">💬 查看/回复评论</button>
-                <div class="comments-section" id="comments-${realIndex}"></div>
-            </div>
-            `;
-        });
-        html += `</div>`;
-    }
-    container.innerHTML = html;
-    container.querySelectorAll('.toggle-comments-btn').forEach(btn => {
-        btn.onclick = function() {
-            const idx = parseInt(this.dataset.index);
-            const section = document.getElementById(`comments-${idx}`);
-            if (section) {
-                const isOpen = section.classList.toggle('open');
-                if (isOpen) renderComments(idx, section);
-            }
-        };
-    });
-}
-
-function toggleCollection(name) {
-    const el = document.getElementById(`col-${name}`);
-    if (el) {
-        const isOpen = el.style.display !== 'none';
-        el.style.display = isOpen ? 'none' : 'block';
-        const btn = document.querySelector(`.collection-card .col-toggle`);
-        if (btn) btn.textContent = isOpen ? '展开视频列表' : '收起视频列表';
-    }
-}
-window.toggleCollection = toggleCollection;
-
-function toggleColVideoComments(collectionName, videoIndex) {
-    const container = document.getElementById(`colcom-${collectionName}-${videoIndex}`);
-    if (!container) return;
-    const isOpen = container.style.display !== 'none';
-    if (isOpen) { container.style.display = 'none'; return; }
-    container.style.display = 'block';
-    renderComments(videoIndex, container);
-}
-window.toggleColVideoComments = toggleColVideoComments;
-
-function renderComments(videoIndex, container) {
-    const video = G.player.videos[videoIndex];
-    if (!video) return;
-    const comments = video.comments || [];
-    let html = '';
-    const activeAccount = getActiveAccountInfo();
-
-    if (comments.length === 0) html = `<div class="no-comments">还没有评论，快来抢沙发！</div>`;
-    else {
-        comments.forEach((comment, idx) => {
-            html += `
-            <div class="comment-item" data-comment-idx="${idx}">
-                <div class="comment-user">${escapeHtml(comment.user)}</div>
-                <div class="comment-content">${escapeHtml(comment.content)}</div>
-                <div class="reply-box">
-                    <input type="text" placeholder="以 [${escapeHtml(activeAccount.name)}] 回复 @${escapeHtml(comment.user)}..." class="reply-input" data-video-idx="${videoIndex}" data-comment-idx="${idx}">
-                    <button class="reply-send" data-video-idx="${videoIndex}" data-comment-idx="${idx}">发送</button>
-                </div>
-            </div>
-            `;
-        });
-    }
-    container.innerHTML = html;
-    container.querySelectorAll('.reply-send').forEach(btn => {
-        btn.onclick = function() {
-            const vIdx = parseInt(this.dataset.videoIdx);
-            const cIdx = parseInt(this.dataset.commentIdx);
-            const input = this.closest('.reply-box').querySelector('.reply-input');
-            const text = input.value.trim();
-            if (!text) { showToast('请输入回复内容', 'error', 1500); return; }
-            if (G.actionPoints < 2) { showToast('⚠️ 需要2行动点', 'error', 2000); return; }
-            sendReply(vIdx, cIdx, text);
-        };
-    });
-}
-
-function sendReply(videoIndex, commentIndex, replyText) {
-    const video = G.player.videos[videoIndex];
-    if (!video) return;
-    const targetComment = video.comments[commentIndex];
-    if (!targetComment) return;
-    if (G.actionPoints < 2) { showToast('⚠️ 行动点不足', 'error'); return; }
-    G.actionPoints -= 2;
-    updateUI();
-    const currentAcc = getActiveAccountInfo();
-    const isAlt = currentAcc.isAlt;
-    const senderName = currentAcc.name + (isAlt ? ' (小号)' : '');
-    const newComment = { user: senderName, content: `回复 @${targetComment.user}: ${replyText}` };
-    video.comments.unshift(newComment);
-    const gain = rand(1, 5);
-    G.player.followers += gain;
-    G.player.likes += rand(1, 3);
-    updateUI();
-    appendStory(`💬 你以「${senderName}」在视频「${video.title}」中回复了 @${targetComment.user}: ${replyText}`, '📨 回复');
-    const container = document.getElementById(`colcom-${video.collection}-${videoIndex}`) || document.getElementById(`comments-${videoIndex}`);
-    if (container && container.style.display !== 'none') renderComments(videoIndex, container);
-    showToast(`✅ 回复成功！粉丝 +${gain}`, 'success', 2000);
-    if (document.querySelector('.tab-btn.active')?.dataset.tab === 'data') renderDataPanel();
-    advanceTimeSlot(); autoSaveGame(); checkSocialRequestsTrigger();
-}
 
 // ============================================================
 // 数据面板
@@ -515,7 +280,7 @@ function renderDataPanel() {
             const isLover = (G.player.lovers || []).includes(npc.name);
             const isBlocked = isAccountBlockedByNpc(id, 'main');
             html += `
-            <div class="npc-card" onclick="openChat('${id}')">
+            <div class="npc-card" onclick="window.openChat('${id}')">
                 <div class="npc-info">
                     <div class="npc-name">${npc.avatarUrl ? `<img src="${npc.avatarUrl}" style="width:20px;height:20px;border-radius:50%;vertical-align:middle;">` : (npc.avatarEmoji || '👤')} ${escapeHtml(npc.name)} ${isLover ? '💕' : ''} ${isBlocked ? '<span style="color:#e53935;font-size:11px;">[已拉黑大号]</span>' : ''}</div>
                     <div class="npc-desc">${npc.isCustom ? '自建好友' : `平均技术 ${avg}`} · 好感 ${npc.favor||0}</div>
@@ -548,7 +313,7 @@ function renderDataPanel() {
 }
 
 // ============================================================
-// 记忆系统与账号管理
+// 记忆系统与账号拉黑系统
 // ============================================================
 if (!G.memoryConfig) G.memoryConfig = { enabled: true, defaultThreshold: 10, defaultKeepRecent: 5, selectedModelKey: '' };
 if (!G.memorySummaries) G.memorySummaries = [];
@@ -611,7 +376,7 @@ function showMemoryFailNoticeModal(moduleName, errorMsg) {
                 <div><b>失败模块：</b>${escapeHtml(moduleName)}</div>
                 <div style="font-size:11px;color:#888;margin-top:4px;"><b>原因提示：</b>${escapeHtml(errorMsg || '网络异常')}</div>
             </div>
-            <div class="btn-row"><button class="btn-primary" onclick="closeModal()" style="width:100%;">我知道了，关闭提示</button></div>
+            <div class="btn-row"><button class="btn-primary" onclick="window.closeModal()" style="width:100%;">我知道了，关闭提示</button></div>
         </div>
     `);
 }
@@ -653,21 +418,6 @@ function isAccountBlockedByNpc(npcId, accId = null) {
     return (G.blockedRecords || []).includes(token);
 }
 
-function setNpcBlockAccount(npcId, accId, block = true) {
-    if (!G.blockedRecords) G.blockedRecords = [];
-    const token = `${npcId}_${accId}`;
-    if (block) {
-        if (!G.blockedRecords.includes(token)) G.blockedRecords.push(token);
-        if (accId === 'main') {
-            if (!G.blockedNpcs) G.blockedNpcs = [];
-            if (!G.blockedNpcs.includes(npcId)) G.blockedNpcs.push(npcId);
-        }
-    } else {
-        G.blockedRecords = G.blockedRecords.filter(t => t !== token);
-        if (accId === 'main' && G.blockedNpcs) G.blockedNpcs = G.blockedNpcs.filter(id => id !== npcId);
-    }
-}
-
 function getActiveAccountInfo() {
     if (G.currentAccountId === 'main' || !G.currentAccountId) {
         return { id: 'main', isAlt: false, name: G.player.ytName || '主播大号', avatar: G.player.avatar || null, bio: 'YouTube 频道官方号' };
@@ -677,14 +427,15 @@ function getActiveAccountInfo() {
     return { id: 'main', isAlt: false, name: G.player.ytName || '主播大号', avatar: G.player.avatar, bio: '' };
 }
 
-function switchAccount(accId) {
+window.switchAccount = function(accId) {
     G.currentAccountId = accId;
     showToast(`🔀 已切换账号为：${getActiveAccountInfo().name}`, 'info', 1800);
     renderSocialPanel();
     autoSaveGame();
-}
+};
 
-function openAccountManagerModal() {
+window.openAccountManagerModal = function() {
+    const mainAcc = { name: G.player.ytName, id: 'main' };
     const currentId = G.currentAccountId || 'main';
     let altsHtml = '';
     (G.altAccounts || []).forEach(alt => {
@@ -698,14 +449,15 @@ function openAccountManagerModal() {
                 </div>
             </div>
             <div style="display:flex;gap:6px;">
-                ${currentId === alt.id ? '<span style="font-size:11px;color:#2e7d32;font-weight:700;padding:4px 6px;">● 当前使用</span>' : `<button class="upload-btn" onclick="switchAccount('${alt.id}');closeModal();" style="padding:4px 8px;font-size:11px;">使用</button>`}
-                <button class="upload-btn" onclick="deleteAltAccount('${alt.id}')" style="padding:4px 6px;font-size:11px;background:#e53935;">🗑️</button>
+                ${currentId === alt.id ? '<span style="font-size:11px;color:#2e7d32;font-weight:700;padding:4px 6px;">● 当前使用</span>' : `<button class="upload-btn" onclick="window.switchAccount('${alt.id}');window.closeModal();" style="padding:4px 8px;font-size:11px;">使用</button>`}
+                <button class="upload-btn" onclick="window.deleteAltAccount('${alt.id}')" style="padding:4px 6px;font-size:11px;background:#e53935;">🗑️</button>
             </div>
         </div>`;
     });
 
     openModal(`
         <h3>🎭 账号中心与快速切换</h3>
+        <p style="font-size:12px;color:#666;line-height:1.6;">每个账号拥有完全独立的私聊记录。某个小号被拉黑后，可继续注册新小号联系骚扰或求情转圜！</p>
         <div style="margin:10px 0;border:1px solid #eee;border-radius:10px;padding:10px;background:#fff;">
             <div style="font-weight:700;font-size:13px;margin-bottom:8px;">👑 主播官方大号</div>
             <div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:#f0f8f0;border-radius:8px;border:1px solid #d0ebd0;">
@@ -715,46 +467,48 @@ function openAccountManagerModal() {
                         <div style="font-weight:700;font-size:13px;">${escapeHtml(G.player.ytName)} <span style="font-size:10px;color:#fff;background:var(--primary);padding:1px 6px;border-radius:4px;">大号</span></div>
                     </div>
                 </div>
-                ${currentId === 'main' ? '<span style="font-size:11px;color:#2e7d32;font-weight:700;padding:4px 6px;">● 当前使用</span>' : `<button class="upload-btn" onclick="switchAccount('main');closeModal();" style="padding:4px 8px;font-size:11px;">使用</button>`}
+                ${currentId === 'main' ? '<span style="font-size:11px;color:#2e7d32;font-weight:700;padding:4px 6px;">● 当前使用</span>' : `<button class="upload-btn" onclick="window.switchAccount('main');window.closeModal();" style="padding:4px 8px;font-size:11px;">使用</button>`}
             </div>
-            <div style="font-weight:700;font-size:13px;margin-12px 0 6px;">🎭 注册的小号列表</div>
+            <div style="font-weight:700;font-size:13px;margin:12px 0 6px;">🎭 注册的小号列表</div>
             ${altsHtml || '<div style="font-size:12px;color:#999;padding:6px 0;">暂无小号，点击下方注册全新马甲</div>'}
         </div>
         <div class="btn-row" style="flex-direction:column;gap:8px;">
-            <button class="btn-primary" id="btnRegisterNewAlt" style="width:100%;">➕ 注册新的自定义小号</button>
-            <button class="btn-secondary" onclick="closeModal()" style="width:100%;">关闭</button>
+            <button class="btn-primary" onclick="window.closeModal(); window.openCreateAltAccountModal();" style="width:100%;">➕ 注册新的自定义小号</button>
+            <button class="btn-secondary" onclick="window.closeModal()" style="width:100%;">关闭</button>
         </div>
     `);
+};
 
-    document.getElementById('btnRegisterNewAlt').onclick = () => { closeModal(); openCreateAltAccountModal(); };
-}
-
-function openCreateAltAccountModal() {
+window.openCreateAltAccountModal = function() {
     openModal(`
         <h3>➕ 注册自定义小号</h3>
         <div class="form-group"><label>小号名称 / ID <span class="required">*</span></label><input type="text" id="altNameInput" placeholder="如：路过的红石学徒"></div>
         <div class="form-group"><label>小号个性签名</label><input type="text" id="altBioInput" placeholder="如：热爱MC建筑..."></div>
-        <div class="btn-row"><button class="btn-secondary" onclick="openAccountManagerModal()">返回</button><button class="btn-primary" id="btnConfirmCreateAlt">完成注册并登录</button></div>
+        <div class="btn-row"><button class="btn-secondary" onclick="window.openAccountManagerModal()">返回</button><button class="btn-primary" onclick="window.confirmCreateAltAccount()">完成注册并登录</button></div>
     `);
-    document.getElementById('btnConfirmCreateAlt').onclick = () => {
-        const name = document.getElementById('altNameInput').value.trim();
-        if (!name) { showToast('⚠️ 请填写小号名称', 'error'); return; }
-        if (!G.altAccounts) G.altAccounts = [];
-        const newAlt = { id: 'alt_' + Date.now(), name, bio: document.getElementById('altBioInput').value.trim() || '路人小号', avatar: null, createdAt: G.day };
-        G.altAccounts.push(newAlt); G.currentAccountId = newAlt.id;
-        showToast(`🎉 小号「${name}」注册成功！`, 'success', 2500);
-        closeModal(); renderSocialPanel(); autoSaveGame();
-    };
-}
+};
 
-function deleteAltAccount(altId) {
+window.confirmCreateAltAccount = function() {
+    const name = document.getElementById('altNameInput').value.trim();
+    if (!name) { showToast('⚠️ 请填写小号名称', 'error'); return; }
+    if (!G.altAccounts) G.altAccounts = [];
+    const newAlt = { id: 'alt_' + Date.now(), name, bio: document.getElementById('altBioInput').value.trim() || '路人小号', avatar: null, createdAt: G.day };
+    G.altAccounts.push(newAlt); G.currentAccountId = newAlt.id;
+    showToast(`🎉 小号「${name}」注册成功！`, 'success', 2500);
+    closeModal(); renderSocialPanel(); autoSaveGame();
+};
+
+window.deleteAltAccount = function(altId) {
     if (!confirm('确定要注销这个小号吗？')) return;
     G.altAccounts = (G.altAccounts || []).filter(a => a.id !== altId);
     if (G.currentAccountId === altId) G.currentAccountId = 'main';
     showToast('🗑️ 小号已注销', 'info');
-    openAccountManagerModal(); autoSaveGame();
-}
+    window.openAccountManagerModal(); autoSaveGame();
+};
 
+// ============================================================
+// 🔔 粉丝热度与社交引擎
+// ============================================================
 function checkSocialRequestsTrigger() {
     if (typeof OFFICIAL_NPCS === 'undefined') return;
     if (!G.friendRequests) G.friendRequests = [];
@@ -787,13 +541,13 @@ function detectPlayerTimezoneInfo() {
     return { country, region, slotName: getTimeSlotName(G.timeSlot), day: G.day };
 }
 
-function formatNpcTimezoneContext(targetNpcName = '') {
+function formatNpcTimezoneContext() {
     const pTz = detectPlayerTimezoneInfo();
-    return `\n【时差上下文】：玩家当前所在地：${pTz.country}，当前时段：第 ${pTz.day} 天【${pTz.slotName}】。请自然体现真实时差反应（如熬夜、刚起等）。\n`;
+    return `\n【时差上下文】：玩家当前所在地：${pTz.country}，当前时段：第 ${pTz.day} 天【${pTz.slotName}】。请自然体现真实时差反应。\n`;
 }
 
 // ============================================================
-// 📱 手机社交中心 UI 与事件（绝对稳固原生点击版本）
+// 📱 手机社交中心 UI 与事件 (基于纯净 onclick 与 oncontextmenu)
 // ============================================================
 if (!G.phoneNav) G.phoneNav = 'chats';
 if (!G.chatActiveTab) G.chatActiveTab = 'direct';
@@ -835,37 +589,24 @@ function renderPhoneApp(container) {
                 ${activeAcc.isAlt ? '<span style="font-size:10px;background:#ffe082;color:#795548;padding:1px 4px;border-radius:4px;font-weight:700;">小号</span>' : ''}
             </div>
             <div style="display:flex;gap:5px;">
-                <button id="phoneClockBtn" style="border:1px solid #b8dbb8;background:#fff;padding:2px 7px;border-radius:12px;font-size:11px;cursor:pointer;color:#2e7d32;font-weight:700;">🕒 时区</button>
-                <button id="phoneAccountBtn" style="border:1px solid #b8dbb8;background:#fff;padding:2px 8px;border-radius:12px;font-size:11px;cursor:pointer;color:#2e7d32;font-weight:700;">🔀 切换账号</button>
+                <button onclick="window.openClockSettingsModal()" style="border:1px solid #b8dbb8;background:#fff;padding:2px 7px;border-radius:12px;font-size:11px;cursor:pointer;color:#2e7d32;font-weight:700;">🕒 时区</button>
+                <button onclick="window.openAccountManagerModal()" style="border:1px solid #b8dbb8;background:#fff;padding:2px 8px;border-radius:12px;font-size:11px;cursor:pointer;color:#2e7d32;font-weight:700;">🔀 切换账号</button>
             </div>
         </div>
         <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;">
             ${contentHtml}
         </div>
         <div style="height:54px;background:#fcfdfc;border-top:1px solid #eef2ee;display:flex;justify-content:space-around;align-items:center;padding:0 10px;flex-shrink:0;">
-            <button id="phoneNavChatsBtn" style="border:none;background:none;font-size:12px;font-weight:700;color:${!isMoments ? 'var(--primary)' : '#888'};display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;">
+            <button onclick="window.G.currentChatNpc = null; window.G.currentChatGroup = null; window.G.phoneNav = 'chats'; window.renderSocialPanel();" style="border:none;background:none;font-size:12px;font-weight:700;color:${!isMoments ? 'var(--primary)' : '#888'};display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;">
                 <span style="font-size:18px;">💬</span><span>消息</span>
             </button>
-            <button id="phoneNavMomentsBtn" style="border:none;background:none;font-size:12px;font-weight:700;color:${isMoments ? 'var(--primary)' : '#888'};display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;">
+            <button onclick="window.G.currentChatNpc = null; window.G.currentChatGroup = null; window.G.phoneNav = 'moments'; window.G.momentsFilterNpcId = null; window.renderSocialPanel();" style="border:none;background:none;font-size:12px;font-weight:700;color:${isMoments ? 'var(--primary)' : '#888'};display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;">
                 <span style="font-size:18px;">🌟</span><span>朋友圈</span>
             </button>
         </div>
     </div>
     `;
     container.innerHTML = html;
-
-    document.getElementById('phoneClockBtn')?.addEventListener('click', () => openClockSettingsModal());
-    document.getElementById('phoneAccountBtn')?.addEventListener('click', () => openAccountManagerModal());
-
-    document.getElementById('phoneNavChatsBtn')?.addEventListener('click', () => {
-        G.currentChatNpc = null; G.currentChatGroup = null; G.phoneNav = 'chats'; renderSocialPanel();
-    });
-    document.getElementById('phoneNavMomentsBtn')?.addEventListener('click', () => {
-        G.currentChatNpc = null; G.currentChatGroup = null; G.phoneNav = 'moments'; G.momentsFilterNpcId = null; renderSocialPanel();
-    });
-
-    if (!isMoments) bindChatListEvents(container);
-    else bindMomentsEvents(container);
 }
 
 function buildChatListHTML() {
@@ -881,8 +622,7 @@ function buildChatListHTML() {
             <div style="text-align:center;color:#888;padding:45px 16px;font-size:13px;line-height:1.7;">
                 <div style="font-size:36px;margin-bottom:8px;">📬</div>
                 <b>通讯录空空如也</b><br>
-                新人主播可以通过<b>发布视频</b>、<b>开启直播</b>积累粉丝热度。<br>
-                也可以点击右上角 ➕ 手动添加联系人！
+                可以通过<b>发布视频</b>积累热度，或者点击右上角 ➕ 手动添加联系人！
             </div>`;
         } else {
             for (const [id, npc] of npcList) {
@@ -892,8 +632,9 @@ function buildChatListHTML() {
                 const time = lastMsg ? (lastMsg.time || '') : '';
                 const isBlocked = isAccountBlockedByNpc(id, currentAcc.id);
                 
+                // 彻底原生化：短按调用 openChat，长按触发 oncontextmenu 调用 openEditNpcModal
                 itemsHtml += `
-                <div class="chat-item" data-id="${id}" style="display:flex;align-items:center;padding:10px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;background:#fff;border:1px solid #f0f4f0;">
+                <div class="chat-item" onclick="window.openChat('${id}')" oncontextmenu="event.preventDefault(); window.openEditNpcModal('${id}'); return false;" style="display:flex;align-items:center;padding:10px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;background:#fff;border:1px solid #f0f4f0;">
                     <div style="margin-right:12px;flex-shrink:0;">${renderAvatarBadge(npc, 44)}</div>
                     <div style="flex:1;min-width:0;">
                         <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -918,7 +659,7 @@ function buildChatListHTML() {
                 const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
                 const purePreview = lastMsg ? `${lastMsg.senderName || '成员'}: ${stripThought(lastMsg.text || '')}` : (grp.desc || '开启热烈讨论吧');
                 itemsHtml += `
-                <div class="group-item" data-gid="${gid}" style="display:flex;align-items:center;padding:10px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;background:#fff;border:1px solid #f0f4f0;">
+                <div class="group-item" onclick="window.openGroupChat('${gid}')" oncontextmenu="event.preventDefault(); window.openGroupSettingsModal('${gid}'); return false;" style="display:flex;align-items:center;padding:10px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;background:#fff;border:1px solid #f0f4f0;">
                     <div style="margin-right:12px;flex-shrink:0;">${renderAvatarBadge(grp, 44)}</div>
                     <div style="flex:1;min-width:0;">
                         <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -935,11 +676,11 @@ function buildChatListHTML() {
     return `
     <div class="chat-header" style="padding:12px 16px;background:#f8fbf8;border-bottom:1px solid #eef3ee;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
         <div style="display:flex;gap:6px;background:#e9f2e9;padding:3px;border-radius:8px;">
-            <button id="tabDirectBtn" style="border:none;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;background:${isDirect ? '#fff' : 'transparent'};color:${isDirect ? 'var(--primary)' : '#666'};">👤 私聊</button>
-            <button id="tabGroupBtn" style="border:none;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;background:${!isDirect ? '#fff' : 'transparent'};color:${!isDirect ? 'var(--primary)' : '#666'};">👥 群聊</button>
+            <button onclick="window.G.chatActiveTab = 'direct'; window.renderSocialPanel();" style="border:none;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;background:${isDirect ? '#fff' : 'transparent'};color:${isDirect ? 'var(--primary)' : '#666'};">👤 私聊</button>
+            <button onclick="window.G.chatActiveTab = 'group'; window.renderSocialPanel();" style="border:none;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;background:${!isDirect ? '#fff' : 'transparent'};color:${!isDirect ? 'var(--primary)' : '#666'};">👥 群聊</button>
         </div>
         <div style="position:relative;">
-            <button id="addChatTargetBtn" title="新建与好友/群邀请" style="border:none;background:var(--primary);color:#fff;width:34px;height:34px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;">➕</button>
+            <button onclick="window.openAddChatTargetModal()" title="新建与好友/群邀请" style="border:none;background:var(--primary);color:#fff;width:34px;height:34px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;">➕</button>
             ${pendingCount > 0 ? `<span style="position:absolute;top:-4px;right:-4px;width:12px;height:12px;background:#ff4757;border:2px solid #fff;border-radius:50%;display:block;"></span>` : ''}
         </div>
     </div>
@@ -951,65 +692,33 @@ function buildChatListHTML() {
     </div>`;
 }
 
-function bindChatListEvents(container) {
-    document.getElementById('tabDirectBtn')?.addEventListener('click', () => { 
-        G.chatActiveTab = 'direct'; G.currentChatNpc = null; G.currentChatGroup = null; renderSocialPanel(); 
-    });
-    document.getElementById('tabGroupBtn')?.addEventListener('click', () => { 
-        G.chatActiveTab = 'group'; G.currentChatNpc = null; G.currentChatGroup = null; renderSocialPanel(); 
-    });
-    document.getElementById('addChatTargetBtn')?.addEventListener('click', () => openAddChatTargetModal());
-
-    // 卡片短按进私聊，长按编辑
-    container.querySelectorAll('.chat-item').forEach(el => {
-        const id = el.dataset.id;
-        if (!id) return;
-        bindCardPress(
-            el,
-            () => openChat(String(id)),
-            () => openEditNpcModal(String(id))
-        );
-    });
-
-    // 卡片短按进群聊，长按管理
-    container.querySelectorAll('.group-item').forEach(el => {
-        const gid = el.dataset.gid;
-        if (!gid) return;
-        bindCardPress(
-            el,
-            () => openGroupChat(gid),
-            () => openGroupSettingsModal(gid)
-        );
-    });
-}
-
-function openChat(npcId) {
+window.openChat = function(npcId) {
     if (!G.npcs || !G.npcs[npcId]) return;
     G.currentChatGroup = null;
     G.currentChatNpc = npcId;
     G.chatActiveTab = 'direct';
     G.phoneNav = 'chats';
     renderSocialPanel();
-}
+};
 
-function closeChat() {
+window.closeChat = function() {
     G.currentChatNpc = null;
     renderSocialPanel();
-}
+};
 
-function openGroupChat(gid) {
+window.openGroupChat = function(gid) {
     if (!G.groups || !G.groups[gid]) return;
     G.currentChatNpc = null;
     G.currentChatGroup = gid;
     G.chatActiveTab = 'group';
     G.phoneNav = 'chats';
     renderSocialPanel();
-}
+};
 
-function closeGroupChat() {
+window.closeGroupChat = function() {
     G.currentChatGroup = null;
     renderSocialPanel();
-}
+};
 
 // ============================================================
 // 💬 私聊窗口渲染（包含屏幕那边的TA、表情包，无旁白）
@@ -1034,7 +743,7 @@ function renderSingleChatWindow(container) {
     if (hasMore) {
         messagesHtml += `
         <div style="text-align:center;margin:4px 0 12px;">
-            <button id="btnLoadMoreChatHist" style="border:none;background:rgba(0,0,0,0.06);color:#555;padding:4px 12px;border-radius:12px;font-size:11px;cursor:pointer;">
+            <button onclick="window.G._chatShowFullHistory['${sessionKey}'] = true; window.renderSingleChatWindow(document.getElementById('socialTab'));" style="border:none;background:rgba(0,0,0,0.06);color:#555;padding:4px 12px;border-radius:12px;font-size:11px;cursor:pointer;">
                 📜 点击展开更早的 ${chatHist.length - FOLD_LIMIT} 条记录
             </button>
         </div>`;
@@ -1061,7 +770,7 @@ function renderSingleChatWindow(container) {
             } else if (msg.sharedMoment) {
                 const sm = msg.sharedMoment;
                 bubbleContent = `
-                <div onclick="jumpToMomentCard(${sm.id})" style="cursor:pointer;background:#fff;border-radius:8px;padding:8px;border:1px solid #e0e0e0;max-width:210px;">
+                <div onclick="window.jumpToMomentCard(${sm.id})" style="cursor:pointer;background:#fff;border-radius:8px;padding:8px;border:1px solid #e0e0e0;max-width:210px;">
                     <div style="font-weight:700;font-size:11px;color:#2e7d32;margin-bottom:3px;">🌟 朋友圈动态 · ${escapeHtml(sm.author)}</div>
                     <div style="font-size:12px;color:#333;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${escapeHtml(sm.body)}</div>
                     ${sm.image ? `<img src="${sm.image}" style="width:100%;height:65px;object-fit:cover;border-radius:4px;margin-top:4px;">` : ''}
@@ -1073,10 +782,10 @@ function renderSingleChatWindow(container) {
 
             messagesHtml += `
             <div class="chat-msg-row" data-msgid="${msg._id || ''}" data-from="${msg.from}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:10px;align-items:flex-start;">
-                ${!isSelf ? `<div class="chat-npc-avatar-btn" data-npcid="${npcId}" style="margin-right:8px;flex-shrink:0;cursor:pointer;">${renderAvatarBadge(npc, 34)}</div>` : ''}
+                ${!isSelf ? `<div onclick="window.openNpcProfileCardModal('${npcId}')" oncontextmenu="event.preventDefault(); window.openEditNpcModal('${npcId}'); return false;" style="margin-right:8px;flex-shrink:0;cursor:pointer;">${renderAvatarBadge(npc, 34)}</div>` : ''}
                 <div style="max-width:75%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                     ${isSelf && msg.senderAccount ? `<div style="font-size:10px;color:#888;margin-bottom:2px;">${escapeHtml(msg.senderAccount)}</div>` : ''}
-                    <div class="chat-bubble ${isSelf ? 'self-bubble' : ''}" style="width:fit-content;max-width:100%;display:inline-block;background:${isSelf ? ((msg.sticker || msg.sharedMoment) ? 'transparent' : '#95ec69') : ((msg.sticker || msg.sharedMoment) ? 'transparent' : '#fff')};color:#111;padding:${(msg.sticker || msg.sharedMoment) ? '0' : '8px 12px'};border-radius:${isSelf ? '10px 0 10px 10px' : '0 10px 10px 10px'};box-shadow:${(msg.sticker || msg.sharedMoment) ? 'none' : '0 1px 3px rgba(0,0,0,0.08)'};font-size:14px;line-height:1.5;word-break:break-word;user-select:none;-webkit-user-select:none;cursor:pointer;">
+                    <div class="chat-bubble ${isSelf ? 'self-bubble' : ''}" ${isSelf && msg._id ? `oncontextmenu="event.preventDefault(); window.showMessageActionSheet('${msg._id}', 'single', '${npcId}'); return false;"` : ''} style="width:fit-content;max-width:100%;display:inline-block;background:${isSelf ? ((msg.sticker || msg.sharedMoment) ? 'transparent' : '#95ec69') : ((msg.sticker || msg.sharedMoment) ? 'transparent' : '#fff')};color:#111;padding:${(msg.sticker || msg.sharedMoment) ? '0' : '8px 12px'};border-radius:${isSelf ? '10px 0 10px 10px' : '0 10px 10px 10px'};box-shadow:${(msg.sticker || msg.sharedMoment) ? 'none' : '0 1px 3px rgba(0,0,0,0.08)'};font-size:14px;line-height:1.5;word-break:break-word;user-select:none;-webkit-user-select:none;cursor:pointer;">
                         ${bubbleContent}
                     </div>
                     <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
@@ -1090,8 +799,8 @@ function renderSingleChatWindow(container) {
     <div style="background:#f2f4f2;border-radius:14px;display:flex;flex-direction:column;height:100%;min-height:500px;box-shadow:0 4px 16px rgba(0,0,0,0.08);overflow:hidden;">
         <div style="padding:8px 12px;background:#fff;border-bottom:1px solid #e5ebe5;display:flex;justify-content:space-between;align-items:center;min-height:48px;flex-shrink:0;">
             <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
-                <button id="singleChatBackBtn" style="border:none;background:none;font-size:19px;color:#333;cursor:pointer;padding:0 2px;">❮</button>
-                <div id="singleChatHeaderProfileBtn" style="cursor:pointer;flex:1;min-width:0;">
+                <button onclick="window.closeChat()" style="border:none;background:none;font-size:19px;color:#333;cursor:pointer;padding:0 2px;">❮</button>
+                <div onclick="window.openNpcProfileCardModal('${npcId}')" oncontextmenu="event.preventDefault(); window.openEditNpcModal('${npcId}'); return false;" style="cursor:pointer;flex:1;min-width:0;">
                     <div style="font-weight:700;font-size:14.5px;display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
                         <span style="overflow:hidden;text-overflow:ellipsis;">${escapeHtml(npc.name)}</span>
                         <span style="font-size:10.5px;color:#e53935;font-weight:normal;background:#ffebee;padding:1px 5px;border-radius:6px;flex-shrink:0;">❤️ ${npc.favor || 0}</span>
@@ -1102,8 +811,8 @@ function renderSingleChatWindow(container) {
                 </div>
             </div>
             <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
-                <button id="btnToggleBehindScreen" style="border:1px solid ${isBehindScreenActive ? '#8d6e63' : '#ccc'};background:${isBehindScreenActive ? '#efebe9' : '#fff'};width:30px;height:30px;border-radius:50%;font-size:15px;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="开启/关闭动作感知">👁️</button>
-                <button id="triggerAIReplyBtn" title="让TA回复" style="border:none;background:#ff4757;color:#fff;width:32px;height:32px;border-radius:8px;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(255,71,87,0.35);">⚡</button>
+                <button onclick="window.toggleBehindScreen('${npcId}')" style="border:1px solid ${isBehindScreenActive ? '#8d6e63' : '#ccc'};background:${isBehindScreenActive ? '#efebe9' : '#fff'};width:30px;height:30px;border-radius:50%;font-size:15px;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="开启/关闭动作感知">👁️</button>
+                <button onclick="window.triggerAIReplyForSingle('${npcId}')" style="border:none;background:#ff4757;color:#fff;width:32px;height:32px;border-radius:8px;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 6px rgba(255,71,87,0.35);">⚡</button>
             </div>
         </div>
 
@@ -1116,13 +825,13 @@ function renderSingleChatWindow(container) {
             ${messagesHtml || '<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">当前与 TA 尚无对话，点击右上方 ⚡ 开启互动！</div>'}
         </div>
 
-        ${_stickerDrawerOpen ? buildStickerDrawerHTML() : ''}
+        ${_stickerDrawerOpen ? buildStickerDrawerHTML('single', npcId) : ''}
 
         <div style="padding:6px 8px;background:#fff;border-top:1px solid #e5ebe5;display:flex;gap:5px;align-items:center;flex-shrink:0;">
-            <button id="chatActionInsertBtn" title="合作/拍共创视频" style="border:1px solid #ccc;background:#f8f9f8;color:#555;width:32px;height:32px;border-radius:50%;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">➕</button>
-            <button id="chatToggleStickerBtn" title="发送表情包" style="border:1px solid #ccc;background:${_stickerDrawerOpen ? '#eaf5ea' : '#f8f9f8'};color:#555;width:32px;height:32px;border-radius:50%;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">😊</button>
+            <button onclick="window.openChatActionMenuModal('single', '${npcId}')" title="合作/拍共创视频" style="border:1px solid #ccc;background:#f8f9f8;color:#555;width:32px;height:32px;border-radius:50%;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">➕</button>
+            <button onclick="window.toggleStickerDrawer('single', '${npcId}')" title="发送表情包" style="border:1px solid #ccc;background:${_stickerDrawerOpen ? '#eaf5ea' : '#f8f9f8'};color:#555;width:32px;height:32px;border-radius:50%;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">😊</button>
             <textarea id="singleChatInput" rows="1" placeholder="发送消息..." style="flex:1;padding:7px 10px;border-radius:16px;border:1px solid #ddd;background:#f8faf8;font-size:13.5px;resize:none;outline:none;font-family:inherit;"></textarea>
-            <button id="singleSendBtn" style="border:none;background:var(--primary);color:#fff;padding:6px 13px;border-radius:16px;font-size:12.5px;font-weight:700;cursor:pointer;flex-shrink:0;">发送</button>
+            <button onclick="window.doSendSingleChat('${npcId}')" style="border:none;background:var(--primary);color:#fff;padding:6px 13px;border-radius:16px;font-size:12.5px;font-weight:700;cursor:pointer;flex-shrink:0;">发送</button>
         </div>
     </div>
     `;
@@ -1131,125 +840,162 @@ function renderSingleChatWindow(container) {
     const msgArea = document.getElementById('chatMessageArea');
     if (msgArea) msgArea.scrollTop = msgArea.scrollHeight;
 
-    if (_stickerDrawerOpen) bindStickerDrawerEvents('single', npcId);
-
-    document.getElementById('singleChatBackBtn')?.addEventListener('click', () => closeChat());
-
-    document.getElementById('btnToggleBehindScreen')?.addEventListener('click', () => {
-        window.G._behindScreenActive[npcId] = !window.G._behindScreenActive[npcId];
-        showToast(window.G._behindScreenActive[npcId] ? '👁️ 已开启「屏幕那边的TA」动作感知' : '已关闭线下动作感知', 'info', 1500);
-        renderSingleChatWindow(container);
-        autoSaveGame();
-    });
-
-    document.getElementById('chatToggleStickerBtn')?.addEventListener('click', () => {
-        _stickerDrawerOpen = !_stickerDrawerOpen;
-        renderSingleChatWindow(container);
-    });
-
-    document.getElementById('btnLoadMoreChatHist')?.addEventListener('click', () => {
-        window.G._chatShowFullHistory[sessionKey] = true;
-        renderSingleChatWindow(container);
-    });
-
-    container.querySelectorAll('.chat-msg-row[data-from="player"]').forEach(row => {
-        const msgId = row.dataset.msgid;
-        const bubble = row.querySelector('.self-bubble');
-        if (bubble && msgId) {
-            bindCardPress(bubble, null, () => showMessageActionSheet(msgId, 'single', npcId));
-        }
-    });
-
-    container.querySelectorAll('.chat-npc-avatar-btn').forEach(btn => {
-        btn.addEventListener('click', () => openNpcProfileCardModal(npcId));
-    });
-
-    document.getElementById('singleChatHeaderProfileBtn')?.addEventListener('click', () => {
-        openNpcProfileCardModal(npcId);
-    });
-
     const input = document.getElementById('singleChatInput');
-    const sendBtn = document.getElementById('singleSendBtn');
-
-    const doSend = () => {
-        const text = input.value.trim();
-        if (!text) return;
-
-        if (isBlocked) {
-            pushChatMessageSafe(npcId, { from: 'player', text, senderAccount: activeAcc.name, time: new Date().toLocaleTimeString().slice(0, 5) });
-            pushChatMessageSafe(npcId, { from: 'action', text: `❌ 消息已被拒收。（已被拉黑）`, time: new Date().toLocaleTimeString().slice(0, 5) });
-            input.value = '';
-            renderSingleChatWindow(container);
-            showToast('⚠️ 对方开启了朋友验证，你已被拉黑', 'error', 3000);
-            return;
-        }
-
-        pushChatMessageSafe(npcId, {
-            from: 'player',
-            text,
-            senderAccount: activeAcc.isAlt ? `${activeAcc.name} (小号)` : activeAcc.name,
-            time: new Date().toLocaleTimeString().slice(0, 5)
-        });
-        input.value = '';
-        renderSingleChatWindow(container);
-        autoSaveGame();
-    };
-
-    if (sendBtn) sendBtn.onclick = doSend;
     if (input) {
         input.onkeydown = (e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
-                doSend();
-            }
-        };
-    }
-
-    document.getElementById('chatActionInsertBtn')?.addEventListener('click', () => {
-        openChatActionMenuModal('single', npcId);
-    });
-
-    const triggerBtn = document.getElementById('triggerAIReplyBtn');
-    if (triggerBtn) {
-        triggerBtn.onclick = async () => {
-            if (window.G.isGenerating) { showToast('⏳ TA 正在打字中...', 'info', 1500); return; }
-            triggerBtn.style.opacity = '0.5';
-            triggerBtn.style.pointerEvents = 'none';
-            await triggerAIReplyForSingle(npcId);
-            const btn2 = document.getElementById('triggerAIReplyBtn');
-            if (btn2) {
-                btn2.style.opacity = '1';
-                btn2.style.pointerEvents = 'auto';
+                window.doSendSingleChat(npcId);
             }
         };
     }
 }
 
-// 供表情包发送，修复 senderName 缺失的问题
-function sendStickerMessage(targetType, targetId, stickerObj) {
-    const curAcc = getActiveAccountInfo();
-    const msg = {
-        _id: 'cstk_' + Date.now() + '_' + rand(100, 999),
-        from: 'player',
-        senderName: curAcc.name, // 关键：供群聊显示名字
-        senderAccount: curAcc.name, // 供私聊显示名字
-        sticker: stickerObj,
-        text: `[表情: ${stickerObj.desc}]`,
-        time: new Date().toLocaleTimeString().slice(0, 5)
-    };
-    if (targetType === 'single') {
-        pushChatMessageSafe(targetId, msg);
-        renderSingleChatWindow(document.getElementById('socialTab'));
-    } else {
-        if (!window.G.groupChatHistory[targetId]) window.G.groupChatHistory[targetId] = [];
-        window.G.groupChatHistory[targetId].push(msg);
-        renderGroupChatWindow(document.getElementById('socialTab'));
-    }
+window.toggleBehindScreen = function(npcId) {
+    window.G._behindScreenActive[npcId] = !window.G._behindScreenActive[npcId];
+    showToast(window.G._behindScreenActive[npcId] ? '👁️ 已开启「屏幕那边的TA」动作感知' : '已关闭线下动作感知', 'info', 1500);
+    renderSingleChatWindow(document.getElementById('socialTab'));
     autoSaveGame();
+};
+
+window.toggleStickerDrawer = function(type, id) {
+    _stickerDrawerOpen = !_stickerDrawerOpen;
+    const cont = document.getElementById('socialTab');
+    if (type === 'single') renderSingleChatWindow(cont);
+    else renderGroupChatWindow(cont);
+};
+
+window.doSendSingleChat = function(npcId) {
+    const input = document.getElementById('singleChatInput');
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text) return;
+    const activeAcc = getActiveAccountInfo();
+    if (isAccountBlockedByNpc(npcId, activeAcc.id)) {
+        pushChatMessageSafe(npcId, { from: 'player', text, senderAccount: activeAcc.name, time: new Date().toLocaleTimeString().slice(0, 5) });
+        pushChatMessageSafe(npcId, { from: 'action', text: `❌ 消息已被拒收。（已被拉黑）`, time: new Date().toLocaleTimeString().slice(0, 5) });
+        input.value = '';
+        renderSingleChatWindow(document.getElementById('socialTab'));
+        showToast('⚠️ 对方开启了朋友验证，你已被拉黑', 'error', 3000);
+        return;
+    }
+    pushChatMessageSafe(npcId, {
+        from: 'player',
+        text,
+        senderAccount: activeAcc.isAlt ? `${activeAcc.name} (小号)` : activeAcc.name,
+        time: new Date().toLocaleTimeString().slice(0, 5)
+    });
+    input.value = '';
+    renderSingleChatWindow(document.getElementById('socialTab'));
+    autoSaveGame();
+};
+
+// ============================================================
+// 👥 群聊窗口渲染（包含表情包，无旁白）
+// ============================================================
+function renderGroupChatWindow(container) {
+    const gid = G.currentChatGroup;
+    const grp = G.groups[gid];
+    if (!grp) { closeGroupChat(); return; }
+    const msgs = G.groupChatHistory[gid] || [];
+    const activeAcc = getActiveAccountInfo();
+
+    let messagesHtml = '';
+    for (const msg of msgs) {
+        if (msg.from === 'action') {
+            messagesHtml += `
+            <div style="text-align:center;margin:8px 0;">
+                <span style="display:inline-block;background:rgba(0,0,0,0.06);color:#666;padding:3px 10px;border-radius:12px;font-size:11px;">${escapeHtml(msg.text)}</span>
+            </div>`;
+        } else {
+            const isSelf = msg.from === 'player';
+            let bubbleContent = '';
+            if (msg.sticker) {
+                bubbleContent = `<div style="padding:0;display:inline-block;"><img src="${msg.sticker.url}" alt="${escapeHtml(msg.sticker.desc)}" style="width:85px;height:85px;border-radius:8px;object-fit:cover;display:block;"></div>`;
+            } else {
+                bubbleContent = isSelf ? escapeHtml(msg.text).replace(/\n/g, '<br>') : renderContentWithThoughts(msg.text);
+            }
+
+            messagesHtml += `
+            <div class="chat-msg-row" data-msgid="${msg._id || ''}" data-from="${msg.from}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:10px;align-items:flex-start;">
+                ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${renderAvatarBadge({ avatarUrl: msg.senderAvatarUrl, avatarEmoji: msg.senderAvatar || '👤' }, 34)}</div>` : ''}
+                <div style="max-width:75%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
+                    ${!isSelf ? `<div style="font-size:11px;color:#777;margin-bottom:2px;">${escapeHtml(msg.senderName || '成员')}</div>` : ''}
+                    <div class="chat-bubble ${isSelf ? 'self-bubble' : ''}" ${isSelf && msg._id ? `oncontextmenu="event.preventDefault(); window.showMessageActionSheet('${msg._id}', 'group', '${gid}'); return false;"` : ''} style="width:fit-content;max-width:100%;display:inline-block;background:${isSelf ? (msg.sticker ? 'transparent' : '#95ec69') : (msg.sticker ? 'transparent' : '#fff')};color:#111;padding:${msg.sticker ? '0' : '8px 12px'};border-radius:${isSelf ? '10px 0 10px 10px' : '0 10px 10px 10px'};box-shadow:${msg.sticker ? 'none' : '0 1px 3px rgba(0,0,0,0.08)'};font-size:14px;line-height:1.5;word-break:break-word;user-select:none;-webkit-user-select:none;">
+                        ${bubbleContent}
+                    </div>
+                    <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
+                </div>
+                ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${renderAvatarBadge({ avatarUrl: activeAcc.avatar }, 34)}</div>` : ''}
+            </div>`;
+        }
+    }
+
+    const html = `
+    <div style="background:#f2f4f2;border-radius:14px;display:flex;flex-direction:column;height:100%;min-height:500px;box-shadow:0 4px 16px rgba(0,0,0,0.08);overflow:hidden;">
+        <div style="padding:10px 14px;background:#fff;border-bottom:1px solid #e5ebe5;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
+            <div style="display:flex;align-items:center;gap:10px;">
+                <button onclick="window.closeGroupChat()" style="border:none;background:none;font-size:20px;color:#333;cursor:pointer;padding:0 4px;">❮</button>
+                <div>
+                    <div style="font-weight:700;font-size:15px;">${escapeHtml(grp.name)} <span style="font-size:12px;color:#888;">(${(grp.members || []).length})</span></div>
+                    <div style="font-size:11px;color:#888;">${grp.desc ? escapeHtml(grp.desc.slice(0, 18)) : '群聊自由交流'}</div>
+                </div>
+            </div>
+            <div style="display:flex;gap:8px;align-items:center;">
+                <button onclick="window.openGroupSettingsModal('${gid}')" style="border:1px solid #ddd;background:#fff;color:#555;padding:4px 8px;border-radius:8px;font-size:12px;cursor:pointer;">⚙️ 管理</button>
+                <button onclick="window.triggerGroupAIReply('${gid}')" title="触发群成员回复" style="border:none;background:#ff4757;color:#fff;width:36px;height:36px;border-radius:10px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(255,71,87,0.35);">⚡</button>
+            </div>
+        </div>
+
+        <div id="groupMessageArea" style="flex:1;overflow-y:auto;padding:14px;">
+            ${messagesHtml || '<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">群里静悄悄的，点击 ➕ 开启多人共创吧！</div>'}
+        </div>
+
+        ${_stickerDrawerOpen ? buildStickerDrawerHTML('group', gid) : ''}
+
+        <div style="padding:8px 10px;background:#fff;border-top:1px solid #e5ebe5;display:flex;gap:8px;align-items:center;flex-shrink:0;">
+            <button onclick="window.openChatActionMenuModal('group', '${gid}')" title="群合作/共创视频" style="border:1px solid #ccc;background:#f8f9f8;color:#555;width:36px;height:36px;border-radius:50%;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">➕</button>
+            <button onclick="window.toggleStickerDrawer('group', '${gid}')" title="发送表情包" style="border:1px solid #ccc;background:${_stickerDrawerOpen ? '#eaf5ea' : '#f8f9f8'};color:#555;width:36px;height:36px;border-radius:50%;font-size:17px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">😊</button>
+            <textarea id="groupChatInput" rows="1" placeholder="以 [${escapeHtml(activeAcc.name)}] 在群里发言..." style="flex:1;padding:8px 12px;border-radius:18px;border:1px solid #ddd;background:#f8faf8;font-size:14px;resize:none;outline:none;font-family:inherit;"></textarea>
+            <button onclick="window.doSendGroupChat('${gid}')" style="border:none;background:var(--primary);color:#fff;padding:8px 16px;border-radius:18px;font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0;">发送</button>
+        </div>
+    </div>
+    `;
+    container.innerHTML = html;
+
+    const msgArea = document.getElementById('groupMessageArea');
+    if (msgArea) msgArea.scrollTop = msgArea.scrollHeight;
+
+    const input = document.getElementById('groupChatInput');
+    if (input) {
+        input.onkeydown = (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                window.doSendGroupChat(gid);
+            }
+        };
+    }
 }
+
+window.doSendGroupChat = function(gid) {
+    const input = document.getElementById('groupChatInput');
+    if (!input) return;
+    const text = input.value.trim();
+    if (!text) return;
+    const activeAcc = getActiveAccountInfo();
+    if (!G.groupChatHistory[gid]) G.groupChatHistory[gid] = [];
+    G.groupChatHistory[gid].push({
+        _id: 'gmsg_' + Date.now() + '_' + rand(100, 999),
+        from: 'player', senderName: activeAcc.name,
+        text, time: new Date().toLocaleTimeString().slice(0, 5)
+    });
+    input.value = '';
+    renderGroupChatWindow(document.getElementById('socialTab'));
+    autoSaveGame();
+};
 
 // 移除旁白选项的菜单（仅保留合作视频和联机开播）
-function openChatActionMenuModal(targetType, targetId) {
+window.openChatActionMenuModal = function(targetType, targetId) {
     const isGroup = targetType === 'group';
     const title = isGroup ? '👥 群聊互动与共创' : `🤝 与 ${escapeHtml(G.npcs[targetId]?.name || '好友')} 的互动`;
 
@@ -1257,25 +1003,15 @@ function openChatActionMenuModal(targetType, targetId) {
         <h3>${title}</h3>
         <p style="font-size:12px;color:#666;line-height:1.5;">选择与对方展开的合作联动形式：</p>
         <div class="btn-row" style="flex-direction:column;gap:8px;margin-top:10px;">
-            <button class="btn-primary" id="actCollabVideoBtn" style="width:100%;background:#e53935;">🎬 邀请一起录制拍视频 (油管共创)</button>
-            <button class="btn-primary" id="actCollabStreamBtn" style="width:100%;background:#388e3c;">🔴 邀请一起联机开播 (连麦涨粉)</button>
+            <button class="btn-primary" onclick="window.closeModal(); window.openCollabVideoPublishModal('${targetType}', '${targetId}')" style="width:100%;background:#e53935;">🎬 邀请一起录制拍视频 (油管共创)</button>
+            <button class="btn-primary" onclick="window.closeModal(); window.handleInviteCollabStream('${targetType}', '${targetId}')" style="width:100%;background:#388e3c;">🔴 邀请一起联机开播 (连麦涨粉)</button>
             <button class="btn-secondary" onclick="closeModal()" style="width:100%;">取消</button>
         </div>
     `);
-
-    document.getElementById('actCollabVideoBtn').onclick = () => {
-        closeModal();
-        openCollabVideoPublishModal(targetType, targetId);
-    };
-
-    document.getElementById('actCollabStreamBtn').onclick = () => {
-        closeModal();
-        handleInviteCollabStream(targetType, targetId);
-    };
-}
+};
 
 // 消息长按撤回/编辑/删除操作
-function showMessageActionSheet(msgId, targetType, targetId) {
+window.showMessageActionSheet = function(msgId, targetType, targetId) {
     const list = targetType === 'single' ? getAccountChatHistory(targetId) : (G.groupChatHistory[targetId] || []);
     const msg = list.find(m => m._id === msgId);
     if (!msg || msg.from !== 'player') return;
@@ -1335,10 +1071,10 @@ function showMessageActionSheet(msgId, targetType, targetId) {
         showToast('🗑️ 消息已删除', 'info');
         autoSaveGame();
     };
-}
+};
 
 // 视频共创与联机开播
-function openCollabVideoPublishModal(targetType, targetId) {
+window.openCollabVideoPublishModal = function(targetType, targetId) {
     const isGroup = targetType === 'group';
     let participants = [];
     if (isGroup) {
@@ -1418,18 +1154,18 @@ function openCollabVideoPublishModal(targetType, targetId) {
         showToast(`🎉 发布成功！`, 'success', 2500);
         advanceTimeSlot(); updateUI(); autoSaveGame(); renderSocialPanel(); checkSocialRequestsTrigger();
     };
-}
+};
 
-function handleInviteCollabStream(targetType, targetId) {
+window.handleInviteCollabStream = function(targetType, targetId) {
     const isGroup = targetType === 'group';
     let partnerNames = isGroup ? (G.groups[targetId]?.members || []).map(mid => G.npcs[mid]?.name).filter(Boolean) : [G.npcs[targetId]?.name].filter(Boolean);
     if (!partnerNames.length) { showToast('找不到联动搭档', 'error'); return; }
     G.pendingCollabPartners = partnerNames;
     showToast(`📺 已向 ${partnerNames.join('、')} 发出连麦邀请！`, 'success', 2500);
     switchTab('stream');
-}
+};
 
-function openNpcProfileCardModal(npcId) {
+window.openNpcProfileCardModal = function(npcId) {
     const npc = G.npcs[npcId];
     if (!npc) return;
     const isBlocked = isAccountBlockedByNpc(npcId, getActiveAccountInfo().id);
@@ -1444,24 +1180,13 @@ function openNpcProfileCardModal(npcId) {
                 ${npc.knownGroupEvents ? `<div style="margin-top:6px;padding-top:6px;border-top:1px dashed #ddd;color:#1565c0;"><b>👥 群聊认知：</b>${escapeHtml(npc.knownGroupEvents)}</div>` : ''}
             </div>
             <div class="btn-row" style="flex-direction:column;gap:8px;">
-                <button class="btn-primary" id="cardViewMomentsBtn" style="width:100%;background:#3866c4;">📱 查看 TA 的朋友圈动态</button>
-                <button class="btn-secondary" id="cardEditNpcBtn" style="width:100%;">✏️ 编辑人设与头像</button>
+                <button class="btn-primary" onclick="window.closeModal(); window.closeChat(); window.G.phoneNav = 'moments'; window.G.momentsFilterNpcId = '${npcId}'; window.renderSocialPanel();" style="width:100%;background:#3866c4;">📱 查看 TA 的朋友圈动态</button>
+                <button class="btn-secondary" onclick="window.closeModal(); window.openEditNpcModal('${npcId}');" style="width:100%;">✏️ 编辑人设与头像</button>
                 <button class="btn-secondary" onclick="closeModal()" style="width:100%;">返回聊天</button>
             </div>
         </div>
     `);
-
-    document.getElementById('cardViewMomentsBtn').onclick = () => {
-        closeModal(); closeChat();
-        G.phoneNav = 'moments';
-        G.momentsFilterNpcId = npcId;
-        renderSocialPanel();
-    };
-    document.getElementById('cardEditNpcBtn').onclick = () => {
-        closeModal();
-        openEditNpcModal(npcId);
-    };
-}
+};
 
 async function checkNpcMemorySummarize(npcId) {
     const memCfg = G.memoryConfig || {};
@@ -1521,7 +1246,7 @@ function splitIntoChatBubbles(rawText) {
     return [clean];
 }
 
-async function triggerAIReplyForSingle(npcId) {
+window.triggerAIReplyForSingle = async function(npcId) {
     const npc = window.G.npcs[npcId];
     if (!npc) return;
     const activeAcc = getActiveAccountInfo();
@@ -1627,7 +1352,7 @@ ${behindScreenPrompt}`;
             curStatusEl.innerHTML = `${isAccountBlockedByNpc(npcId, activeAcc.id) ? '<span style="color:#d32f2f;">⚠️ TA已拉黑</span>' : '● 在线'} ${npc.memorySummary ? '· 🧠记忆' : ''}`;
         }
     }
-}
+};
 
 async function checkGroupMemorySummarize(gid) {
     const memCfg = G.memoryConfig || {};
@@ -1662,7 +1387,7 @@ async function checkGroupMemorySummarize(gid) {
     }
 }
 
-async function triggerGroupAIReply(gid) {
+window.triggerGroupAIReply = async function(gid) {
     const grp = G.groups[gid];
     if (!grp) return;
     const history = G.groupChatHistory[gid] || [];
@@ -1796,7 +1521,136 @@ async function triggerGroupAIReply(gid) {
     } finally {
         G.isGenerating = false;
     }
+};
+
+// 🎨 表情包抽屉逻辑
+function buildStickerDrawerHTML(targetType, targetId) {
+    ensureStickersLoaded();
+    const cats = window.G.stickerCategories || ['猪猪', '默认'];
+    const activeCat = window.G.activeStickerCategory || cats[0];
+    const stickers = (window.G.stickerLibrary || []).filter(s => s.category === activeCat);
+
+    let tabsHtml = cats.map(c => `
+        <button class="stk-tab-btn ${c === activeCat ? 'active' : ''}" onclick="window.switchStickerCategory('${escapeHtml(c)}', '${targetType}')" style="padding:4px 9px;font-size:11px;font-weight:700;border:1px solid ${c === activeCat ? 'var(--primary)' : '#ccc'};border-radius:6px;background:${c === activeCat ? '#eaf5ea' : '#fff'};color:${c === activeCat ? 'var(--primary)' : '#555'};cursor:pointer;white-space:nowrap;">
+            ${escapeHtml(c)}
+        </button>
+    `).join('');
+
+    let gridHtml = `
+        <div class="stk-item-card" onclick="window.openImportStickersModal('${targetType}', '${targetId}')" style="height:62px;border:1.5px dashed #aaa;border-radius:6px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;background:#fafafa;">
+            <span style="font-size:20px;color:#888;">➕</span>
+            <span style="font-size:9.5px;color:#888;margin-top:2px;">添加</span>
+        </div>
+    `;
+
+    stickers.forEach((stk) => {
+        gridHtml += `
+        <div class="stk-item-card stk-send-btn" onclick="window.sendStickerMessage('${targetType}', '${targetId}', {desc: '${escapeHtml(stk.desc)}', url: '${escapeHtml(stk.url)}'})" style="height:62px;border:1px solid #e0e0e0;border-radius:6px;padding:2px;box-sizing:border-box;display:flex;align-items:center;justify-content:center;cursor:pointer;background:#fff;overflow:hidden;" title="${escapeHtml(stk.desc)}">
+            <img src="${stk.url}" style="width:100%;height:100%;object-fit:cover;border-radius:4px;">
+        </div>
+        `;
+    });
+
+    return `
+    <div id="stickerDrawerContainer" style="background:#f4f6f4;border-top:1px solid #ddd;padding:6px 8px;height:165px;display:flex;flex-direction:column;box-sizing:border-box;flex-shrink:0;">
+        <div style="display:flex;align-items:center;gap:5px;overflow-x:auto;padding-bottom:5px;border-bottom:1px solid #e2e8e2;flex-shrink:0;">
+            ${tabsHtml}
+            <button onclick="window.openCreateStickerCategoryModal('${targetType}', '${targetId}')" title="新建分组" style="border:1px solid #bbb;background:#fff;padding:3px 7px;border-radius:6px;font-size:10.5px;cursor:pointer;white-space:nowrap;">✏️ 新分类</button>
+        </div>
+        <div style="flex:1;overflow-y:auto;display:grid;grid-template-columns:repeat(auto-fill, minmax(52px, 1fr));gap:6px;padding-top:6px;">
+            ${gridHtml}
+        </div>
+    </div>
+    `;
 }
+
+window.switchStickerCategory = function(cat, type) {
+    window.G.activeStickerCategory = cat;
+    const cont = document.getElementById('socialTab');
+    if (type === 'single') renderSingleChatWindow(cont);
+    else renderGroupChatWindow(cont);
+};
+
+window.openCreateStickerCategoryModal = function(targetType, targetId) {
+    openModal(`
+        <div style="text-align:center;padding:10px 0;">
+            <h3 style="margin-bottom:12px;">新建表情分类</h3>
+            <div class="form-group">
+                <input type="text" id="newStickerCatName" placeholder="输入分类名称..." style="width:100%;padding:10px;border-radius:10px;border:1px solid #ccc;font-size:14px;box-sizing:border-box;">
+            </div>
+            <div class="btn-row" style="margin-top:14px;">
+                <button class="btn-secondary" onclick="closeModal()">取消</button>
+                <button class="btn-primary" id="btnConfirmCreateStkCat" style="background:#b39ddb;">创建</button>
+            </div>
+        </div>
+    `);
+
+    document.getElementById('btnConfirmCreateStkCat').onclick = () => {
+        const val = document.getElementById('newStickerCatName').value.trim();
+        if (!val) { showToast('⚠️ 请输入分类名称', 'error'); return; }
+        if (!window.G.stickerCategories.includes(val)) window.G.stickerCategories.push(val);
+        window.G.activeStickerCategory = val;
+        closeModal();
+        if (targetType === 'single') renderSingleChatWindow(document.getElementById('socialTab'));
+        else renderGroupChatWindow(document.getElementById('socialTab'));
+        autoSaveGame();
+    };
+};
+
+window.openImportStickersModal = function(targetType, targetId) {
+    const curCat = window.G.activeStickerCategory || '猪猪';
+    openModal(`
+        <h3>🖼️ 导入表情包到「${escapeHtml(curCat)}」</h3>
+        <p style="font-size:12px;color:#666;line-height:1.5;">支持批量导入。格式：<br><b style="color:#2e7d32;">表情描述——图床链接</b>（每行一个）</p>
+        <div class="form-group"><textarea id="importStickerBatchInput" rows="6" placeholder="这只可爱的小猪就是我呀——https://imgbed.heliar.top/i/QZNPVIKLzB8DiDL-.jpg" style="width:100%;padding:8px;font-size:12px;"></textarea></div>
+        <div class="btn-row"><button class="btn-secondary" onclick="closeModal()">取消</button><button class="btn-primary" id="btnConfirmBatchImport">批量导入</button></div>
+    `);
+    document.getElementById('btnConfirmBatchImport').onclick = () => {
+        const raw = document.getElementById('importStickerBatchInput').value.trim();
+        if (!raw) return;
+        const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
+        let count = 0;
+        if (!window.G.stickerLibrary) window.G.stickerLibrary = [];
+        for (const line of lines) {
+            if (line.includes('——')) {
+                const parts = line.split('——');
+                const desc = parts[0].trim();
+                const url = parts.slice(1).join('——').trim();
+                if (url.startsWith('http')) {
+                    window.G.stickerLibrary.push({ category: curCat, desc, url });
+                    count++;
+                }
+            }
+        }
+        showToast(`🎉 导入 ${count} 个表情！`, 'success', 2000);
+        closeModal();
+        if (targetType === 'single') renderSingleChatWindow(document.getElementById('socialTab'));
+        else renderGroupChatWindow(document.getElementById('socialTab'));
+        autoSaveGame();
+    };
+};
+
+window.sendStickerMessage = function(targetType, targetId, stickerObj) {
+    const curAcc = getActiveAccountInfo();
+    const msg = {
+        _id: 'cstk_' + Date.now() + '_' + rand(100, 999),
+        from: 'player',
+        senderName: curAcc.name, 
+        senderAccount: curAcc.name,
+        sticker: stickerObj,
+        text: `[表情: ${stickerObj.desc}]`,
+        time: new Date().toLocaleTimeString().slice(0, 5)
+    };
+    if (targetType === 'single') {
+        pushChatMessageSafe(targetId, msg);
+        renderSingleChatWindow(document.getElementById('socialTab'));
+    } else {
+        if (!window.G.groupChatHistory[targetId]) window.G.groupChatHistory[targetId] = [];
+        window.G.groupChatHistory[targetId].push(msg);
+        renderGroupChatWindow(document.getElementById('socialTab'));
+    }
+    autoSaveGame();
+};
 
 function openClockSettingsModal() {
     const cfg = G.clockConfig || { mode: 'game', customCountry: '中国 (东八区)', customTimeStr: '' };
@@ -1814,6 +1668,45 @@ function openClockSettingsModal() {
     };
 }
 
+window.toggleMomentLike = function(id) {
+    const item = G.feed.find(f => f.id === id);
+    if (!item) return;
+    item.liked = !item.liked;
+    item.likes = (item.likes || 0) + (item.liked ? 1 : -1);
+    renderSocialPanel();
+    autoSaveGame();
+};
+
+window.deleteMoment = function(id) {
+    if (confirm('确定删除这条动态吗？')) {
+        G.feed = G.feed.filter(f => f.id !== id);
+        showToast('🗑️ 动态已删除', 'info', 1200);
+        renderSocialPanel();
+        autoSaveGame();
+    }
+};
+
+window.recallMoment = function(id) {
+    const itemIdx = G.feed.findIndex(f => f.id === id);
+    if (itemIdx === -1) return;
+    const item = G.feed[itemIdx];
+    const isSeen = Math.random() < 0.5;
+    G.feed.splice(itemIdx, 1);
+    if (isSeen) {
+        showToast('👀 你撤回了动态，但有好友在你撤回前正好看到了！', 'info', 3000);
+        addGlobalMemoryRecord(`【朋友圈撤回】：撤回动态"${item.body.slice(0, 20)}"被发现。`);
+    } else {
+        showToast('↩️ 动态已悄悄撤回，没人发现', 'success', 2000);
+    }
+    renderSocialPanel();
+    autoSaveGame();
+};
+
+window.openEditMomentModalById = function(id) {
+    const item = G.feed.find(f => f.id === id);
+    if (item) openEditMomentModal(item);
+};
+
 function renderMemoir() {
     const container = (dom && dom.memoirTab) || document.getElementById('memoirTab');
     if (!container) return;
@@ -1828,29 +1721,22 @@ function renderMemoir() {
     container.innerHTML = html;
 }
 
-function jumpToMomentCard(momentId) {
+window.jumpToMomentCard = function(momentId) {
     window.G.currentChatNpc = null; window.G.phoneNav = 'moments'; window.G.momentsFilterNpcId = null; renderSocialPanel();
     setTimeout(() => {
         const card = document.querySelector(`.moment-card[data-id="${momentId}"]`);
         if (card) { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
     }, 150);
-}
+};
 
 // 暴露全部全局函数（保障跨文件调用绝不报错）
 window.renderSocialPanel = renderSocialPanel;
-window.openChat = openChat;
-window.closeChat = closeChat;
-window.openGroupChat = openGroupChat;
-window.closeGroupChat = closeGroupChat;
 window.openAccountManagerModal = openAccountManagerModal;
-window.switchAccount = switchAccount;
 window.receiveFriendRequest = receiveFriendRequest;
 window.deleteAltAccount = deleteAltAccount;
-window.showMessageActionSheet = showMessageActionSheet;
 window.triggerGenerateFriendsFeed = triggerGenerateFriendsFeed;
 window.detectPlayerTimezoneInfo = detectPlayerTimezoneInfo;
 window.formatNpcTimezoneContext = formatNpcTimezoneContext;
-window.jumpToMomentCard = jumpToMomentCard;
 window.openClockSettingsModal = openClockSettingsModal;
 window.renderMemoir = renderMemoir;
 window.openAddChatTargetModal = openAddChatTargetModal;
@@ -1865,3 +1751,4 @@ window.toggleCollection = toggleCollection;
 window.toggleColVideoComments = toggleColVideoComments;
 window.acceptSponsor = acceptSponsor;
 window.checkSocialRequestsTrigger = checkSocialRequestsTrigger;
+window.triggerAiCommentForMoment = triggerAiCommentForMoment;
