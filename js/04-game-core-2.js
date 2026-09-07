@@ -922,54 +922,100 @@ if (!G._behindScreenActive) G._behindScreenActive = {};
 
 function bindLongPressEvent(el, onLongPress, onClick) {
     if (!el) return;
+
+    // Android WebView 统一使用 Pointer Events，避免 touchend + mousedown + 合成 click
+    // 三套事件互相抢状态。私聊联系人尤其依赖这一点：短按必须稳定进入聊天，长按才编辑。
     const LONG_PRESS_MS = 500;
-    const MOVE_TOLERANCE = 10;
-    let pressTimer = null;
-    let longPressTriggered = false;
-    let startX = 0, startY = 0;
+    const MOVE_TOLERANCE = 12;
+    let timer = null;
+    let pressed = false;
+    let longPressed = false;
+    let moved = false;
+    let startX = 0;
+    let startY = 0;
 
-    const clearTimer = () => { if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; } };
+    const clear = () => {
+        if (timer !== null) {
+            clearTimeout(timer);
+            timer = null;
+        }
+    };
 
-    const start = (x, y) => {
-        longPressTriggered = false;
-        startX = x; startY = y;
-        clearTimer();
-        pressTimer = setTimeout(() => {
-            longPressTriggered = true;
+    const begin = (e) => {
+        if (e.pointerType === 'mouse' && e.button !== 0) return;
+        clear();
+        pressed = true;
+        longPressed = false;
+        moved = false;
+        startX = e.clientX;
+        startY = e.clientY;
+
+        // 不强制 preventDefault：允许列表继续自然滚动。
+        timer = setTimeout(() => {
+            if (!pressed || moved) return;
+            longPressed = true;
+            timer = null;
             if (typeof onLongPress === 'function') onLongPress();
         }, LONG_PRESS_MS);
     };
 
-    const move = (x, y) => {
-        if (Math.abs(x - startX) > MOVE_TOLERANCE || Math.abs(y - startY) > MOVE_TOLERANCE) {
-            clearTimer();
+    const move = (e) => {
+        if (!pressed) return;
+        if (Math.abs(e.clientX - startX) > MOVE_TOLERANCE ||
+            Math.abs(e.clientY - startY) > MOVE_TOLERANCE) {
+            moved = true;
+            clear();
         }
     };
 
-    const end = () => {
-        clearTimer();
-        if (!longPressTriggered) {
-            if (typeof onClick === 'function') onClick();
+    const finish = (e) => {
+        if (!pressed) return;
+        const wasLong = longPressed;
+        const wasMoved = moved;
+        pressed = false;
+        clear();
+
+        // 自己处理短按，因此阻止 WebView 随后再补发一次 click，避免双开聊天。
+        if (!wasLong && !wasMoved && typeof onClick === 'function') {
+            if (e && typeof e.preventDefault === 'function') e.preventDefault();
+            if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+            onClick();
         }
+        longPressed = false;
+        moved = false;
     };
 
-    const cancel = () => { clearTimer(); };
+    const cancel = () => {
+        pressed = false;
+        longPressed = false;
+        moved = false;
+        clear();
+    };
 
-    el.addEventListener('touchstart', e => {
-        const t = e.touches[0];
-        if (t) start(t.clientX, t.clientY);
-    }, { passive: true });
-    el.addEventListener('touchmove', e => {
-        const t = e.touches[0];
-        if (t) move(t.clientX, t.clientY);
-    }, { passive: true });
-    el.addEventListener('touchend', end);
-    el.addEventListener('touchcancel', cancel);
+    if (window.PointerEvent) {
+        el.addEventListener('pointerdown', begin, { passive: true });
+        el.addEventListener('pointermove', move, { passive: true });
+        el.addEventListener('pointerup', finish, { passive: false });
+        el.addEventListener('pointercancel', cancel, { passive: true });
+        el.addEventListener('lostpointercapture', cancel, { passive: true });
+    } else {
+        // 极老旧 WebView 兜底；正常 Android 新版不会走这里。
+        el.addEventListener('touchstart', e => {
+            const t = e.touches && e.touches[0];
+            if (t) begin({ clientX: t.clientX, clientY: t.clientY, pointerType: 'touch' });
+        }, { passive: true });
+        el.addEventListener('touchmove', e => {
+            const t = e.touches && e.touches[0];
+            if (t) move({ clientX: t.clientX, clientY: t.clientY });
+        }, { passive: true });
+        el.addEventListener('touchend', e => finish(e), { passive: false });
+        el.addEventListener('touchcancel', cancel, { passive: true });
+        el.addEventListener('click', e => {
+            // 老 WebView 若没有可靠 touchend，则允许正常 click 兜底。
+            if (typeof onClick === 'function' && !pressed && !longPressed && !moved) onClick();
+        });
+    }
 
-    el.addEventListener('mousedown', e => start(e.clientX, e.clientY));
-    el.addEventListener('mousemove', e => { if (pressTimer) move(e.clientX, e.clientY); });
-    el.addEventListener('mouseup', end);
-    el.addEventListener('mouseleave', cancel);
     el.addEventListener('contextmenu', e => e.preventDefault());
 }
 
