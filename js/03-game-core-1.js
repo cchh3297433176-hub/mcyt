@@ -128,9 +128,11 @@ function switchTab(tab) {
     }
 
     document.querySelectorAll('.tab-content').forEach(el => {
-        el.classList.toggle('active', el.id === targetId);
-        if (el.id === targetId) {
-            el.style.display = 'block';
+        const isTarget = (el.id === targetId);
+        el.classList.toggle('active', isTarget);
+        if (isTarget) {
+            el.style.display = (el.id === 'socialTab' || el.id === 'browserTab' || el.id === 'youtubeTab') ? 'flex' : 'block';
+            if (el.style.display === 'flex') el.style.flexDirection = 'column';
         } else {
             el.style.display = 'none';
         }
@@ -227,52 +229,35 @@ function showDeviceBanLockScreen() {
     `;
     lockMask.style.display = 'flex';
 
-    // 1. 导出取证卡按钮
     document.getElementById('lockExportBackupBtn').onclick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (typeof openBackupModal === 'function') {
-            openBackupModal();
-        } else {
-            alert('正在准备导出模块，请稍候重试...');
-        }
+        e.preventDefault(); e.stopPropagation();
+        if (typeof openBackupModal === 'function') openBackupModal();
+        else alert('正在准备导出模块，请稍候重试...');
     };
 
-    // 2. 导入管理员解封卡按钮
     document.getElementById('lockImportPardonCardBtn').onclick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        if (typeof openRestoreModal === 'function') {
-            openRestoreModal();
-        } else {
-            alert('请稍候，正在唤起文件管理器...');
-        }
+        e.preventDefault(); e.stopPropagation();
+        if (typeof openRestoreModal === 'function') openRestoreModal();
+        else alert('请稍候，正在唤起文件管理器...');
     };
 
-    // 3. 管理员密匙核验抽屉
     const toggleBtn = document.getElementById('toggleAdminUnlockFormBtn');
     const unlockBox = document.getElementById('inlineAdminUnlockBox');
     toggleBtn.onclick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
+        e.preventDefault(); e.stopPropagation();
         const isHidden = unlockBox.style.display === 'none';
         unlockBox.style.display = isHidden ? 'block' : 'none';
-        if (isHidden) {
-            document.getElementById('inlineAdminKeyInput')?.focus();
-        }
+        if (isHidden) document.getElementById('inlineAdminKeyInput')?.focus();
     };
 
-    // 4. 管理员查房进入
     document.getElementById('btnDoInlineUnlock').onclick = (e) => {
-        e.preventDefault();
-        e.stopPropagation();
+        e.preventDefault(); e.stopPropagation();
         const inputKey = document.getElementById('inlineAdminKeyInput').value;
         if (!inputKey) { alert('请输入管理员密匙！'); return; }
 
         if (inputKey.trim() === OtomeSecurityGuard.ADMIN_SECRET_KEY) {
             window._isAdminAuditing = true;
             lockMask.remove();
-
             _gameInitialized = true;
             G.phase = 'playing';
 
@@ -305,36 +290,31 @@ function showDeviceBanLockScreen() {
                 </div>
             `;
 
-            // ✅ 签发特赦卡并导出
             document.getElementById('btnAdminConfirmUnlockAll').onclick = () => {
                 OtomeSecurityGuard.adminAuthorizePardon(OtomeSecurityGuard.ADMIN_SECRET_KEY);
                 OtomeSecurityGuard.purgeAllDeviceBans();
-
-                alert('🎉 管理员特赦令已签发！现在为您打开导出弹窗，将导出的解密记忆卡发还给用户，用户在手机上导入即可解除封锁！\n\n导出完成后将自动退出查房，保证您的设备纯净。');
+                alert('🎉 管理员特赦令已签发！现在为您打开导出弹窗，将导出的解密记忆卡发还给用户，用户在手机上导入即可解除封锁！');
                 openBackupModal();
-
                 setTimeout(() => {
-                    if (confirm('是否已完成特赦卡导出？点击「确定」将立即退出查房模式并重置设备，防止他人人设残留。')) {
+                    if (confirm('是否已完成特赦卡导出？点击「确定」将立即退出查房模式并重置设备。')) {
                         exitAdminAuditingAndCleanup();
                     }
                 }, 1500);
             };
 
-            // 🚪 退出查房并清空
             document.getElementById('btnAdminExitAuditClean').onclick = () => {
-                if (confirm('确定退出当前查房模式吗？退出将彻底清洗此存档数据，避免残留。')) {
+                if (confirm('确定退出当前查房模式吗？退出将彻底清洗此存档数据。')) {
                     exitAdminAuditingAndCleanup();
                 }
             };
 
-            // ❌ 确属违规维持锁死
             document.getElementById('btnAdminRejectBanKeep').onclick = () => {
                 window._isAdminAuditing = false;
                 adminBanner.remove();
                 showDeviceBanLockScreen();
             };
 
-            alert('🔍 密匙正确！已进入管理员查房模式。你现在可以点进私聊、同人、朋友圈任意查阅历史。查验完毕后点击顶部按钮签发特赦卡或安全退出！');
+            alert('🔍 密匙正确！已进入管理员查房模式。');
             updateUI();
             renderAllPanels();
         } else {
@@ -343,31 +323,20 @@ function showDeviceBanLockScreen() {
     };
 }
 
-// 🛡️ 管理员查房彻底安全退出函数：清洗全部他人数据，防止新档串号
 function exitAdminAuditingAndCleanup() {
     window._isAdminAuditing = false;
     const adminBanner = document.getElementById('adminAuditStatusBar');
     if (adminBanner) adminBanner.remove();
 
-    // 彻底清空全局状态，仅保留网络模型配置
-    if (typeof resetGameState === 'function') {
-        resetGameState(true);
-    }
+    if (typeof resetGameState === 'function') resetGameState(true);
 
     _gameInitialized = false;
     G.phase = 'setup';
 
-    // 切换回开局设定页，并清空输入框
     const setup = $('setupPage');
     const game = $('gamePage');
-    if (game) {
-        game.classList.remove('active');
-        game.style.display = 'none';
-    }
-    if (setup) {
-        setup.classList.add('active');
-        setup.style.display = 'block';
-    }
+    if (game) { game.classList.remove('active'); game.style.display = 'none'; }
+    if (setup) { setup.classList.add('active'); setup.style.display = 'block'; }
 
     if ($('ytNameInput')) $('ytNameInput').value = '';
     if ($('personaInput')) $('personaInput').value = '';
@@ -376,7 +345,7 @@ function exitAdminAuditingAndCleanup() {
     const banner = $('resumeBanner');
     if (banner) banner.style.display = 'none';
 
-    showToast('✨ 已彻底清空查房数据，您可以全新开局或读取自己的存档！', 'success', 3500);
+    showToast('✨ 已清空查房数据！', 'success', 3500);
 }
 
 window.showDeviceBanLockScreen = showDeviceBanLockScreen;
@@ -477,9 +446,9 @@ function renderAllPanels() {
     const activeTab = document.querySelector('.tab-btn.active')?.dataset.tab;
     if (activeTab === 'data') renderDataPanel();
     if (activeTab === 'dashboard') renderDashboard();
-    if (activeTab === 'social' || document.getElementById('socialTab')?.style.display === 'block') renderSocialPanel();
-    if (document.getElementById('browserTab')?.style.display === 'block' && typeof renderBrowserPanel === 'function') renderBrowserPanel();
-    if (document.getElementById('youtubeTab')?.style.display === 'block' && typeof renderYouTubePanel === 'function') renderYouTubePanel();
+    if (activeTab === 'social' || document.getElementById('socialTab')?.style.display === 'flex') renderSocialPanel();
+    if (document.getElementById('browserTab')?.style.display === 'flex' && typeof renderBrowserPanel === 'function') renderBrowserPanel();
+    if (document.getElementById('youtubeTab')?.style.display === 'flex' && typeof renderYouTubePanel === 'function') renderYouTubePanel();
     if (activeTab === 'shop') renderShop();
     if (activeTab === 'memoir') renderMemoir();
     if (activeTab === 'stream') renderStreamPanel();
@@ -566,9 +535,7 @@ function applyLongTailEffect() {
 function updateCollectionStats(collectionName) {
     const col = G.collections[collectionName];
     if (!col) return;
-    let totalViews = 0,
-        totalLikes = 0,
-        totalComments = 0;
+    let totalViews = 0, totalLikes = 0, totalComments = 0;
     col.videos.forEach(idx => {
         const v = G.player.videos[idx];
         if (v) {
@@ -583,9 +550,6 @@ function updateCollectionStats(collectionName) {
     col.videoCount = col.videos.length;
 }
 
-// ============================================================
-// 动态系统 (Feed)
-// ============================================================
 function addFeedItem(data) {
     const item = {
         id: G.feedIdCounter++,
@@ -617,14 +581,7 @@ function generateFeedEvents() {
             `${npc.name} 发起了「${pick(['建筑大赛', '红石挑战', 'PvP锦标赛', '生存马拉松'])}」活动！`,
             `${npc.name} 表示最近在筹备一个大项目，敬请期待！`,
         ];
-        const body = pick(msgs);
-        addFeedItem({
-            author: npc.name,
-            avatar: npc.avatarEmoji || '👤',
-            body: body,
-            type: 'public',
-            npcId: npc.id,
-        });
+        addFeedItem({ author: npc.name, avatar: npc.avatarEmoji || '👤', body: pick(msgs), type: 'public', npcId: npc.id });
     }
     if (G.player.videos.length > 0 && Math.random() < 0.4) {
         const v = pick(G.player.videos);
@@ -634,12 +591,7 @@ function generateFeedEvents() {
             `有粉丝在动态中分享了你的视频「${v.title}」并配文：太棒了！`,
             `「${v.title}」被推荐到了热门首页！`,
         ];
-        addFeedItem({
-            author: '系统',
-            avatar: '📢',
-            body: pick(msgs),
-            type: 'public',
-        });
+        addFeedItem({ author: '系统', avatar: '📢', body: pick(msgs), type: 'public' });
     }
 }
 
@@ -670,3 +622,30 @@ function getNextMilestone() {
     }
     return '已达成所有里程碑！';
 }
+
+// 暴露全局（已安全移除未定义的 bindLongPressEvent 导出）
+window.closeModal = closeModal;
+window.performAction = performAction;
+window.openActionModal = openActionModal;
+window.advanceDayFree = advanceDayFree;
+window.switchTab = switchTab;
+window.renderDataPanel = renderDataPanel;
+window.renderDashboard = renderDashboard;
+window.renderStreamPanel = renderStreamPanel;
+window.openVideoModal = openVideoModal;
+window.toggleCollection = toggleCollection;
+window.toggleColVideoComments = toggleColVideoComments;
+window.renderShop = renderShop;
+window.renderMemoir = renderMemoir;
+window.renderAchievements = renderAchievements;
+window.acceptSponsor = acceptSponsor;
+window.G = G;
+window.showSaveSlotsModal = showSaveSlotsModal;
+window.saveGameToSlot = saveGameToSlot;
+window.loadGameFromSlot = loadGameFromSlot;
+window.showStartChoiceModal = showStartChoiceModal;
+window.receiveFriendRequest = receiveFriendRequest;
+window.openEditPlayerProfileModal = openEditPlayerProfileModal;
+window.checkAndShowVersionNoticeModal = checkAndShowVersionNoticeModal;
+window.openVersionNoticeModal = openVersionNoticeModal;
+window.updateWebSearchToggleUI = updateWebSearchToggleUI;
