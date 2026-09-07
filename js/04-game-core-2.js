@@ -914,6 +914,11 @@ if (!G.friendRequests) G.friendRequests = [];
 if (!G.groupInvites) G.groupInvites = [];
 if (!G.momentsFilterNpcId) G.momentsFilterNpcId = null;
 if (!G._chatShowFullHistory) G._chatShowFullHistory = {};
+// 聊天扩展状态必须在 renderSingleChatWindow 可能被调用前初始化。
+// 之前合并时漏掉这个声明，导致第一次进入聊天直接抛出
+// ReferenceError: _stickerDrawerOpen is not defined，表现为“点了完全没反应”。
+let _stickerDrawerOpen = false;
+if (!G._behindScreenActive) G._behindScreenActive = {};
 
 function bindLongPressEvent(el, onLongPress, onClick) {
     if (!el) return;
@@ -2758,6 +2763,23 @@ async function triggerGroupAIReply(gid) {
 }
 
 // ============================================================
+// 好友申请入口（供 07-actions-social.js 的随机好友事件调用）
+function receiveFriendRequest(req) {
+    if (!req) return;
+    if (!G.friendRequests) G.friendRequests = [];
+    const item = Object.assign({
+        _id: 'friend_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
+        fromReason: '好友申请',
+        persona: '',
+        avatarEmoji: '👤',
+        day: G.day || 1
+    }, req);
+    G.friendRequests.push(item);
+    showToast(`📬 收到新的好友申请：${item.name || '新好友'}`, 'success', 2200);
+    if (document.querySelector('.tab-btn.active')?.dataset.tab === 'social') renderSocialPanel();
+    autoSaveGame();
+}
+
 // ➕ 新建与好友/群邀请管理弹窗
 // ============================================================
 function openAddChatTargetModal() {
@@ -3551,6 +3573,7 @@ window.openGroupChat = openGroupChat;
 window.closeGroupChat = closeGroupChat;
 window.openAccountManagerModal = openAccountManagerModal;
 window.switchAccount = switchAccount;
+window.receiveFriendRequest = receiveFriendRequest;
 window.deleteAltAccount = deleteAltAccount;
 window.showMessageActionSheet = showMessageActionSheet;
 window.triggerGenerateFriendsFeed = triggerGenerateFriendsFeed;
