@@ -1215,8 +1215,11 @@ function bindChatListEvents(container) {
                 return;
             }
             // 某些 WebView 不派发 click，因此短按在 touchend 再提供一次兜底入口。
-            suppressClickUntil = Date.now() + 350;
+            // 注意：必须先执行 enterChat()，再设置 suppressClickUntil——
+            // 否则 enterChat() 内部的时间戳校验会把这次调用自己拦截掉，
+            // 导致私聊联系人在触屏设备上完全点不进去（这正是此前的 bug）。
             enterChat();
+            suppressClickUntil = Date.now() + 350;
         }, { passive: true });
 
         el.addEventListener('touchcancel', () => {
