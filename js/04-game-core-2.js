@@ -174,7 +174,7 @@ function renderShop() {
             if (offer.accepted) {
                 html += `<div class="sponsor-card" style="border-left-color:#4caf50;">
                     <div class="sponsor-name">✅ ${offer.name}</div>
-                    <div class="sponsor-desc">已接受，获得 ${offer.reward} 金币</div>
+                    <div class="sponsor-desc">已��受，获得 ${offer.reward} 金币</div>
                 </div>`;
             } else {
                 html += `
@@ -351,7 +351,7 @@ function renderComments(videoIndex, container) {
                 <div class="comment-user">${escapeHtml(comment.user)}</div>
                 <div class="comment-content">${escapeHtml(comment.content)}</div>
                 <div class="reply-box">
-                    <input type="text" placeholder="以 [${escapeHtml(activeAccount.name)}] 回复 @${escapeHtml(comment.user)}..." class="reply-input" data-video-idx="${videoIndex}" data-comment-idx="${idx}">
+                    <input type="text" placeholder="��� [${escapeHtml(activeAccount.name)}] 回复 @${escapeHtml(comment.user)}..." class="reply-input" data-video-idx="${videoIndex}" data-comment-idx="${idx}">
                     <button class="reply-send" data-video-idx="${videoIndex}" data-comment-idx="${idx}">发送</button>
                 </div>
             </div>
@@ -617,7 +617,6 @@ function getAccountChatHistory(npcId, accId = null) {
     if (!G.chatHistory) G.chatHistory = {};
     const key = getChatStorageKey(npcId, accId);
     if (!G.chatHistory[key]) {
-        // 旧档兼容：如果当前是 main 账号，且存在旧格式的历史，直接迁移
         const targetAcc = accId || (G.currentAccountId || 'main');
         if (targetAcc === 'main' && Array.isArray(G.chatHistory[npcId])) {
             G.chatHistory[key] = G.chatHistory[npcId];
@@ -857,7 +856,7 @@ function checkSocialRequestsTrigger() {
 window.checkSocialRequestsTrigger = checkSocialRequestsTrigger;
 
 // ============================================================
-// 🌍 时区与时差自适应推导工具（根据玩家人设判断其所在地）
+// 🌍 时区与时差自适应推导工具
 // ============================================================
 function detectPlayerTimezoneInfo() {
     const persona = ((G.player && G.player.persona) || '').toLowerCase();
@@ -868,23 +867,17 @@ function detectPlayerTimezoneInfo() {
     let region = 'CN';
 
     if (combined.includes('美国') || combined.includes('美籍') || combined.includes('usa') || combined.includes('america') || combined.includes('洛杉矶') || combined.includes('纽约')) {
-        country = '美国 (北美时区)';
-        region = 'US';
+        country = '美国 (北美时区)'; region = 'US';
     } else if (combined.includes('加拿大') || combined.includes('canada')) {
-        country = '加拿大 (北美时区)';
-        region = 'CA';
+        country = '加拿大 (北美时区)'; region = 'CA';
     } else if (combined.includes('英国') || combined.includes('uk') || combined.includes('伦敦') || combined.includes('英格兰')) {
-        country = '英国 (格林威治/欧洲时区)';
-        region = 'UK';
+        country = '英国 (格林威治/欧洲时区)'; region = 'UK';
     } else if (combined.includes('法国') || combined.includes('france') || combined.includes('巴黎')) {
-        country = '法国 (欧洲时区)';
-        region = 'FR';
+        country = '法国 (欧洲时区)'; region = 'FR';
     } else if (combined.includes('日本') || combined.includes('japan') || combined.includes('东京')) {
-        country = '日本 (东九区)';
-        region = 'JP';
+        country = '日本 (东九区)'; region = 'JP';
     } else if (combined.includes('澳洲') || combined.includes('澳大利亚') || combined.includes('australia') || combined.includes('悉尼')) {
-        country = '澳大利亚 (东十区)';
-        region = 'AU';
+        country = '澳大利亚 (东十区)'; region = 'AU';
     }
 
     const slotName = getTimeSlotName(G.timeSlot);
@@ -899,7 +892,7 @@ function formatNpcTimezoneContext(targetNpcName = '') {
 2. 常见海外MC主播（如 Dream/美、ThatMob/加法、Grox/美、Twixxel/美、xqree/欧洲、Whispy/美）：
    - 若玩家在中国/亚洲：玩家这边的「早晨/中午」是海外主播那边的「深夜/凌晨/甚至熬夜修仙还未睡觉」；玩家这边的「夜晚」是海外主播那边的「清晨起床/正午刚开播」。
    - 若玩家人设本就在北美/欧洲同区，则基本没有大时差，为正常同区作息。
-3. 请在对话/评论中，根据此真实时差及角色作息自然反应（例如“这么早发动态？我这刚准备通宵下播睡觉…”或“哈欠…刚爬起来就刷到你”），细节极其生动真实！
+3. 请在对话/评论中，根据此真实时差及角色作息自然反应（例如"这么早发动态？我这刚准备通宵下播睡觉…"或"哈欠…刚爬起来就刷到你"），细节极其生动真实！
 `;
 }
 
@@ -914,107 +907,86 @@ if (!G.friendRequests) G.friendRequests = [];
 if (!G.groupInvites) G.groupInvites = [];
 if (!G.momentsFilterNpcId) G.momentsFilterNpcId = null;
 if (!G._chatShowFullHistory) G._chatShowFullHistory = {};
-// 聊天扩展状态必须在 renderSingleChatWindow 可能被调用前初始化。
-// 之前合并时漏掉这个声明，导致第一次进入聊天直接抛出
-// ReferenceError: _stickerDrawerOpen is not defined，表现为“点了完全没反应”。
 let _stickerDrawerOpen = false;
 if (!G._behindScreenActive) G._behindScreenActive = {};
 
+// ============================================================
+// ✅ [BUG FIX] bindLongPressEvent 完全重写
+// 原版使用 Pointer Events，但 Android WebView 上 pointerup 在无指针捕获时
+// 可能不发到原元素，导致所有短按失效。
+// 新版改用 touchstart/touchend（touchend 永远发到触摸起始元素，不受移动影响），
+// 并用 touchConsumedNext 标记阻止后续合成 click 双触发。
+// ============================================================
 function bindLongPressEvent(el, onLongPress, onClick) {
     if (!el) return;
+    const LONG_MS = 500;
+    const MOVE_LIMIT = 10;
+    let touchTimer = null;
+    let touchPressing = false;
+    let touchLong = false;
+    let touchMoved = false;
+    let touchSx = 0, touchSy = 0;
+    // 防止 touchend 之后 300ms 内浏览器合成的 click 事件重复触发
+    let touchConsumedNext = false;
 
-    // Android WebView 统一使用 Pointer Events，避免 touchend + mousedown + 合成 click
-    // 三套事件互相抢状态。私聊联系人尤其依赖这一点：短按必须稳定进入聊天，长按才编辑。
-    const LONG_PRESS_MS = 500;
-    const MOVE_TOLERANCE = 12;
-    let timer = null;
-    let pressed = false;
-    let longPressed = false;
-    let moved = false;
-    let startX = 0;
-    let startY = 0;
-
-    const clear = () => {
-        if (timer !== null) {
-            clearTimeout(timer);
-            timer = null;
+    // ===== 触摸事件（Android WebView 主逻辑）=====
+    el.addEventListener('touchstart', e => {
+        if (e.touches.length !== 1) return;
+        touchPressing = true;
+        touchLong = false;
+        touchMoved = false;
+        touchSx = e.touches[0].clientX;
+        touchSy = e.touches[0].clientY;
+        if (touchTimer) { clearTimeout(touchTimer); touchTimer = null; }
+        if (onLongPress) {
+            touchTimer = setTimeout(() => {
+                if (touchPressing && !touchMoved) {
+                    touchLong = true;
+                    touchTimer = null;
+                    onLongPress();
+                }
+            }, LONG_MS);
         }
-    };
+    }, { passive: true });
 
-    const begin = (e) => {
-        if (e.pointerType === 'mouse' && e.button !== 0) return;
-        clear();
-        pressed = true;
-        longPressed = false;
-        moved = false;
-        startX = e.clientX;
-        startY = e.clientY;
-
-        // 不强制 preventDefault：允许列表继续自然滚动。
-        timer = setTimeout(() => {
-            if (!pressed || moved) return;
-            longPressed = true;
-            timer = null;
-            if (typeof onLongPress === 'function') onLongPress();
-        }, LONG_PRESS_MS);
-    };
-
-    const move = (e) => {
-        if (!pressed) return;
-        if (Math.abs(e.clientX - startX) > MOVE_TOLERANCE ||
-            Math.abs(e.clientY - startY) > MOVE_TOLERANCE) {
-            moved = true;
-            clear();
+    el.addEventListener('touchmove', e => {
+        if (!touchPressing || !e.touches[0]) return;
+        if (Math.abs(e.touches[0].clientX - touchSx) > MOVE_LIMIT ||
+            Math.abs(e.touches[0].clientY - touchSy) > MOVE_LIMIT) {
+            touchMoved = true;
+            if (touchTimer) { clearTimeout(touchTimer); touchTimer = null; }
         }
-    };
+    }, { passive: true });
 
-    const finish = (e) => {
-        if (!pressed) return;
-        const wasLong = longPressed;
-        const wasMoved = moved;
-        pressed = false;
-        clear();
-
-        // 自己处理短按，因此阻止 WebView 随后再补发一次 click，避免双开聊天。
-        if (!wasLong && !wasMoved && typeof onClick === 'function') {
-            if (e && typeof e.preventDefault === 'function') e.preventDefault();
-            if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+    el.addEventListener('touchend', e => {
+        if (touchTimer) { clearTimeout(touchTimer); touchTimer = null; }
+        const wasShortTap = touchPressing && !touchMoved && !touchLong;
+        touchPressing = false;
+        touchLong = false;
+        touchMoved = false;
+        if (wasShortTap && onClick) {
+            // 阻止浏览器合成的 300ms 延迟 click，防止 onClick 双发
+            e.preventDefault();
+            touchConsumedNext = true;
+            setTimeout(() => { touchConsumedNext = false; }, 600);
             onClick();
         }
-        longPressed = false;
-        moved = false;
-    };
+    }, { passive: false });
 
-    const cancel = () => {
-        pressed = false;
-        longPressed = false;
-        moved = false;
-        clear();
-    };
+    el.addEventListener('touchcancel', () => {
+        if (touchTimer) { clearTimeout(touchTimer); touchTimer = null; }
+        touchPressing = false;
+        touchLong = false;
+        touchMoved = false;
+    }, { passive: true });
 
-    if (window.PointerEvent) {
-        el.addEventListener('pointerdown', begin, { passive: true });
-        el.addEventListener('pointermove', move, { passive: true });
-        el.addEventListener('pointerup', finish, { passive: false });
-        el.addEventListener('pointercancel', cancel, { passive: true });
-        el.addEventListener('lostpointercapture', cancel, { passive: true });
-    } else {
-        // 极老旧 WebView 兜底；正常 Android 新版不会走这里。
-        el.addEventListener('touchstart', e => {
-            const t = e.touches && e.touches[0];
-            if (t) begin({ clientX: t.clientX, clientY: t.clientY, pointerType: 'touch' });
-        }, { passive: true });
-        el.addEventListener('touchmove', e => {
-            const t = e.touches && e.touches[0];
-            if (t) move({ clientX: t.clientX, clientY: t.clientY });
-        }, { passive: true });
-        el.addEventListener('touchend', e => finish(e), { passive: false });
-        el.addEventListener('touchcancel', cancel, { passive: true });
-        el.addEventListener('click', e => {
-            // 老 WebView 若没有可靠 touchend，则允许正常 click 兜底。
-            if (typeof onClick === 'function' && !pressed && !longPressed && !moved) onClick();
-        });
-    }
+    // ===== 鼠标点击（PC 浏览器调试回退）=====
+    // touchend 已用 preventDefault 阻止合成 click，
+    // touchConsumedNext 进一步保险屏蔽，所以在 Android 上这里不会双发。
+    el.addEventListener('click', () => {
+        if (touchConsumedNext) { touchConsumedNext = false; return; }
+        onClick && onClick();
+    });
 
     el.addEventListener('contextmenu', e => e.preventDefault());
 }
@@ -1045,6 +1017,13 @@ function renderSocialPanel() {
     renderPhoneApp(container);
 }
 
+// ============================================================
+// ✅ [BUG FIX] renderPhoneApp：
+// 1. 底部导航按钮改为 addEventListener('click')，不再用 bindLongPressEvent
+//    （这些按钮只需点击，不需要长按，用 click 最可靠）
+// 2. 账号切换按钮改为 ID 绑定
+// 3. 新增 🕒 时区设置快捷按钮（对应 openClockSettingsModal）
+// ============================================================
 function renderPhoneApp(container) {
     const isMoments = G.phoneNav === 'moments';
     let contentHtml = isMoments ? buildMomentsHTML() : buildChatListHTML();
@@ -1057,7 +1036,10 @@ function renderPhoneApp(container) {
                 <span>${activeAcc.isAlt ? '🎭' : '👑'} 当前账号：<b>${escapeHtml(activeAcc.name)}</b></span>
                 ${activeAcc.isAlt ? '<span style="font-size:10px;background:#ffe082;color:#795548;padding:1px 4px;border-radius:4px;font-weight:700;">小号模式</span>' : ''}
             </div>
-            <button onclick="openAccountManagerModal()" style="border:1px solid #b8dbb8;background:#fff;padding:2px 8px;border-radius:12px;font-size:11px;cursor:pointer;color:#2e7d32;font-weight:700;">🔀 切换/注册小号</button>
+            <div style="display:flex;gap:5px;align-items:center;">
+                <button id="phoneClockBtn" title="时区与时钟设置" style="border:1px solid #b8dbb8;background:#fff;padding:2px 7px;border-radius:12px;font-size:11px;cursor:pointer;color:#2e7d32;font-weight:700;">🕒 时区</button>
+                <button id="phoneAccountBtn" style="border:1px solid #b8dbb8;background:#fff;padding:2px 8px;border-radius:12px;font-size:11px;cursor:pointer;color:#2e7d32;font-weight:700;">🔀 切换/注册小号</button>
+            </div>
         </div>
 
         <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;">
@@ -1077,18 +1059,18 @@ function renderPhoneApp(container) {
     `;
     container.innerHTML = html;
 
-    // 注意：不要用 .onclick= 直接绑定。部分 Android WebView 在触屏下不会稳定
-    // 补发合成的 click 事件，导致这两个底部导航按钮偶发“点了没反应”，
-    // 且一旦卡在某个聊天窗口里（G.currentChatNpc/currentChatGroup 未清空），
-    // renderSocialPanel() 会一直渲染回聊天窗口，看起来就像“朋友圈切不过去”。
-    // 统一改用已验证在触屏上稳定可用的 bindLongPressEvent，并显式清空聊天状态。
-    bindLongPressEvent(document.getElementById('phoneNavChatsBtn'), null, () => {
+    // ✅ 使用 addEventListener('click') 而非 bindLongPressEvent
+    // 纯点击按钮不需要长按检测，click 在 Android WebView 上最稳定可靠
+    document.getElementById('phoneClockBtn')?.addEventListener('click', () => openClockSettingsModal());
+    document.getElementById('phoneAccountBtn')?.addEventListener('click', () => openAccountManagerModal());
+
+    document.getElementById('phoneNavChatsBtn')?.addEventListener('click', () => {
         G.currentChatNpc = null;
         G.currentChatGroup = null;
         G.phoneNav = 'chats';
         renderSocialPanel();
     });
-    bindLongPressEvent(document.getElementById('phoneNavMomentsBtn'), null, () => {
+    document.getElementById('phoneNavMomentsBtn')?.addEventListener('click', () => {
         G.currentChatNpc = null;
         G.currentChatGroup = null;
         G.phoneNav = 'moments';
@@ -1191,29 +1173,39 @@ function buildChatListHTML() {
     </div>`;
 }
 
+// ============================================================
+// ✅ [BUG FIX] bindChatListEvents：
+// Tab 切换按钮和加号按钮只需点击，改用 addEventListener('click')
+// 联系人/群聊列表项需要长按，继续用修复后的 bindLongPressEvent
+// ============================================================
 function bindChatListEvents(container) {
     const directBtn = document.getElementById('tabDirectBtn');
     const groupBtn = document.getElementById('tabGroupBtn');
     const addBtn = document.getElementById('addChatTargetBtn');
-    // 统一使用 bindLongPressEvent（触屏 touchend 直接触发，不依赖 WebView
-    // 补发的合成 click 事件），这几个按钮之前用 .onclick= 绑定，在部分
-    // Android WebView 上会出现“点了没反应”的问题。
-    bindLongPressEvent(directBtn, null, () => { G.chatActiveTab = 'direct'; G.currentChatNpc = null; G.currentChatGroup = null; renderSocialPanel(); });
-    bindLongPressEvent(groupBtn, null, () => { G.chatActiveTab = 'group'; G.currentChatNpc = null; G.currentChatGroup = null; renderSocialPanel(); });
-    bindLongPressEvent(addBtn, null, () => openAddChatTargetModal());
 
-    // 私聊联系人：短按进入聊天，长按编辑人设。
-    // 之前这里是一套自行实现的 touch/click 混合逻辑，其中 touchend 内部
-    // “先设置抑制标记、再调用进入聊天”的顺序写反了，导致进入聊天的调用
-    // 一进来就被自己刚设的标记拦截，触屏点击私聊联系人完全没反应。
-    // 群聊列表用的 bindLongPressEvent 一直工作正常，这里直接复用同一套
-    // 已验证可靠的机制，避免再犯同样的错误。
+    // 纯点击按钮：直接用 click，最可靠
+    directBtn?.addEventListener('click', () => {
+        G.chatActiveTab = 'direct';
+        G.currentChatNpc = null;
+        G.currentChatGroup = null;
+        renderSocialPanel();
+    });
+    groupBtn?.addEventListener('click', () => {
+        G.chatActiveTab = 'group';
+        G.currentChatNpc = null;
+        G.currentChatGroup = null;
+        renderSocialPanel();
+    });
+    addBtn?.addEventListener('click', () => openAddChatTargetModal());
+
+    // 私聊联系人：短按进入聊天，长按编辑人设
     container.querySelectorAll('.chat-item').forEach(el => {
         const id = el.dataset.id;
         if (!id) return;
         bindLongPressEvent(el, () => openEditNpcModal(String(id)), () => openChat(String(id)));
     });
 
+    // 群聊列表：短按进群，长按设置
     container.querySelectorAll('.group-item').forEach(el => {
         const gid = el.dataset.gid;
         if (!gid) return;
@@ -1222,7 +1214,7 @@ function bindChatListEvents(container) {
 }
 
 // ============================================================
-// 🌟 朋友圈生态系统（发动态、AI多模态识图互动、楼中楼互怼与时差）
+// 🌟 朋友圈生态系统
 // ============================================================
 function buildMomentsHTML() {
     let feedItems = [...(G.feed || [])].reverse();
@@ -1335,7 +1327,6 @@ function bindMomentsEvents(container) {
         };
     });
 
-    // 💬 召唤好友互动（多模态识图 + 时差 + 楼中楼互怼）
     container.querySelectorAll('.moment-ai-cmt-btn').forEach(btn => {
         btn.onclick = async () => {
             const id = parseInt(btn.dataset.id);
@@ -1363,7 +1354,7 @@ function bindMomentsEvents(container) {
                 G.feed.splice(itemIdx, 1);
                 if (isSeen) {
                     showToast('👀 你撤回了动态，但有好友在你撤回前正好看到了！', 'info', 3000);
-                    addGlobalMemoryRecord(`【朋友圈动态撤回】：主角发布了关于“${item.body.slice(0, 20)}”的动态后又快速撤回，但被部分好友偶然看到。`);
+                    addGlobalMemoryRecord(`【朋友圈动态撤回】：主角发布了关于"${item.body.slice(0, 20)}"的动态后又快速撤回，但被部分好友偶然看到。`);
                 } else {
                     showToast('↩️ 动态已悄悄撤回，没人发现', 'success', 2000);
                 }
@@ -1443,7 +1434,7 @@ function openCreateMomentPostModal() {
             imageMode: imgType, likes: 0, liked: false, comments: [], time: new Date().toLocaleTimeString().slice(0, 5)
         };
         G.feed.push(newPost);
-        addGlobalMemoryRecord(`【玩家发朋友圈】：在第 ${G.day} 天发布了动态：“${body}”${newPost.image ? '（附带了一张相册照片/立绘截图）' : ''}${newPost.imageDesc ? `（配图描述: ${newPost.imageDesc}）` : ''}`);
+        addGlobalMemoryRecord(`【玩家发朋友圈】：在第 ${G.day} 天发布了动态："${body}"${newPost.image ? '（附带了一张相册照片/立绘截图）' : ''}${newPost.imageDesc ? `（配图描述: ${newPost.imageDesc}）` : ''}`);
         showToast('🎉 朋友圈发布成功！', 'success', 2000); closeModal(); renderSocialPanel(); autoSaveGame();
     };
 }
@@ -1472,7 +1463,6 @@ function openEditMomentModal(item) {
     };
 }
 
-// ✨ AI 自动生成通讯录好友朋友圈动态（融合时区与主播生活）
 async function triggerGenerateFriendsFeed() {
     const npcs = Object.values(G.npcs || {});
     if (!npcs.length) {
@@ -1491,7 +1481,7 @@ ${tzContext}
 内容可以结合你当前所处时区的作息（如熬夜剪辑翻车、刚起床迷糊开箱、吐槽其他主播、或生活碎碎念）。只输出动态正文，严禁解释。`;
 
         const raw = await callAI([{ role: 'system', content: sys }, { role: 'user', content: '发一条新动态。' }], { maxTokens: 150, temperature: 0.95 });
-        const clean = stripThought(raw).replace(/^["'“]|["'”]$/g, '').trim();
+        const clean = stripThought(raw).replace(/^["'"]|["'"]$/g, '').trim();
 
         if (!G.feed) G.feed = [];
         G.feed.push({
@@ -1514,7 +1504,6 @@ ${tzContext}
     }
 }
 
-// 💬 召唤好友互动评论（支持真实相册图片多模态识别 + 时区推导 + 楼中楼争风吃醋/互怼）
 async function triggerAiCommentForMoment(momentId) {
     const item = (G.feed || []).find(f => f.id === momentId);
     if (!item) return;
@@ -1546,7 +1535,7 @@ async function triggerAiCommentForMoment(momentId) {
 ${tzContext}
 
 【动态发布者】：${item.author}
-【动态文字内容】：“${item.body}” ${imgDescContext}
+【动态文字内容】："${item.body}" ${imgDescContext}
 ${existingCommentsText}
 
 【本次参与互动的具体好友】：
@@ -1554,14 +1543,13 @@ ${participantsDesc}
 
 【核心演绎规则（纯乙女守护与多模态视觉聚焦）】：
 1. 配图理解规则：
-   - “真实图片”：可以视觉识图，并结合图片细节评论。
-   - “真实图片 + 文字描述”：绝对不能读取真实图片，只能依据【配图描述】理解图片内容。
-   - “文字代替图片”：只能依据【配图描述】理解图片内容。
+   - "真实图片"：可以视觉识图，并结合图片细节评论。
+   - "真实图片 + 文字描述"：绝对不能读取真实图片，只能依据【配图描述】理解图片内容。
+   - "文字代替图片"：只能依据【配图描述】理解图片内容。
 2. 楼中楼接梗与互怼争吵（纯乙女安全合规）：
-   - 好友之间不要各说各话！第二位及后续的好友必须直接接前面的话、甚至争风吃醋或毒舌拆台（例如ThatMob傲娇说“没我可爱/去帮你报仇”，其他角色可以立刻嘲讽“就你那PVP技术送双杀去吧”）。
+   - 好友之间不要各说各话！第二位及后续的好友必须直接接前面的话、甚至争风吃醋或毒舌拆台。
    - 严禁攻略角色之间发生搞基或同性恋爱（纯乙女红线），角色之间的争吵仅限【技术攀比、护短争宠、傲娇吃醋、毒舌吐槽】！
-3. 时差自然体现：
-   - 结合双方真实时差（如中国与欧美），在评论中自然带上当时的生活状态（通宵刚下播准备睡觉、刚起床迷糊等）。
+3. 时差自然体现：结合双方真实时差，在评论中自然带上当时的生活状态。
 
 【输出格式要求（每行一条，必须按此格式）】：
 [COMMENT name=角色名字]评论正文（40字以内）[/COMMENT]
@@ -1569,21 +1557,12 @@ ${participantsDesc}
 
         let userContent = null;
         if (hasAiImage) {
-            // 🌟 标准多模态消息数组格式，完美兼容 Gemini / OpenAI
             userContent = [
-                {
-                    type: 'text',
-                    text: `请好友们针对玩家发布的动态及这张图片进行生动评论与互怼接话：`
-                },
-                {
-                    type: 'image_url',
-                    image_url: {
-                        url: item.image
-                    }
-                }
+                { type: 'text', text: `请好友们针对玩家发布的动态及这张图片进行生动评论与互怼接话：` },
+                { type: 'image_url', image_url: { url: item.image } }
             ];
         } else {
-            userContent = `请好友们针对玩家发布的动态进行生动评论与互怼接话。${item.imageDesc ? `这张配图只能依据以下文字描述理解：${item.imageDesc}` : ''}`;
+            userContent = `请���友们针对玩家发布的动态进行生动评论与互怼接话。${item.imageDesc ? `这张配图只能依据以下文字描述理解：${item.imageDesc}` : ''}`;
         }
 
         const raw = await callAI([
@@ -1605,27 +1584,19 @@ ${participantsDesc}
             const matchedNpc = selectedNpcs.find(n => n.name === rawName || rawName.includes(n.name));
             const finalName = matchedNpc ? matchedNpc.name : rawName;
 
-            item.comments.push({
-                user: finalName,
-                content: text
-            });
+            item.comments.push({ user: finalName, content: text });
 
-            // 🧠 记忆穿透：将该 NPC 对玩家动态的评论注入该 NPC 独立记忆
             if (matchedNpc) {
-                const npcMemo = `【朋友圈互动】：在动态“${item.body.slice(0, 18)}”下评论说：“${text}”`;
+                const npcMemo = `【朋友圈互动】：在动态"${item.body.slice(0, 18)}"下评论说："${text}"`;
                 matchedNpc.memorySummary = (matchedNpc.memorySummary || '') + '\n' + npcMemo;
             }
-
             addedCount++;
         }
 
         if (addedCount === 0 && raw.trim()) {
             const fallbackNpc = selectedNpcs[0] || npcs[0];
             const cleanBody = stripThought(raw.replace(/\[\/?COMMENT[^\]]*\]/gi, '').trim());
-            item.comments.push({
-                user: fallbackNpc.name,
-                content: cleanBody.slice(0, 50) || '噗，这动态太搞笑了！'
-            });
+            item.comments.push({ user: fallbackNpc.name, content: cleanBody.slice(0, 50) || '噗，这动态太搞笑了！' });
             addedCount++;
         }
 
@@ -1650,7 +1621,7 @@ function showMessageActionSheet(msgId, targetType, targetId) {
     openModal(`
         <h3>💬 消息操作</h3>
         <div style="background:#f4f7f4;padding:8px 12px;border-radius:8px;font-size:13px;color:#333;margin:8px 0 14px;word-break:break-word;">
-            “${escapeHtml(msg.text)}”
+            "${escapeHtml(msg.text)}"
         </div>
         <div class="btn-row" style="flex-direction:column;gap:8px;">
             <button class="btn-primary" id="btnActionRecall" style="width:100%;background:#388e3c;">↩️ 撤 回（对方有概率看到）</button>
@@ -1664,16 +1635,13 @@ function showMessageActionSheet(msgId, targetType, targetId) {
         closeModal();
         const origText = msg.text;
         const isSeenByNpc = Math.random() < 0.5;
-
         msg.from = 'action';
         msg.text = '你撤回了一条消息';
         msg._recalled = true;
         msg._originalText = origText;
         msg._seenByNpc = isSeenByNpc;
-
         if (targetType === 'single') renderSingleChatWindow(document.getElementById('socialTab'));
         else renderGroupChatWindow(document.getElementById('socialTab'));
-
         if (isSeenByNpc) showToast('👀 提示：你撤回了一条消息，但对方好像已经看到了...', 'info', 2500);
         else showToast('↩️ 消息已撤回，对方没有看到', 'success', 2000);
         autoSaveGame();
@@ -1715,7 +1683,6 @@ function showMessageActionSheet(msgId, targetType, targetId) {
     };
 }
 
-// 💬 聊天加号弹窗：整合拍共创视频、联动直播与旁白
 function openChatActionMenuModal(targetType, targetId) {
     const isGroup = targetType === 'group';
     const title = isGroup ? '👥 群聊互动与共创' : `🤝 与 ${escapeHtml(G.npcs[targetId]?.name || '好友')} 的互动`;
@@ -1731,20 +1698,9 @@ function openChatActionMenuModal(targetType, targetId) {
         </div>
     `);
 
-    document.getElementById('actCollabVideoBtn').onclick = () => {
-        closeModal();
-        openCollabVideoPublishModal(targetType, targetId);
-    };
-
-    document.getElementById('actCollabStreamBtn').onclick = () => {
-        closeModal();
-        handleInviteCollabStream(targetType, targetId);
-    };
-
-    document.getElementById('actInsertNarrativeBtn').onclick = () => {
-        closeModal();
-        openInsertNarrativeModal(targetType, targetId);
-    };
+    document.getElementById('actCollabVideoBtn').onclick = () => { closeModal(); openCollabVideoPublishModal(targetType, targetId); };
+    document.getElementById('actCollabStreamBtn').onclick = () => { closeModal(); handleInviteCollabStream(targetType, targetId); };
+    document.getElementById('actInsertNarrativeBtn').onclick = () => { closeModal(); openInsertNarrativeModal(targetType, targetId); };
 }
 
 function openInsertNarrativeModal(targetType, targetId) {
@@ -1777,7 +1733,6 @@ function openInsertNarrativeModal(targetType, targetId) {
     };
 }
 
-// 🎬 拍共创视频模态框
 function openCollabVideoPublishModal(targetType, targetId) {
     const isGroup = targetType === 'group';
     let participants = [];
@@ -1828,7 +1783,6 @@ function openCollabVideoPublishModal(targetType, targetId) {
         const checkedBoxes = document.querySelectorAll('.collab-partner-check:checked');
         const partnerNames = Array.from(checkedBoxes).map(cb => G.npcs[cb.value]?.name).filter(Boolean);
         const partnerNamesStr = partnerNames.join('、') || '好友';
-
         showToast('🤖 AI 正在构思爆款标题与内容...', 'info', 1500);
         try {
             const sys = `你是一名顶级 YouTube 游戏主播。玩家「${G.player.ytName}」正与搭档「${partnerNamesStr}」共同录制一期 Minecraft 合作视频。灵感线索为：${idea || '趣味竞技与互坑挑战'}。请生成一个极其吸睛的视频标题，以及一段80字以内的精彩剧情高光简介。
@@ -1855,7 +1809,6 @@ function openCollabVideoPublishModal(targetType, targetId) {
         if (!title) { showToast('⚠️ 请输入视频标题', 'error'); return; }
         if (!summary) { showToast('⚠️ 请填写视频剧情高光', 'error'); return; }
         if (!partnerIds.length) { showToast('⚠️ 至少需要勾选一位合作搭档', 'error'); return; }
-
         if (G.actionPoints < 2) { showToast('⚠️ 行动点不足，录制视频需要 2 点推进时段', 'error'); return; }
         G.actionPoints -= 2;
 
@@ -1863,14 +1816,10 @@ function openCollabVideoPublishModal(targetType, targetId) {
         const fullTitle = `【共创】${title} (ft. ${partnerNames.join(' & ')})`;
 
         const videoObj = {
-            title: fullTitle,
-            desc: summary,
-            isCollab: true,
-            partners: partnerNames,
+            title: fullTitle, desc: summary, isCollab: true, partners: partnerNames,
             views: rand(800, 3500) + partnerNames.length * 500,
             likes: rand(100, 800) + partnerNames.length * 80,
-            day: G.day,
-            comments: []
+            day: G.day, comments: []
         };
 
         if (!G.player.videos) G.player.videos = [];
@@ -1879,16 +1828,13 @@ function openCollabVideoPublishModal(targetType, targetId) {
         if (!G.ytExternalVideos) G.ytExternalVideos = [];
         G.ytExternalVideos.unshift({
             _id: 'yt_collab_' + Date.now(),
-            channelId: 'all',
-            title: fullTitle,
+            channelId: 'all', title: fullTitle,
             author: `${G.player.ytName} × ${partnerNames.join(' × ')}`,
             authorId: partnerIds[0] || null,
-            views: `${videoObj.views}次观看`,
-            time: '刚刚',
+            views: `${videoObj.views}次观看`, time: '刚刚',
             duration: `${rand(10, 25)}:${rand(10, 59)}`,
             thumbnailEmoji: pick(['⚔️', '🎬', '💥', '🏆', '🔥']),
-            summary: summary,
-            comments: []
+            summary: summary, comments: []
         });
 
         partnerIds.forEach(id => {
@@ -1905,7 +1851,6 @@ function openCollabVideoPublishModal(targetType, targetId) {
         closeModal();
         appendStory(`🎬 你与 ${partnerNames.join('、')} 联合拍摄发布了爆款共创视频《${fullTitle}》！好感度与播放量大涨！`, '🤜 合作共创');
         addGlobalMemoryRecord(`【共创发布】：主角与 ${partnerNames.join('、')} 合作发布了油管共创视频《${fullTitle}》，收获 ${videoObj.views} 播放。`);
-        
         showToast(`🎉 共创视频发布成功！`, 'success', 2500);
         advanceTimeSlot();
         updateUI();
@@ -1924,15 +1869,13 @@ function handleInviteCollabStream(targetType, targetId) {
         const npc = G.npcs[targetId];
         if (npc) partnerNames.push(npc.name);
     }
-
     if (!partnerNames.length) { showToast('找不到联动搭档', 'error'); return; }
-
     G.pendingCollabPartners = partnerNames;
     showToast(`📺 已向 ${partnerNames.join('、')} 发出连麦邀请！切换至直播面板开启直播`, 'success', 2500);
     switchTab('stream');
 }
 
-// 💬 私聊窗口渲染（含账号隔离、气泡自适应、历史折叠、右上角切号头像）
+// 💬 私聊窗口渲染
 function renderSingleChatWindow(container) {
     const npcId = window.G.currentChatNpc;
     const npc = window.G.npcs[npcId];
@@ -1968,9 +1911,7 @@ function renderSingleChatWindow(container) {
         } else if (msg.from === 'behind_screen') {
             messagesHtml += `
             <div style="margin:10px 14px;background:rgba(255,253,245,0.92);border:1px dashed #d7ccc8;border-radius:10px;padding:8px 12px;font-size:12px;color:#5d4037;line-height:1.6;box-shadow:0 1px 4px rgba(0,0,0,0.04);position:relative;">
-                <div style="font-weight:700;font-size:11px;color:#8d6e63;margin-bottom:3px;display:flex;align-items:center;gap:4px;">
-                    <span>👁️ 屏幕那边的 TA (${escapeHtml(npc.name)})</span>
-                </div>
+                <div style="font-weight:700;font-size:11px;color:#8d6e63;margin-bottom:3px;">👁️ 屏幕那边的 TA (${escapeHtml(npc.name)})</div>
                 <div>${escapeHtml(msg.text)}</div>
             </div>`;
         } else {
@@ -1978,10 +1919,7 @@ function renderSingleChatWindow(container) {
             let bubbleContent = '';
 
             if (msg.sticker) {
-                bubbleContent = `
-                <div style="padding:0;display:inline-block;">
-                    <img src="${msg.sticker.url}" alt="${escapeHtml(msg.sticker.desc)}" style="width:85px;height:85px;border-radius:8px;object-fit:cover;display:block;">
-                </div>`;
+                bubbleContent = `<div style="padding:0;display:inline-block;"><img src="${msg.sticker.url}" alt="${escapeHtml(msg.sticker.desc)}" style="width:85px;height:85px;border-radius:8px;object-fit:cover;display:block;"></div>`;
             } else if (msg.sharedMoment) {
                 const sm = msg.sharedMoment;
                 bubbleContent = `
@@ -2012,7 +1950,6 @@ function renderSingleChatWindow(container) {
 
     const html = `
     <div style="background:#f2f4f2;border-radius:14px;display:flex;flex-direction:column;height:82vh;max-height:850px;box-shadow:0 4px 16px rgba(0,0,0,0.08);overflow:hidden;">
-        <!-- 紧凑单行顶栏 -->
         <div style="padding:8px 12px;background:#fff;border-bottom:1px solid #e5ebe5;display:flex;justify-content:space-between;align-items:center;min-height:48px;box-sizing:border-box;">
             <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
                 <button onclick="closeChat()" style="border:none;background:none;font-size:19px;color:#333;cursor:pointer;padding:0 2px;">❮</button>
@@ -2026,12 +1963,8 @@ function renderSingleChatWindow(container) {
                     </div>
                 </div>
             </div>
-
-            <!-- 右侧紧凑小图标区 -->
             <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
-                <button id="btnToggleBehindScreen" style="border:1px solid ${isBehindScreenActive ? '#8d6e63' : '#ccc'};background:${isBehindScreenActive ? '#efebe9' : '#fff'};width:30px;height:30px;border-radius:50%;font-size:15px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.2s ease;" title="${isBehindScreenActive ? '已开启屏幕那边的动作感知(点击关闭)' : '点击开启屏幕那边的动作感知'}">
-                    👁️
-                </button>
+                <button id="btnToggleBehindScreen" style="border:1px solid ${isBehindScreenActive ? '#8d6e63' : '#ccc'};background:${isBehindScreenActive ? '#efebe9' : '#fff'};width:30px;height:30px;border-radius:50%;font-size:15px;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="${isBehindScreenActive ? '已开启屏幕那边的动作感知(点击关闭)' : '点击开启屏幕那边的动作感知'}">👁️</button>
                 <div id="singleChatHeaderAccountBtn" title="当前账号：${escapeHtml(activeAcc.name)} (点击切换)" style="cursor:pointer;display:flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;border:1.5px solid ${activeAcc.isAlt ? '#ffb300' : 'var(--primary)'};overflow:hidden;background:#fff;">
                     ${activeAcc.avatar ? `<img src="${activeAcc.avatar}" style="width:100%;height:100%;object-fit:cover;">` : `<span style="font-size:14px;">${activeAcc.isAlt ? '🎭' : '👑'}</span>`}
                 </div>
@@ -2087,33 +2020,21 @@ function renderSingleChatWindow(container) {
 
     document.getElementById('singleChatHeaderAccountBtn')?.addEventListener('click', openAccountManagerModal);
 
-    // 绑定长按气泡触发撤回/编辑/删除
     container.querySelectorAll('.chat-msg-row[data-from="player"]').forEach(row => {
         const msgId = row.dataset.msgid;
         const bubble = row.querySelector('.self-bubble');
         if (bubble && msgId) {
-            bindLongPressEvent(bubble, () => {
-                showMessageActionSheet(msgId, 'single', npcId);
-            });
+            bindLongPressEvent(bubble, () => { showMessageActionSheet(msgId, 'single', npcId); });
         }
     });
 
-    // 🌟 长按头像弹出编辑角色资料；单击查看角色名片
     container.querySelectorAll('.chat-npc-avatar-btn').forEach(btn => {
-        bindLongPressEvent(
-            btn,
-            () => openEditNpcModal(npcId),
-            () => openNpcProfileCardModal(npcId)
-        );
+        bindLongPressEvent(btn, () => openEditNpcModal(npcId), () => openNpcProfileCardModal(npcId));
     });
 
     const headerProfileBtn = document.getElementById('singleChatHeaderProfileBtn');
     if (headerProfileBtn) {
-        bindLongPressEvent(
-            headerProfileBtn,
-            () => openEditNpcModal(npcId),
-            () => openNpcProfileCardModal(npcId)
-        );
+        bindLongPressEvent(headerProfileBtn, () => openEditNpcModal(npcId), () => openNpcProfileCardModal(npcId));
     }
 
     const input = document.getElementById('singleChatInput');
@@ -2124,17 +2045,8 @@ function renderSingleChatWindow(container) {
         if (!text) return;
 
         if (isBlocked) {
-            pushChatMessageSafe(npcId, {
-                from: 'player',
-                text,
-                senderAccount: activeAcc.name,
-                time: new Date().toLocaleTimeString().slice(0, 5)
-            });
-            pushChatMessageSafe(npcId, {
-                from: 'action',
-                text: `❌ 消息已发出，但被对方拒收了。（当前账号已被拉黑）`,
-                time: new Date().toLocaleTimeString().slice(0, 5)
-            });
+            pushChatMessageSafe(npcId, { from: 'player', text, senderAccount: activeAcc.name, time: new Date().toLocaleTimeString().slice(0, 5) });
+            pushChatMessageSafe(npcId, { from: 'action', text: `❌ 消息已发出，但被对方拒收了。（当前账号已被拉黑）`, time: new Date().toLocaleTimeString().slice(0, 5) });
             input.value = '';
             renderSingleChatWindow(container);
             showToast('⚠️ 对方开启了朋友验证，你已被拉黑', 'error', 3000);
@@ -2155,10 +2067,7 @@ function renderSingleChatWindow(container) {
     if (sendBtn) sendBtn.onclick = doSend;
     if (input) {
         input.onkeydown = (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                doSend();
-            }
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); }
         };
     }
 
@@ -2173,10 +2082,8 @@ function renderSingleChatWindow(container) {
             triggerBtn.style.opacity = '0.5';
             triggerBtn.style.pointerEvents = 'none';
             await triggerAIReplyForSingle(npcId);
-            if (document.getElementById('triggerAIReplyBtn')) {
-                document.getElementById('triggerAIReplyBtn').style.opacity = '1';
-                document.getElementById('triggerAIReplyBtn').style.pointerEvents = 'auto';
-            }
+            const btn2 = document.getElementById('triggerAIReplyBtn');
+            if (btn2) { btn2.style.opacity = '1'; btn2.style.pointerEvents = 'auto'; }
         };
     }
 }
@@ -2189,9 +2096,7 @@ function openNpcProfileCardModal(npcId) {
 
     openModal(`
         <div style="text-align:center;padding:10px 0;">
-            <div style="display:flex;justify-content:center;margin-bottom:8px;">
-                ${renderAvatarBadge(npc, 64)}
-            </div>
+            <div style="display:flex;justify-content:center;margin-bottom:8px;">${renderAvatarBadge(npc, 64)}</div>
             <div style="font-weight:700;font-size:17px;color:var(--text);">${escapeHtml(npc.name)}</div>
             <div style="font-size:12px;color:#888;margin-top:2px;">好感度：<b style="color:#e53935;">${npc.favor||0}</b> / 100 ${isBlocked ? '· <span style="color:#d32f2f;">已拉黑当前账号</span>' : ''}</div>
             <div style="background:#f8faf8;padding:10px 14px;border-radius:10px;margin:12px 0;text-align:left;font-size:13px;color:#555;line-height:1.6;border:1px solid #eee;">
@@ -2208,23 +2113,17 @@ function openNpcProfileCardModal(npcId) {
     `);
 
     document.getElementById('cardViewMomentsBtn').onclick = () => {
-        closeModal();
-        closeChat();
+        closeModal(); closeChat();
         G.phoneNav = 'moments';
         G.momentsFilterNpcId = npcId;
         renderSocialPanel();
     };
-
-    document.getElementById('cardEditNpcBtn').onclick = () => {
-        closeModal();
-        openEditNpcModal(npcId);
-    };
+    document.getElementById('cardEditNpcBtn').onclick = () => { closeModal(); openEditNpcModal(npcId); };
 }
 
 async function checkNpcMemorySummarize(npcId) {
     const memCfg = G.memoryConfig || {};
     if (memCfg.enabled === false) return;
-
     const npc = G.npcs[npcId];
     if (!npc) return;
     const history = getAccountChatHistory(npcId);
@@ -2238,12 +2137,10 @@ async function checkNpcMemorySummarize(npcId) {
             const textToSummarize = toSummarize.map(m => `${m.from === 'player' ? '主角' : npc.name}: ${stripThought(m.text || '')}`).join('\n');
             const prior = npc.memorySummary ? `【此前已有记忆】：\n${npc.memorySummary}\n\n` : '';
             const sys = `你是精炼的角色长期记忆整理助手。请将主角与「${npc.name}」的最新私聊对话与此前记忆进行提炼合并，输出一段不超过180字的精炼记忆摘要。保留两人的关系变化、关键话题、约定承诺与喜好细节。直接输出摘要正文，严禁废话。`;
-
             const summary = await callMemoryAI([
                 { role: 'system', content: sys },
                 { role: 'user', content: `${prior}【需归纳的新对话】：\n${textToSummarize}` }
             ], { maxTokens: 400, temperature: 0.35 });
-
             npc.memorySummary = stripThought(summary.trim());
             autoSaveGame();
             showToast(`🧠 已自动整理与 ${npc.name} 的私聊记忆！`, 'info', 2000);
@@ -2268,13 +2165,10 @@ function splitIntoChatBubbles(rawText) {
         const item = match[1].trim();
         if (item) bubbles.push(item);
     }
-
     if (bubbles.length > 0) return bubbles.slice(0, 5);
 
     const lines = clean.split(/\n+/).map(l => l.trim()).filter(Boolean);
-    if (lines.length > 1) {
-        return lines.slice(0, 5);
-    }
+    if (lines.length > 1) return lines.slice(0, 5);
 
     if (lines.length === 1 && lines[0].length > 35) {
         const sentences = lines[0].split(/([。！？!?~～]+)/).filter(Boolean);
@@ -2293,7 +2187,6 @@ function splitIntoChatBubbles(rawText) {
     return [clean];
 }
 
-// ⚡ 单人聊天 AI 回复触发（贯通朋友圈动态记忆 + 真实时差自适应推导）
 async function triggerAIReplyForSingle(npcId) {
     const npc = window.G.npcs[npcId];
     if (!npc) return;
@@ -2313,14 +2206,10 @@ async function triggerAIReplyForSingle(npcId) {
     let recentContext = '';
     if (history.length > 0) {
         recentContext = history.slice(-10).map(m => {
-            if (m._recalled) {
-                return m._seenByNpc
-                    ? `[系统提示: 对方发了“${m._originalText}”，随后撤回了，但被你亲眼看到了]`
-                    : `[系统提示: 对方撤回了一条消息]`;
-            }
+            if (m._recalled) return m._seenByNpc ? `[系统提示: 对方发了"${m._originalText}"，随后撤回了，但被你亲眼看到了]` : `[系统提示: 对方撤回了一条消息]`;
             if (m.from === 'action') return `[旁白: ${m.text}]`;
             if (m.from === 'behind_screen') return `[此前你屏幕那边的线下动作: ${m.text}]`;
-            if (m.sharedMoment) return `[对方转发了朋友圈动态给你: “${m.sharedMoment.body}”]`;
+            if (m.sharedMoment) return `[对方转发了朋友圈动态给你: "${m.sharedMoment.body}"]`;
             const speaker = m.from === 'player' ? (m.senderAccount || '主角') : npc.name;
             return `${speaker}: ${m.sticker ? `[发送了表情包: ${m.sticker.desc}]` : stripThought(m.text || '')}`;
         }).join('\n');
@@ -2336,7 +2225,7 @@ async function triggerAIReplyForSingle(npcId) {
     let playerMomentsContext = '';
     if (recentPlayerPosts.length > 0) {
         playerMomentsContext = '【玩家最近发的朋友圈动态（可自然在私信中提起）】：\n' +
-            recentPlayerPosts.map(p => `• “${p.body}” ${p.image ? '(附带图片)' : ''}${p.imageDesc ? `(配图: ${p.imageDesc})` : ''}`).join('\n') + '\n';
+            recentPlayerPosts.map(p => `• "${p.body}" ${p.image ? '(附带图片)' : ''}${p.imageDesc ? `(配图: ${p.imageDesc})` : ''}`).join('\n') + '\n';
     }
 
     const tzContext = formatNpcTimezoneContext(npc.name);
@@ -2348,31 +2237,20 @@ async function triggerAIReplyForSingle(npcId) {
         favorStageRule = `
 【🚨 好感度极度生疏阶段警告（当前好感度: ${curFavor}/100）】：
 1. 双方【刚刚认识或完全不熟】！你对玩家的态度必须保持【明显的冷淡、生疏、防备、距离感、或作为知名大主播对新人的冷漠审视】！
-2. 绝对严禁【自来熟】！严禁说“你想我了”、“抢着点给我道早安”、“下午一起联机谁都不许迟到”等老熟人/情侣才会说的自恋调侃！
-3. 玩家如果说你好，你只能冷淡简洁地回应“你好，有事？”或“请问你是？”；绝不要无端主动约对方联机或讨论合作！
+2. 绝对严禁【自来熟】！严禁说"你想我了"、"抢着点给我道早安"等老熟人/情侣才会说的自恋调侃！
+3. 玩家如果说你好，你只能冷淡简洁地回应"你好，有事？"或"请问你是？"；绝不要无端主动约对方联机或讨论合作！
 `;
     } else if (curFavor < 40) {
-        favorStageRule = `
-【好感度阶段：点头之交（当前好感度: ${curFavor}/100）】：
-客气、礼貌的同行关系，偶尔互相客套，但依然保持基本社交礼貌，不做过分亲密的玩笑。
-`;
+        favorStageRule = `【好感度阶段：点头之交（当前好感度: ${curFavor}/100）】：客气、礼貌的同行关系，偶尔互相客套，但依然保持基本社交礼貌，不做过分亲密的玩笑。`;
     } else if (curFavor < 60) {
-        favorStageRule = `
-【好感度阶段：熟络朋友（当前好感度: ${curFavor}/100）】：
-已经比较熟悉，可以互相开玩笑、互怼、讨论视频灵感与日常。
-`;
+        favorStageRule = `【好感度阶段：熟络朋友（当前好感度: ${curFavor}/100）】：已经比较熟悉，可以互相开玩笑、互怼、讨论视频灵感与日常。`;
     } else {
-        favorStageRule = `
-【好感度阶段：知己/暧昧（当前好感度: ${curFavor}/100）】：
-关系亲密，默契深厚，充满护短与偏袒。
-`;
+        favorStageRule = `【好感度阶段：知己/暧昧（当前好感度: ${curFavor}/100）】：关系亲密，默契深厚，充满护短与偏袒。`;
     }
 
     const behindScreenPrompt = isBehindScreenActive ? `
 【屏幕那边的TA（线下第三人称动作感知）】：
 玩家已开启线下动作感知。请在输出完聊天消息后，额外输出一个独立块 [BEHIND_SCREEN]...[/BEHIND_SCREEN]，细腻描写你在屏幕那边的真实线下动作、环境与心理小动作（30~60字）。
-例如：
-[BEHIND_SCREEN]靠在电竞椅上端起冰美式喝了一口，单手转动着鼠标，屏幕微光映在冷峻的脸上，等待着对话框的动静。[/BEHIND_SCREEN]
 ` : '';
 
     const sysPrompt = `
@@ -2383,9 +2261,9 @@ ${npcMemoryContext}
 ${playerMomentsContext}
 
 【严禁出戏括号与纯净打字铁律】：
-1. 聊天气泡内【绝对禁止】包含任何动作括号（如“（叹气）”、“（喝了一口水）”、“*微笑*”等）！把聊天框当成真实的微信打字，只输出纯粹口语化的消息文字！
+1. 聊天气泡内【绝对禁止】包含任何动作括号（如"（叹气）"、"*微笑*"等）！把聊天框当成真实的微信打字，只输出纯粹口语化的消息文字！
 2. 支持发送表情包斗图：若语境合适，可将其中一条消息写为 [STICKER:表情关键词]（可用关键词参考：${availableStickers}）。
-3. 必须输出 2 到 4 条短消息气泡，每条用 [MSG]...[/MSG] 包裹，禁止 markdown 代码块：
+3. 必须输出 2 到 4 条短消息气泡，每条用 [MSG]...[/MSG] 包裹：
 [MSG]第一句话[/MSG]
 [MSG]第二句话[/MSG]
 ${behindScreenPrompt}
@@ -2421,47 +2299,24 @@ ${behindScreenPrompt}
             if (stkMatch) {
                 const stkObj = findStickerByKeyword(stkMatch[1]);
                 if (stkObj) {
-                    pushChatMessageSafe(npcId, {
-                        from: 'npc',
-                        text: `[表情: ${stkObj.desc}]`,
-                        sticker: stkObj,
-                        time: new Date().toLocaleTimeString().slice(0, 5)
-                    });
+                    pushChatMessageSafe(npcId, { from: 'npc', text: `[表情: ${stkObj.desc}]`, sticker: stkObj, time: new Date().toLocaleTimeString().slice(0, 5) });
                 } else {
-                    pushChatMessageSafe(npcId, {
-                        from: 'npc',
-                        text: bText.replace(/\[STICKER:[^\]]+\]/gi, '😏'),
-                        time: new Date().toLocaleTimeString().slice(0, 5)
-                    });
+                    pushChatMessageSafe(npcId, { from: 'npc', text: bText.replace(/\[STICKER:[^\]]+\]/gi, '😏'), time: new Date().toLocaleTimeString().slice(0, 5) });
                 }
             } else {
-                pushChatMessageSafe(npcId, {
-                    from: 'npc',
-                    text: bText,
-                    time: new Date().toLocaleTimeString().slice(0, 5)
-                });
+                pushChatMessageSafe(npcId, { from: 'npc', text: bText, time: new Date().toLocaleTimeString().slice(0, 5) });
             }
 
-            const container = (dom && dom.socialTab) || document.getElementById('socialTab');
-            if (window.G.currentChatNpc === npcId && container) {
-                renderSingleChatWindow(container);
-            }
+            const cont = (dom && dom.socialTab) || document.getElementById('socialTab');
+            if (window.G.currentChatNpc === npcId && cont) renderSingleChatWindow(cont);
 
-            if (i < finalBubbles.length - 1) {
-                await new Promise(res => setTimeout(res, 500));
-            }
+            if (i < finalBubbles.length - 1) await new Promise(res => setTimeout(res, 500));
         }
 
         if (behindScreenActionText && isBehindScreenActive) {
-            pushChatMessageSafe(npcId, {
-                from: 'behind_screen',
-                text: behindScreenActionText,
-                time: new Date().toLocaleTimeString().slice(0, 5)
-            });
-            const container = (dom && dom.socialTab) || document.getElementById('socialTab');
-            if (window.G.currentChatNpc === npcId && container) {
-                renderSingleChatWindow(container);
-            }
+            pushChatMessageSafe(npcId, { from: 'behind_screen', text: behindScreenActionText, time: new Date().toLocaleTimeString().slice(0, 5) });
+            const cont = (dom && dom.socialTab) || document.getElementById('socialTab');
+            if (window.G.currentChatNpc === npcId && cont) renderSingleChatWindow(cont);
         }
 
         autoSaveGame();
@@ -2482,6 +2337,10 @@ ${behindScreenPrompt}
 // ============================================================
 // 👥 群聊系统
 // ============================================================
+
+// ✅ [BUG FIX] openGroupChat：新增 renderSocialPanel() 直接调用
+// 原版只调 switchTab('social')，若已在 social Tab，路由器不会重渲染，
+// 群聊窗口永远不会打开。现在无论如何都强制渲染一次。
 function openGroupChat(gid) {
     if (!G.groups || !G.groups[gid]) return;
     G.currentChatNpc = null;
@@ -2490,9 +2349,9 @@ function openGroupChat(gid) {
     G.phoneNav = 'chats';
     if (typeof switchTab === 'function') {
         switchTab('social');
-    } else {
-        renderSocialPanel();
     }
+    // 强制渲染：确保即使已在 social Tab 也能打开群聊窗口
+    renderSocialPanel();
 }
 
 function closeGroupChat() {
@@ -2567,9 +2426,7 @@ function renderGroupChatWindow(container) {
         const msgId = row.dataset.msgid;
         const bubble = row.querySelector('.self-bubble');
         if (bubble && msgId) {
-            bindLongPressEvent(bubble, () => {
-                showMessageActionSheet(msgId, 'group', gid);
-            });
+            bindLongPressEvent(bubble, () => { showMessageActionSheet(msgId, 'group', gid); });
         }
     });
 
@@ -2582,10 +2439,8 @@ function renderGroupChatWindow(container) {
         if (!G.groupChatHistory[gid]) G.groupChatHistory[gid] = [];
         G.groupChatHistory[gid].push({
             _id: 'gmsg_' + Date.now() + '_' + rand(100, 999),
-            from: 'player',
-            senderName: activeAcc.name,
-            text,
-            time: new Date().toLocaleTimeString().slice(0, 5)
+            from: 'player', senderName: activeAcc.name,
+            text, time: new Date().toLocaleTimeString().slice(0, 5)
         });
         input.value = '';
         renderGroupChatWindow(container);
@@ -2595,19 +2450,15 @@ function renderGroupChatWindow(container) {
     if (sendBtn) sendBtn.onclick = doSend;
     if (input) {
         input.onkeydown = (e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                doSend();
-            }
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); doSend(); }
         };
     }
 
     document.getElementById('groupActionInsertBtn')?.addEventListener('click', () => {
         openChatActionMenuModal('group', gid);
     });
-
     document.getElementById('groupSettingsBtn')?.addEventListener('click', () => openGroupSettingsModal(gid));
-    
+
     const triggerGrpBtn = document.getElementById('triggerGroupAIBtn');
     if (triggerGrpBtn) {
         triggerGrpBtn.onclick = async () => {
@@ -2622,7 +2473,6 @@ function renderGroupChatWindow(container) {
 async function checkGroupMemorySummarize(gid) {
     const memCfg = G.memoryConfig || {};
     if (memCfg.enabled === false) return;
-
     const grp = G.groups[gid];
     if (!grp) return;
     const history = G.groupChatHistory[gid] || [];
@@ -2635,23 +2485,17 @@ async function checkGroupMemorySummarize(gid) {
             const toSummarize = history.slice(0, Math.max(1, history.length - keepRecent));
             const textToSummarize = toSummarize.map(m => `${m.senderName}: ${stripThought(m.text || '')}`).join('\n');
             const prior = G.groupMemories[gid] ? `【群聊已有纪要】：\n${G.groupMemories[gid]}\n\n` : '';
-
             const sys = `你是群聊记忆纪要整理员。请将群聊「${grp.name}」中的讨论内容提炼为一段150字以内的核心纪要，包含聊过的八卦、共同约定、关键笑点与事件。直接输出纪要正文。`;
             const summary = await callMemoryAI([
                 { role: 'system', content: sys },
                 { role: 'user', content: `${prior}【最新群聊记录】：\n${textToSummarize}` }
             ], { maxTokens: 350, temperature: 0.35 });
-
             const cleanSummary = stripThought(summary.trim());
             G.groupMemories[gid] = cleanSummary;
-
             (grp.members || []).forEach(mid => {
                 const targetNpc = G.npcs[mid];
-                if (targetNpc) {
-                    targetNpc.knownGroupEvents = `【在群「${grp.name}」获悉】：${cleanSummary}`;
-                }
+                if (targetNpc) targetNpc.knownGroupEvents = `【在群「${grp.name}」获悉】：${cleanSummary}`;
             });
-
             autoSaveGame();
             showToast(`👥 已同步提炼群聊「${grp.name}」记忆，群成员已共享认知！`, 'info', 2000);
         } catch (e) {
@@ -2679,23 +2523,17 @@ async function triggerGroupAIReply(gid) {
     const activeFans = [];
     activeList.forEach(mid => {
         const n = G.npcs[mid];
-        if (n) {
-            if (!n.isCustom) activeStreamers.push(n);
-            else activeFans.push(n);
-        }
+        if (n) { if (!n.isCustom) activeStreamers.push(n); else activeFans.push(n); }
     });
 
     const recent = history.slice(-10).map(m => {
-        if (m._recalled) {
-            return m._seenByNpc ? `[群提示: ${m.senderName}发了“${m._originalText}”，又撤回了，但被群友看到了]` : `[群提示: ${m.senderName}撤回了一条消息]`;
-        }
+        if (m._recalled) return m._seenByNpc ? `[群提示: ${m.senderName}发了"${m._originalText}"，又撤回了，但被群友看到了]` : `[群提示: ${m.senderName}撤回了一条消息]`;
         return `${m.senderName}: ${stripThought(m.text || '')}`;
     }).join('\n');
 
     try {
         G.isGenerating = true;
         if (typeof showLoading === 'function') showLoading();
-
         let generatedCount = 0;
 
         if (grp.streamerMode === 'separate' && activeStreamers.length) {
@@ -2707,29 +2545,15 @@ async function triggerGroupAIReply(gid) {
                     const cleanRep = stripThought(rep.replace(/^[^\s:：]{1,12}[:：]\s*/, '').trim());
                     if (cleanRep) {
                         if (!G.groupChatHistory[gid]) G.groupChatHistory[gid] = [];
-                        G.groupChatHistory[gid].push({
-                            _id: 'gmsg_' + Date.now() + '_' + rand(100, 999),
-                            from: 'npc',
-                            senderName: st.name,
-                            senderAvatar: st.avatarEmoji || '👤',
-                            senderAvatarUrl: st.avatarUrl || null,
-                            text: cleanRep,
-                            time: new Date().toLocaleTimeString().slice(0, 5)
-                        });
+                        G.groupChatHistory[gid].push({ _id: 'gmsg_' + Date.now() + '_' + rand(100, 999), from: 'npc', senderName: st.name, senderAvatar: st.avatarEmoji || '👤', senderAvatarUrl: st.avatarUrl || null, text: cleanRep, time: new Date().toLocaleTimeString().slice(0, 5) });
                         generatedCount++;
                     }
-                } catch(err) {
-                    console.warn(`主播 ${st.name} 单独回复失败:`, err);
-                }
+                } catch(err) { console.warn(`主播 ${st.name} 单独回复失败:`, err); }
             }
         }
 
         if (grp.streamerMode !== 'separate' || (activeFans.length && generatedCount === 0)) {
-            const memberPoolDesc = activeList.map(mid => {
-                const n = G.npcs[mid];
-                return n ? `【${n.name}】(${n.persona || '群友'})` : null;
-            }).filter(Boolean).join('、');
-
+            const memberPoolDesc = activeList.map(mid => { const n = G.npcs[mid]; return n ? `【${n.name}】(${n.persona || '群友'})` : null; }).filter(Boolean).join('、');
             const sys = `
 你正在模拟 Minecraft 主播/粉丝群聊「${grp.name}」（群简介：${grp.desc || '自由讨论'}）。
 群内可发言成员有：${memberPoolDesc}。
@@ -2738,7 +2562,6 @@ async function triggerGroupAIReply(gid) {
 [MSG name=成员名字]发言内容[/MSG]
 严禁添加开场白、问候语或解释。
             `;
-
             const raw = await callAI([
                 { role: 'system', content: sys },
                 { role: 'user', content: `【群聊最近动态】：\n${recent}\n请成员开始接话：` }
@@ -2750,20 +2573,10 @@ async function triggerGroupAIReply(gid) {
                 const sName = m[2].trim();
                 const body = stripThought(m[3].replace(/\[\/?MSG[^\]]*\]/gi, '').trim());
                 if (!body) continue;
-
                 const matchedNpc = Object.values(G.npcs).find(n => n.name.trim() === sName || sName.includes(n.name));
                 const finalName = matchedNpc ? matchedNpc.name : sName;
-
                 if (!G.groupChatHistory[gid]) G.groupChatHistory[gid] = [];
-                G.groupChatHistory[gid].push({
-                    _id: 'gmsg_' + Date.now() + '_' + rand(100, 999),
-                    from: 'npc',
-                    senderName: finalName,
-                    senderAvatar: matchedNpc ? (matchedNpc.avatarEmoji || '👤') : '💬',
-                    senderAvatarUrl: matchedNpc ? (matchedNpc.avatarUrl || null) : null,
-                    text: body,
-                    time: new Date().toLocaleTimeString().slice(0, 5)
-                });
+                G.groupChatHistory[gid].push({ _id: 'gmsg_' + Date.now() + '_' + rand(100, 999), from: 'npc', senderName: finalName, senderAvatar: matchedNpc ? (matchedNpc.avatarEmoji || '👤') : '💬', senderAvatarUrl: matchedNpc ? (matchedNpc.avatarUrl || null) : null, text: body, time: new Date().toLocaleTimeString().slice(0, 5) });
                 generatedCount++;
             }
 
@@ -2771,28 +2584,14 @@ async function triggerGroupAIReply(gid) {
                 const lines = raw.split('\n').map(l => l.trim()).filter(l => l.length > 2);
                 for (const line of lines) {
                     const lineMatch = line.match(/^([^:：]{1,12})[:：]\s*(.+)$/);
-                    let speaker = null;
-                    let text = line;
-                    if (lineMatch) {
-                        speaker = lineMatch[1].trim();
-                        text = lineMatch[2].trim();
-                    } else {
-                        const randomNpcId = pick(activeList);
-                        speaker = G.npcs[randomNpcId] ? G.npcs[randomNpcId].name : '群友';
-                    }
+                    let speaker = null; let text = line;
+                    if (lineMatch) { speaker = lineMatch[1].trim(); text = lineMatch[2].trim(); }
+                    else { const randomNpcId = pick(activeList); speaker = G.npcs[randomNpcId] ? G.npcs[randomNpcId].name : '群友'; }
                     const cleanBody = stripThought(text.replace(/\[\/?MSG[^\]]*\]/gi, '').trim());
                     if (cleanBody) {
                         const matchedNpc = Object.values(G.npcs).find(n => n.name === speaker);
                         if (!G.groupChatHistory[gid]) G.groupChatHistory[gid] = [];
-                        G.groupChatHistory[gid].push({
-                            _id: 'gmsg_' + Date.now() + '_' + rand(100, 999),
-                            from: 'npc',
-                            senderName: matchedNpc ? matchedNpc.name : speaker,
-                            senderAvatar: matchedNpc ? (matchedNpc.avatarEmoji || '👤') : '💬',
-                            senderAvatarUrl: matchedNpc ? (matchedNpc.avatarUrl || null) : null,
-                            text: cleanBody,
-                            time: new Date().toLocaleTimeString().slice(0, 5)
-                        });
+                        G.groupChatHistory[gid].push({ _id: 'gmsg_' + Date.now() + '_' + rand(100, 999), from: 'npc', senderName: matchedNpc ? matchedNpc.name : speaker, senderAvatar: matchedNpc ? (matchedNpc.avatarEmoji || '👤') : '💬', senderAvatarUrl: matchedNpc ? (matchedNpc.avatarUrl || null) : null, text: cleanBody, time: new Date().toLocaleTimeString().slice(0, 5) });
                         generatedCount++;
                     }
                 }
@@ -2816,26 +2615,16 @@ async function triggerGroupAIReply(gid) {
     }
 }
 
-// ============================================================
-// 好友申请入口（供 07-actions-social.js 的随机好友事件调用）
 function receiveFriendRequest(req) {
     if (!req) return;
     if (!G.friendRequests) G.friendRequests = [];
-    const item = Object.assign({
-        _id: 'friend_' + Date.now() + '_' + Math.floor(Math.random() * 1000),
-        fromReason: '好友申请',
-        persona: '',
-        avatarEmoji: '👤',
-        day: G.day || 1
-    }, req);
+    const item = Object.assign({ _id: 'friend_' + Date.now() + '_' + Math.floor(Math.random() * 1000), fromReason: '好友申请', persona: '', avatarEmoji: '👤', day: G.day || 1 }, req);
     G.friendRequests.push(item);
     showToast(`📬 收到新的好友申请：${item.name || '新好友'}`, 'success', 2200);
     if (document.querySelector('.tab-btn.active')?.dataset.tab === 'social') renderSocialPanel();
     autoSaveGame();
 }
 
-// ➕ 新建与好友/群邀请管理弹窗
-// ============================================================
 function openAddChatTargetModal() {
     const requests = G.friendRequests || [];
     const groupInvs = G.groupInvites || [];
@@ -2914,28 +2703,13 @@ function handleFriendRequestAction(reqId, accept) {
     if (accept) {
         let id = req.npcOfficialId || ('custom_npc_' + Date.now());
         let npcData = null;
-
         if (req.npcOfficialId && typeof OFFICIAL_NPCS !== 'undefined' && OFFICIAL_NPCS[req.npcOfficialId]) {
             npcData = Object.assign({}, OFFICIAL_NPCS[req.npcOfficialId]);
-            npcData.favor = 40;
-            npcData.summaryThreshold = 10;
-            npcData.keepRecent = 5;
+            npcData.favor = 40; npcData.summaryThreshold = 10; npcData.keepRecent = 5;
         } else {
-            npcData = {
-                id,
-                name: req.name,
-                avatarEmoji: req.avatarEmoji || '👤',
-                avatarUrl: req.avatarUrl || null,
-                persona: req.persona || '一位热心好友',
-                favor: 40,
-                isCustom: true,
-                summaryThreshold: 10,
-                keepRecent: 5
-            };
+            npcData = { id, name: req.name, avatarEmoji: req.avatarEmoji || '👤', avatarUrl: req.avatarUrl || null, persona: req.persona || '一位热心好友', favor: 40, isCustom: true, summaryThreshold: 10, keepRecent: 5 };
         }
-
         G.npcs[id] = npcData;
-
         showToast(`🎉 已添加「${req.name}」为好友！`, 'success', 2500);
         appendStory(`🤝 你通过了「${req.name}」的好友申请，双方正式添加为好友。`, '🤝 新增好友');
         addGlobalMemoryRecord(`【结识好友】：添加了新好友「${req.name}」（${req.fromReason || '社交申请'}）。`);
@@ -2956,18 +2730,7 @@ function handleGroupInviteAction(invId, accept) {
 
     if (accept) {
         const gid = inv.gid || ('grp_' + Date.now());
-        G.groups[gid] = {
-            id: gid,
-            name: inv.name,
-            avatarEmoji: inv.avatarEmoji || '👥',
-            avatarUrl: '',
-            desc: inv.desc || '粉丝后援群聊',
-            members: Object.keys(G.npcs).slice(0, 4),
-            activeMembers: Object.keys(G.npcs).slice(0, 4),
-            streamerMode: 'unified',
-            summaryThreshold: 10,
-            keepRecent: 5
-        };
+        G.groups[gid] = { id: gid, name: inv.name, avatarEmoji: inv.avatarEmoji || '👥', avatarUrl: '', desc: inv.desc || '粉丝后援群聊', members: Object.keys(G.npcs).slice(0, 4), activeMembers: Object.keys(G.npcs).slice(0, 4), streamerMode: 'unified', summaryThreshold: 10, keepRecent: 5 };
         if (!G.groupChatHistory[gid]) G.groupChatHistory[gid] = [];
         showToast(`🎉 成功加入群聊「${inv.name}」！`, 'success', 2500);
         appendStory(`👥 你接受了邀请，成功加入了群聊「${inv.name}」。`, '👥 加入群聊');
@@ -3028,8 +2791,7 @@ function openEditNpcModal(npcId) {
     let currentAvatarDataUrl = npc.avatarUrl || '';
 
     document.getElementById('npcLocalAvatarInput').onchange = function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
+        const file = e.target.files[0]; if (!file) return;
         const reader = new FileReader();
         reader.onload = function(evt) {
             currentAvatarDataUrl = evt.target.result;
@@ -3054,19 +2816,8 @@ function openEditNpcModal(npcId) {
         const threshold = parseInt(document.getElementById('npcThresholdInput').value) || 10;
         const keepRecent = parseInt(document.getElementById('npcKeepRecentInput').value) || 5;
         if (!name) { showToast('⚠️ 角色姓名不能为空', 'error'); return; }
-
         const id = isNew ? ('custom_npc_' + Date.now()) : npcId;
-        G.npcs[id] = {
-            ...npc,
-            id,
-            name,
-            avatarEmoji: emoji,
-            avatarUrl: currentAvatarDataUrl,
-            persona,
-            summaryThreshold: threshold,
-            keepRecent,
-            isCustom: true
-        };
+        G.npcs[id] = { ...npc, id, name, avatarEmoji: emoji, avatarUrl: currentAvatarDataUrl, persona, summaryThreshold: threshold, keepRecent, isCustom: true };
         showToast('✅ 角色信息已保存', 'success');
         closeModal();
         renderSocialPanel();
@@ -3117,13 +2868,9 @@ function openEditGroupModal(gid) {
 
     let currentGroupAvatar = grp.avatarUrl || '';
     document.getElementById('grpLocalAvatarInput').onchange = function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
+        const file = e.target.files[0]; if (!file) return;
         const reader = new FileReader();
-        reader.onload = function(evt) {
-            currentGroupAvatar = evt.target.result;
-            showToast('✅ 群图标已载入', 'success', 1200);
-        };
+        reader.onload = function(evt) { currentGroupAvatar = evt.target.result; showToast('✅ 群图标已载入', 'success', 1200); };
         reader.readAsDataURL(file);
     };
 
@@ -3133,21 +2880,8 @@ function openEditGroupModal(gid) {
         const url = document.getElementById('grpAvatarUrlInput').value.trim();
         const desc = document.getElementById('grpDescInput').value.trim();
         if (!name) { showToast('⚠️ 群名称不能为空', 'error'); return; }
-
         const id = isNew ? ('grp_' + Date.now()) : gid;
-        G.groups[id] = {
-            ...grp,
-            id,
-            name,
-            avatarEmoji: emoji,
-            avatarUrl: url || currentGroupAvatar,
-            desc,
-            members: grp.members || Object.keys(G.npcs).slice(0, 4),
-            activeMembers: grp.activeMembers || grp.members,
-            streamerMode: grp.streamerMode || 'unified',
-            summaryThreshold: grp.summaryThreshold || 10,
-            keepRecent: grp.keepRecent || 5
-        };
+        G.groups[id] = { ...grp, id, name, avatarEmoji: emoji, avatarUrl: url || currentGroupAvatar, desc, members: grp.members || Object.keys(G.npcs).slice(0, 4), activeMembers: grp.activeMembers || grp.members, streamerMode: grp.streamerMode || 'unified', summaryThreshold: grp.summaryThreshold || 10, keepRecent: grp.keepRecent || 5 };
         showToast('✅ 群聊已保存', 'success');
         closeModal();
         renderSocialPanel();
@@ -3161,7 +2895,6 @@ function openGroupSettingsModal(gid) {
 
     let memberCheckboxes = '';
     const allNpcIds = Object.keys(G.npcs || {});
-
     allNpcIds.forEach(nid => {
         const n = G.npcs[nid];
         const isMember = (grp.members || []).includes(nid);
@@ -3192,7 +2925,6 @@ function openGroupSettingsModal(gid) {
                 <b>模式 B（主播独立调用）</b>：每位被勾选的主播角色单独调 1 次 API，其余成员统一回复
             </label>
         </div>
-
         <div style="display:flex;gap:10px;margin-bottom:12px;">
             <div class="form-group" style="flex:1;">
                 <label style="font-size:12px;">🧠 群记忆总结轮数</label>
@@ -3203,12 +2935,10 @@ function openGroupSettingsModal(gid) {
                 <input type="number" id="grpKeepRecentInput" min="2" max="20" value="${grp.keepRecent || 5}">
             </div>
         </div>
-
         <div style="font-size:13px;font-weight:700;margin-bottom:6px;">👥 成员勾选与接话配置</div>
         <div style="max-height:180px;overflow-y:auto;border:1px solid #eee;border-radius:8px;padding:4px 10px;">
             ${memberCheckboxes}
         </div>
-
         <div class="btn-row" style="margin-top:14px;">
             <button class="btn-secondary" id="delGroupBtn" style="color:#e53935;">🗑️ 解散群聊</button>
             <button class="btn-secondary" onclick="closeModal()">取消</button>
@@ -3220,28 +2950,20 @@ function openGroupSettingsModal(gid) {
         chk.onchange = () => {
             const nid = chk.dataset.id;
             const actChk = document.querySelector(`.grp-active-check[data-id="${nid}"]`);
-            if (actChk) {
-                actChk.disabled = !chk.checked;
-                if (!chk.checked) actChk.checked = false;
-            }
+            if (actChk) { actChk.disabled = !chk.checked; if (!chk.checked) actChk.checked = false; }
         };
     });
 
     document.getElementById('saveGroupSettingsBtn').onclick = () => {
-        const mems = [];
-        const actives = [];
+        const mems = []; const actives = [];
         document.querySelectorAll('.grp-mem-check:checked').forEach(c => mems.push(c.dataset.id));
         document.querySelectorAll('.grp-active-check:checked').forEach(c => actives.push(c.dataset.id));
         const mode = document.querySelector('input[name="streamerMode"]:checked').value;
         const threshold = parseInt(document.getElementById('grpSummaryThresholdInput').value) || 10;
         const keepRecent = parseInt(document.getElementById('grpKeepRecentInput').value) || 5;
-
         grp.members = mems.length ? mems : Object.keys(G.npcs).slice(0, 3);
         grp.activeMembers = actives.length ? actives : grp.members;
-        grp.streamerMode = mode;
-        grp.summaryThreshold = threshold;
-        grp.keepRecent = keepRecent;
-
+        grp.streamerMode = mode; grp.summaryThreshold = threshold; grp.keepRecent = keepRecent;
         showToast('✅ 群设置已保存', 'success');
         closeModal();
         renderSocialPanel();
@@ -3249,20 +2971,16 @@ function openGroupSettingsModal(gid) {
     };
 
     document.getElementById('delGroupBtn').onclick = () => {
-        delete G.groups[gid];
-        delete G.groupChatHistory[gid];
-        delete G.groupMemories[gid];
+        delete G.groups[gid]; delete G.groupChatHistory[gid]; delete G.groupMemories[gid];
         showToast('🗑️ 已解散该群聊', 'success');
-        closeModal();
-        closeGroupChat();
-        autoSaveGame();
+        closeModal(); closeGroupChat(); autoSaveGame();
     };
 }
 
+// ✅ [BUG FIX] openChat：新增 renderSocialPanel() 直接调用
+// 原版只调 switchTab('social')，若已在 social Tab，路由器不会重渲染，
+// 聊天窗口永远不会打开。现在无论如何都强制渲染一次。
 function openChat(npcId) {
-    // 从通讯录/其他页面进入聊天时，必须同时切到手机社交页。
-    // 旧版合并时漏掉了这一层，所以点击联系人虽然修改了状态，
-    // 但画面仍停留在原来的 dataTab，看起来就像“点了没反应”。
     if (!G.npcs || !G.npcs[npcId]) return;
     G.currentChatGroup = null;
     G.currentChatNpc = npcId;
@@ -3270,15 +2988,15 @@ function openChat(npcId) {
     G.phoneNav = 'chats';
     if (typeof switchTab === 'function') {
         switchTab('social');
-    } else {
-        renderSocialPanel();
     }
+    // 强制渲染：确保即使已在 social Tab 也能打开私聊窗口
+    renderSocialPanel();
 }
+
 function closeChat() {
     G.currentChatNpc = null;
     renderSocialPanel();
 }
-
 
 // ============================================================
 // 🧠 记忆总结模态框
@@ -3293,12 +3011,7 @@ window.openMemoryModal = openMemoryModal;
 
 function renderMemoryModalView() {
     ensureNpcIntegrity();
-    const memCfg = G.memoryConfig || {
-        enabled: true,
-        defaultThreshold: 10,
-        defaultKeepRecent: 5,
-        selectedModelKey: ''
-    };
+    const memCfg = G.memoryConfig || { enabled: true, defaultThreshold: 10, defaultKeepRecent: 5, selectedModelKey: '' };
     G.memoryConfig = memCfg;
 
     let unarchivedCount = 0;
@@ -3319,9 +3032,7 @@ function renderMemoryModalView() {
         existingSummaries = G.groupMemories[gid] ? [{ text: G.groupMemories[gid], day: G.day }] : [];
     }
 
-    const modelOptions = getAvailableMemoryModels().map(m => `
-        <option value="${m.key}" ${m.key === memCfg.selectedModelKey ? 'selected' : ''}>${escapeHtml(m.name)}</option>
-    `).join('');
+    const modelOptions = getAvailableMemoryModels().map(m => `<option value="${m.key}" ${m.key === memCfg.selectedModelKey ? 'selected' : ''}>${escapeHtml(m.name)}</option>`).join('');
 
     let summariesListHtml = '<div style="color:#888;font-size:12px;padding:4px 0;">暂无</div>';
     if (existingSummaries.length > 0) {
@@ -3345,111 +3056,59 @@ function renderMemoryModalView() {
     `;
 
     if (activeMemoryScope === 'character') {
-        const npcOpts = Object.values(G.npcs || {}).map(n => `
-            <option value="${n.id}" ${n.id === selectedScopeTargetId ? 'selected' : ''}>${escapeHtml(n.name)}</option>
-        `).join('');
-        scopeSelectorHtml += `
-        <div style="margin-bottom:10px;display:flex;align-items:center;gap:8px;font-size:12px;">
-            <span>选择角色：</span>
-            <select id="scopeTargetSelect" style="flex:1;padding:4px 8px;border-radius:6px;border:1px solid #ccc;font-size:12px;">${npcOpts || '<option>暂无角色</option>'}</select>
-        </div>`;
+        const npcOpts = Object.values(G.npcs || {}).map(n => `<option value="${n.id}" ${n.id === selectedScopeTargetId ? 'selected' : ''}>${escapeHtml(n.name)}</option>`).join('');
+        scopeSelectorHtml += `<div style="margin-bottom:10px;display:flex;align-items:center;gap:8px;font-size:12px;"><span>选择角色：</span><select id="scopeTargetSelect" style="flex:1;padding:4px 8px;border-radius:6px;border:1px solid #ccc;font-size:12px;">${npcOpts || '<option>暂无角色</option>'}</select></div>`;
     } else if (activeMemoryScope === 'group') {
-        const grpOpts = Object.values(G.groups || {}).map(g => `
-            <option value="${g.id}" ${g.id === selectedScopeTargetId ? 'selected' : ''}>${escapeHtml(g.name)}</option>
-        `).join('');
-        scopeSelectorHtml += `
-        <div style="margin-bottom:10px;display:flex;align-items:center;gap:8px;font-size:12px;">
-            <span>选择群聊：</span>
-            <select id="scopeTargetSelect" style="flex:1;padding:4px 8px;border-radius:6px;border:1px solid #ccc;font-size:12px;">${grpOpts || '<option>暂无群聊</option>'}</select>
-        </div>`;
+        const grpOpts = Object.values(G.groups || {}).map(g => `<option value="${g.id}" ${g.id === selectedScopeTargetId ? 'selected' : ''}>${escapeHtml(g.name)}</option>`).join('');
+        scopeSelectorHtml += `<div style="margin-bottom:10px;display:flex;align-items:center;gap:8px;font-size:12px;"><span>选择群聊：</span><select id="scopeTargetSelect" style="flex:1;padding:4px 8px;border-radius:6px;border:1px solid #ccc;font-size:12px;">${grpOpts || '<option>暂无群聊</option>'}</select></div>`;
     }
 
     openModal(`
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-            <div style="display:flex;align-items:center;gap:6px;font-weight:800;font-size:18px;color:#2e7d32;">
-                <span>🧠 记忆总结</span>
-            </div>
+            <div style="display:flex;align-items:center;gap:6px;font-weight:800;font-size:18px;color:#2e7d32;"><span>🧠 记忆总结</span></div>
         </div>
-
         ${scopeSelectorHtml}
-
         <p style="font-size:12.5px;color:#555;line-height:1.6;margin-bottom:12px;">
             当前共有 <b>${unarchivedCount}</b> 轮未归档的记录，AI 会读取这些内容。你可以让 AI 将较早的内容总结为一段精炼记忆，之后 AI 将只读取「记忆总结 + 最近若干轮」，不再读取被总结掉的原文。
         </p>
-
         <div class="form-group" style="margin-bottom:10px;">
-            <label style="font-size:12px;color:#333;font-weight:600;">保留最近几轮不总结（其余更早的内容会被总结并归档）</label>
+            <label style="font-size:12px;color:#333;font-weight:600;">保留最近几轮不总结</label>
             <input type="number" id="memKeepRecentInput" min="1" max="30" value="${memCfg.defaultKeepRecent || 5}" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #ccc;font-size:13px;">
         </div>
-
         <div class="form-group" style="margin-bottom:12px;">
-            <label style="font-size:12px;color:#333;font-weight:600;">🧩 用于总结的模型（可与主对话模型不同）</label>
-            <select id="memModelSelect" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #ccc;font-size:13px;background:#fff;">
-                ${modelOptions}
-            </select>
+            <label style="font-size:12px;color:#333;font-weight:600;">🧩 用于总结的模型</label>
+            <select id="memModelSelect" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #ccc;font-size:13px;background:#fff;">${modelOptions}</select>
         </div>
-
         <div style="display:flex;gap:10px;margin-bottom:10px;">
             <button class="btn-secondary" onclick="closeModal()" style="flex:1;border-radius:10px;font-size:13px;padding:8px 0;">取消</button>
             <button class="btn-primary" id="btnRunAiSummary" style="flex:1.4;border-radius:10px;background:#2e7d32;font-size:13px;padding:8px 0;">🧠 AI 生成总结</button>
         </div>
-
-        <button class="btn-secondary" id="btnManualWriteSummary" style="width:100%;padding:7px 0;font-size:12px;border-radius:8px;margin-bottom:14px;background:#fdfcf9;border:1px solid #eedec8;color:#7a5223;">
-            ✍️ 改为手动填写总结
-        </button>
-
+        <button class="btn-secondary" id="btnManualWriteSummary" style="width:100%;padding:7px 0;font-size:12px;border-radius:8px;margin-bottom:14px;background:#fdfcf9;border:1px solid #eedec8;color:#7a5223;">✍️ 改为手动填写总结</button>
         <div style="border-top:1px solid #eee;padding-top:10px;margin-top:8px;">
             <div style="font-weight:700;font-size:13px;color:#333;margin-bottom:6px;">⚙️ 自动总结</div>
             <label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;color:#444;line-height:1.5;cursor:pointer;margin-bottom:8px;">
                 <input type="checkbox" id="memAutoSummaryCheck" ${memCfg.enabled ? 'checked' : ''} style="width:16px;height:16px;margin-top:2px;">
-                <span>开启自动总结（未归档轮数达到阈值时，剧情生成后后台自动触发总结）</span>
+                <span>开启自动总结（未归档轮数达到阈值时，剧情生成后后���自动触发总结）</span>
             </label>
             <div class="form-group" style="margin-bottom:12px;">
                 <label style="font-size:12px;color:#666;">达到多少轮未归档时自动触发</label>
                 <input type="number" id="memAutoThresholdInput" min="4" max="60" value="${memCfg.defaultThreshold || 10}" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #ccc;font-size:13px;">
             </div>
         </div>
-
         <div style="border-top:1px solid #eee;padding-top:10px;">
             <div style="font-weight:700;font-size:13px;color:#333;margin-bottom:6px;">已有记忆总结 (${existingSummaries.length})</div>
-            <div style="max-height:150px;overflow-y:auto;">
-                ${summariesListHtml}
-            </div>
+            <div style="max-height:150px;overflow-y:auto;">${summariesListHtml}</div>
         </div>
     `);
 
     const stSelect = document.getElementById('scopeTargetSelect');
-    if (stSelect) {
-        stSelect.onchange = () => {
-            selectedScopeTargetId = stSelect.value;
-            renderMemoryModalView();
-        };
-    }
-
-    document.getElementById('btnRunAiSummary').onclick = async () => {
-        await executeManualAiSummary();
-    };
-
-    document.getElementById('btnManualWriteSummary').onclick = () => {
-        openManualMemoryInputModal();
-    };
-
-    document.getElementById('memAutoSummaryCheck').onchange = (e) => {
-        G.memoryConfig.enabled = e.target.checked;
-        autoSaveGame();
-    };
-    document.getElementById('memAutoThresholdInput').onchange = (e) => {
-        G.memoryConfig.defaultThreshold = parseInt(e.target.value) || 10;
-        autoSaveGame();
-    };
-    document.getElementById('memKeepRecentInput').onchange = (e) => {
-        G.memoryConfig.defaultKeepRecent = parseInt(e.target.value) || 5;
-        autoSaveGame();
-    };
-    document.getElementById('memModelSelect').onchange = (e) => {
-        G.memoryConfig.selectedModelKey = e.target.value;
-        autoSaveGame();
-    };
+    if (stSelect) { stSelect.onchange = () => { selectedScopeTargetId = stSelect.value; renderMemoryModalView(); }; }
+    document.getElementById('btnRunAiSummary').onclick = async () => { await executeManualAiSummary(); };
+    document.getElementById('btnManualWriteSummary').onclick = () => { openManualMemoryInputModal(); };
+    document.getElementById('memAutoSummaryCheck').onchange = (e) => { G.memoryConfig.enabled = e.target.checked; autoSaveGame(); };
+    document.getElementById('memAutoThresholdInput').onchange = (e) => { G.memoryConfig.defaultThreshold = parseInt(e.target.value) || 10; autoSaveGame(); };
+    document.getElementById('memKeepRecentInput').onchange = (e) => { G.memoryConfig.defaultKeepRecent = parseInt(e.target.value) || 5; autoSaveGame(); };
+    document.getElementById('memModelSelect').onchange = (e) => { G.memoryConfig.selectedModelKey = e.target.value; autoSaveGame(); };
 }
 
 window.switchMemoryScope = function(scope) {
@@ -3461,9 +3120,7 @@ window.switchMemoryScope = function(scope) {
 
 window.handleDeleteSummaryItem = function(idx) {
     if (activeMemoryScope === 'story') {
-        if (G.memorySummaries && G.memorySummaries[idx]) {
-            G.memorySummaries.splice(idx, 1);
-        }
+        if (G.memorySummaries && G.memorySummaries[idx]) G.memorySummaries.splice(idx, 1);
     } else if (activeMemoryScope === 'character') {
         const npc = G.npcs[selectedScopeTargetId];
         if (npc) npc.memorySummary = '';
@@ -3486,30 +3143,21 @@ async function executeManualAiSummary() {
 
     if (activeMemoryScope === 'story') {
         const list = G.storyHistory || [];
-        if (list.length <= keepRecent) {
-            showToast(`当前未归档记录数 (${list.length}) 小于等于保留轮数 (${keepRecent})，无需总结`, 'info', 2000);
-            return;
-        }
+        if (list.length <= keepRecent) { showToast(`当前未归档记录数 (${list.length}) 小于等于保留轮数 (${keepRecent})，无需总结`, 'info', 2000); return; }
         const sliceItems = list.slice(0, list.length - keepRecent);
         textToSummarize = sliceItems.map(item => `[第${item.day}天]: ${item.text}`).join('\n');
         prior = (G.memorySummaries || []).map(s => s.text || s).join('\n');
     } else if (activeMemoryScope === 'character') {
         const npc = G.npcs[selectedScopeTargetId];
         const list = getAccountChatHistory(selectedScopeTargetId);
-        if (list.length <= keepRecent) {
-            showToast(`当前私聊记录数 (${list.length}) 小于等于保留轮数，无需总结`, 'info', 2000);
-            return;
-        }
+        if (list.length <= keepRecent) { showToast(`当前私聊记录数 (${list.length}) 小于等于保留轮数，无需总结`, 'info', 2000); return; }
         const sliceItems = list.slice(0, list.length - keepRecent);
         textToSummarize = sliceItems.map(m => `${m.from === 'player' ? '主角' : npc.name}: ${stripThought(m.text || '')}`).join('\n');
         prior = npc.memorySummary || '';
     } else if (activeMemoryScope === 'group') {
         const grp = G.groups[selectedScopeTargetId];
         const list = G.groupChatHistory[selectedScopeTargetId] || [];
-        if (list.length <= keepRecent) {
-            showToast(`当前群聊记录数 (${list.length}) 小于等于保留轮数，无需总结`, 'info', 2000);
-            return;
-        }
+        if (list.length <= keepRecent) { showToast(`当前群聊记录数 (${list.length}) 小于等于保留轮数，无需总结`, 'info', 2000); return; }
         const sliceItems = list.slice(0, list.length - keepRecent);
         textToSummarize = sliceItems.map(m => `${m.senderName}: ${stripThought(m.text || '')}`).join('\n');
         prior = G.groupMemories[selectedScopeTargetId] || '';
@@ -3522,12 +3170,7 @@ async function executeManualAiSummary() {
     try {
         const sys = `你是资深的剧情记忆提炼专家。请将以下需要归档的事件对话内容压缩总结为一段精炼的记忆（150-250字内）。要求保留重大发展、角色关系变动、约定、数据成就等核心要素。直接输出精炼记忆文本。`;
         const userPrompt = `${prior ? '【已有历史记忆摘要】：\n' + prior + '\n\n' : ''}【本次需归档的新内容】：\n${textToSummarize}`;
-
-        const summary = await callMemoryAI([
-            { role: 'system', content: sys },
-            { role: 'user', content: userPrompt }
-        ], { maxTokens: 500, temperature: 0.35 });
-
+        const summary = await callMemoryAI([{ role: 'system', content: sys }, { role: 'user', content: userPrompt }], { maxTokens: 500, temperature: 0.35 });
         const cleanSummary = stripThought(summary.trim());
 
         if (activeMemoryScope === 'story') {
@@ -3539,9 +3182,7 @@ async function executeManualAiSummary() {
         } else if (activeMemoryScope === 'group') {
             G.groupMemories[selectedScopeTargetId] = cleanSummary;
             const grp = G.groups[selectedScopeTargetId];
-            (grp.members || []).forEach(mid => {
-                if (G.npcs[mid]) G.npcs[mid].knownGroupEvents = `【在群「${grp.name}」获悉】：${cleanSummary}`;
-            });
+            (grp.members || []).forEach(mid => { if (G.npcs[mid]) G.npcs[mid].knownGroupEvents = `【在群「${grp.name}」获悉】：${cleanSummary}`; });
         }
 
         if (typeof hideLoading === 'function') hideLoading();
@@ -3572,21 +3213,13 @@ function openManualMemoryInputModal() {
     document.getElementById('btnSaveManualMemory').onclick = () => {
         const val = document.getElementById('manualMemoryText').value.trim();
         if (!val) { showToast('⚠️ 记忆内容不能为空', 'error'); return; }
-
-        if (activeMemoryScope === 'story') {
-            addGlobalMemoryRecord(val);
-        } else if (activeMemoryScope === 'character') {
-            if (G.npcs[selectedScopeTargetId]) G.npcs[selectedScopeTargetId].memorySummary = val;
-        } else if (activeMemoryScope === 'group') {
+        if (activeMemoryScope === 'story') { addGlobalMemoryRecord(val); }
+        else if (activeMemoryScope === 'character') { if (G.npcs[selectedScopeTargetId]) G.npcs[selectedScopeTargetId].memorySummary = val; }
+        else if (activeMemoryScope === 'group') {
             G.groupMemories[selectedScopeTargetId] = val;
             const grp = G.groups[selectedScopeTargetId];
-            if (grp) {
-                (grp.members || []).forEach(mid => {
-                    if (G.npcs[mid]) G.npcs[mid].knownGroupEvents = `【在群「${grp.name}」获悉】：${val}`;
-                });
-            }
+            if (grp) { (grp.members || []).forEach(mid => { if (G.npcs[mid]) G.npcs[mid].knownGroupEvents = `【在群「${grp.name}」获悉】：${val}`; }); }
         }
-
         showToast('✅ 记忆总结已保存', 'success');
         autoSaveGame();
         openMemoryModal();
@@ -3633,10 +3266,13 @@ window.showMessageActionSheet = showMessageActionSheet;
 window.triggerGenerateFriendsFeed = triggerGenerateFriendsFeed;
 window.detectPlayerTimezoneInfo = detectPlayerTimezoneInfo;
 window.formatNpcTimezoneContext = formatNpcTimezoneContext;
+// ✅ [新增导出] jumpToMomentCard 原先未导出，导致朋友圈卡片转发气泡点击报错
+window.jumpToMomentCard = jumpToMomentCard;
+// ✅ [新增导出] openClockSettingsModal 供外部调用
+window.openClockSettingsModal = openClockSettingsModal;
+
 // ============================================================
-// ============================================================
-// 🎨 新版聊天扩展：表情包 +「屏幕那边的TA」
-// 这些状态从原 12 号文件迁回 04，避免 04/12 双核心互相抢状态。
+// 🎨 聊天扩展：表情包 +「屏幕那边的TA」
 // ============================================================
 if (!window.G.stickerCategories) window.G.stickerCategories = ['猪猪', '默认'];
 if (!window.G.activeStickerCategory) window.G.activeStickerCategory = '猪猪';
@@ -3781,7 +3417,7 @@ function openImportStickersModal(targetType, targetId) {
             <i>例如：微笑——https://imgbed.xxx/a.jpg</i>
         </p>
         <div class="form-group">
-            <textarea id="importStickerBatchInput" rows="6" placeholder="这只可爱的小猪就是我呀——https://imgbed.heliar.top/i/QZNPVIKLzB8DiDL-.jpg&#10;你给我老实点——https://imgbed.heliar.top/i/KpiF2iLAUzHVDvjD.jpg" style="width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;font-size:12px;font-family:monospace;box-sizing:border-box;"></textarea>
+            <textarea id="importStickerBatchInput" rows="6" placeholder="这只可爱的小猪就是我呀——https://imgbed.heliar.top/i/QZNPVIKLzB8DiDL-.jpg" style="width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;font-size:12px;font-family:monospace;box-sizing:border-box;"></textarea>
         </div>
         <div class="btn-row">
             <button class="btn-secondary" onclick="closeModal()">取消</button>
@@ -3792,35 +3428,17 @@ function openImportStickersModal(targetType, targetId) {
     document.getElementById('btnConfirmBatchImport').onclick = () => {
         const raw = document.getElementById('importStickerBatchInput').value.trim();
         if (!raw) { showToast('⚠️ 请输入表情内容与图床链接', 'error'); return; }
-
         const lines = raw.split('\n').map(l => l.trim()).filter(Boolean);
         let count = 0;
-
         if (!window.G.stickerLibrary) window.G.stickerLibrary = [];
 
         for (const line of lines) {
-            let desc = '';
-            let url = '';
-            if (line.includes('——')) {
-                const parts = line.split('——');
-                desc = parts[0].trim();
-                url = parts.slice(1).join('——').trim();
-            } else if (line.includes(':http')) {
-                const idx = line.indexOf(':http');
-                desc = line.slice(0, idx).trim();
-                url = line.slice(idx + 1).trim();
-            } else if (line.includes('http')) {
-                const idx = line.indexOf('http');
-                desc = line.slice(0, idx).replace(/[-—:：\s]+$/, '').trim() || '表情';
-                url = line.slice(idx).trim();
-            }
-
+            let desc = ''; let url = '';
+            if (line.includes('——')) { const parts = line.split('——'); desc = parts[0].trim(); url = parts.slice(1).join('——').trim(); }
+            else if (line.includes(':http')) { const idx = line.indexOf(':http'); desc = line.slice(0, idx).trim(); url = line.slice(idx + 1).trim(); }
+            else if (line.includes('http')) { const idx = line.indexOf('http'); desc = line.slice(0, idx).replace(/[-—:：\s]+$/, '').trim() || '表情'; url = line.slice(idx).trim(); }
             if (url && (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:image/'))) {
-                window.G.stickerLibrary.push({
-                    category: curCat,
-                    desc: desc || '萌系表情',
-                    url: url
-                });
+                window.G.stickerLibrary.push({ category: curCat, desc: desc || '萌系表情', url });
                 count++;
             }
         }
@@ -3840,24 +3458,9 @@ function openImportStickersModal(targetType, targetId) {
 function sendStickerMessage(targetType, targetId, stickerObj) {
     const curAcc = getActiveAccountInfo();
     const isSingle = targetType === 'single';
-
-    const msg = {
-        _id: 'cstk_' + Date.now() + '_' + rand(100, 999),
-        from: 'player',
-        senderAccount: curAcc.name,
-        sticker: stickerObj,
-        text: `[表情: ${stickerObj.desc}]`,
-        time: new Date().toLocaleTimeString().slice(0, 5)
-    };
-
-    if (isSingle) {
-        pushChatMessageSafe(targetId, msg);
-        renderSingleChatWindow(document.getElementById('socialTab'));
-    } else {
-        if (!window.G.groupChatHistory[targetId]) window.G.groupChatHistory[targetId] = [];
-        window.G.groupChatHistory[targetId].push(msg);
-        renderGroupChatWindow(document.getElementById('socialTab'));
-    }
+    const msg = { _id: 'cstk_' + Date.now() + '_' + rand(100, 999), from: 'player', senderAccount: curAcc.name, sticker: stickerObj, text: `[表情: ${stickerObj.desc}]`, time: new Date().toLocaleTimeString().slice(0, 5) };
+    if (isSingle) { pushChatMessageSafe(targetId, msg); renderSingleChatWindow(document.getElementById('socialTab')); }
+    else { if (!window.G.groupChatHistory[targetId]) window.G.groupChatHistory[targetId] = []; window.G.groupChatHistory[targetId].push(msg); renderGroupChatWindow(document.getElementById('socialTab')); }
     autoSaveGame();
 }
 
@@ -3926,22 +3529,14 @@ function openClockSettingsModal() {
     `);
 
     document.querySelectorAll('input[name="clockModeRadio"]').forEach(r => {
-        r.onchange = () => {
-            document.getElementById('customClockInputsArea').style.display = (r.value === 'custom') ? 'block' : 'none';
-        };
+        r.onchange = () => { document.getElementById('customClockInputsArea').style.display = (r.value === 'custom') ? 'block' : 'none'; };
     });
 
     document.getElementById('btnSaveClockSettings').onclick = () => {
         const mode = document.querySelector('input[name="clockModeRadio"]:checked').value;
         const country = document.getElementById('customCountryInput').value.trim() || '中国 (东八区)';
         const timeStr = document.getElementById('customTimeStrInput').value.trim();
-
-        window.G.clockConfig = {
-            mode,
-            customCountry: country,
-            customTimeStr: timeStr
-        };
-
+        window.G.clockConfig = { mode, customCountry: country, customTimeStr: timeStr };
         showToast('✅ 时钟时区设置已更新！', 'success', 1500);
         closeModal();
         autoSaveGame();
@@ -3983,28 +3578,11 @@ function openCreateCustomNpcModal() {
         const skin = document.getElementById('newNpcSkinInput').value.trim();
         const category = document.getElementById('newNpcCategoryInput').value.trim();
         const catchphrase = document.getElementById('newNpcCatchphraseInput').value.trim();
-
         if (!name) { showToast('⚠️ 请填写角色姓名', 'error'); return; }
         if (!persona) { showToast('⚠️ 请填写角色性格人设', 'error'); return; }
-
         const npcId = 'custom_' + Date.now();
         if (!window.G.npcs) window.G.npcs = {};
-        window.G.npcs[npcId] = {
-            id: npcId,
-            name,
-            gender: '男',
-            persona,
-            skin: skin || '经典主播装扮',
-            appearance: skin || '经典主播装扮',
-            category: category || 'MC实况',
-            catchphrase,
-            favor: 20,
-            avatarEmoji: '👤',
-            avatarUrl: null,
-            works: [],
-            isCustom: true
-        };
-
+        window.G.npcs[npcId] = { id: npcId, name, gender: '男', persona, skin: skin || '经典主播装扮', appearance: skin || '经典主播装扮', category: category || 'MC实况', catchphrase, favor: 20, avatarEmoji: '👤', avatarUrl: null, works: [], isCustom: true };
         closeModal();
         showToast(`🎉 好友「${name}」已添加进通讯录！`, 'success', 2500);
         renderSocialPanel();
@@ -4014,11 +3592,7 @@ function openCreateCustomNpcModal() {
 
 function openCreateGroupModal() {
     const npcs = Object.values(window.G.npcs || {});
-    if (!npcs.length) {
-        showToast('请先结识好友后再创建群聊', 'error');
-        return;
-    }
-
+    if (!npcs.length) { showToast('请先结识好友后再创建群聊', 'error'); return; }
     const memberBoxes = npcs.map(n => `
         <label style="display:inline-flex;align-items:center;gap:4px;font-size:12.5px;background:#f8faf8;padding:4px 8px;border-radius:12px;margin:3px;border:1px solid #e0ebe0;cursor:pointer;">
             <input type="checkbox" class="create-group-member-check" value="${n.id}">
@@ -4038,9 +3612,7 @@ function openCreateGroupModal() {
         </div>
         <div class="form-group">
             <label>勾选拉入群聊的好友：</label>
-            <div style="max-height:160px;overflow-y:auto;display:flex;flex-wrap:wrap;gap:2px;padding:6px;border:1px solid #eee;border-radius:8px;">
-                ${memberBoxes}
-            </div>
+            <div style="max-height:160px;overflow-y:auto;display:flex;flex-wrap:wrap;gap:2px;padding:6px;border:1px solid #eee;border-radius:8px;">${memberBoxes}</div>
         </div>
         <div class="btn-row">
             <button class="btn-secondary" onclick="openAddChatTargetModal()">返回</button>
@@ -4053,28 +3625,13 @@ function openCreateGroupModal() {
         const desc = document.getElementById('newGroupDescInput').value.trim();
         const checked = document.querySelectorAll('.create-group-member-check:checked');
         const memberIds = Array.from(checked).map(c => c.value);
-
         if (!name) { showToast('⚠️ 请填写群聊名称', 'error'); return; }
         if (!memberIds.length) { showToast('⚠️ 至少需要拉入一位好友', 'error'); return; }
-
         const gid = 'grp_' + Date.now();
         if (!window.G.groups) window.G.groups = {};
-        window.G.groups[gid] = {
-            id: gid,
-            name,
-            desc: desc || '日常探讨与开播分享',
-            avatarEmoji: '👥',
-            members: memberIds
-        };
-
+        window.G.groups[gid] = { id: gid, name, desc: desc || '日常探讨与开播分享', avatarEmoji: '👥', members: memberIds };
         if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
-        window.G.groupChatHistory[gid] = [{
-            _id: 'ginit_' + Date.now(),
-            from: 'action',
-            text: `群聊「${name}」已创建，你邀请了 ${memberIds.map(id => window.G.npcs[id]?.name).join('、')} 加入群聊。`,
-            time: new Date().toLocaleTimeString().slice(0, 5)
-        }];
-
+        window.G.groupChatHistory[gid] = [{ _id: 'ginit_' + Date.now(), from: 'action', text: `群聊「${name}」已创建，你邀请了 ${memberIds.map(id => window.G.npcs[id]?.name).join('、')} 加入群聊。`, time: new Date().toLocaleTimeString().slice(0, 5) }];
         closeModal();
         showToast(`🎉 群聊「${name}」创建成功！`, 'success', 2500);
         window.G.chatActiveTab = 'group';
@@ -4086,12 +3643,8 @@ function openCreateGroupModal() {
 function openShareMomentTargetModal(momentId) {
     const item = (window.G.feed || []).find(f => f.id === momentId);
     if (!item) return;
-
     const npcs = Object.values(window.G.npcs || {});
-    if (!npcs.length) {
-        showToast('暂无好友可以转发', 'error');
-        return;
-    }
+    if (!npcs.length) { showToast('暂无好友可以转发', 'error'); return; }
 
     let npcItems = npcs.map(n => `
         <div class="share-target-item" data-id="${n.id}" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:8px;background:#f9faf9;border:1px solid #eef2ee;margin-bottom:6px;cursor:pointer;">
@@ -4108,12 +3661,8 @@ function openShareMomentTargetModal(momentId) {
         <div style="font-size:12px;color:#666;background:#f0f4f0;padding:6px 10px;border-radius:6px;margin:8px 0;">
             <b>动态内容：</b>${escapeHtml(item.body.slice(0, 36))}...
         </div>
-        <div style="max-height:220px;overflow-y:auto;margin:10px 0;">
-            ${npcItems}
-        </div>
-        <div class="btn-row">
-            <button class="btn-secondary" onclick="closeModal()" style="width:100%;">取消</button>
-        </div>
+        <div style="max-height:220px;overflow-y:auto;margin:10px 0;">${npcItems}</div>
+        <div class="btn-row"><button class="btn-secondary" onclick="closeModal()" style="width:100%;">取消</button></div>
     `);
 
     document.querySelectorAll('.share-target-item').forEach(el => {
@@ -4121,26 +3670,8 @@ function openShareMomentTargetModal(momentId) {
             const targetNpcId = el.dataset.id;
             const curAcc = getActiveAccountInfo();
             const targetNpc = window.G.npcs[targetNpcId];
-
-            pushChatMessageSafe(targetNpcId, {
-                from: 'player',
-                senderAccount: curAcc.name,
-                sharedMoment: {
-                    id: item.id,
-                    author: item.author,
-                    body: item.body,
-                    image: item.image || null,
-                    imageDesc: item.imageDesc || null,
-                    imageMode: item.imageMode || (item.image && item.imageDesc ? 'hybrid' : (item.image ? 'real' : 'desc'))
-                },
-                text: `[转发动态]: ${item.body.slice(0, 40)}`,
-                time: new Date().toLocaleTimeString().slice(0, 5)
-            });
-
-            if (targetNpc) {
-                targetNpc.memorySummary = (targetNpc.memorySummary || '') + `\n【好友私信互动】：主角转发了朋友圈动态“${item.body.slice(0, 20)}”给你，你可以此话题展开互动。`;
-            }
-
+            pushChatMessageSafe(targetNpcId, { from: 'player', senderAccount: curAcc.name, sharedMoment: { id: item.id, author: item.author, body: item.body, image: item.image || null, imageDesc: item.imageDesc || null, imageMode: item.imageMode || (item.image && item.imageDesc ? 'hybrid' : (item.image ? 'real' : 'desc')) }, text: `[转发动态]: ${item.body.slice(0, 40)}`, time: new Date().toLocaleTimeString().slice(0, 5) });
+            if (targetNpc) targetNpc.memorySummary = (targetNpc.memorySummary || '') + `\n【好友私信互动】：主角转发了朋友圈动态"${item.body.slice(0, 20)}"给你，你可以此话题展开互动。`;
             closeModal();
             showToast(`✅ 已将动态转发给 ${targetNpc ? targetNpc.name : '好友'}！`, 'success', 2000);
             openChat(targetNpcId);
