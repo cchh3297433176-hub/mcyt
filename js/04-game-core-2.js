@@ -2,6 +2,60 @@
 // 成就系统、商店、数据面板、手机社交(多模态识图、时差推导、朋友圈互怼吃醋、私聊动态贯通、微信式连发)
 // ============================================================
 
+// 🐷 内置默认表情包源数据（确保永远不会丢失）
+const DEFAULT_PIG_STICKERS = [
+    {category:'猪猪',desc:'这只可爱的小猪就是我呀',url:'https://imgbed.heliar.top/i/QZNPVIKLzB8DiDL-.jpg'},
+    {category:'猪猪',desc:'你给我老实点',url:'https://imgbed.heliar.top/i/KpiF2iLAUzHVDvjD.jpg'},
+    {category:'猪猪',desc:'骂我的人看到我这样还忍心骂吗',url:'https://imgbed.heliar.top/i/TnIT9ii2FOss4Fke.jpg'},
+    {category:'猪猪',desc:'这两只小猪就是我们呀',url:'https://imgbed.heliar.top/i/K0UZOCq2MYES8vga.jpg'},
+    {category:'猪猪',desc:'悲愤离开',url:'https://imgbed.heliar.top/i/O7E9kWjlYBDg59W-.jpg'},
+    {category:'猪猪',desc:'猪是必须要爱惜的',url:'https://imgbed.heliar.top/i/tiUgP49B0Tez99eI.jpg'},
+    {category:'猪猪',desc:'而我只是一个QQ肠',url:'https://imgbed.heliar.top/i/G4YYaUbHaS62Acf-.jpg'},
+    {category:'猪猪',desc:'小猪魔法',url:'https://imgbed.heliar.top/i/nEe02eA-RY7p7Ehl.jpg'},
+    {category:'猪猪',desc:'wink一下',url:'https://imgbed.heliar.top/i/PSfpaNyQU1Pe2Qvm.jpg'},
+    {category:'猪猪',desc:'再睡拱死你',url:'https://imgbed.heliar.top/i/2IqW2TDCBMsl81T9.jpg'},
+    {category:'猪猪',desc:'忙着玩手机',url:'https://imgbed.heliar.top/i/AKsZ0ADV1nbpN6Xh.jpg'},
+    {category:'猪猪',desc:'饶了这一次呗',url:'https://imgbed.heliar.top/i/cAIQytv_7rGo92is.jpg'},
+    {category:'猪猪',desc:'气疯了你满意了吗！',url:'https://imgbed.heliar.top/i/ST0SkhSSAT0tNcJ7.jpg'},
+    {category:'猪猪',desc:'熟睡中',url:'https://imgbed.heliar.top/i/pa6PWuk1W2T9sM_i.jpg'},
+    {category:'猪猪',desc:'突然出现',url:'https://imgbed.heliar.top/i/rH-ZeZBzySvEydf1.jpg'},
+    {category:'猪猪',desc:'你这样对我我会哭的呀',url:'https://imgbed.heliar.top/i/JVjz3snh4bQPeJPB.jpg'},
+    {category:'猪猪',desc:'就这样萌萌的看着泥',url:'https://imgbed.heliar.top/i/wjHyOK7Nlrje2RMj.jpg'},
+    {category:'猪猪',desc:'我发现躺着会很酥胡',url:'https://imgbed.heliar.top/i/iOZZUDJmk9i4oyjK.jpg'},
+    {category:'猪猪',desc:'我把话放这了',url:'https://imgbed.heliar.top/i/QNTbRjWXRXJiFof8.jpg'},
+    {category:'猪猪',desc:'猪的天啊',url:'https://imgbed.heliar.top/i/Iaai5e8mbqtCqciE.jpg'},
+    {category:'猪猪',desc:'我素你的掌上明猪呀',url:'https://imgbed.heliar.top/i/9ro4rlqIzD9nH1uw.jpg'},
+    {category:'猪猪',desc:'如果我是猪也该遇见属于我的恋猪癖了',url:'https://imgbed.heliar.top/i/JN_hGfK5CEHBb34K.jpg'},
+    {category:'猪猪',desc:'你不要猪了吗',url:'https://imgbed.heliar.top/i/LSckmvTxPcjpX5sM.jpg'},
+    {category:'猪猪',desc:'你这只猪到底想我没',url:'https://imgbed.heliar.top/i/EpozQFX0HEf6X9TF.jpg'},
+    {category:'猪猪',desc:'两猪对视',url:'https://imgbed.heliar.top/i/OjuoWxmO7dtaCGGr.jpg'},
+    {category:'猪猪',desc:'别想让我理你这只猪了',url:'https://imgbed.heliar.top/i/3Uy69MILiykjX2Yw.jpg'},
+    {category:'猪猪',desc:'你这只猪又不理我',url:'https://imgbed.heliar.top/i/YKTyf0FsRqDaAUFv.jpg'}
+];
+
+// 表情包强制保全机制（防止读档后表情包变空）
+function ensureStickersLoaded() {
+    if (!window.G) window.G = {};
+    if (!window.G.stickerCategories || !Array.isArray(window.G.stickerCategories)) {
+        window.G.stickerCategories = ['猪猪', '默认'];
+    }
+    if (!window.G.stickerCategories.includes('猪猪')) {
+        window.G.stickerCategories.unshift('猪猪');
+    }
+    if (!window.G.activeStickerCategory) {
+        window.G.activeStickerCategory = '猪猪';
+    }
+    if (!window.G.stickerLibrary || !Array.isArray(window.G.stickerLibrary)) {
+        window.G.stickerLibrary = [];
+    }
+    const hasPigStickers = window.G.stickerLibrary.some(s => s && s.category === '猪猪');
+    if (!hasPigStickers) {
+        window.G.stickerLibrary.push(...DEFAULT_PIG_STICKERS);
+    }
+}
+ensureStickersLoaded();
+
+// ============================================================
 // 成就系统
 // ============================================================
 function checkAchievements() {
@@ -577,7 +631,7 @@ function showMemoryFailNoticeModal(moduleName, errorMsg) {
         <div style="text-align:center;padding:10px 0;">
             <div style="font-size:36px;margin-bottom:8px;">⚠️</div>
             <h3 style="color:#d32f2f;margin-bottom:6px;">自动记忆总结未完成</h3>
-            <div style="font-size:13px;color:#555;line-height:1.6;margin:10px 0;background:#fff8f8;padding:10px 12px;border-radius:8px;border:1px solid #ffd8d8;text-align:left;">
+            <div style="font-size:13px;color:#555;line-height:1.6;margin-nav:10px 0;background:#fff8f8;padding:10px 12px;border-radius:8px;border:1px solid #ffd8d8;text-align:left;">
                 <div><b>失败模块：</b>${escapeHtml(moduleName)}</div>
                 <div style="font-size:11px;color:#888;margin-top:4px;"><b>原因提示：</b>${escapeHtml(errorMsg || '网络超时或接口异常')}</div>
             </div>
@@ -713,7 +767,7 @@ function openAccountManagerModal() {
 
     openModal(`
         <h3>🎭 账号中心与快速切换</h3>
-        <p style="font-size:12px;color:#666;line-height:1.6;">每个账号拥有完全独立的私聊记录。某个小号被拉黑后，可继续注册新小号联系骚扰或求情转圜！</p>
+        <p style="font-size:12px;color:#666;line-height:1.6;">每个账号拥有完全独立的私聊记录。某个小号被拉黑后，可继续注册新小号联系求情转圜！</p>
         
         <div style="margin:10px 0;border:1px solid #eee;border-radius:10px;padding:10px;background:#fff;">
             <div style="font-weight:700;font-size:13px;margin-bottom:8px;">👑 主播官方大号</div>
@@ -978,6 +1032,7 @@ function renderSocialPanel() {
     const container = (dom && dom.socialTab) || document.getElementById('socialTab');
     if (!container) return;
     ensureNpcIntegrity();
+    ensureStickersLoaded();
     if (G.currentChatGroup) {
         renderGroupChatWindow(container);
         return;
@@ -1077,15 +1132,17 @@ function buildChatListHTML() {
                 const isBlocked = isAccountBlockedByNpc(id, currentAcc.id);
 
                 itemsHtml += `
-                <div class="chat-item" data-id="${id}" style="display:flex;align-items:center;padding:10px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;background:#fff;border:1px solid #f0f4f0;position:relative;">
-                    <div style="margin-right:12px;flex-shrink:0;">${renderAvatarBadge(npc, 44)}</div>
+                <div class="chat-item" data-id="${id}" style="display:flex;align-items:center;padding:10px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;background:#fff;border:1px solid #f0f4f0;position:relative;gap:10px;">
+                    <div style="flex-shrink:0;">${renderAvatarBadge(npc, 44)}</div>
                     <div style="flex:1;min-width:0;">
                         <div style="display:flex;justify-content:space-between;align-items:center;">
                             <span style="font-weight:700;font-size:14px;color:var(--text);">${escapeHtml(npc.name)} ${isLover ? '💕' : ''} ${isBlocked ? '<span style="font-size:10px;color:#fff;background:#e53935;padding:1px 5px;border-radius:4px;">已拉黑本号</span>' : ''}</span>
                             <span style="font-size:11px;color:#bbb;">${time}</span>
                         </div>
-                        <div style="font-size:12px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:3px;">${escapeHtml(purePreview.slice(0, 30))}</div>
+                        <div style="font-size:12px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:3px;">${escapeHtml(purePreview.slice(0, 26))}</div>
                     </div>
+                    <!-- 💬 独立直达私聊按钮，绝对防止误触或事件丢失 -->
+                    <button class="chat-enter-btn" data-id="${id}" title="进入聊天" style="border:none;background:var(--primary);color:#fff;width:34px;height:34px;border-radius:50%;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 5px rgba(0,0,0,0.15);">💬</button>
                 </div>`;
             }
         }
@@ -1103,15 +1160,16 @@ function buildChatListHTML() {
                 const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
                 const purePreview = lastMsg ? `${lastMsg.senderName}: ${stripThought(lastMsg.text || '')}` : (grp.desc || '开启热烈讨论吧');
                 itemsHtml += `
-                <div class="group-item" data-gid="${gid}" style="display:flex;align-items:center;padding:10px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;background:#fff;border:1px solid #f0f4f0;">
-                    <div style="margin-right:12px;flex-shrink:0;">${renderAvatarBadge(grp, 44)}</div>
+                <div class="group-item" data-gid="${gid}" style="display:flex;align-items:center;padding:10px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;background:#fff;border:1px solid #f0f4f0;gap:10px;">
+                    <div style="flex-shrink:0;">${renderAvatarBadge(grp, 44)}</div>
                     <div style="flex:1;min-width:0;">
                         <div style="display:flex;justify-content:space-between;align-items:center;">
                             <span style="font-weight:700;font-size:14px;color:var(--text);">${escapeHtml(grp.name)} <span style="font-size:11px;color:#999;">(${(grp.members || []).length}人)</span></span>
                             <span style="font-size:11px;color:#bbb;">${lastMsg ? (lastMsg.time || '') : ''}</span>
                         </div>
-                        <div style="font-size:12px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:3px;">${escapeHtml(purePreview.slice(0, 30))}</div>
+                        <div style="font-size:12px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:3px;">${escapeHtml(purePreview.slice(0, 26))}</div>
                     </div>
+                    <button class="group-enter-btn" data-gid="${gid}" title="进入群聊" style="border:none;background:#2e7d32;color:#fff;width:34px;height:34px;border-radius:50%;font-size:16px;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;box-shadow:0 2px 5px rgba(0,0,0,0.15);">👥</button>
                 </div>`;
             }
         }
@@ -1129,7 +1187,7 @@ function buildChatListHTML() {
         </div>
     </div>
     <div style="font-size:11px;color:#888;padding:6px 16px;background:#fcfdfc;border-bottom:1px dashed #eee;">
-        💡 提示：长按消息可撤回、编辑或删除；长按联系人可编辑人设与独立记忆
+        💡 提示：点击 💬 可直接开启聊天，长按卡片可编辑人设与独立记忆
     </div>
     <div class="chat-list" style="flex:1;overflow-y:auto;padding:8px;">
         ${itemsHtml}
@@ -1155,12 +1213,32 @@ function bindChatListEvents(container) {
     });
     addBtn?.addEventListener('click', () => openAddChatTargetModal());
 
+    // 💬 按钮点击直接进入私聊（阻止冒泡）
+    container.querySelectorAll('.chat-enter-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const id = btn.dataset.id;
+            if (id) openChat(String(id));
+        });
+    });
+
+    // 👥 按钮点击直接进入群聊（阻止冒泡）
+    container.querySelectorAll('.group-enter-btn').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const gid = btn.dataset.gid;
+            if (gid) openGroupChat(String(gid));
+        });
+    });
+
+    // 私聊卡片整体：短按进入聊天，长按编辑人设
     container.querySelectorAll('.chat-item').forEach(el => {
         const id = el.dataset.id;
         if (!id) return;
         bindLongPressEvent(el, () => openEditNpcModal(String(id)), () => openChat(String(id)));
     });
 
+    // 群聊卡片整体：短按进群，长按设置
     container.querySelectorAll('.group-item').forEach(el => {
         const gid = el.dataset.gid;
         if (!gid) return;
@@ -1962,7 +2040,7 @@ ${participantsDesc}
     }
 }
 
-// 消息长按
+// 消息长按操作
 function showMessageActionSheet(msgId, targetType, targetId) {
     const list = targetType === 'single' ? getAccountChatHistory(targetId) : (G.groupChatHistory[targetId] || []);
     const msg = list.find(m => m._id === msgId);
@@ -3156,38 +3234,6 @@ function openManualMemoryInputModal() {
 }
 
 // 表情包与扩展抽屉
-if (!window.G.stickerCategories) window.G.stickerCategories = ['猪猪', '默认'];
-if (!window.G.activeStickerCategory) window.G.activeStickerCategory = '猪猪';
-if (!window.G.stickerLibrary || !window.G.stickerLibrary.length) window.G.stickerLibrary = [
-    {category:'猪猪',desc:'这只可爱的小猪就是我呀',url:'https://imgbed.heliar.top/i/QZNPVIKLzB8DiDL-.jpg'},
-    {category:'猪猪',desc:'你给我老实点',url:'https://imgbed.heliar.top/i/KpiF2iLAUzHVDvjD.jpg'},
-    {category:'猪猪',desc:'骂我的人看到我这样还忍心骂吗',url:'https://imgbed.heliar.top/i/TnIT9ii2FOss4Fke.jpg'},
-    {category:'猪猪',desc:'这两只小猪就是我们呀',url:'https://imgbed.heliar.top/i/K0UZOCq2MYES8vga.jpg'},
-    {category:'猪猪',desc:'悲愤离开',url:'https://imgbed.heliar.top/i/O7E9kWjlYBDg59W-.jpg'},
-    {category:'猪猪',desc:'猪是必须要爱惜的',url:'https://imgbed.heliar.top/i/tiUgP49B0Tez99eI.jpg'},
-    {category:'猪猪',desc:'而我只是一个QQ肠',url:'https://imgbed.heliar.top/i/G4YYaUbHaS62Acf-.jpg'},
-    {category:'猪猪',desc:'小猪魔法',url:'https://imgbed.heliar.top/i/nEe02eA-RY7p7Ehl.jpg'},
-    {category:'猪猪',desc:'wink一下',url:'https://imgbed.heliar.top/i/PSfpaNyQU1Pe2Qvm.jpg'},
-    {category:'猪猪',desc:'再睡拱死你',url:'https://imgbed.heliar.top/i/2IqW2TDCBMsl81T9.jpg'},
-    {category:'猪猪',desc:'忙着玩手机',url:'https://imgbed.heliar.top/i/AKsZ0ADV1nbpN6Xh.jpg'},
-    {category:'猪猪',desc:'饶了这一次呗',url:'https://imgbed.heliar.top/i/cAIQytv_7rGo92is.jpg'},
-    {category:'猪猪',desc:'气疯了你满意了吗！',url:'https://imgbed.heliar.top/i/ST0SkhSSAT0tNcJ7.jpg'},
-    {category:'猪猪',desc:'熟睡中',url:'https://imgbed.heliar.top/i/pa6PWuk1W2T9sM_i.jpg'},
-    {category:'猪猪',desc:'突然出现',url:'https://imgbed.heliar.top/i/rH-ZeZBzySvEydf1.jpg'},
-    {category:'猪猪',desc:'你这样对我我会哭的呀',url:'https://imgbed.heliar.top/i/JVjz3snh4bQPeJPB.jpg'},
-    {category:'猪猪',desc:'就这样萌萌的看着泥',url:'https://imgbed.heliar.top/i/wjHyOK7Nlrje2RMj.jpg'},
-    {category:'猪猪',desc:'我发现躺着会很酥胡',url:'https://imgbed.heliar.top/i/iOZZUDJmk9i4oyjK.jpg'},
-    {category:'猪猪',desc:'我把话放这了',url:'https://imgbed.heliar.top/i/QNTbRjWXRXJiFof8.jpg'},
-    {category:'猪猪',desc:'猪的天啊',url:'https://imgbed.heliar.top/i/Iaai5e8mbqtCqciE.jpg'},
-    {category:'猪猪',desc:'我素你的掌上明猪呀',url:'https://imgbed.heliar.top/i/9ro4rlqIzD9nH1uw.jpg'},
-    {category:'猪猪',desc:'如果我是猪也该遇见属于我的恋猪癖了',url:'https://imgbed.heliar.top/i/JN_hGfK5CEHBb34K.jpg'},
-    {category:'猪猪',desc:'你不要猪了吗',url:'https://imgbed.heliar.top/i/LSckmvTxPcjpX5sM.jpg'},
-    {category:'猪猪',desc:'你这只猪到底想我没',url:'https://imgbed.heliar.top/i/EpozQFX0HEf6X9TF.jpg'},
-    {category:'猪猪',desc:'两猪对视',url:'https://imgbed.heliar.top/i/OjuoWxmO7dtaCGGr.jpg'},
-    {category:'猪猪',desc:'别想让我理你这只猪了',url:'https://imgbed.heliar.top/i/3Uy69MILiykjX2Yw.jpg'},
-    {category:'猪猪',desc:'你这只猪又不理我',url:'https://imgbed.heliar.top/i/YKTyf0FsRqDaAUFv.jpg'}
-];
-
 function findStickerByKeyword(kw) {
     if (!kw || !window.G.stickerLibrary) return null;
     const cleanKw = kw.trim().toLowerCase();
@@ -3195,6 +3241,7 @@ function findStickerByKeyword(kw) {
 }
 
 function buildStickerDrawerHTML() {
+    ensureStickersLoaded();
     const cats = window.G.stickerCategories || ['猪猪', '默认'];
     const activeCat = window.G.activeStickerCategory || cats[0];
     const stickers = (window.G.stickerLibrary || []).filter(s => s.category === activeCat);
@@ -3422,6 +3469,143 @@ function openClockSettingsModal() {
         closeModal();
         autoSaveGame();
     };
+}
+
+function openCreateCustomNpcModal() {
+    openModal(`
+        <h3>➕ 自定义添加新角色好友</h3>
+        <p style="font-size:12px;color:#666;">创造一位全新的 MC 主播或搭档，即刻开始互动！</p>
+        <div class="form-group">
+            <label>角色姓名 <span class="required">*</span></label>
+            <input type="text" id="newNpcNameInput" placeholder="例如：Skeppy / 某位主播好友...">
+        </div>
+        <div class="form-group">
+            <label>性格人设特征 (Prompt) <span class="required">*</span></label>
+            <textarea id="newNpcPersonaInput" rows="3" placeholder="例如：脾气火爆但非常重义气，热爱恶作剧整蛊，说话语速极快..."></textarea>
+        </div>
+        <div class="form-group">
+            <label>外貌/皮肤外观 (Skin)</label>
+            <input type="text" id="newNpcSkinInput" placeholder="例如：红色鸭舌帽与黑色连帽卫衣...">
+        </div>
+        <div class="form-group">
+            <label>赛道与口头禅</label>
+            <div style="display:flex;gap:6px;">
+                <input type="text" id="newNpcCategoryInput" placeholder="如：整蛊/PvP" style="flex:1;">
+                <input type="text" id="newNpcCatchphraseInput" placeholder="口头禅" style="flex:1;">
+            </div>
+        </div>
+        <div class="btn-row">
+            <button class="btn-secondary" onclick="openAddChatTargetModal()">返回</button>
+            <button class="btn-primary" id="btnConfirmCreateNpc">完成添加</button>
+        </div>
+    `);
+
+    document.getElementById('btnConfirmCreateNpc').onclick = () => {
+        const name = document.getElementById('newNpcNameInput').value.trim();
+        const persona = document.getElementById('newNpcPersonaInput').value.trim();
+        const skin = document.getElementById('newNpcSkinInput').value.trim();
+        const category = document.getElementById('newNpcCategoryInput').value.trim();
+        const catchphrase = document.getElementById('newNpcCatchphraseInput').value.trim();
+        if (!name) { showToast('⚠️ 请填写角色姓名', 'error'); return; }
+        if (!persona) { showToast('⚠️ 请填写角色性格人设', 'error'); return; }
+        const npcId = 'custom_' + Date.now();
+        if (!window.G.npcs) window.G.npcs = {};
+        window.G.npcs[npcId] = { id: npcId, name, gender: '男', persona, skin: skin || '经典主播装扮', appearance: skin || '经典主播装扮', category: category || 'MC实况', catchphrase, favor: 20, avatarEmoji: '👤', avatarUrl: null, works: [], isCustom: true };
+        closeModal();
+        showToast(`🎉 好友「${name}」已添加进通讯录！`, 'success', 2500);
+        renderSocialPanel();
+        autoSaveGame();
+    };
+}
+
+function openCreateGroupModal() {
+    const npcs = Object.values(window.G.npcs || {});
+    if (!npcs.length) { showToast('请先结识好友后再创建群聊', 'error'); return; }
+    const memberBoxes = npcs.map(n => `
+        <label style="display:inline-flex;align-items:center;gap:4px;font-size:12.5px;background:#f8faf8;padding:4px 8px;border-radius:12px;margin:3px;border:1px solid #e0ebe0;cursor:pointer;">
+            <input type="checkbox" class="create-group-member-check" value="${n.id}">
+            <span>${n.avatarEmoji || '👤'} ${escapeHtml(n.name)}</span>
+        </label>
+    `).join('');
+
+    openModal(`
+        <h3>👥 建立新的群聊</h3>
+        <div class="form-group">
+            <label>群聊名称 <span class="required">*</span></label>
+            <input type="text" id="newGroupNameInput" placeholder="例如：周末联机整蛊小分队...">
+        </div>
+        <div class="form-group">
+            <label>群简介 (选填)</label>
+            <input type="text" id="newGroupDescInput" placeholder="描述这个群的日常氛围与话题...">
+        </div>
+        <div class="form-group">
+            <label>勾选拉入群聊的好友：</label>
+            <div style="max-height:160px;overflow-y:auto;display:flex;flex-wrap:wrap;gap:2px;padding:6px;border:1px solid #eee;border-radius:8px;">${memberBoxes}</div>
+        </div>
+        <div class="btn-row">
+            <button class="btn-secondary" onclick="openAddChatTargetModal()">返回</button>
+            <button class="btn-primary" id="btnConfirmCreateGroup">创建群聊</button>
+        </div>
+    `);
+
+    document.getElementById('btnConfirmCreateGroup').onclick = () => {
+        const name = document.getElementById('newGroupNameInput').value.trim();
+        const desc = document.getElementById('newGroupDescInput').value.trim();
+        const checked = document.querySelectorAll('.create-group-member-check:checked');
+        const memberIds = Array.from(checked).map(c => c.value);
+        if (!name) { showToast('⚠️ 请填写群聊名称', 'error'); return; }
+        if (!memberIds.length) { showToast('⚠️ 至少需要拉入一位好友', 'error'); return; }
+        const gid = 'grp_' + Date.now();
+        if (!window.G.groups) window.G.groups = {};
+        window.G.groups[gid] = { id: gid, name, desc: desc || '日常探讨与开播分享', avatarEmoji: '👥', members: memberIds };
+        if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
+        window.G.groupChatHistory[gid] = [{ _id: 'ginit_' + Date.now(), from: 'action', text: `群聊「${name}」已创建，你邀请了 ${memberIds.map(id => window.G.npcs[id]?.name).join('、')} 加入群聊。`, time: new Date().toLocaleTimeString().slice(0, 5) }];
+        closeModal();
+        showToast(`🎉 群聊「${name}」创建成功！`, 'success', 2500);
+        window.G.chatActiveTab = 'group';
+        renderSocialPanel();
+        autoSaveGame();
+    };
+}
+
+function openShareMomentTargetModal(momentId) {
+    const item = (window.G.feed || []).find(f => f.id === momentId);
+    if (!item) return;
+    const npcs = Object.values(window.G.npcs || {});
+    if (!npcs.length) { showToast('暂无好友可以转发', 'error'); return; }
+
+    let npcItems = npcs.map(n => `
+        <div class="share-target-item" data-id="${n.id}" style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-radius:8px;background:#f9faf9;border:1px solid #eef2ee;margin-bottom:6px;cursor:pointer;">
+            <div style="display:flex;align-items:center;gap:8px;">
+                ${renderAvatarBadge(n, 32)}
+                <span style="font-weight:700;font-size:13px;">${escapeHtml(n.name)}</span>
+            </div>
+            <button class="upload-btn" style="padding:3px 10px;font-size:11px;pointer-events:none;">发送</button>
+        </div>
+    `).join('');
+
+    openModal(`
+        <h3>↗️ 转发动态给好友</h3>
+        <div style="font-size:12px;color:#666;background:#f0f4f0;padding:6px 10px;border-radius:6px;margin:8px 0;">
+            <b>动态内容：</b>${escapeHtml(item.body.slice(0, 36))}...
+        </div>
+        <div style="max-height:220px;overflow-y:auto;margin:10px 0;">${npcItems}</div>
+        <div class="btn-row"><button class="btn-secondary" onclick="closeModal()" style="width:100%;">取消</button></div>
+    `);
+
+    document.querySelectorAll('.share-target-item').forEach(el => {
+        el.onclick = () => {
+            const targetNpcId = el.dataset.id;
+            const curAcc = getActiveAccountInfo();
+            const targetNpc = window.G.npcs[targetNpcId];
+            pushChatMessageSafe(targetNpcId, { from: 'player', senderAccount: curAcc.name, sharedMoment: { id: item.id, author: item.author, body: item.body, image: item.image || null, imageDesc: item.imageDesc || null, imageMode: item.imageMode || (item.image && item.imageDesc ? 'hybrid' : (item.image ? 'real' : 'desc')) }, text: `[转发动态]: ${item.body.slice(0, 40)}`, time: new Date().toLocaleTimeString().slice(0, 5) });
+            if (targetNpc) targetNpc.memorySummary = (targetNpc.memorySummary || '') + `\n【好友私信互动】：主角转发了朋友圈动态"${item.body.slice(0, 20)}"给你，你可以此话题展开互动。`;
+            closeModal();
+            showToast(`✅ 已将动态转发给 ${targetNpc ? targetNpc.name : '好友'}！`, 'success', 2000);
+            openChat(targetNpcId);
+            autoSaveGame();
+        };
+    });
 }
 
 // 回忆录
