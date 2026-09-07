@@ -48,22 +48,26 @@ function ensureStickersLoaded() {
 ensureStickersLoaded();
 
 // ============================================================
-// 📱 核心手势引擎：短按/长按防抖与触屏兼容
+// 📱 核心手势引擎：极速秒进短按与长按精准防抖
 // ============================================================
 function bindLongPressEvent(element, onClick, onLongPress, threshold = 450) {
     if (!element) return;
     let timer = null;
     let startX = 0, startY = 0;
+    let startTime = 0;
     let isLongPressTriggered = false;
-    let isTouchActive = false;
+    let isMoved = false;
+    let lastTouchTime = 0;
 
     element.addEventListener('touchstart', (e) => {
-        isTouchActive = true;
-        isLongPressTriggered = false;
         if (e.touches.length > 1) return;
         const touch = e.touches[0];
         startX = touch.clientX;
         startY = touch.clientY;
+        startTime = Date.now();
+        isLongPressTriggered = false;
+        isMoved = false;
+
         timer = setTimeout(() => {
             isLongPressTriggered = true;
             if (window.navigator && typeof window.navigator.vibrate === 'function') {
@@ -74,25 +78,33 @@ function bindLongPressEvent(element, onClick, onLongPress, threshold = 450) {
     }, { passive: true });
 
     element.addEventListener('touchmove', (e) => {
-        if (!timer) return;
+        if (!timer && !isLongPressTriggered) return;
         const touch = e.touches[0];
-        if (Math.hypot(touch.clientX - startX, touch.clientY - startY) > 10) {
-            clearTimeout(timer);
-            timer = null;
+        if (Math.hypot(touch.clientX - startX, touch.clientY - startY) > 8) {
+            isMoved = true;
+            if (timer) {
+                clearTimeout(timer);
+                timer = null;
+            }
         }
     }, { passive: true });
 
     element.addEventListener('touchend', (e) => {
+        lastTouchTime = Date.now();
         if (timer) {
             clearTimeout(timer);
             timer = null;
         }
-        if (!isLongPressTriggered && isTouchActive) {
+        if (isLongPressTriggered) {
+            e.preventDefault();
+            return;
+        }
+        if (!isMoved && (Date.now() - startTime < 380)) {
             if (typeof onClick === 'function') {
+                e.preventDefault();
                 onClick(e);
             }
         }
-        setTimeout(() => { isTouchActive = false; }, 320);
     });
 
     element.addEventListener('touchcancel', () => {
@@ -101,10 +113,12 @@ function bindLongPressEvent(element, onClick, onLongPress, threshold = 450) {
             timer = null;
         }
         isLongPressTriggered = false;
+        isMoved = false;
     });
 
+    // 桌面端鼠标支持（屏蔽触屏后 400ms 内的合成 click）
     element.addEventListener('click', (e) => {
-        if (isTouchActive) return;
+        if (Date.now() - lastTouchTime < 400) return;
         if (!isLongPressTriggered && typeof onClick === 'function') {
             onClick(e);
         }
@@ -113,9 +127,7 @@ function bindLongPressEvent(element, onClick, onLongPress, threshold = 450) {
     element.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         e.stopPropagation();
-        if (typeof onLongPress === 'function') {
-            onLongPress(e);
-        }
+        if (typeof onLongPress === 'function') onLongPress(e);
         return false;
     });
 }
@@ -211,13 +223,13 @@ function acceptSponsor(index) {
         G.player.followers = Math.max(0, G.player.followers - loss);
         appendStory(`⚠️ 你接受了 ${offer.name} 的赞助，但部分粉丝觉得推广太多，流失了 ${loss} 人。`, '📢 赞助风险');
         showToast(`⚠️ 赞助推广导致 ${loss} 粉丝流失`, 'error', 3000);
-        addGlobalMemoryRecord(`【商业赞助】：接受 ${offer.name} 商业推广获得 ${reward} 金币，但引起部分粉丝反弹掉粉 ${loss} 人。`);
+        addGlobalMemoryRecord(`【商业赞助】：接受 ${offer.name} 商业推广获得 ${reward} 金币，掉粉 ${loss} 人。`);
     } else {
         const gain = rand(20, 100);
         G.player.followers += gain;
         appendStory(`✅ 你接受了 ${offer.name} 的赞助，获得 ${reward} 金币，粉丝增长了 ${gain} 人！`, '📢 赞助成功');
         showToast(`✅ 赞助合作成功！获得 ${reward} 金币`, 'success', 3000);
-        addGlobalMemoryRecord(`【商业赞助】：成功与 ${offer.name} 达成广告合作，收益 ${reward} 金币且口碑良好涨粉 ${gain} 人。`);
+        addGlobalMemoryRecord(`【商业赞助】：与 ${offer.name} 达成广告合作，收益 ${reward} 金币，涨粉 ${gain} 人。`);
     }
     G.sponsorCooldown = 5;
     G.sponsorOffers = [];
@@ -800,17 +812,28 @@ function checkSocialRequestsTrigger() {
 window.checkSocialRequestsTrigger = checkSocialRequestsTrigger;
 
 function detectPlayerTimezoneInfo() {
-    const p = ((G.player && G.player.persona) || '').toLowerCase() + ' ' + ((G.player && G.player.skin) || '').toLowerCase();
-    let country = '中国 (东八区)'; let region = 'CN';
-    if (p.includes('美国') || p.includes('usa') || p.includes('洛杉矶')) { country = '美国 (北美时区)'; region = 'US'; }
-    else if (p.includes('加拿大') || p.includes('canada')) { country = '加拿大 (北美时区)'; region = 'CA'; }
-    else if (p.includes('英国') || p.includes('uk')) { country = '英国 (欧洲时区)'; region = 'UK'; }
-    return { country, region, slotName: getTimeSlotName(G.timeSlot), day: G.day };
+    const cfg = G.clockConfig || {};
+    const mode = cfg.mode || 'game';
+    let country = cfg.customCountry || '中国 (东八区 UTC+8)';
+    let timeSlotDesc = getTimeSlotName(G.timeSlot);
+    let timeStr = '';
+
+    if (mode === 'real') {
+        const now = new Date();
+        const days = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+        timeStr = `现实时间 ${now.getHours().toString().padStart(2,'0')}:${now.getMinutes().toString().padStart(2,'0')} · ${days[now.getDay()]}`;
+    } else if (mode === 'custom') {
+        timeStr = cfg.customTimeStr || `第 ${G.day} 天 · 自定义时间`;
+    } else {
+        timeStr = `游戏第 ${G.day} 天 · ${timeSlotDesc}`;
+    }
+
+    return { mode, country, timeStr, slotName: timeSlotDesc, day: G.day };
 }
 
 function formatNpcTimezoneContext() {
     const pTz = detectPlayerTimezoneInfo();
-    return `\n【时差上下文】：玩家当前所在地：${pTz.country}，当前时段：第 ${pTz.day} 天【${pTz.slotName}】。请自然体现真实时差反应。\n`;
+    return `\n【时区与时间上下文】：玩家当前所在地/时区：${pTz.country}，当前时间状态：${pTz.timeStr}。请自然体现真实时差、作息与生活互动反应。\n`;
 }
 
 // ============================================================
@@ -844,10 +867,18 @@ function renderSocialPanel() {
     renderPhoneApp(container);
 }
 
+window.switchChatTab = function(tab) {
+    G.chatActiveTab = tab;
+    G.currentChatNpc = null;
+    G.currentChatGroup = null;
+    renderSocialPanel();
+};
+
 function renderPhoneApp(container) {
     const isMoments = G.phoneNav === 'moments';
     let contentHtml = isMoments ? buildMomentsHTML() : buildChatListHTML();
     const activeAcc = getActiveAccountInfo();
+    const tz = detectPlayerTimezoneInfo();
 
     const html = `
     <div class="phone-app-wrap" style="background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 4px 16px rgba(0,0,0,0.06);height:100%;min-height:500px;display:flex;flex-direction:column;">
@@ -857,7 +888,7 @@ function renderPhoneApp(container) {
                 ${activeAcc.isAlt ? '<span style="font-size:10px;background:#ffe082;color:#795548;padding:1px 4px;border-radius:4px;font-weight:700;">小号</span>' : ''}
             </div>
             <div style="display:flex;gap:5px;">
-                <button onclick="window.openClockSettingsModal()" style="border:1px solid #b8dbb8;background:#fff;padding:2px 7px;border-radius:12px;font-size:11px;cursor:pointer;color:#2e7d32;font-weight:700;">🕒 时区</button>
+                <button onclick="window.openClockSettingsModal()" style="border:1px solid #b8dbb8;background:#fff;padding:2px 7px;border-radius:12px;font-size:11px;cursor:pointer;color:#2e7d32;font-weight:700;">🕒 ${escapeHtml(tz.timeStr.slice(0, 10))}</button>
                 <button onclick="window.openAccountManagerModal()" style="border:1px solid #b8dbb8;background:#fff;padding:2px 8px;border-radius:12px;font-size:11px;cursor:pointer;color:#2e7d32;font-weight:700;">🔀 切换账号</button>
             </div>
         </div>
@@ -876,25 +907,23 @@ function renderPhoneApp(container) {
     `;
     container.innerHTML = html;
 
-    // 手势强化绑定：确保移动端短按 100% 灵敏进入聊天，长按 0.45s 弹出编辑人设
-    setTimeout(() => {
-        container.querySelectorAll('.chat-item[data-npc-id]').forEach(item => {
-            const id = item.dataset.npcId;
-            bindLongPressEvent(
-                item,
-                () => { window.openChat(id); },
-                () => { window.openEditNpcModal(id); }
-            );
-        });
-        container.querySelectorAll('.group-item[data-group-id]').forEach(item => {
-            const gid = item.dataset.groupId;
-            bindLongPressEvent(
-                item,
-                () => { window.openGroupChat(gid); },
-                () => { window.openGroupSettingsModal(gid); }
-            );
-        });
-    }, 20);
+    // 手势精确挂载：确保短按百分百秒开聊天，长按弹出编辑
+    container.querySelectorAll('.chat-item[data-npc-id]').forEach(item => {
+        const id = item.dataset.npcId;
+        bindLongPressEvent(
+            item,
+            () => { window.openChat(id); },
+            () => { window.openEditNpcModal(id); }
+        );
+    });
+    container.querySelectorAll('.group-item[data-group-id]').forEach(item => {
+        const gid = item.dataset.groupId;
+        bindLongPressEvent(
+            item,
+            () => { window.openGroupChat(gid); },
+            () => { window.openGroupSettingsModal(gid); }
+        );
+    });
 }
 
 function buildChatListHTML() {
@@ -963,8 +992,8 @@ function buildChatListHTML() {
     return `
     <div class="chat-header" style="padding:12px 16px;background:#f8fbf8;border-bottom:1px solid #eef3ee;display:flex;justify-content:space-between;align-items:center;flex-shrink:0;">
         <div style="display:flex;gap:6px;background:#e9f2e9;padding:3px;border-radius:8px;">
-            <button onclick="window.G.chatActiveTab = 'direct'; window.renderSocialPanel();" style="border:none;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;background:${isDirect ? '#fff' : 'transparent'};color:${isDirect ? 'var(--primary)' : '#666'};">👤 私聊</button>
-            <button onclick="window.G.chatActiveTab = 'group'; window.renderSocialPanel();" style="border:none;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;background:${!isDirect ? '#fff' : 'transparent'};color:${!isDirect ? 'var(--primary)' : '#666'};">👥 群聊</button>
+            <button type="button" onclick="window.switchChatTab('direct')" style="border:none;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;background:${isDirect ? '#fff' : 'transparent'};color:${isDirect ? 'var(--primary)' : '#666'};">👤 私聊</button>
+            <button type="button" onclick="window.switchChatTab('group')" style="border:none;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;background:${!isDirect ? '#fff' : 'transparent'};color:${!isDirect ? 'var(--primary)' : '#666'};">👥 群聊</button>
         </div>
         <div style="position:relative;">
             <button onclick="window.openAddChatTargetModal()" title="新建与好友/群邀请" style="border:none;background:var(--primary);color:#fff;width:34px;height:34px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;">➕</button>
@@ -972,7 +1001,7 @@ function buildChatListHTML() {
         </div>
     </div>
     <div style="font-size:11px;color:#888;padding:6px 16px;background:#fcfdfc;border-bottom:1px dashed #eee;flex-shrink:0;">
-        💡 提示：轻点卡片进入聊天，长按卡片可编辑人设与配置
+        💡 提示：轻点卡片秒进聊天，长按卡片可编辑人设与配置
     </div>
     <div class="chat-list" style="flex:1;overflow-y:auto;padding:8px;">
         ${itemsHtml}
@@ -1008,7 +1037,7 @@ window.closeGroupChat = function() {
 };
 
 // ============================================================
-// 🌟 朋友圈 (Moments) 子系统实现
+// 🌟 朋友圈 (Moments) 子系统实现（支持三种配图模式）
 // ============================================================
 function buildMomentsHTML() {
     if (!G.feed) G.feed = [];
@@ -1057,6 +1086,21 @@ function buildMomentsHTML() {
                 </div>`;
             }
 
+            // 配图渲染：区分三种模式（真实图片、文字代替图片、图片加文字描述）
+            let mediaHtml = '';
+            if (m.imageMode === 'text_only' && m.imageDesc) {
+                mediaHtml = `
+                <div style="margin:6px 0;background:#f3f6f3;border-left:3px solid #7cb342;padding:6px 10px;border-radius:4px;font-size:12px;color:#558b2f;">
+                    🖼️ <b>[配图]</b> ${escapeHtml(m.imageDesc)}
+                </div>`;
+            } else if (m.image) {
+                mediaHtml = `
+                <div style="margin:6px 0;">
+                    <img src="${m.image}" style="max-width:100%;max-height:180px;border-radius:8px;object-fit:cover;display:block;">
+                    ${m.imageDesc ? `<div style="font-size:11px;color:#777;margin-top:2px;">📝 ${escapeHtml(m.imageDesc)}</div>` : ''}
+                </div>`;
+            }
+
             cardsHtml += `
             <div class="moment-card" data-id="${m.id}" style="background:#fff;border-radius:12px;padding:12px;margin-bottom:10px;border:1px solid #f0f4f0;box-shadow:0 1px 4px rgba(0,0,0,0.03);">
                 <div style="display:flex;align-items:flex-start;gap:10px;">
@@ -1069,7 +1113,7 @@ function buildMomentsHTML() {
                         <div style="font-size:13.5px;color:#222;margin:6px 0;line-height:1.5;word-break:break-word;">
                             ${escapeHtml(m.body || '').replace(/\n/g, '<br>')}
                         </div>
-                        ${m.image ? `<div style="margin:6px 0;"><img src="${m.image}" style="max-width:100%;max-height:180px;border-radius:8px;object-fit:cover;"></div>` : ''}
+                        ${mediaHtml}
                         
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:6px;border-top:1px dashed #f2f5f2;font-size:12px;">
                             <div style="display:flex;gap:12px;align-items:center;">
@@ -1120,28 +1164,104 @@ function buildMomentsHTML() {
     </div>`;
 }
 
+// 📷 发表朋友圈动态：包含三种发图模式
 window.openPostMomentModal = function() {
     const curAcc = getActiveAccountInfo();
     openModal(`
         <h3>📷 发表朋友圈动态</h3>
         <p style="font-size:12px;color:#666;margin-bottom:8px;">以当前身份「${escapeHtml(curAcc.name)}」发布动态：</p>
         <div class="form-group">
-            <textarea id="postMomentBody" rows="4" placeholder="分享此刻的MC游玩心情、直播预告或趣事..." style="width:100%;padding:8px;font-size:13.5px;"></textarea>
+            <textarea id="postMomentBody" rows="3" placeholder="分享此刻的MC游玩心情、直播预告或趣事..." style="width:100%;padding:8px;font-size:13.5px;"></textarea>
         </div>
-        <div class="form-group">
-            <label style="font-size:12px;">附带配图链接 (可选)：</label>
-            <input type="text" id="postMomentImgUrl" placeholder="如：https://imgbed.heliar.top/i/...">
+
+        <div class="form-group" style="margin-top:6px;">
+            <label style="font-size:12px;font-weight:700;">🖼️ 配图模式选择：</label>
+            <div style="display:flex;flex-direction:column;gap:5px;font-size:12.5px;margin-top:4px;">
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                    <input type="radio" name="momentPicMode" value="none" checked> ⚪ 无配图纯文字
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                    <input type="radio" name="momentPicMode" value="image_real"> 📷 选择图片（支持AI识图）
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                    <input type="radio" name="momentPicMode" value="text_only"> 📝 选择文字代替图片（省Token）
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                    <input type="radio" name="momentPicMode" value="image_with_desc"> 🖼️ 选择图片加文字描述（AI只读描述）
+                </label>
+            </div>
         </div>
-        <div class="btn-row">
+
+        <!-- 动态展开项：图片上传/URL -->
+        <div id="momentImgSection" style="display:none;margin-top:6px;background:#f7faf7;padding:8px;border-radius:8px;border:1px solid #e0ede0;">
+            <label style="font-size:12px;">图片链接或选择本地图片：</label>
+            <div style="display:flex;gap:6px;margin-top:4px;">
+                <input type="text" id="postMomentImgUrl" placeholder="输入图片链接 https://..." style="flex:1;padding:6px;font-size:12px;">
+                <label class="upload-btn" style="cursor:pointer;padding:6px 10px;font-size:11px;white-space:nowrap;">
+                    📁 本地相册
+                    <input type="file" id="postMomentFileInput" accept="image/*" style="display:none;">
+                </label>
+            </div>
+            <div id="momentImgPreviewWrap" style="margin-top:6px;display:none;">
+                <img id="momentImgPreview" style="max-height:80px;border-radius:6px;object-fit:cover;">
+            </div>
+        </div>
+
+        <!-- 动态展开项：文字描述配图 -->
+        <div id="momentDescSection" style="display:none;margin-top:6px;background:#f7faf7;padding:8px;border-radius:8px;border:1px solid #e0ede0;">
+            <label style="font-size:12px;">配图文字描绘（AI将读取这段描述产生评论互动）：</label>
+            <input type="text" id="postMomentImgDesc" placeholder="如：和Dream在下界堡垒残血对视的截图..." style="width:100%;padding:6px;font-size:12px;margin-top:4px;">
+        </div>
+
+        <div class="btn-row" style="margin-top:14px;">
             <button class="btn-secondary" onclick="closeModal()">取消</button>
-            <button class="btn-primary" id="btnConfirmPublishMoment">发布</button>
+            <button class="btn-primary" id="btnConfirmPublishMoment">发布动态</button>
         </div>
     `);
 
+    let localImgData = '';
+    const radios = document.querySelectorAll('input[name="momentPicMode"]');
+    const imgSec = document.getElementById('momentImgSection');
+    const descSec = document.getElementById('momentDescSection');
+
+    radios.forEach(r => {
+        r.onchange = () => {
+            const v = r.value;
+            imgSec.style.display = (v === 'image_real' || v === 'image_with_desc') ? 'block' : 'none';
+            descSec.style.display = (v === 'text_only' || v === 'image_with_desc') ? 'block' : 'none';
+        };
+    });
+
+    document.getElementById('postMomentFileInput').onchange = function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(evt) {
+            localImgData = evt.target.result;
+            const prev = document.getElementById('momentImgPreview');
+            const wrap = document.getElementById('momentImgPreviewWrap');
+            if (prev && wrap) {
+                prev.src = localImgData;
+                wrap.style.display = 'block';
+            }
+            showToast('✅ 本地图片已载入', 'success', 1200);
+        };
+        reader.readAsDataURL(file);
+    };
+
     document.getElementById('btnConfirmPublishMoment').onclick = () => {
         const body = document.getElementById('postMomentBody').value.trim();
-        const img = document.getElementById('postMomentImgUrl').value.trim();
-        if (!body) { showToast('请填写动态内容', 'error'); return; }
+        const mode = document.querySelector('input[name="momentPicMode"]:checked')?.value || 'none';
+        const imgUrl = document.getElementById('postMomentImgUrl')?.value.trim();
+        const imgDesc = document.getElementById('postMomentImgDesc')?.value.trim();
+
+        if (!body) { showToast('请填写动态文字内容', 'error'); return; }
+
+        let finalImg = null;
+        if (mode === 'image_real' || mode === 'image_with_desc') {
+            finalImg = localImgData || imgUrl || null;
+        }
+
         if (!G.feed) G.feed = [];
         const newMoment = {
             id: Date.now() + rand(100, 999),
@@ -1149,7 +1269,9 @@ window.openPostMomentModal = function() {
             avatar: curAcc.avatar,
             isPlayer: true,
             body,
-            image: img || null,
+            imageMode: mode,
+            image: finalImg,
+            imageDesc: imgDesc || null,
             time: '刚刚',
             liked: false,
             likes: 0,
@@ -1172,8 +1294,8 @@ window.openEditMomentModal = function(item) {
             <textarea id="editMomentBody" rows="4" style="width:100%;padding:8px;font-size:13.5px;">${escapeHtml(item.body || '')}</textarea>
         </div>
         <div class="form-group">
-            <label style="font-size:12px;">配图链接：</label>
-            <input type="text" id="editMomentImgUrl" value="${escapeHtml(item.image || '')}">
+            <label style="font-size:12px;">配图文字描述：</label>
+            <input type="text" id="editMomentDesc" value="${escapeHtml(item.imageDesc || '')}">
         </div>
         <div class="btn-row">
             <button class="btn-secondary" onclick="closeModal()">取消</button>
@@ -1183,10 +1305,10 @@ window.openEditMomentModal = function(item) {
 
     document.getElementById('btnConfirmSaveMomentEdit').onclick = () => {
         const body = document.getElementById('editMomentBody').value.trim();
-        const img = document.getElementById('editMomentImgUrl').value.trim();
+        const desc = document.getElementById('editMomentDesc').value.trim();
         if (!body) { showToast('内容不能为空', 'error'); return; }
         item.body = body;
-        item.image = img || null;
+        item.imageDesc = desc || null;
         closeModal();
         showToast('✅ 动态已修改', 'success', 1500);
         renderSocialPanel();
@@ -1365,10 +1487,19 @@ window.triggerAiCommentForMoment = async function(momentId) {
     const speaker = candidates.length ? pick(candidates) : npcList[0];
     showToast(`🤖 ${speaker.name} 正在赶来评论...`, 'info', 1200);
 
+    let picPrompt = '';
+    if (item.imageMode === 'text_only' && item.imageDesc) {
+        picPrompt = `\n【该动态附带了画面描述】：${item.imageDesc}`;
+    } else if (item.imageMode === 'image_with_desc' && item.imageDesc) {
+        picPrompt = `\n【该动态配图内容描述】：${item.imageDesc}`;
+    } else if (item.image) {
+        picPrompt = `\n【该动态附带了一张MC游玩截图】`;
+    }
+
     try {
         const sys = `你正在扮演 Minecraft 主播「${speaker.name}」（性格：${speaker.persona || '好友'}，好感度：${speaker.favor || 50}）。
-现在好友「${item.author}」发了一条朋友圈：“${item.body}”。
-请根据你们的关系人设，发一句真实鲜活、极简接地气的评论（15~35字），可吐槽、调侃或关心。直接输出评论文字。`;
+现在好友「${item.author}」发了一条朋友圈：“${item.body}”。${picPrompt}
+请根据你们的关系人设与动态内容（以及配图描述），发一句真实鲜活、极简接地气的评论（15~35字），可吐槽、调侃或关心。直接输出评论文字。`;
         const raw = await callAI([{ role: 'system', content: sys }, { role: 'user', content: '写一条评论' }], { maxTokens: 100, temperature: 0.9 });
         const clean = stripThought(raw.trim());
         if (clean) {
@@ -1987,7 +2118,6 @@ function renderSingleChatWindow(container) {
         setTimeout(() => { msgArea.scrollTop = msgArea.scrollHeight; }, 50);
     }
 
-    // 消息长按支持撤回/删除/编辑
     container.querySelectorAll('.chat-bubble.self-bubble[data-msgid]').forEach(b => {
         const mid = b.dataset.msgid;
         if (!mid) return;
@@ -2129,7 +2259,6 @@ function renderGroupChatWindow(container) {
         setTimeout(() => { msgArea.scrollTop = msgArea.scrollHeight; }, 50);
     }
 
-    // 消息长按支持撤回/删除/编辑
     container.querySelectorAll('.chat-bubble.self-bubble[data-msgid]').forEach(b => {
         const mid = b.dataset.msgid;
         if (!mid) return;
@@ -2457,9 +2586,18 @@ window.triggerAIReplyForSingle = async function(npcId) {
     if (npc.knownGroupEvents) npcMemoryContext += `【群聊获悉事件】\n${npc.knownGroupEvents}\n`;
 
     const recentPlayerPosts = (window.G.feed || []).filter(f => f.isPlayer || f.author === window.G.player?.ytName).slice(-2);
-    let playerMomentsContext = recentPlayerPosts.length > 0 ? '【玩家最近发的朋友圈动态（可自然在私信中提起）】：\n' + recentPlayerPosts.map(p => `• "${p.body}" ${p.image ? '(附带图片)' : ''}`).join('\n') + '\n' : '';
+    let playerMomentsContext = '';
+    if (recentPlayerPosts.length > 0) {
+        playerMomentsContext = '【玩家最近发的朋友圈动态（可自然在私聊中提起）】：\n' + recentPlayerPosts.map(p => {
+            let picDesc = '';
+            if (p.imageMode === 'text_only' && p.imageDesc) picDesc = ` (配图描述: ${p.imageDesc})`;
+            else if (p.imageMode === 'image_with_desc' && p.imageDesc) picDesc = ` (配图内容描述: ${p.imageDesc})`;
+            else if (p.image) picDesc = ` (附带图片)`;
+            return `• "${p.body}"${picDesc}`;
+        }).join('\n') + '\n';
+    }
 
-    const tzContext = formatNpcTimezoneContext(npc.name);
+    const tzContext = formatNpcTimezoneContext();
     const availableStickers = (window.G.stickerLibrary || []).slice(0, 20).map(s => s.desc).join('、');
     const curFavor = npc.favor || 0;
 
@@ -2840,19 +2978,117 @@ window.sendStickerMessage = function(targetType, targetId, stickerObj) {
     autoSaveGame();
 };
 
+// ============================================================
+// 🕒 游戏时钟与时区管理（支持现实时间、游戏时间、自定义与纬度时区）
+// ============================================================
 function openClockSettingsModal() {
-    const cfg = G.clockConfig || { mode: 'game', customCountry: '中国 (东八区)', customTimeStr: '' };
+    if (!G.clockConfig) {
+        G.clockConfig = {
+            mode: 'game', // 'real' | 'game' | 'custom'
+            customCountry: '中国 (东八区 UTC+8)',
+            customTimeStr: ''
+        };
+    }
+    const cfg = G.clockConfig;
     const curTz = detectPlayerTimezoneInfo();
+
+    const presets = [
+        '中国 (东八区 UTC+8)',
+        '北美东部时区 (纽约/波士顿 UTC-5)',
+        '北美太平洋时区 (洛杉矶/西雅图 UTC-8)',
+        '北美中部时区 (芝加哥 UTC-6)',
+        '欧洲西部/英国 (伦敦 UTC+0)',
+        '欧洲中部时区 (柏林/巴黎 UTC+1)',
+        '日本/韩国时区 (东京/首尔 UTC+9)',
+        '澳洲东部时区 (悉尼 UTC+10)'
+    ];
+
+    const presetOptions = presets.map(p => `
+        <option value="${p}" ${cfg.customCountry === p ? 'selected' : ''}>${p}</option>
+    `).join('');
+
     openModal(`
-        <h3>🕒 游戏时钟与时区管理</h3>
-        <p style="font-size:12px;color:#666;">当前推导时区：<b>${curTz.country}</b> · <b>${curTz.slotName}</b></p>
-        <div class="form-group"><label>身处的国家/地区：</label><input type="text" id="customCountryInput" value="${escapeHtml(cfg.customCountry || '中国 (东八区)')}"></div>
-        <div class="btn-row"><button class="btn-secondary" onclick="closeModal()">取消</button><button class="btn-primary" id="btnSaveClockSettings">💾 保存时区</button></div>
+        <h3>🕒 游戏时钟、时区与时间管理</h3>
+        <p style="font-size:12px;color:#666;">配置你当前所处时区与生活作息，NPC 在私聊和互动中将贴合真实时差感应！</p>
+        
+        <div class="form-group" style="margin-top:10px;">
+            <label style="font-weight:700;font-size:13px;">⏱️ 时间跟随模式：</label>
+            <div style="display:flex;flex-direction:column;gap:6px;font-size:13px;margin-top:4px;">
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                    <input type="radio" name="clockModeRadio" value="real" ${cfg.mode === 'real' ? 'checked' : ''}>
+                    <span>🌍 <b>跟随真实时间</b>（按手机当前真实系统时间与星期驱动）</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                    <input type="radio" name="clockModeRadio" value="game" ${cfg.mode === 'game' ? 'checked' : ''}>
+                    <span>🎮 <b>跟随游戏天数与时段</b>（当前第 ${G.day} 天 · ${getTimeSlotName(G.timeSlot)}）</span>
+                </label>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
+                    <input type="radio" name="clockModeRadio" value="custom" ${cfg.mode === 'custom' ? 'checked' : ''}>
+                    <span>✏️ <b>自定义设定时间</b></span>
+                </label>
+            </div>
+        </div>
+
+        <div id="clockCustomInputWrap" style="display:${cfg.mode === 'custom' ? 'block' : 'none'};margin-top:8px;">
+            <label style="font-size:12px;">自定义时间描述：</label>
+            <input type="text" id="clockCustomTimeInput" value="${escapeHtml(cfg.customTimeStr || '')}" placeholder="如：深夜 02:30 / 暑假周末清晨 / 凌晨暴雨天..." style="width:100%;padding:7px;border-radius:6px;border:1px solid #ccc;font-size:12.5px;">
+        </div>
+
+        <div class="form-group" style="margin-top:12px;">
+            <label style="font-weight:700;font-size:13px;">🌐 身处的纬度与时区：</label>
+            <select id="clockTimezonePresetSelect" style="width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;font-size:13px;background:#fff;">
+                ${presetOptions}
+                <option value="custom_tz">✍️ 自定义填入时区/地区...</option>
+            </select>
+            <input type="text" id="customCountryInput" value="${escapeHtml(cfg.customCountry || '中国 (东八区 UTC+8)')}" placeholder="输入自定义地区与时区..." style="width:100%;padding:7px;border-radius:6px;border:1px solid #ccc;font-size:12.5px;margin-top:6px;display:none;">
+        </div>
+
+        <div style="background:#f4f7f4;padding:8px 10px;border-radius:8px;font-size:12px;color:#2e7d32;margin-top:10px;">
+            <b>当前时间感知状态：</b>${escapeHtml(curTz.timeStr)} · ${escapeHtml(curTz.country)}
+        </div>
+
+        <div class="btn-row" style="margin-top:14px;">
+            <button class="btn-secondary" onclick="closeModal()">取消</button>
+            <button class="btn-primary" id="btnSaveClockSettings">💾 保存时间设定</button>
+        </div>
     `);
+
+    const radios = document.querySelectorAll('input[name="clockModeRadio"]');
+    const customWrap = document.getElementById('clockCustomInputWrap');
+    radios.forEach(r => {
+        r.onchange = () => {
+            customWrap.style.display = r.value === 'custom' ? 'block' : 'none';
+        };
+    });
+
+    const tzSelect = document.getElementById('clockTimezonePresetSelect');
+    const customTzInput = document.getElementById('customCountryInput');
+    tzSelect.onchange = () => {
+        if (tzSelect.value === 'custom_tz') {
+            customTzInput.style.display = 'block';
+            customTzInput.focus();
+        } else {
+            customTzInput.style.display = 'none';
+            customTzInput.value = tzSelect.value;
+        }
+    };
+
     document.getElementById('btnSaveClockSettings').onclick = () => {
-        window.G.clockConfig = { customCountry: document.getElementById('customCountryInput').value.trim() || '中国 (东八区)' };
-        showToast('✅ 时钟时区设置已更新！', 'success', 1500);
-        closeModal(); autoSaveGame();
+        const mode = document.querySelector('input[name="clockModeRadio"]:checked')?.value || 'game';
+        let country = tzSelect.value === 'custom_tz' ? customTzInput.value.trim() : tzSelect.value;
+        if (!country) country = '中国 (东八区 UTC+8)';
+        const customTimeStr = document.getElementById('clockCustomTimeInput')?.value.trim() || '';
+
+        G.clockConfig = {
+            mode,
+            customCountry: country,
+            customTimeStr
+        };
+
+        showToast('✅ 游戏时钟与时区设置已生效！', 'success', 1500);
+        closeModal();
+        renderSocialPanel();
+        autoSaveGame();
     };
 }
 
@@ -2924,6 +3160,7 @@ window.jumpToMomentCard = function(momentId) {
 window.renderSocialPanel = renderSocialPanel;
 window.renderSingleChatWindow = renderSingleChatWindow;
 window.renderGroupChatWindow = renderGroupChatWindow;
+window.switchChatTab = switchChatTab;
 window.openAccountManagerModal = openAccountManagerModal;
 window.receiveFriendRequest = receiveFriendRequest;
 window.deleteAltAccount = deleteAltAccount;
