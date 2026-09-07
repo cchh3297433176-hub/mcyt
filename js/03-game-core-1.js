@@ -26,9 +26,10 @@ function appendStory(text, tag = '📖 剧情', extra = {}, opts = {}) {
         btnRow.appendChild(btn);
         block.appendChild(btnRow);
     }
-    if (dom.storyArea) {
-        dom.storyArea.appendChild(block);
-        dom.storyArea.scrollTop = dom.storyArea.scrollHeight;
+    const targetArea = (dom && dom.storyArea) || document.getElementById('storyArea');
+    if (targetArea) {
+        targetArea.appendChild(block);
+        targetArea.scrollTop = targetArea.scrollHeight;
     }
     const historyEntry = { text, tag, day: G.day, time: G.timeSlot, truncated: !!opts.truncated, archived: false, _id: id, ...extra };
     G.storyHistory.push(historyEntry);
@@ -55,14 +56,14 @@ function extractThemes(text) {
 }
 
 function showLoading() {
+    const targetArea = (dom && dom.storyArea) || document.getElementById('storyArea');
+    if (!targetArea) return;
     const el = document.createElement('div');
     el.className = 'story-block loading-dots';
     el.id = 'loadingIndicator';
     el.innerHTML = `<span>●</span><span>●</span><span>●</span> <span style="margin-left:8px;">AI 正在编织剧情...</span>`;
-    if (dom.storyArea) {
-        dom.storyArea.appendChild(el);
-        dom.storyArea.scrollTop = dom.storyArea.scrollHeight;
-    }
+    targetArea.appendChild(el);
+    targetArea.scrollTop = targetArea.scrollHeight;
 }
 
 function hideLoading() { const el = document.getElementById('loadingIndicator'); if (el) el.remove(); }
@@ -73,11 +74,18 @@ function updateUI() {
         return;
     }
 
-    if (dom.dayDisplay) dom.dayDisplay.textContent = G.day;
-    if (dom.timeDisplay) dom.timeDisplay.textContent = getTimeSlotName(G.timeSlot);
-    if (dom.apDisplay) dom.apDisplay.textContent = G.actionPoints;
-    if (dom.apDots) {
-        const dots = dom.apDots.querySelectorAll('.ap-dot');
+    const dayEl = (dom && dom.dayDisplay) || document.getElementById('dayDisplay');
+    const timeEl = (dom && dom.timeDisplay) || document.getElementById('timeDisplay');
+    const apEl = (dom && dom.apDisplay) || document.getElementById('apDisplay');
+    const apDotsEl = (dom && dom.apDots) || document.getElementById('apDots');
+    const avatarImg = (dom && dom.headerAvatarImg) || document.getElementById('headerAvatarImg');
+    const avatarTxt = (dom && dom.headerAvatar) || document.getElementById('headerAvatar');
+
+    if (dayEl) dayEl.textContent = G.day;
+    if (timeEl) timeEl.textContent = getTimeSlotName(G.timeSlot);
+    if (apEl) apEl.textContent = G.actionPoints;
+    if (apDotsEl) {
+        const dots = apDotsEl.querySelectorAll('.ap-dot');
         for (let i = 0; i < 6; i++) {
             if (dots[i]) dots[i].className = i < G.actionPoints ? 'ap-dot filled' : 'ap-dot spent';
         }
@@ -90,12 +98,12 @@ function updateUI() {
     }
     if (followerEl) followerEl.textContent = `❤️ ${G.player.followers}`;
     
-    if (G.player.avatar && dom.headerAvatarImg) {
-        dom.headerAvatarImg.src = G.player.avatar;
-        dom.headerAvatarImg.style.display = 'block';
-    } else if (dom.headerAvatarImg) {
-        dom.headerAvatarImg.style.display = 'none';
-        if (dom.headerAvatar) dom.headerAvatar.textContent = '👤';
+    if (G.player.avatar && avatarImg) {
+        avatarImg.src = G.player.avatar;
+        avatarImg.style.display = 'block';
+    } else if (avatarImg) {
+        avatarImg.style.display = 'none';
+        if (avatarTxt) avatarTxt.textContent = '👤';
     }
     autoSaveGame();
 }
@@ -137,33 +145,36 @@ function switchTab(tab) {
         }
     });
 
-    if (tab === 'dashboard') renderDashboard();
-    if (tab === 'data') renderDataPanel();
-    if (tab === 'stream') renderStreamPanel();
+    if (tab === 'dashboard' && typeof renderDashboard === 'function') renderDashboard();
+    if (tab === 'data' && typeof renderDataPanel === 'function') renderDataPanel();
+    if (tab === 'stream' && typeof renderStreamPanel === 'function') renderStreamPanel();
     if (tab === 'social') {
         if (!dom.socialTab) dom.socialTab = document.getElementById('socialTab');
         if (typeof renderSocialPanel === 'function') renderSocialPanel();
     }
-    if (tab === 'browser') {
-        if (typeof renderBrowserPanel === 'function') renderBrowserPanel();
-    }
-    if (tab === 'youtube') {
-        if (typeof renderYouTubePanel === 'function') renderYouTubePanel();
-    }
-    if (tab === 'shop') renderShop();
-    if (tab === 'memoir') renderMemoir();
+    if (tab === 'browser' && typeof renderBrowserPanel === 'function') renderBrowserPanel();
+    if (tab === 'youtube' && typeof renderYouTubePanel === 'function') renderYouTubePanel();
+    if (tab === 'shop' && typeof renderShop === 'function') renderShop();
+    if (tab === 'memoir' && typeof renderMemoir === 'function') renderMemoir();
     if (tab === 'feed' && typeof renderFeed === 'function') renderFeed();
-    if (tab === 'achievements') renderAchievements();
+    if (tab === 'achievements' && typeof renderAchievements === 'function') renderAchievements();
 }
 
-function closeModal() { if (dom.modal) dom.modal.classList.remove('open'); }
-if (dom.modalClose) dom.modalClose.addEventListener('click', closeModal);
-if (dom.modal) dom.modal.addEventListener('click', (e) => { if (e.target === dom.modal) closeModal(); });
+function closeModal() {
+    const modal = (dom && dom.modal) || document.getElementById('modal');
+    if (modal) modal.classList.remove('open');
+}
+const mClose = (dom && dom.modalClose) || document.getElementById('modalClose');
+if (mClose) mClose.addEventListener('click', closeModal);
+const mRoot = (dom && dom.modal) || document.getElementById('modal');
+if (mRoot) mRoot.addEventListener('click', (e) => { if (e.target === mRoot) closeModal(); });
 
 function openModal(html) {
-    if (dom.modalBody && dom.modal) {
-        dom.modalBody.innerHTML = html;
-        dom.modal.classList.add('open');
+    const mBody = (dom && dom.modalBody) || document.getElementById('modalBody');
+    const modal = (dom && dom.modal) || document.getElementById('modal');
+    if (mBody && modal) {
+        mBody.innerHTML = html;
+        modal.classList.add('open');
     }
 }
 
@@ -355,7 +366,7 @@ window.exitAdminAuditingAndCleanup = exitAdminAuditingAndCleanup;
 // ============================================================
 function applyDailyVideoGrowth() {
     const videos = G.player.videos;
-    if (videos.length === 0) return;
+    if (!videos || videos.length === 0) return;
     const followers = G.player.followers;
     const baseFactor = 0.008;
     for (const v of videos) {
@@ -443,17 +454,17 @@ function renderAllPanels() {
         return;
     }
     const activeTab = document.querySelector('.tab-btn.active')?.dataset.tab;
-    if (activeTab === 'data') renderDataPanel();
-    if (activeTab === 'dashboard') renderDashboard();
+    if (activeTab === 'data' && typeof renderDataPanel === 'function') renderDataPanel();
+    if (activeTab === 'dashboard' && typeof renderDashboard === 'function') renderDashboard();
     if (activeTab === 'social' || document.getElementById('socialTab')?.style.display === 'block') {
         if (typeof renderSocialPanel === 'function') renderSocialPanel();
     }
     if (document.getElementById('browserTab')?.style.display === 'block' && typeof renderBrowserPanel === 'function') renderBrowserPanel();
     if (document.getElementById('youtubeTab')?.style.display === 'block' && typeof renderYouTubePanel === 'function') renderYouTubePanel();
-    if (activeTab === 'shop') renderShop();
-    if (activeTab === 'memoir') renderMemoir();
-    if (activeTab === 'stream') renderStreamPanel();
-    if (activeTab === 'achievements') renderAchievements();
+    if (activeTab === 'shop' && typeof renderShop === 'function') renderShop();
+    if (activeTab === 'memoir' && typeof renderMemoir === 'function') renderMemoir();
+    if (activeTab === 'stream' && typeof renderStreamPanel === 'function') renderStreamPanel();
+    if (activeTab === 'achievements' && typeof renderAchievements === 'function') renderAchievements();
 }
 
 // ============================================================
@@ -465,7 +476,7 @@ function showDailyBriefing() {
             followers: G.player.followers,
             money: G.player.money,
             likes: G.player.likes,
-            views: G.player.videos.reduce((s, v) => s + v.views, 0),
+            views: (G.player.videos || []).reduce((s, v) => s + (v.views || 0), 0),
         };
     }
     const last = G._lastBriefing;
@@ -473,7 +484,7 @@ function showDailyBriefing() {
         followers: G.player.followers,
         money: G.player.money,
         likes: G.player.likes,
-        views: G.player.videos.reduce((s, v) => s + v.views, 0),
+        views: (G.player.videos || []).reduce((s, v) => s + (v.views || 0), 0),
     };
     const delta = {
         followers: curr.followers - last.followers,
@@ -483,7 +494,7 @@ function showDailyBriefing() {
     };
     G._lastBriefing = { ...curr };
     let videoReports = '';
-    const allVideos = G.player.videos;
+    const allVideos = G.player.videos || [];
     if (allVideos.length === 0) {
         videoReports = '还没有视频，快去发布吧！';
     } else {
@@ -520,7 +531,7 @@ function showDailyBriefing() {
 }
 
 function applyLongTailEffect() {
-    const videos = G.player.videos;
+    const videos = G.player.videos || [];
     for (let i = 0; i < videos.length; i++) {
         const v = videos[i];
         if (Math.random() < 0.05) {
@@ -534,8 +545,9 @@ function applyLongTailEffect() {
 }
 
 function updateCollectionStats(collectionName) {
+    if (!G.collections) return;
     const col = G.collections[collectionName];
-    if (!col) return;
+    if (!col || !Array.isArray(col.videos)) return;
     let totalViews = 0, totalLikes = 0, totalComments = 0;
     col.videos.forEach(idx => {
         const v = G.player.videos[idx];
@@ -552,6 +564,7 @@ function updateCollectionStats(collectionName) {
 }
 
 function addFeedItem(data) {
+    if (!G.feed) G.feed = [];
     const item = {
         id: G.feedIdCounter++,
         day: G.day,
@@ -572,7 +585,7 @@ function addFeedItem(data) {
 
 function generateFeedEvents() {
     if (G.day % 2 !== 0 && G.day % 3 !== 0) return;
-    const npcs = Object.values(G.npcs);
+    const npcs = Object.values(G.npcs || {});
     const npc = pick(npcs);
     if (npc && Math.random() < 0.6) {
         const msgs = [
@@ -584,7 +597,7 @@ function generateFeedEvents() {
         ];
         addFeedItem({ author: npc.name, avatar: npc.avatarEmoji || '👤', body: pick(msgs), type: 'public', npcId: npc.id });
     }
-    if (G.player.videos.length > 0 && Math.random() < 0.4) {
+    if (G.player.videos && G.player.videos.length > 0 && Math.random() < 0.4) {
         const v = pick(G.player.videos);
         const msgs = [
             `粉丝们正在热议你的视频「${v.title}」！`,
@@ -624,29 +637,25 @@ function getNextMilestone() {
     return '已达成所有里程碑！';
 }
 
-// 暴露全局（安全导出，绝无未定义变量）
+// 暴露全局（安全导出）
 window.closeModal = closeModal;
-window.performAction = performAction;
-window.openActionModal = openActionModal;
-window.advanceDayFree = advanceDayFree;
+window.openModal = openModal;
+window.showLoading = showLoading;
+window.hideLoading = hideLoading;
+window.updateUI = updateUI;
 window.switchTab = switchTab;
-window.renderDataPanel = renderDataPanel;
-window.renderDashboard = renderDashboard;
-window.renderStreamPanel = renderStreamPanel;
-window.openVideoModal = openVideoModal;
-window.toggleCollection = toggleCollection;
-window.toggleColVideoComments = toggleColVideoComments;
-window.renderShop = renderShop;
-window.renderMemoir = renderMemoir;
-window.renderAchievements = renderAchievements;
-window.acceptSponsor = acceptSponsor;
+window.advanceDayFree = advanceDayFree;
+window.advanceTimeSlot = advanceTimeSlot;
+window.renderAllPanels = renderAllPanels;
+window.appendStory = appendStory;
+window.pushChat = pushChat;
+window.extractThemes = extractThemes;
+window.showDailyBriefing = showDailyBriefing;
+window.applyLongTailEffect = applyLongTailEffect;
+window.updateCollectionStats = updateCollectionStats;
+window.addFeedItem = addFeedItem;
+window.generateFeedEvents = generateFeedEvents;
+window.checkMilestones = checkMilestones;
+window.triggerMilestone = triggerMilestone;
+window.getNextMilestone = getNextMilestone;
 window.G = G;
-window.showSaveSlotsModal = showSaveSlotsModal;
-window.saveGameToSlot = saveGameToSlot;
-window.loadGameFromSlot = loadGameFromSlot;
-window.showStartChoiceModal = showStartChoiceModal;
-window.receiveFriendRequest = receiveFriendRequest;
-window.openEditPlayerProfileModal = openEditPlayerProfileModal;
-window.checkAndShowVersionNoticeModal = checkAndShowVersionNoticeModal;
-window.openVersionNoticeModal = openVersionNoticeModal;
-window.updateWebSearchToggleUI = updateWebSearchToggleUI;

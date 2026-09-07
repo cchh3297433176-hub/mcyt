@@ -60,10 +60,21 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // 左上角头像点击弹窗
-    $('headerAvatar')?.addEventListener('click', () => {
-        openEditPlayerProfileModal();
-    });
+    // 左上角头像：采用手势防抖引擎，触屏秒开《编辑个人资料人设》
+    const headerAvatarEl = $('headerAvatar');
+    if (headerAvatarEl) {
+        if (typeof bindLongPressEvent === 'function') {
+            bindLongPressEvent(headerAvatarEl, () => {
+                openEditPlayerProfileModal();
+            }, () => {
+                openEditPlayerProfileModal();
+            });
+        } else {
+            headerAvatarEl.addEventListener('click', () => {
+                openEditPlayerProfileModal();
+            });
+        }
+    }
 
     // 顶栏时间时钟胶囊点击：打开时钟与时区设置面板
     $('timeDisplay')?.parentElement?.addEventListener('click', () => {
@@ -240,7 +251,7 @@ function openVersionNoticeModal(version) {
 
     <div class="notice-slider-wrap">
         <div class="notice-slider-track" id="noticeSliderTrack">
-            <!-- 第 1 页：主公告与正版声明（仅向玩家展示，不注入给AI） -->
+            <!-- 第 1 页：主公告与正版声明 -->
             <div class="notice-slide-page">
                 <div class="notice-card-box">
                     <h4>📜 关于本项目与正版声明</h4>
@@ -265,7 +276,7 @@ function openVersionNoticeModal(version) {
                     <ol style="padding-left:18px;margin:4px 0 8px;font-size:12px;color:#334155;line-height:1.7;">
                         <li><b>恢复角色与玩家人设编辑</b>：
                             <div style="font-size:11.5px;color:#64748b;margin-top:2px;">
-                                • 轻点（单击）：打开角色资料名片，查看好感与专属记忆；<br>
+                                • 轻点（单击）：打开角色私聊，秒进窗口；<br>
                                 • 长按（按住 0.45 秒）：带有手机微震反馈，立即弹出《✏️ 编辑角色资料与人设》弹窗，可自由调整角色姓名、自定义上传头像、修改人设性格、皮肤形象、口头禅与赛道；左上角头像亦支持全能修改。
                             </div>
                         </li>
@@ -344,7 +355,7 @@ function openVersionNoticeModal(version) {
 }
 
 // ============================================================
-// 🧑 个人资料与人设全面编辑弹窗（支持改名、换头像、改人设、改皮肤、改赛道）
+// 🧑 个人资料与人设全面编辑弹窗
 // ============================================================
 function openEditPlayerProfileModal() {
     const p = G.player || {};

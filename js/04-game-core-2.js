@@ -48,6 +48,80 @@ function ensureStickersLoaded() {
 ensureStickersLoaded();
 
 // ============================================================
+// 📱 核心手势引擎：短按/长按防抖与触屏兼容
+// ============================================================
+function bindLongPressEvent(element, onClick, onLongPress, threshold = 450) {
+    if (!element) return;
+    let timer = null;
+    let startX = 0, startY = 0;
+    let isLongPressTriggered = false;
+    let isTouchActive = false;
+
+    element.addEventListener('touchstart', (e) => {
+        isTouchActive = true;
+        isLongPressTriggered = false;
+        if (e.touches.length > 1) return;
+        const touch = e.touches[0];
+        startX = touch.clientX;
+        startY = touch.clientY;
+        timer = setTimeout(() => {
+            isLongPressTriggered = true;
+            if (window.navigator && typeof window.navigator.vibrate === 'function') {
+                try { window.navigator.vibrate(40); } catch(ex){}
+            }
+            if (typeof onLongPress === 'function') onLongPress(e);
+        }, threshold);
+    }, { passive: true });
+
+    element.addEventListener('touchmove', (e) => {
+        if (!timer) return;
+        const touch = e.touches[0];
+        if (Math.hypot(touch.clientX - startX, touch.clientY - startY) > 10) {
+            clearTimeout(timer);
+            timer = null;
+        }
+    }, { passive: true });
+
+    element.addEventListener('touchend', (e) => {
+        if (timer) {
+            clearTimeout(timer);
+            timer = null;
+        }
+        if (!isLongPressTriggered && isTouchActive) {
+            if (typeof onClick === 'function') {
+                onClick(e);
+            }
+        }
+        setTimeout(() => { isTouchActive = false; }, 320);
+    });
+
+    element.addEventListener('touchcancel', () => {
+        if (timer) {
+            clearTimeout(timer);
+            timer = null;
+        }
+        isLongPressTriggered = false;
+    });
+
+    element.addEventListener('click', (e) => {
+        if (isTouchActive) return;
+        if (!isLongPressTriggered && typeof onClick === 'function') {
+            onClick(e);
+        }
+    });
+
+    element.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        if (typeof onLongPress === 'function') {
+            onLongPress(e);
+        }
+        return false;
+    });
+}
+window.bindLongPressEvent = bindLongPressEvent;
+
+// ============================================================
 // 成就系统
 // ============================================================
 function checkAchievements() {
@@ -255,7 +329,6 @@ function renderDashboard() {
     const videos = p.videos || [];
     const totalViews = videos.reduce((sum, v) => sum + (v.views || 0), 0);
     const totalLikes = (p.likes || 0);
-    const equipMultipliers = [1.0, 1.2, 1.5, 2.0, 2.8, 4.0];
     const equipLevel = p.equipmentLevel || 1;
 
     let videosHtml = '';
@@ -330,7 +403,6 @@ function renderDashboard() {
 
     const html = `
     <div style="display:flex;flex-direction:column;gap:12px;">
-        <!-- 频道数据顶部卡片 -->
         <div style="background:linear-gradient(135deg, #e8f5e9 0%, #ffffff 100%);border-radius:14px;padding:14px;box-shadow:var(--shadow);border:1px solid #d8ebd8;">
             <div style="display:flex;align-items:center;gap:12px;">
                 <div style="flex-shrink:0;">${renderAvatarBadge({ isPlayer: true }, 52)}</div>
@@ -352,7 +424,6 @@ function renderDashboard() {
             </div>
         </div>
 
-        <!-- 快捷操作直通车 -->
         <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:8px;">
             <button onclick="window.switchTab('story')" style="border:none;background:#fff;border-radius:10px;padding:10px;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,0.04);cursor:pointer;border:1px solid #edf2ed;">
                 <div style="font-size:20px;margin-bottom:3px;">📖</div>
@@ -368,7 +439,6 @@ function renderDashboard() {
             </button>
         </div>
 
-        <!-- 频道作品列表 -->
         <div>
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
                 <div style="font-weight:700;font-size:15px;color:var(--text);">🎬 频道视频作品 (${videos.length})</div>
@@ -805,6 +875,26 @@ function renderPhoneApp(container) {
     </div>
     `;
     container.innerHTML = html;
+
+    // 手势强化绑定：确保移动端短按 100% 灵敏进入聊天，长按 0.45s 弹出编辑人设
+    setTimeout(() => {
+        container.querySelectorAll('.chat-item[data-npc-id]').forEach(item => {
+            const id = item.dataset.npcId;
+            bindLongPressEvent(
+                item,
+                () => { window.openChat(id); },
+                () => { window.openEditNpcModal(id); }
+            );
+        });
+        container.querySelectorAll('.group-item[data-group-id]').forEach(item => {
+            const gid = item.dataset.groupId;
+            bindLongPressEvent(
+                item,
+                () => { window.openGroupChat(gid); },
+                () => { window.openGroupSettingsModal(gid); }
+            );
+        });
+    }, 20);
 }
 
 function buildChatListHTML() {
@@ -831,7 +921,7 @@ function buildChatListHTML() {
                 const isBlocked = isAccountBlockedByNpc(id, currentAcc.id);
                 
                 itemsHtml += `
-                <div class="chat-item" onclick="window.openChat('${id}')" oncontextmenu="event.preventDefault(); window.openEditNpcModal('${id}'); return false;" style="display:flex;align-items:center;padding:10px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;background:#fff;border:1px solid #f0f4f0;">
+                <div class="chat-item" data-npc-id="${id}" style="display:flex;align-items:center;padding:10px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;background:#fff;border:1px solid #f0f4f0;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;">
                     <div style="margin-right:12px;flex-shrink:0;">${renderAvatarBadge(npc, 44)}</div>
                     <div style="flex:1;min-width:0;">
                         <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -856,7 +946,7 @@ function buildChatListHTML() {
                 const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
                 const purePreview = lastMsg ? `${lastMsg.senderName || '成员'}: ${stripThought(lastMsg.text || '')}` : (grp.desc || '开启热烈讨论吧');
                 itemsHtml += `
-                <div class="group-item" onclick="window.openGroupChat('${gid}')" oncontextmenu="event.preventDefault(); window.openGroupSettingsModal('${gid}'); return false;" style="display:flex;align-items:center;padding:10px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;background:#fff;border:1px solid #f0f4f0;">
+                <div class="group-item" data-group-id="${gid}" style="display:flex;align-items:center;padding:10px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;background:#fff;border:1px solid #f0f4f0;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;">
                     <div style="margin-right:12px;flex-shrink:0;">${renderAvatarBadge(grp, 44)}</div>
                     <div style="flex:1;min-width:0;">
                         <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -882,7 +972,7 @@ function buildChatListHTML() {
         </div>
     </div>
     <div style="font-size:11px;color:#888;padding:6px 16px;background:#fcfdfc;border-bottom:1px dashed #eee;flex-shrink:0;">
-        💡 提示：短按卡片进入聊天，长按卡片可编辑人设与配置
+        💡 提示：轻点卡片进入聊天，长按卡片可编辑人设与配置
     </div>
     <div class="chat-list" style="flex:1;overflow-y:auto;padding:8px;">
         ${itemsHtml}
@@ -922,7 +1012,6 @@ window.closeGroupChat = function() {
 // ============================================================
 function buildMomentsHTML() {
     if (!G.feed) G.feed = [];
-    const activeAcc = getActiveAccountInfo();
     const filterNpcId = G.momentsFilterNpcId;
     const filterNpc = filterNpcId ? G.npcs[filterNpcId] : null;
 
@@ -956,7 +1045,7 @@ function buildMomentsHTML() {
 
             let commentsBoxHtml = '';
             if (comments.length > 0) {
-                const comLines = comments.map((c, cIdx) => `
+                const comLines = comments.map((c) => `
                     <div style="font-size:12px;line-height:1.5;margin-bottom:3px;">
                         <span style="color:#2e7d32;font-weight:700;cursor:pointer;" onclick="window.replyMomentComment(${m.id}, '${escapeHtml(c.name || '好友')}')">${escapeHtml(c.name || '好友')}:</span>
                         <span style="color:#333;">${escapeHtml(c.text)}</span>
@@ -964,7 +1053,7 @@ function buildMomentsHTML() {
                 `).join('');
                 commentsBoxHtml = `
                 <div style="background:#f4f7f4;border-radius:6px;padding:6px 10px;margin-top:8px;border:1px solid #e9f0e9;">
-                    ${commentsBoxHtml}${comLines}
+                    ${comLines}
                 </div>`;
             }
 
@@ -982,7 +1071,6 @@ function buildMomentsHTML() {
                         </div>
                         ${m.image ? `<div style="margin:6px 0;"><img src="${m.image}" style="max-width:100%;max-height:180px;border-radius:8px;object-fit:cover;"></div>` : ''}
                         
-                        <!-- 底部互动操作栏 -->
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:6px;border-top:1px dashed #f2f5f2;font-size:12px;">
                             <div style="display:flex;gap:12px;align-items:center;">
                                 <button onclick="window.toggleMomentLike(${m.id})" style="border:none;background:none;color:${isLiked ? '#e53935' : '#777'};cursor:pointer;display:flex;align-items:center;gap:3px;font-size:12.5px;padding:0;">
@@ -1013,7 +1101,6 @@ function buildMomentsHTML() {
 
     return `
     <div style="display:flex;flex-direction:column;height:100%;">
-        <!-- 朋友圈个性背景顶部栏 -->
         <div style="background:linear-gradient(135deg, #a8e6cf 0%, #dcedc1 100%);padding:16px 14px 12px;position:relative;flex-shrink:0;">
             <div style="display:flex;justify-content:space-between;align-items:flex-end;">
                 <div>
@@ -1308,7 +1395,7 @@ window.openAddChatTargetModal = function() {
     if (reqs.length === 0 && grpInvs.length === 0) {
         reqsHtml = '<div style="font-size:12px;color:#999;padding:10px 0;text-align:center;">暂无待处理的好友申请与群邀请。</div>';
     } else {
-        reqs.forEach((r, idx) => {
+        reqs.forEach((r) => {
             reqsHtml += `
             <div style="background:#f8faf8;border-radius:8px;padding:8px 10px;margin-bottom:6px;border:1px solid #e0ede0;display:flex;justify-content:space-between;align-items:center;">
                 <div style="flex:1;min-width:0;">
@@ -1321,7 +1408,7 @@ window.openAddChatTargetModal = function() {
                 </div>
             </div>`;
         });
-        grpInvs.forEach((gi, idx) => {
+        grpInvs.forEach((gi) => {
             reqsHtml += `
             <div style="background:#f8faf8;border-radius:8px;padding:8px 10px;margin-bottom:6px;border:1px solid #e0ede0;display:flex;justify-content:space-between;align-items:center;">
                 <div style="flex:1;min-width:0;">
@@ -1390,7 +1477,6 @@ window.handleFriendRequestAction = function(reqId, action) {
             G.npcs[newId] = finalNpc;
         }
 
-        // 推送一条初始打招呼消息
         pushChatMessageSafe(finalNpc.id, {
             from: 'npc',
             text: `你好！我通过了你的好友验证，以后可以一起录视频玩MC啦！`,
@@ -1652,7 +1738,7 @@ window.openGroupSettingsModal = function(gid) {
         G.groupMemories[gid] = document.getElementById('editGrpMemory').value.trim();
         showToast('✅ 群聊配置已更新！', 'success', 1500);
         closeModal();
-        renderGroupChatWindow(document.getElementById('socialTab'));
+        renderSocialPanel();
         autoSaveGame();
     };
 };
@@ -1734,7 +1820,7 @@ window.deleteGlobalMemoryItem = function(idx) {
     }
 };
 
-window.openManualMemoryInputModal = function(type, targetId) {
+window.openManualMemoryInputModal = function() {
     openModal(`
         <h3>➕ 手动写入全局核心记忆</h3>
         <p style="font-size:12px;color:#666;">记录玩家与MC世界的不可磨灭经历：</p>
@@ -1812,13 +1898,13 @@ function renderSingleChatWindow(container) {
         if (msg.from === 'action') {
             messagesHtml += `
             <div style="text-align:center;margin:8px 0;">
-                <span style="display:inline-block;background:rgba(0,0,0,0.06);color:#666;padding:4px 10px;border-radius:12px;font-size:12px;max-width:85%;">${escapeHtml(msg.text)}</span>
+                <span style="display:inline-block;background:rgba(0,0,0,0.06);color:#666;padding:4px 10px;border-radius:12px;font-size:12px;max-width:85%;">${escapeHtml(msg.text || '')}</span>
             </div>`;
         } else if (msg.from === 'behind_screen') {
             messagesHtml += `
             <div style="margin:10px 14px;background:rgba(255,253,245,0.92);border:1px dashed #d7ccc8;border-radius:10px;padding:8px 12px;font-size:12px;color:#5d4037;line-height:1.6;box-shadow:0 1px 4px rgba(0,0,0,0.04);position:relative;">
                 <div style="font-weight:700;font-size:11px;color:#8d6e63;margin-bottom:3px;">👁️ 屏幕那边的 TA (${escapeHtml(npc.name)})</div>
-                <div>${escapeHtml(msg.text)}</div>
+                <div>${escapeHtml(msg.text || '')}</div>
             </div>`;
         } else {
             const isSelf = msg.from === 'player';
@@ -1831,20 +1917,20 @@ function renderSingleChatWindow(container) {
                 bubbleContent = `
                 <div onclick="window.jumpToMomentCard(${sm.id})" style="cursor:pointer;background:#fff;border-radius:8px;padding:8px;border:1px solid #e0e0e0;max-width:210px;">
                     <div style="font-weight:700;font-size:11px;color:#2e7d32;margin-bottom:3px;">🌟 朋友圈动态 · ${escapeHtml(sm.author)}</div>
-                    <div style="font-size:12px;color:#333;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${escapeHtml(sm.body)}</div>
+                    <div style="font-size:12px;color:#333;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">${escapeHtml(sm.body || '')}</div>
                     ${sm.image ? `<img src="${sm.image}" style="width:100%;height:65px;object-fit:cover;border-radius:4px;margin-top:4px;">` : ''}
                     <div style="font-size:10px;color:#999;text-align:right;margin-top:4px;">点击查看完整动态 ❯</div>
                 </div>`;
             } else {
-                bubbleContent = isSelf ? escapeHtml(msg.text).replace(/\n/g, '<br>') : renderContentWithThoughts(msg.text);
+                bubbleContent = isSelf ? escapeHtml(msg.text || '').replace(/\n/g, '<br>') : renderContentWithThoughts(msg.text || '');
             }
 
             messagesHtml += `
             <div class="chat-msg-row" data-msgid="${msg._id || ''}" data-from="${msg.from}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:10px;align-items:flex-start;">
-                ${!isSelf ? `<div onclick="window.openNpcProfileCardModal('${npcId}')" oncontextmenu="event.preventDefault(); window.openEditNpcModal('${npcId}'); return false;" style="margin-right:8px;flex-shrink:0;cursor:pointer;">${renderAvatarBadge(npc, 34)}</div>` : ''}
+                ${!isSelf ? `<div onclick="window.openNpcProfileCardModal('${npcId}')" style="margin-right:8px;flex-shrink:0;cursor:pointer;">${renderAvatarBadge(npc, 34)}</div>` : ''}
                 <div style="max-width:75%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                     ${isSelf && msg.senderAccount ? `<div style="font-size:10px;color:#888;margin-bottom:2px;">${escapeHtml(msg.senderAccount)}</div>` : ''}
-                    <div class="chat-bubble ${isSelf ? 'self-bubble' : ''}" ${isSelf && msg._id ? `oncontextmenu="event.preventDefault(); window.showMessageActionSheet('${msg._id}', 'single', '${npcId}'); return false;"` : ''} style="width:fit-content;max-width:100%;display:inline-block;background:${isSelf ? ((msg.sticker || msg.sharedMoment) ? 'transparent' : '#95ec69') : ((msg.sticker || msg.sharedMoment) ? 'transparent' : '#fff')};color:#111;padding:${(msg.sticker || msg.sharedMoment) ? '0' : '8px 12px'};border-radius:${isSelf ? '10px 0 10px 10px' : '0 10px 10px 10px'};box-shadow:${(msg.sticker || msg.sharedMoment) ? 'none' : '0 1px 3px rgba(0,0,0,0.08)'};font-size:14px;line-height:1.5;word-break:break-word;user-select:none;-webkit-user-select:none;cursor:pointer;">
+                    <div class="chat-bubble ${isSelf ? 'self-bubble' : ''}" data-msgid="${msg._id || ''}" style="width:fit-content;max-width:100%;display:inline-block;background:${isSelf ? ((msg.sticker || msg.sharedMoment) ? 'transparent' : '#95ec69') : ((msg.sticker || msg.sharedMoment) ? 'transparent' : '#fff')};color:#111;padding:${(msg.sticker || msg.sharedMoment) ? '0' : '8px 12px'};border-radius:${isSelf ? '10px 0 10px 10px' : '0 10px 10px 10px'};box-shadow:${(msg.sticker || msg.sharedMoment) ? 'none' : '0 1px 3px rgba(0,0,0,0.08)'};font-size:14px;line-height:1.5;word-break:break-word;user-select:none;-webkit-user-select:none;cursor:pointer;">
                         ${bubbleContent}
                     </div>
                     <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
@@ -1859,7 +1945,7 @@ function renderSingleChatWindow(container) {
         <div style="padding:8px 12px;background:#fff;border-bottom:1px solid #e5ebe5;display:flex;justify-content:space-between;align-items:center;min-height:48px;flex-shrink:0;">
             <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0;">
                 <button onclick="window.closeChat()" style="border:none;background:none;font-size:19px;color:#333;cursor:pointer;padding:0 2px;">❮</button>
-                <div onclick="window.openNpcProfileCardModal('${npcId}')" oncontextmenu="event.preventDefault(); window.openEditNpcModal('${npcId}'); return false;" style="cursor:pointer;flex:1;min-width:0;">
+                <div onclick="window.openNpcProfileCardModal('${npcId}')" style="cursor:pointer;flex:1;min-width:0;">
                     <div style="font-weight:700;font-size:14.5px;display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
                         <span style="overflow:hidden;text-overflow:ellipsis;">${escapeHtml(npc.name)}</span>
                         <span style="font-size:10.5px;color:#e53935;font-weight:normal;background:#ffebee;padding:1px 5px;border-radius:6px;flex-shrink:0;">❤️ ${npc.favor || 0}</span>
@@ -1897,7 +1983,20 @@ function renderSingleChatWindow(container) {
     container.innerHTML = html;
 
     const msgArea = document.getElementById('chatMessageArea');
-    if (msgArea) msgArea.scrollTop = msgArea.scrollHeight;
+    if (msgArea) {
+        setTimeout(() => { msgArea.scrollTop = msgArea.scrollHeight; }, 50);
+    }
+
+    // 消息长按支持撤回/删除/编辑
+    container.querySelectorAll('.chat-bubble.self-bubble[data-msgid]').forEach(b => {
+        const mid = b.dataset.msgid;
+        if (!mid) return;
+        bindLongPressEvent(
+            b,
+            null,
+            () => { window.showMessageActionSheet(mid, 'single', npcId); }
+        );
+    });
 
     const input = document.getElementById('singleChatInput');
     if (input) {
@@ -1909,17 +2008,18 @@ function renderSingleChatWindow(container) {
         };
     }
 }
+window.renderSingleChatWindow = renderSingleChatWindow;
 
 window.toggleBehindScreen = function(npcId) {
     window.G._behindScreenActive[npcId] = !window.G._behindScreenActive[npcId];
     showToast(window.G._behindScreenActive[npcId] ? '👁️ 已开启「屏幕那边的TA」动作感知' : '已关闭线下动作感知', 'info', 1500);
-    renderSingleChatWindow(document.getElementById('socialTab'));
+    renderSingleChatWindow((dom && dom.socialTab) || document.getElementById('socialTab'));
     autoSaveGame();
 };
 
 window.toggleStickerDrawer = function(type, id) {
     _stickerDrawerOpen = !_stickerDrawerOpen;
-    const cont = document.getElementById('socialTab');
+    const cont = (dom && dom.socialTab) || document.getElementById('socialTab');
     if (type === 'single') renderSingleChatWindow(cont);
     else renderGroupChatWindow(cont);
 };
@@ -1930,11 +2030,13 @@ window.doSendSingleChat = function(npcId) {
     const text = input.value.trim();
     if (!text) return;
     const activeAcc = getActiveAccountInfo();
+    const cont = (dom && dom.socialTab) || document.getElementById('socialTab');
+
     if (isAccountBlockedByNpc(npcId, activeAcc.id)) {
         pushChatMessageSafe(npcId, { from: 'player', text, senderAccount: activeAcc.name, time: new Date().toLocaleTimeString().slice(0, 5) });
         pushChatMessageSafe(npcId, { from: 'action', text: `❌ 消息已被拒收。（已被拉黑）`, time: new Date().toLocaleTimeString().slice(0, 5) });
         input.value = '';
-        renderSingleChatWindow(document.getElementById('socialTab'));
+        renderSingleChatWindow(cont);
         showToast('⚠️ 对方开启了朋友验证，你已被拉黑', 'error', 3000);
         return;
     }
@@ -1945,7 +2047,7 @@ window.doSendSingleChat = function(npcId) {
         time: new Date().toLocaleTimeString().slice(0, 5)
     });
     input.value = '';
-    renderSingleChatWindow(document.getElementById('socialTab'));
+    renderSingleChatWindow(cont);
     autoSaveGame();
 };
 
@@ -1964,7 +2066,7 @@ function renderGroupChatWindow(container) {
         if (msg.from === 'action') {
             messagesHtml += `
             <div style="text-align:center;margin:8px 0;">
-                <span style="display:inline-block;background:rgba(0,0,0,0.06);color:#666;padding:3px 10px;border-radius:12px;font-size:11px;">${escapeHtml(msg.text)}</span>
+                <span style="display:inline-block;background:rgba(0,0,0,0.06);color:#666;padding:3px 10px;border-radius:12px;font-size:11px;">${escapeHtml(msg.text || '')}</span>
             </div>`;
         } else {
             const isSelf = msg.from === 'player';
@@ -1972,7 +2074,7 @@ function renderGroupChatWindow(container) {
             if (msg.sticker) {
                 bubbleContent = `<div style="padding:0;display:inline-block;"><img src="${msg.sticker.url}" alt="${escapeHtml(msg.sticker.desc)}" style="width:85px;height:85px;border-radius:8px;object-fit:cover;display:block;"></div>`;
             } else {
-                bubbleContent = isSelf ? escapeHtml(msg.text).replace(/\n/g, '<br>') : renderContentWithThoughts(msg.text);
+                bubbleContent = isSelf ? escapeHtml(msg.text || '').replace(/\n/g, '<br>') : renderContentWithThoughts(msg.text || '');
             }
 
             messagesHtml += `
@@ -1980,7 +2082,7 @@ function renderGroupChatWindow(container) {
                 ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${renderAvatarBadge({ avatarUrl: msg.senderAvatarUrl, avatarEmoji: msg.senderAvatar || '👤' }, 34)}</div>` : ''}
                 <div style="max-width:75%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                     ${!isSelf ? `<div style="font-size:11px;color:#777;margin-bottom:2px;">${escapeHtml(msg.senderName || '成员')}</div>` : ''}
-                    <div class="chat-bubble ${isSelf ? 'self-bubble' : ''}" ${isSelf && msg._id ? `oncontextmenu="event.preventDefault(); window.showMessageActionSheet('${msg._id}', 'group', '${gid}'); return false;"` : ''} style="width:fit-content;max-width:100%;display:inline-block;background:${isSelf ? (msg.sticker ? 'transparent' : '#95ec69') : (msg.sticker ? 'transparent' : '#fff')};color:#111;padding:${msg.sticker ? '0' : '8px 12px'};border-radius:${isSelf ? '10px 0 10px 10px' : '0 10px 10px 10px'};box-shadow:${msg.sticker ? 'none' : '0 1px 3px rgba(0,0,0,0.08)'};font-size:14px;line-height:1.5;word-break:break-word;user-select:none;-webkit-user-select:none;">
+                    <div class="chat-bubble ${isSelf ? 'self-bubble' : ''}" data-msgid="${msg._id || ''}" style="width:fit-content;max-width:100%;display:inline-block;background:${isSelf ? (msg.sticker ? 'transparent' : '#95ec69') : (msg.sticker ? 'transparent' : '#fff')};color:#111;padding:${msg.sticker ? '0' : '8px 12px'};border-radius:${isSelf ? '10px 0 10px 10px' : '0 10px 10px 10px'};box-shadow:${msg.sticker ? 'none' : '0 1px 3px rgba(0,0,0,0.08)'};font-size:14px;line-height:1.5;word-break:break-word;user-select:none;-webkit-user-select:none;">
                         ${bubbleContent}
                     </div>
                     <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
@@ -2023,7 +2125,20 @@ function renderGroupChatWindow(container) {
     container.innerHTML = html;
 
     const msgArea = document.getElementById('groupMessageArea');
-    if (msgArea) msgArea.scrollTop = msgArea.scrollHeight;
+    if (msgArea) {
+        setTimeout(() => { msgArea.scrollTop = msgArea.scrollHeight; }, 50);
+    }
+
+    // 消息长按支持撤回/删除/编辑
+    container.querySelectorAll('.chat-bubble.self-bubble[data-msgid]').forEach(b => {
+        const mid = b.dataset.msgid;
+        if (!mid) return;
+        bindLongPressEvent(
+            b,
+            null,
+            () => { window.showMessageActionSheet(mid, 'group', gid); }
+        );
+    });
 
     const input = document.getElementById('groupChatInput');
     if (input) {
@@ -2035,6 +2150,7 @@ function renderGroupChatWindow(container) {
         };
     }
 }
+window.renderGroupChatWindow = renderGroupChatWindow;
 
 window.doSendGroupChat = function(gid) {
     const input = document.getElementById('groupChatInput');
@@ -2049,7 +2165,7 @@ window.doSendGroupChat = function(gid) {
         text, time: new Date().toLocaleTimeString().slice(0, 5)
     });
     input.value = '';
-    renderGroupChatWindow(document.getElementById('socialTab'));
+    renderGroupChatWindow((dom && dom.socialTab) || document.getElementById('socialTab'));
     autoSaveGame();
 };
 
@@ -2075,7 +2191,7 @@ window.showMessageActionSheet = function(msgId, targetType, targetId) {
 
     openModal(`
         <h3>💬 消息操作</h3>
-        <div style="background:#f4f7f4;padding:8px 12px;border-radius:8px;font-size:13px;color:#333;margin:8px 0 14px;">“${escapeHtml(msg.text)}”</div>
+        <div style="background:#f4f7f4;padding:8px 12px;border-radius:8px;font-size:13px;color:#333;margin:8px 0 14px;">“${escapeHtml(msg.text || '')}”</div>
         <div class="btn-row" style="flex-direction:column;gap:8px;">
             <button class="btn-primary" id="btnActionRecall" style="width:100%;background:#388e3c;">↩️ 撤 回</button>
             <button class="btn-primary" id="btnActionEdit" style="width:100%;background:#1976d2;">✏️ 编 辑</button>
@@ -2093,8 +2209,9 @@ window.showMessageActionSheet = function(msgId, targetType, targetId) {
         msg._recalled = true;
         msg._originalText = origText;
         msg._seenByNpc = isSeenByNpc;
-        if (targetType === 'single') renderSingleChatWindow(document.getElementById('socialTab'));
-        else renderGroupChatWindow(document.getElementById('socialTab'));
+        const cont = (dom && dom.socialTab) || document.getElementById('socialTab');
+        if (targetType === 'single') renderSingleChatWindow(cont);
+        else renderGroupChatWindow(cont);
         showToast(isSeenByNpc ? '👀 对方好像已经看到了...' : '↩️ 消息已撤回', 'info', 2000);
         autoSaveGame();
     };
@@ -2104,7 +2221,7 @@ window.showMessageActionSheet = function(msgId, targetType, targetId) {
         openModal(`
             <h3>✏️ 编辑消息</h3>
             <p style="font-size:12px;color:#666;">修改已经发送的消息：</p>
-            <div class="form-group"><textarea id="editMsgTextInput" rows="3" style="width:100%;padding:8px;">${escapeHtml(msg.text)}</textarea></div>
+            <div class="form-group"><textarea id="editMsgTextInput" rows="3" style="width:100%;padding:8px;">${escapeHtml(msg.text || '')}</textarea></div>
             <div class="btn-row"><button class="btn-secondary" onclick="closeModal()">取消</button><button class="btn-primary" id="confirmSaveEditMsg">💾 保存</button></div>
         `);
         document.getElementById('confirmSaveEditMsg').onclick = () => {
@@ -2112,8 +2229,9 @@ window.showMessageActionSheet = function(msgId, targetType, targetId) {
             if (!newT) { showToast('内容不能为空', 'error'); return; }
             msg.text = newT;
             closeModal();
-            if (targetType === 'single') renderSingleChatWindow(document.getElementById('socialTab'));
-            else renderGroupChatWindow(document.getElementById('socialTab'));
+            const cont = (dom && dom.socialTab) || document.getElementById('socialTab');
+            if (targetType === 'single') renderSingleChatWindow(cont);
+            else renderGroupChatWindow(cont);
             showToast('✅ 消息已修改', 'success', 1500);
             autoSaveGame();
         };
@@ -2123,8 +2241,9 @@ window.showMessageActionSheet = function(msgId, targetType, targetId) {
         closeModal();
         const idx = list.findIndex(m => m._id === msgId);
         if (idx !== -1) list.splice(idx, 1);
-        if (targetType === 'single') renderSingleChatWindow(document.getElementById('socialTab'));
-        else renderGroupChatWindow(document.getElementById('socialTab'));
+        const cont = (dom && dom.socialTab) || document.getElementById('socialTab');
+        if (targetType === 'single') renderSingleChatWindow(cont);
+        else renderGroupChatWindow(cont);
         showToast('🗑️ 消息已删除', 'info');
         autoSaveGame();
     };
@@ -2141,7 +2260,7 @@ window.openCollabVideoPublishModal = function(targetType, targetId) {
     }
 
     const partnerCheckboxes = participants.map((p) => `
-        <label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;background:#f4f6f4;padding:4px 8px;border-radius:12px;margin:2px;">
+        <label style="display:inline-flex;align-items:center;gap:4px;font-size:12px;background:#f4f7f4;padding:4px 8px;border-radius:12px;margin:2px;">
             <input type="checkbox" class="collab-partner-check" value="${p.id}" checked>
             <span>${p.avatarEmoji || '👤'} ${escapeHtml(p.name)}</span>
         </label>
@@ -2632,7 +2751,7 @@ function buildStickerDrawerHTML(targetType, targetId) {
 
 window.switchStickerCategory = function(cat, type) {
     window.G.activeStickerCategory = cat;
-    const cont = document.getElementById('socialTab');
+    const cont = (dom && dom.socialTab) || document.getElementById('socialTab');
     if (type === 'single') renderSingleChatWindow(cont);
     else renderGroupChatWindow(cont);
 };
@@ -2657,8 +2776,9 @@ window.openCreateStickerCategoryModal = function(targetType, targetId) {
         if (!window.G.stickerCategories.includes(val)) window.G.stickerCategories.push(val);
         window.G.activeStickerCategory = val;
         closeModal();
-        if (targetType === 'single') renderSingleChatWindow(document.getElementById('socialTab'));
-        else renderGroupChatWindow(document.getElementById('socialTab'));
+        const cont = (dom && dom.socialTab) || document.getElementById('socialTab');
+        if (targetType === 'single') renderSingleChatWindow(cont);
+        else renderGroupChatWindow(cont);
         autoSaveGame();
     };
 };
@@ -2690,8 +2810,9 @@ window.openImportStickersModal = function(targetType, targetId) {
         }
         showToast(`🎉 导入 ${count} 个表情！`, 'success', 2000);
         closeModal();
-        if (targetType === 'single') renderSingleChatWindow(document.getElementById('socialTab'));
-        else renderGroupChatWindow(document.getElementById('socialTab'));
+        const cont = (dom && dom.socialTab) || document.getElementById('socialTab');
+        if (targetType === 'single') renderSingleChatWindow(cont);
+        else renderGroupChatWindow(cont);
         autoSaveGame();
     };
 };
@@ -2707,13 +2828,14 @@ window.sendStickerMessage = function(targetType, targetId, stickerObj) {
         text: `[表情: ${stickerObj.desc}]`,
         time: new Date().toLocaleTimeString().slice(0, 5)
     };
+    const cont = (dom && dom.socialTab) || document.getElementById('socialTab');
     if (targetType === 'single') {
         pushChatMessageSafe(targetId, msg);
-        renderSingleChatWindow(document.getElementById('socialTab'));
+        renderSingleChatWindow(cont);
     } else {
         if (!window.G.groupChatHistory[targetId]) window.G.groupChatHistory[targetId] = [];
         window.G.groupChatHistory[targetId].push(msg);
-        renderGroupChatWindow(document.getElementById('socialTab'));
+        renderGroupChatWindow(cont);
     }
     autoSaveGame();
 };
@@ -2800,6 +2922,8 @@ window.jumpToMomentCard = function(momentId) {
 // 暴露全部全局函数（保障跨文件调用绝不报错）
 // ============================================================
 window.renderSocialPanel = renderSocialPanel;
+window.renderSingleChatWindow = renderSingleChatWindow;
+window.renderGroupChatWindow = renderGroupChatWindow;
 window.openAccountManagerModal = openAccountManagerModal;
 window.receiveFriendRequest = receiveFriendRequest;
 window.deleteAltAccount = deleteAltAccount;
