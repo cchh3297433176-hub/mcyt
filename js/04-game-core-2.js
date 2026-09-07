@@ -1031,8 +1031,24 @@ function renderPhoneApp(container) {
     `;
     container.innerHTML = html;
 
-    document.getElementById('phoneNavChatsBtn').onclick = () => { G.phoneNav = 'chats'; renderSocialPanel(); };
-    document.getElementById('phoneNavMomentsBtn').onclick = () => { G.phoneNav = 'moments'; G.momentsFilterNpcId = null; renderSocialPanel(); };
+    // 注意：不要用 .onclick= 直接绑定。部分 Android WebView 在触屏下不会稳定
+    // 补发合成的 click 事件，导致这两个底部导航按钮偶发“点了没反应”，
+    // 且一旦卡在某个聊天窗口里（G.currentChatNpc/currentChatGroup 未清空），
+    // renderSocialPanel() 会一直渲染回聊天窗口，看起来就像“朋友圈切不过去”。
+    // 统一改用已验证在触屏上稳定可用的 bindLongPressEvent，并显式清空聊天状态。
+    bindLongPressEvent(document.getElementById('phoneNavChatsBtn'), null, () => {
+        G.currentChatNpc = null;
+        G.currentChatGroup = null;
+        G.phoneNav = 'chats';
+        renderSocialPanel();
+    });
+    bindLongPressEvent(document.getElementById('phoneNavMomentsBtn'), null, () => {
+        G.currentChatNpc = null;
+        G.currentChatGroup = null;
+        G.phoneNav = 'moments';
+        G.momentsFilterNpcId = null;
+        renderSocialPanel();
+    });
 
     if (!isMoments) {
         bindChatListEvents(container);
@@ -1133,141 +1149,25 @@ function bindChatListEvents(container) {
     const directBtn = document.getElementById('tabDirectBtn');
     const groupBtn = document.getElementById('tabGroupBtn');
     const addBtn = document.getElementById('addChatTargetBtn');
-    if (directBtn) directBtn.onclick = (e) => { e.preventDefault(); e.stopPropagation(); G.chatActiveTab = 'direct'; G.currentChatNpc = null; G.currentChatGroup = null; renderSocialPanel(); };
-    if (groupBtn) groupBtn.onclick = (e) => { e.preventDefault(); e.stopPropagation(); G.chatActiveTab = 'group'; G.currentChatNpc = null; G.currentChatGroup = null; renderSocialPanel(); };
-    if (addBtn) addBtn.onclick = (e) => { e.preventDefault(); e.stopPropagation(); openAddChatTargetModal(); };
+    // 统一使用 bindLongPressEvent（触屏 touchend 直接触发，不依赖 WebView
+    // 补发的合成 click 事件），这几个按钮之前用 .onclick= 绑定，在部分
+    // Android WebView 上会出现“点了没反应”的问题。
+    bindLongPressEvent(directBtn, null, () => { G.chatActiveTab = 'direct'; G.currentChatNpc = null; G.currentChatGroup = null; renderSocialPanel(); });
+    bindLongPressEvent(groupBtn, null, () => { G.chatActiveTab = 'group'; G.currentChatNpc = null; G.currentChatGroup = null; renderSocialPanel(); });
+    bindLongPressEvent(addBtn, null, () => openAddChatTargetModal());
 
-    // 私聊联系人：不要依赖 Pointer Events。
-    // Android WebView/部分内嵌浏览器可能对动态 innerHTML 元素的 pointerup 处理不一致，
-    // 这会造成“群聊能点、私聊不能点”。这里改为原生 click + touch 长按的独立机制。
-    const bindDirectItem = (el, id) => {
-        if (!el || !id) return;
-        let timer = null;
-        let longPressed = false;
-        let moved = false;
-        let suppressClickUntil = 0;
-        let sx = 0, sy = 0;
-
-        const clear = () => {
-            if (timer) { clearTimeout(timer); timer = null; }
-        };
-        const enterChat = () => {
-            if (Date.now() < suppressClickUntil) return;
-            G.currentChatGroup = null;
-            G.currentChatNpc = String(id);
-            G.chatActiveTab = 'direct';
-            G.phoneNav = 'chats';
-            renderSocialPanel();
-        };
-        const editNpc = () => {
-            suppressClickUntil = Date.now() + 700;
-            openEditNpcModal(String(id));
-        };
-
-        // 普通鼠标/浏览器点击的唯一入口
-        el.onclick = (e) => {
-            if (Date.now() < suppressClickUntil) {
-                e.preventDefault();
-                e.stopPropagation();
-                return;
-            }
-            if (longPressed) {
-                longPressed = false;
-                e.preventDefault();
-                e.stopPropagation();
-                return;
-            }
-            enterChat();
-        };
-
-        // Android 触屏：短按直接进入，长按打开编辑。
-        el.addEventListener('touchstart', (e) => {
-            const t = e.touches && e.touches[0];
-            if (!t) return;
-            sx = t.clientX; sy = t.clientY;
-            moved = false;
-            longPressed = false;
-            clear();
-            timer = setTimeout(() => {
-                timer = null;
-                if (!moved) {
-                    longPressed = true;
-                    suppressClickUntil = Date.now() + 700;
-                    editNpc();
-                }
-            }, 550);
-        }, { passive: true });
-
-        el.addEventListener('touchmove', (e) => {
-            const t = e.touches && e.touches[0];
-            if (!t) return;
-            if (Math.abs(t.clientX - sx) > 12 || Math.abs(t.clientY - sy) > 12) {
-                moved = true;
-                clear();
-            }
-        }, { passive: true });
-
-        el.addEventListener('touchend', (e) => {
-            clear();
-            if (moved) return;
-            if (longPressed) {
-                suppressClickUntil = Date.now() + 700;
-                return;
-            }
-            // 某些 WebView 不派发 click，因此短按在 touchend 再提供一次兜底入口。
-            // 注意：必须先执行 enterChat()，再设置 suppressClickUntil——
-            // 否则 enterChat() 内部的时间戳校验会把这次调用自己拦截掉，
-            // 导致私聊联系人在触屏设备上完全点不进去（这正是此前的 bug）。
-            enterChat();
-            suppressClickUntil = Date.now() + 350;
-        }, { passive: true });
-
-        el.addEventListener('touchcancel', () => {
-            clear();
-            moved = true;
-            longPressed = false;
-        }, { passive: true });
-
-        // 桌面端长按/右键编辑人设
-        el.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            editNpc();
-        });
-
-        el.addEventListener('mousedown', (e) => {
-            if (e.button !== 0) return;
-            sx = e.clientX; sy = e.clientY;
-            moved = false;
-            longPressed = false;
-            clear();
-            timer = setTimeout(() => {
-                timer = null;
-                if (!moved) {
-                    longPressed = true;
-                    suppressClickUntil = Date.now() + 700;
-                    editNpc();
-                }
-            }, 550);
-        });
-        el.addEventListener('mousemove', (e) => {
-            if (Math.abs(e.clientX - sx) > 12 || Math.abs(e.clientY - sy) > 12) {
-                moved = true;
-                clear();
-            }
-        });
-        el.addEventListener('mouseup', () => {
-            clear();
-            if (longPressed) suppressClickUntil = Date.now() + 700;
-        });
-        el.addEventListener('mouseleave', clear);
-    };
-
+    // 私聊联系人：短按进入聊天，长按编辑人设。
+    // 之前这里是一套自行实现的 touch/click 混合逻辑，其中 touchend 内部
+    // “先设置抑制标记、再调用进入聊天”的顺序写反了，导致进入聊天的调用
+    // 一进来就被自己刚设的标记拦截，触屏点击私聊联系人完全没反应。
+    // 群聊列表用的 bindLongPressEvent 一直工作正常，这里直接复用同一套
+    // 已验证可靠的机制，避免再犯同样的错误。
     container.querySelectorAll('.chat-item').forEach(el => {
-        bindDirectItem(el, el.dataset.id);
+        const id = el.dataset.id;
+        if (!id) return;
+        bindLongPressEvent(el, () => openEditNpcModal(String(id)), () => openChat(String(id)));
     });
 
-    // 群聊继续使用现有机制；群聊本身已经可以正常进入。
     container.querySelectorAll('.group-item').forEach(el => {
         const gid = el.dataset.gid;
         if (!gid) return;
