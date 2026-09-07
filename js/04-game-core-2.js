@@ -692,10 +692,18 @@ function getActiveAccountInfo() {
 }
 
 function switchAccount(accId) {
+    if (accId !== 'main' && !(G.altAccounts || []).some(a => a.id === accId)) return;
     G.currentAccountId = accId;
+    // 切号后退出当前聊天，避免旧账号的聊天窗口状态遮住新账号的列表。
+    G.currentChatNpc = null;
+    G.currentChatGroup = null;
+    G.chatActiveTab = 'direct';
+    G.phoneNav = 'chats';
     const acc = getActiveAccountInfo();
     showToast(`🔀 已切换账号为：${acc.name}`, 'info', 1800);
-    renderSocialPanel();
+    if (typeof closeModal === 'function') closeModal();
+    if (typeof switchTab === 'function') switchTab('social');
+    else renderSocialPanel();
     autoSaveGame();
 }
 
@@ -1018,11 +1026,11 @@ function renderPhoneApp(container) {
             ${contentHtml}
         </div>
         <div style="height:54px;background:#fcfdfc;border-top:1px solid #eef2ee;display:flex;justify-content:space-around;align-items:center;padding:0 10px;flex-shrink:0;">
-            <button id="phoneNavChatsBtn" style="border:none;background:none;font-size:12px;font-weight:700;color:${!isMoments ? 'var(--primary)' : '#888'};display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;">
+            <button id="phoneNavChatsBtn" onclick="G.phoneNav='chats';G.currentChatNpc=null;G.currentChatGroup=null;renderSocialPanel();" style="border:none;pointer-events:auto;position:relative;z-index:5;background:none;font-size:12px;font-weight:700;color:${!isMoments ? 'var(--primary)' : '#888'};display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;">
                 <span style="font-size:18px;">💬</span>
                 <span>消息</span>
             </button>
-            <button id="phoneNavMomentsBtn" style="border:none;background:none;font-size:12px;font-weight:700;color:${isMoments ? 'var(--primary)' : '#888'};display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;">
+            <button id="phoneNavMomentsBtn" onclick="G.phoneNav='moments';G.currentChatNpc=null;G.currentChatGroup=null;G.momentsFilterNpcId=null;renderSocialPanel();" style="border:none;pointer-events:auto;position:relative;z-index:5;background:none;font-size:12px;font-weight:700;color:${isMoments ? 'var(--primary)' : '#888'};display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;">
                 <span style="font-size:18px;">🌟</span>
                 <span>朋友圈</span>
             </button>
@@ -1070,7 +1078,7 @@ function buildChatListHTML() {
                 const isBlocked = isAccountBlockedByNpc(id, currentAcc.id);
 
                 itemsHtml += `
-                <div class="chat-item" data-id="${id}" style="display:flex;align-items:center;padding:10px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;background:#fff;border:1px solid #f0f4f0;position:relative;">
+                <div class="chat-item" data-id="${id}" onclick="openChat(${JSON.stringify(id)})" oncontextmenu="event.preventDefault();openEditNpcModal(${JSON.stringify(id)})" style="display:flex;align-items:center;padding:10px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;background:#fff;border:1px solid #f0f4f0;position:relative;">
                     <div style="margin-right:12px;flex-shrink:0;">${renderAvatarBadge(npc, 44)}</div>
                     <div style="flex:1;min-width:0;">
                         <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -1096,7 +1104,7 @@ function buildChatListHTML() {
                 const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1] : null;
                 const purePreview = lastMsg ? `${lastMsg.senderName}: ${stripThought(lastMsg.text || '')}` : (grp.desc || '开启热烈讨论吧');
                 itemsHtml += `
-                <div class="group-item" data-gid="${gid}" style="display:flex;align-items:center;padding:10px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;background:#fff;border:1px solid #f0f4f0;">
+                <div class="group-item" data-gid="${gid}" onclick="openGroupChat(${JSON.stringify(gid)})" oncontextmenu="event.preventDefault();openGroupSettingsModal(${JSON.stringify(gid)})" style="display:flex;align-items:center;padding:10px 12px;border-radius:10px;margin-bottom:6px;cursor:pointer;background:#fff;border:1px solid #f0f4f0;">
                     <div style="margin-right:12px;flex-shrink:0;">${renderAvatarBadge(grp, 44)}</div>
                     <div style="flex:1;min-width:0;">
                         <div style="display:flex;justify-content:space-between;align-items:center;">
@@ -1113,11 +1121,11 @@ function buildChatListHTML() {
     return `
     <div class="chat-header" style="padding:12px 16px;background:#f8fbf8;border-bottom:1px solid #eef3ee;display:flex;justify-content:space-between;align-items:center;">
         <div style="display:flex;gap:6px;background:#e9f2e9;padding:3px;border-radius:8px;">
-            <button id="tabDirectBtn" style="border:none;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;background:${isDirect ? '#fff' : 'transparent'};color:${isDirect ? 'var(--primary)' : '#666'};">👤 私聊</button>
-            <button id="tabGroupBtn" style="border:none;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;background:${!isDirect ? '#fff' : 'transparent'};color:${!isDirect ? 'var(--primary)' : '#666'};">👥 群聊</button>
+            <button id="tabDirectBtn" onclick="G.chatActiveTab='direct';G.currentChatNpc=null;G.currentChatGroup=null;renderSocialPanel();" style="border:none;pointer-events:auto;position:relative;z-index:5;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;background:${isDirect ? '#fff' : 'transparent'};color:${isDirect ? 'var(--primary)' : '#666'};">👤 私聊</button>
+            <button id="tabGroupBtn" onclick="G.chatActiveTab='group';G.currentChatNpc=null;G.currentChatGroup=null;renderSocialPanel();" style="border:none;pointer-events:auto;position:relative;z-index:5;padding:6px 14px;border-radius:6px;font-size:13px;font-weight:700;cursor:pointer;background:${!isDirect ? '#fff' : 'transparent'};color:${!isDirect ? 'var(--primary)' : '#666'};">👥 群聊</button>
         </div>
         <div style="position:relative;">
-            <button id="addChatTargetBtn" title="新建与好友/群邀请" style="border:none;background:var(--primary);color:#fff;width:34px;height:34px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;">➕</button>
+            <button id="addChatTargetBtn" onclick="openAddChatTargetModal()" title="新建与好友/群邀请" style="border:none;pointer-events:auto;position:relative;z-index:6;background:var(--primary);color:#fff;width:34px;height:34px;border-radius:50%;font-size:18px;cursor:pointer;display:flex;align-items:center;justify-content:center;">➕</button>
             ${pendingCount > 0 ? `<span style="position:absolute;top:-4px;right:-4px;width:12px;height:12px;background:#ff4757;border:2px solid #fff;border-radius:50%;display:block;"></span>` : ''}
         </div>
     </div>
@@ -1130,19 +1138,16 @@ function buildChatListHTML() {
 }
 
 function bindChatListEvents(container) {
-    document.getElementById('tabDirectBtn').onclick = () => { G.chatActiveTab = 'direct'; renderSocialPanel(); };
-    document.getElementById('tabGroupBtn').onclick = () => { G.chatActiveTab = 'group'; renderSocialPanel(); };
-    document.getElementById('addChatTargetBtn').onclick = () => openAddChatTargetModal();
-
-    container.querySelectorAll('.chat-item').forEach(el => {
-        const id = el.dataset.id;
-        bindLongPressEvent(el, () => openEditNpcModal(id), () => openChat(id));
-    });
-
-    container.querySelectorAll('.group-item').forEach(el => {
-        const gid = el.dataset.gid;
-        bindLongPressEvent(el, () => openGroupSettingsModal(gid), () => openGroupChat(gid));
-    });
+    // 手机端聊天列表现在使用元素自身的 onclick/oncontextmenu。
+    // 不再依赖 touchstart/touchend 长按封装来完成“进入聊天”，
+    // 避免 Android WebView 在合并版中吞掉轻触事件。
+    if (!container) return;
+    const directBtn = document.getElementById('tabDirectBtn');
+    const groupBtn = document.getElementById('tabGroupBtn');
+    const addBtn = document.getElementById('addChatTargetBtn');
+    if (directBtn) directBtn.onclick = () => { G.chatActiveTab = 'direct'; G.currentChatNpc = null; G.currentChatGroup = null; renderSocialPanel(); };
+    if (groupBtn) groupBtn.onclick = () => { G.chatActiveTab = 'group'; G.currentChatNpc = null; G.currentChatGroup = null; renderSocialPanel(); };
+    if (addBtn) addBtn.onclick = () => openAddChatTargetModal();
 }
 
 // ============================================================
