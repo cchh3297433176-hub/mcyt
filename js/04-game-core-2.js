@@ -1137,55 +1137,47 @@ function bindChatListEvents(container) {
     if (groupBtn) groupBtn.onclick = (e) => { e.preventDefault(); e.stopPropagation(); G.chatActiveTab = 'group'; G.currentChatNpc = null; G.currentChatGroup = null; renderSocialPanel(); };
     if (addBtn) addBtn.onclick = (e) => { e.preventDefault(); e.stopPropagation(); openAddChatTargetModal(); };
 
-    // 联系人/群聊列表使用普通 click 进入，长按单独由 Pointer Events 处理。
-    // 不再让 touchend 同时承担“点击”和“长按”两个职责，避免 Android WebView 中事件被吞掉。
+    // Android WebView 兼容：点击与长按由同一个 Pointer Events 状态机处理。
+    // 不再等待浏览器额外生成 click，避免私聊列表出现“群聊能进、私聊点不动”。
     const bindListItem = (el, onClick, onLongPress) => {
         if (!el) return;
-        let timer = null;
-        let longPressed = false;
+        let timer = null, longPressed = false, moved = false;
         let sx = 0, sy = 0;
         const clear = () => { if (timer) { clearTimeout(timer); timer = null; } };
-
-        el.onclick = (e) => {
-            if (longPressed) {
-                e.preventDefault();
-                e.stopPropagation();
-                longPressed = false;
-                return;
-            }
-            onClick();
-        };
-
-        const down = (e) => {
-            // 鼠标左键 / 触控笔 / 手指均支持；右键交给 contextmenu。
+        el.style.touchAction = 'manipulation';
+        el.oncontextmenu = (e) => { e.preventDefault(); if (e.pointerType === 'mouse' && onLongPress) onLongPress(); };
+        el.onpointerdown = (e) => {
             if (e.pointerType === 'mouse' && e.button !== 0) return;
-            sx = e.clientX || 0; sy = e.clientY || 0;
-            longPressed = false;
-            clear();
+            sx = e.clientX || 0; sy = e.clientY || 0; moved = false; longPressed = false; clear();
+            try { el.setPointerCapture(e.pointerId); } catch (_) {}
             timer = setTimeout(() => {
                 timer = null;
-                longPressed = true;
-                onLongPress();
+                if (!moved) { longPressed = true; if (onLongPress) onLongPress(); }
             }, 550);
         };
-        const move = (e) => {
-            if (Math.abs((e.clientX || 0) - sx) > 12 || Math.abs((e.clientY || 0) - sy) > 12) clear();
+        el.onpointermove = (e) => {
+            if (Math.abs((e.clientX || 0) - sx) > 14 || Math.abs((e.clientY || 0) - sy) > 14) { moved = true; clear(); }
         };
-        const up = () => clear();
-        el.addEventListener('pointerdown', down, { passive: true });
-        el.addEventListener('pointermove', move, { passive: true });
-        el.addEventListener('pointerup', up, { passive: true });
-        el.addEventListener('pointercancel', up, { passive: true });
-        el.addEventListener('pointerleave', up, { passive: true });
-        el.addEventListener('contextmenu', e => {
-            if (e.pointerType === 'mouse') { e.preventDefault(); onLongPress(); }
-        });
+        el.onpointerup = (e) => {
+            clear();
+            try { el.releasePointerCapture(e.pointerId); } catch (_) {}
+            if (!moved && !longPressed && onClick) { e.preventDefault(); e.stopPropagation(); onClick(); }
+            longPressed = false;
+        };
+        el.onpointercancel = () => { clear(); moved = true; longPressed = false; };
     };
 
     container.querySelectorAll('.chat-item').forEach(el => {
         const id = el.dataset.id;
         if (!id) return;
-        bindListItem(el, () => openChat(id), () => openEditNpcModal(id));
+        bindListItem(el, () => {
+            // 直接从元素进入，避免被当前账号/页面状态拦截。
+            G.currentChatGroup = null;
+            G.currentChatNpc = String(id);
+            G.chatActiveTab = 'direct';
+            G.phoneNav = 'chats';
+            renderSocialPanel();
+        }, () => openEditNpcModal(id));
     });
 
     container.querySelectorAll('.group-item').forEach(el => {
@@ -1365,13 +1357,10 @@ function openCreateMomentPostModal() {
         </div>
         <div class="form-group">
             <label>配图形式选择</label>
-            <div style="display:flex;gap:6px;margin-bottom:6px;">
-                <label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;">
-                    <input type="radio" name="postImgType" value="real" checked> 🖼️ 上传相册真实图片 (Gemini等多模态识图)
-                </label>
-                <label style="font-size:12px;display:flex;align-items:center;gap:4px;cursor:pointer;">
-                    <input type="radio" name="postImgType" value="desc"> 📝 用文字描述图片 (极省 Token)
-                </label>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:8px;align-items:stretch;">
+                <label style="font-size:12px;display:flex;align-items:flex-start;gap:6px;cursor:pointer;line-height:1.45;"><input type="radio" name="postImgType" value="real" checked><span>🖼️ <b>真实图片</b>（占大量 Token，AI 可直接识图）</span></label>
+                <label style="font-size:12px;display:flex;align-items:flex-start;gap:6px;cursor:pointer;line-height:1.45;"><input type="radio" name="postImgType" value="desc"><span>📝 <b>文字代替图片</b>（不保存/发送图片，最省 Token）</span></label>
+                <label style="font-size:12px;display:flex;align-items:flex-start;gap:6px;cursor:pointer;line-height:1.45;"><input type="radio" name="postImgType" value="hybrid"><span>🖼️📝 <b>真实图片 + 文字描述</b>（朋友圈显示真实图，但 AI 只读取文字描述）</span></label>
             </div>
             <div id="postImgRealArea">
                 <input type="file" id="postRealFileInput" accept="image/*" style="font-size:12px;">
@@ -1379,70 +1368,49 @@ function openCreateMomentPostModal() {
             </div>
             <div id="postImgDescArea" style="display:none;">
                 <input type="text" id="postImgDescInput" placeholder="如：一张被苦力怕炸穿的地牢遗迹惨状截图">
+                <div id="postImgDescHint" style="font-size:11px;color:#888;margin-top:4px;"></div>
             </div>
         </div>
-        <div class="btn-row">
-            <button class="btn-secondary" onclick="closeModal()">取消</button>
-            <button class="btn-primary" id="btnConfirmPublishPost">🚀 发布动态</button>
-        </div>
+        <div class="btn-row"><button class="btn-secondary" onclick="closeModal()">取消</button><button class="btn-primary" id="btnConfirmPublishPost">🚀 发布动态</button></div>
     `);
 
     let uploadedBase64 = null;
-    document.querySelectorAll('input[name="postImgType"]').forEach(r => {
-        r.onchange = () => {
-            const isReal = r.value === 'real';
-            document.getElementById('postImgRealArea').style.display = isReal ? 'block' : 'none';
-            document.getElementById('postImgDescArea').style.display = isReal ? 'none' : 'block';
-        };
-    });
-
+    const syncPostImageModeUI = () => {
+        const mode = document.querySelector('input[name="postImgType"]:checked')?.value || 'real';
+        const needsImage = mode === 'real' || mode === 'hybrid';
+        const needsDesc = mode === 'desc' || mode === 'hybrid';
+        document.getElementById('postImgRealArea').style.display = needsImage ? 'block' : 'none';
+        document.getElementById('postImgDescArea').style.display = needsDesc ? 'block' : 'none';
+        const hint = document.getElementById('postImgDescHint');
+        if (hint) hint.textContent = mode === 'hybrid' ? '⚠️ AI 永远只会收到这段文字，不会收到上传的真实图片。' : '';
+    };
+    document.querySelectorAll('input[name="postImgType"]').forEach(r => r.onchange = syncPostImageModeUI);
     document.getElementById('postRealFileInput').onchange = function() {
-        const file = this.files[0];
-        if (!file) return;
+        const file = this.files[0]; if (!file) return;
         const reader = new FileReader();
-        reader.onload = (e) => {
-            uploadedBase64 = e.target.result;
-            document.getElementById('postImgPreview').innerHTML = `<img src="${uploadedBase64}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid #ccc;">`;
-        };
+        reader.onload = e => { uploadedBase64 = e.target.result; document.getElementById('postImgPreview').innerHTML = `<img src="${uploadedBase64}" style="width:80px;height:80px;object-fit:cover;border-radius:8px;border:1px solid #ccc;">`; };
         reader.readAsDataURL(file);
     };
+    syncPostImageModeUI();
 
     document.getElementById('btnConfirmPublishPost').onclick = () => {
         const title = document.getElementById('postTitleInput').value.trim();
         const body = document.getElementById('postBodyInput').value.trim();
         const imgType = document.querySelector('input[name="postImgType"]:checked').value;
         const imgDesc = document.getElementById('postImgDescInput').value.trim();
-
         if (!body) { showToast('⚠️ 正文不能为空', 'error'); return; }
-
-        if (!G.feed) G.feed = [];
-        G.feedIdCounter = (G.feedIdCounter || 0) + 1;
-
+        if ((imgType === 'real' || imgType === 'hybrid') && !uploadedBase64) { showToast('⚠️ 请先选择一张图片', 'error'); return; }
+        if ((imgType === 'desc' || imgType === 'hybrid') && !imgDesc) { showToast('⚠️ 请填写图片文字描述', 'error'); return; }
+        if (!G.feed) G.feed = []; G.feedIdCounter = (G.feedIdCounter || 0) + 1;
         const newPost = {
-            id: Date.now(),
-            author: curAcc.name,
-            isPlayer: true,
-            avatar: curAcc.avatar,
-            title: title,
-            body: body,
-            image: imgType === 'real' ? uploadedBase64 : null,
-            imageDesc: imgType === 'desc' ? imgDesc : null,
-            likes: 0,
-            liked: false,
-            comments: [],
-            time: new Date().toLocaleTimeString().slice(0, 5)
+            id: Date.now(), author: curAcc.name, isPlayer: true, avatar: curAcc.avatar, title, body,
+            image: (imgType === 'real' || imgType === 'hybrid') ? uploadedBase64 : null,
+            imageDesc: (imgType === 'desc' || imgType === 'hybrid') ? imgDesc : null,
+            imageMode: imgType, likes: 0, liked: false, comments: [], time: new Date().toLocaleTimeString().slice(0, 5)
         };
-
         G.feed.push(newPost);
-
-        // 🧠 双向记忆沉淀：将玩家动态记录落入记忆库，方便私聊中 NPC 主动提起
-        const memoSummaryText = `【玩家发朋友圈】：在第 ${G.day} 天发布了动态：“${body}”${newPost.image ? '（附带了一张相册照片/立绘截图）' : ''}${newPost.imageDesc ? `（配图描述: ${newPost.imageDesc}）` : ''}`;
-        addGlobalMemoryRecord(memoSummaryText);
-
-        showToast('🎉 朋友圈发布成功！', 'success', 2000);
-        closeModal();
-        renderSocialPanel();
-        autoSaveGame();
+        addGlobalMemoryRecord(`【玩家发朋友圈】：在第 ${G.day} 天发布了动态：“${body}”${newPost.image ? '（附带了一张相册照片/立绘截图）' : ''}${newPost.imageDesc ? `（配图描述: ${newPost.imageDesc}）` : ''}`);
+        showToast('🎉 朋友圈发布成功！', 'success', 2000); closeModal(); renderSocialPanel(); autoSaveGame();
     };
 }
 
@@ -1528,7 +1496,8 @@ async function triggerAiCommentForMoment(momentId) {
 
     try {
         const tzContext = formatNpcTimezoneContext();
-        const hasRealImage = !!item.image;
+        const imageMode = item.imageMode || (item.image && item.imageDesc ? 'hybrid' : (item.image ? 'real' : 'desc'));
+        const hasAiImage = !!item.image && imageMode === 'real';
         const imgDescContext = item.imageDesc ? `（配图描述：${item.imageDesc}）` : '';
 
         let existingCommentsText = '';
@@ -1550,9 +1519,10 @@ ${existingCommentsText}
 ${participantsDesc}
 
 【核心演绎规则（纯乙女守护与多模态视觉聚焦）】：
-1. 视觉识图重点（如果有上传图片）：
-   - 你必须仔细凝视这张图片！看清画面的细节、人物立绘特征（如西装、领带、面具、表情、动作、日文字样如Verity等）。
-   - 绝不允许只回复“可爱”或忽视图片，必须在评论中展现出你真的【看到了这张画】并结合画中元素调侃吐槽！
+1. 配图理解规则：
+   - “真实图片”：可以视觉识图，并结合图片细节评论。
+   - “真实图片 + 文字描述”：绝对不能读取真实图片，只能依据【配图描述】理解图片内容。
+   - “文字代替图片”：只能依据【配图描述】理解图片内容。
 2. 楼中楼接梗与互怼争吵（纯乙女安全合规）：
    - 好友之间不要各说各话！第二位及后续的好友必须直接接前面的话、甚至争风吃醋或毒舌拆台（例如ThatMob傲娇说“没我可爱/去帮你报仇”，其他角色可以立刻嘲讽“就你那PVP技术送双杀去吧”）。
    - 严禁攻略角色之间发生搞基或同性恋爱（纯乙女红线），角色之间的争吵仅限【技术攀比、护短争宠、傲娇吃醋、毒舌吐槽】！
@@ -1564,7 +1534,7 @@ ${participantsDesc}
 `;
 
         let userContent = null;
-        if (hasRealImage) {
+        if (hasAiImage) {
             // 🌟 标准多模态消息数组格式，完美兼容 Gemini / OpenAI
             userContent = [
                 {
@@ -1579,7 +1549,7 @@ ${participantsDesc}
                 }
             ];
         } else {
-            userContent = `请好友们针对玩家发布的动态进行生动评论与互怼接话：`;
+            userContent = `请好友们针对玩家发布的动态进行生动评论与互怼接话。${item.imageDesc ? `这张配图只能依据以下文字描述理解：${item.imageDesc}` : ''}`;
         }
 
         const raw = await callAI([
@@ -4125,7 +4095,9 @@ function openShareMomentTargetModal(momentId) {
                     id: item.id,
                     author: item.author,
                     body: item.body,
-                    image: item.image || null
+                    image: item.image || null,
+                    imageDesc: item.imageDesc || null,
+                    imageMode: item.imageMode || (item.image && item.imageDesc ? 'hybrid' : (item.image ? 'real' : 'desc'))
                 },
                 text: `[转发动态]: ${item.body.slice(0, 40)}`,
                 time: new Date().toLocaleTimeString().slice(0, 5)
