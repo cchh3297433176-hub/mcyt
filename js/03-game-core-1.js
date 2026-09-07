@@ -131,8 +131,7 @@ function switchTab(tab) {
         const isTarget = (el.id === targetId);
         el.classList.toggle('active', isTarget);
         if (isTarget) {
-            el.style.display = (el.id === 'socialTab' || el.id === 'browserTab' || el.id === 'youtubeTab') ? 'flex' : 'block';
-            if (el.style.display === 'flex') el.style.flexDirection = 'column';
+            el.style.display = 'block';
         } else {
             el.style.display = 'none';
         }
@@ -143,7 +142,7 @@ function switchTab(tab) {
     if (tab === 'stream') renderStreamPanel();
     if (tab === 'social') {
         if (!dom.socialTab) dom.socialTab = document.getElementById('socialTab');
-        renderSocialPanel();
+        if (typeof renderSocialPanel === 'function') renderSocialPanel();
     }
     if (tab === 'browser') {
         if (typeof renderBrowserPanel === 'function') renderBrowserPanel();
@@ -446,9 +445,11 @@ function renderAllPanels() {
     const activeTab = document.querySelector('.tab-btn.active')?.dataset.tab;
     if (activeTab === 'data') renderDataPanel();
     if (activeTab === 'dashboard') renderDashboard();
-    if (activeTab === 'social' || document.getElementById('socialTab')?.style.display === 'flex') renderSocialPanel();
-    if (document.getElementById('browserTab')?.style.display === 'flex' && typeof renderBrowserPanel === 'function') renderBrowserPanel();
-    if (document.getElementById('youtubeTab')?.style.display === 'flex' && typeof renderYouTubePanel === 'function') renderYouTubePanel();
+    if (activeTab === 'social' || document.getElementById('socialTab')?.style.display === 'block') {
+        if (typeof renderSocialPanel === 'function') renderSocialPanel();
+    }
+    if (document.getElementById('browserTab')?.style.display === 'block' && typeof renderBrowserPanel === 'function') renderBrowserPanel();
+    if (document.getElementById('youtubeTab')?.style.display === 'block' && typeof renderYouTubePanel === 'function') renderYouTubePanel();
     if (activeTab === 'shop') renderShop();
     if (activeTab === 'memoir') renderMemoir();
     if (activeTab === 'stream') renderStreamPanel();
@@ -623,7 +624,7 @@ function getNextMilestone() {
     return '已达成所有里程碑！';
 }
 
-// 暴露全局（已安全移除未定义的 bindLongPressEvent 导出）
+// 暴露全局（安全导出，绝无未定义变量）
 window.closeModal = closeModal;
 window.performAction = performAction;
 window.openActionModal = openActionModal;
