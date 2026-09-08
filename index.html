@@ -51,14 +51,47 @@
                     <label>📺 YouTube 账号名 <span class="required">*</span></label>
                     <input type="text" id="ytNameInput" placeholder="例如：MC_CraftMaster" value="MC_CraftMaster">
                 </div>
+
                 <div class="form-group">
-                    <label>🎭 皮上形象（虚拟人设） <span class="required">*</span></label>
-                    <textarea id="personaInput" placeholder="描述你的网络形象..." style="min-height:40px;">一位充满活力的冒险家，擅长红石科技，偶尔整活，声音富有感染力。</textarea>
+                    <label>📖 全局剧情叙事人称 (POV) <span class="required">*</span></label>
+                    <select id="povSelect" style="width:100%;padding:8px 12px;border-radius:8px;border:2px solid rgba(30, 60, 30, 0.10);background:#f5faf5;color:var(--text);font-size:14px;outline:none;">
+                        <option value="second" selected>第二人称【你】（经典沉浸代入式）</option>
+                        <option value="first">第一人称【我】（身临其境主播自述视点）</option>
+                        <option value="third">第三人称【她 / 频道名】（小说客观记录视点）</option>
+                    </select>
                 </div>
+
+                <div class="form-group" style="background:#f9fbf9;border:1.5px solid #dceedc;border-radius:12px;padding:12px;margin:10px 0;">
+                    <div style="font-weight:700;font-size:13.5px;color:#1e4620;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+                        <span>🎭 形象三大维度细分设定（AI精准场景分层）</span>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom:8px;">
+                        <label style="font-size:12px;">1. 🖥️ 线上虚拟形象（Live2D / Vtuber皮套） <span class="required">*</span></label>
+                        <textarea id="avatarLive2dInput" placeholder="描述直播与视频出镜时观众看到的虚拟立绘形象..." style="min-height:45px;">清纯可爱的薄荷绿长发少女，戴着猫耳监听耳机，身穿学院风白色水手连帽衫，Live2D表情灵动丰富。</textarea>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom:8px;">
+                        <label style="font-size:12px;">2. 🎮 游戏形象（Minecraft 像素皮肤） <span class="required">*</span></label>
+                        <textarea id="skinInput" placeholder="描述你在Minecraft世界操作的像素方块人角色外观、披风..." style="min-height:45px;">身穿钻石战甲，头戴金色附魔头盔，背后有红色鞘翅披风，左眼处有一道帅气的战斗伤疤。</textarea>
+                    </div>
+
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label style="font-size:12px;">3. 🏠 线下真实形象（现实皮下素颜） <span class="required">*</span></label>
+                        <textarea id="appearanceRealInput" placeholder="描述现实生活中的素颜容貌、身形气质与日常私服..." style="min-height:45px;">眉眼清秀干净的年轻少女，素颜灵动，乌黑柔顺的长发微卷，身材轻盈匀称，日常喜欢穿宽松舒服的居服卫衣。</textarea>
+                    </div>
+                </div>
+
+                <div class="form-group checkbox-group" style="margin-bottom:10px;">
+                    <input type="checkbox" id="voiceChangerInput">
+                    <label for="voiceChangerInput">🎙️ 直播/视频出镜时使用变声器（不勾选即为自然真实清澈女声）</label>
+                </div>
+
                 <div class="form-group">
-                    <label>🧱 MC 皮肤形象 <span class="required">*</span></label>
-                    <textarea id="skinInput" placeholder="描述你的皮肤外观..." style="min-height:40px;">身穿钻石甲，头戴金色头盔，背后有红色披风，左眼有一道伤疤。</textarea>
+                    <label>🎭 性格人设简介 <span class="required">*</span></label>
+                    <textarea id="personaInput" placeholder="描述你的主播性格人设..." style="min-height:40px;">一位充满活力的冒险家，擅长红石科技，偶尔整活，声音富有感染力。</textarea>
                 </div>
+
                 <div class="form-group">
                     <label>🎯 创作赛道 <span class="required">*</span></label>
                     <select id="categorySelect">
@@ -79,7 +112,7 @@
                     <div class="skill-input-group"><label>⚔️</label><input type="range" id="skillPvp" min="0" max="100" value="20"><input type="number" id="skillPvpNum" min="0" max="100" value="20"></div>
                     <div class="skill-input-group"><label>🌲</label><input type="range" id="skillSurvival" min="0" max="100" value="20"><input type="number" id="skillSurvivalNum" min="0" max="100" value="20"></div>
                     <div class="skill-input-group"><label>🏹</label><input type="range" id="skillHunting" min="0" max="100" value="20"><input type="number" id="skillHuntingNum" min="0" max="100" value="20"></div>
-                    <div style="font-size:11px;color:var(--text2);margin-top:2px;">💡 皮上形象中的关键词会额外加成</div>
+                    <div style="font-size:11px;color:var(--text2);margin-top:2px;">💡 性格人设中的关键词会额外加成</div>
                 </div>
                 <button class="btn-primary" id="startGameBtn">🚀 填入Key，开始游戏</button>
                 <button class="btn-secondary" id="setupLoadGameBtn" style="width:100%;margin-top:8px;">📂 读取已有存档</button>
@@ -199,12 +232,11 @@
     <script src="js/08-save-load.js"></script>
     <script src="js/09-events-init.js"></script>
 
-    <!-- 🚀 安全的视图启动器（支持封禁态拦截与杀后台无缝自动续玩） -->
+    <!-- 🚀 安全的视图启动器 -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             setTimeout(function() {
                 try {
-                    // 1. 优先封锁拦截
                     if (typeof OtomeSecurityGuard !== 'undefined' && OtomeSecurityGuard.isDeviceBanned()) {
                         if (typeof showDeviceBanLockScreen === 'function') {
                             showDeviceBanLockScreen();
@@ -212,7 +244,6 @@
                         }
                     }
 
-                    // 2. 杀后台重进智能自启续玩：存在有效进度时，无缝恢复游戏界面
                     var autoInfo = (typeof getAutoSaveInfo === 'function') ? getAutoSaveInfo() : null;
                     var hasValidSave = !!(autoInfo && autoInfo.data && (autoInfo.data.player || autoInfo.data.npcs));
 
