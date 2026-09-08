@@ -836,7 +836,8 @@ async function callAI(messages, options = {}) {
 
     const finalMessages = messages.map(m => {
         if (m.role === 'system') {
-            const extraIronRule = '\n\n【乙女向绝对铁律约束】：本作是由 @鸢尾黎明 老师作品二改的代入向纯乙女Airp游戏，女主为全员唯一核心。所有剧情与互动严禁出现任何男男同性恋爱、BL耽美、攻略角色互配拉郎或男男亲昵性张力，坚决捍卫纯正乙女向定位！';
+            // 🌟 在这里打上绝不妥协的思想钢印！
+            const extraIronRule = '\n\n【性别与情感绝对铁律约束】：\n1. 本作是代入向纯正女性向游戏，支持GL(百合)、GB(女攻男受)、BG(男女)，但主角绝对是纯正的女性（生理与心理皆为女性，绝无男性生殖器官或扶他特征）！女主为全员唯一绝对核心。\n2. 所有剧情与互动严禁出现任何男男同性恋爱、BL耽美、攻略角色互配拉郎或男男亲昵性张力，坚决捍卫纯正女性向定位！\n3. 【社区防线】：此世界观下网民极度排斥男同CP，若有任何读者/弹幕发表拉郎言论，必定会被其他观众立刻毒舌狂喷（如痛骂“腐蟑螂”、“有病吧恶心死我了”、“别发癫”等），用以反击并捍卫纯正的环境！';
             if (typeof m.content === 'string') {
                 return { role: 'system', content: m.content + extraIronRule };
             } else if (Array.isArray(m.content)) {
@@ -890,7 +891,7 @@ async function callAI(messages, options = {}) {
                 const lastUser = [...messages].reverse().find(m => m.role === 'user');
                 const lastUserText = lastUser ? extractTextFromMessageContent(lastUser.content) : '未知指令';
                 OtomeSecurityGuard.triggerDeviceBan(`诱导生成男男拉郎内容（${outViolation}）`, lastUserText, messages.map(m => `[${m.role}]: ${extractTextFromMessageContent(m.content)}`));
-                throw new Error('生成的回复触犯纯乙女红线，已阻断呈现。');
+                throw new Error('生成的回复触犯纯女性向红线，已阻断呈现。');
             }
         }
 
@@ -907,3 +908,4 @@ window.buildSearchSettingsHTML = buildSearchSettingsHTML;
 window.bindSearchSettingsUI = bindSearchSettingsUI;
 window.persistSearchConfig = persistSearchConfig;
 window.loadSearchConfig = loadSearchConfig;
+

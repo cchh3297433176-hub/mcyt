@@ -348,11 +348,16 @@ function _applyImportedStateData(stateData) {
             }
         } else if (stateData._isDeviceBanned) {
             isIncomingBannedCard = true;
+            
+            // 🚀 核心修复：当管理员导入取证卡时，强制开启管理员查房特权
+            // 这样能够放行底层的 UI 渲染拦截，让管理员能在弹锁屏前真正看到玩家的现场数据，而不是一直停留在自己的存档画面！
+            window._isAdminAuditing = true;
+            
             window.G._isDeviceBanned = true;
             window.G._banReason = stateData._banReason;
             window.G._activeBanToken = stateData._activeBanToken;
             window.G._securityAuditBox = stateData._securityAuditBox;
-            alert('⚠️ 检测到这是一张违规被锁定的取证卡！已加载全部历史，即将为您打开封锁审核界面。');
+            alert('⚠️ 检测到这是一张违规被锁定的取证卡！已加载该玩家的现场数据，即将为您打开封锁审核界面。');
         }
     }
 
@@ -379,6 +384,8 @@ function _applyImportedStateData(stateData) {
         game.style.display = 'flex';
     }
 
+    // 确保 UI 能够渲染最新导入的玩家数据（特别是查房模式下）
+    if (typeof renderAllPanels === 'function') renderAllPanels();
     updateUI();
     switchTab('story');
 
@@ -392,8 +399,10 @@ function _applyImportedStateData(stateData) {
     const nameVal = window.G.player?.ytName || '主角';
 
     if (stateData._isDeviceBanned) {
-        showDeviceBanLockScreen();
+        // 渲染完玩家现场后，再次调起管理员审核密匙输入锁屏
+        if (typeof showDeviceBanLockScreen === 'function') showDeviceBanLockScreen();
     } else if (isPardonRedemption) {
+        // 特赦成功无需弹窗，已在上面 alert 过
     } else {
         if (typeof openModal === 'function') {
             openModal(`

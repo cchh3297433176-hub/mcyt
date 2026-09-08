@@ -271,7 +271,7 @@ function buildAo3HomeHTML() {
             </div>
         </div>
         <div style="font-size:11px;color:#888;padding:5px 12px;background:#fff8ee;border-bottom:1px dashed #e8d8c8;">
-            🌸 <b>纯乙女向原则</b>：所有恋爱与CP仅限指向女主本人，严禁男男拉郎或角色与非玩家配对！
+            🌸 <b>纯乙女/百合/GB原则</b>：生理心理皆为女性。严禁男男拉郎，所有向往皆属主角本人！
         </div>
         <div class="ao3-work-list">
             ${worksListHtml}
@@ -331,25 +331,42 @@ function buildAo3ReadHTML(id) {
         reviewsHtml = `<div style="text-align:center;color:#999;font-size:12px;padding:16px 0;">暂无书评，点击下方「🎲 生成读者书评」或发表你的感想吧！</div>`;
     } else {
         reviewsHtml = work.reviews.map((rev, rIdx) => {
+            // 容错处理：防止以前旧数据是个纯字符串导致报错
+            let rAuthor = rev.author;
+            let rText = rev.text;
+            let rTime = rev.time;
+            if (typeof rev === 'string') {
+                rAuthor = '匿名粉';
+                rText = rev;
+                rTime = '';
+            }
+
             let repliesHtml = '';
             if (rev.replies && rev.replies.length) {
-                repliesHtml = `<div class="ao3-replies-list">` + rev.replies.map(rep => `
+                repliesHtml = `<div class="ao3-replies-list">` + rev.replies.map(rep => {
+                    let repAuthor = rep.author;
+                    let repText = rep.text;
+                    let repTime = rep.time;
+                    let repIsSelf = rep.isSelf;
+                    if (typeof rep === 'string') { repAuthor = '匿名粉'; repText = rep; repTime = ''; repIsSelf = false; }
+                    
+                    return `
                     <div class="ao3-reply-entry">
-                        <span style="font-weight:700;color:${rep.isSelf ? '#2e7d32' : '#900'};">${escapeHtml(rep.author)}</span>
-                        ${rep.isSelf ? '<span style="font-size:9px;background:#eaf5ea;color:#2e7d32;padding:1px 4px;border-radius:4px;margin-left:3px;">你</span>' : ''}：
-                        <span>${escapeHtml(rep.text)}</span>
-                        <div style="font-size:9px;color:#bbb;text-align:right;">${rep.time || ''}</div>
+                        <span style="font-weight:700;color:${repIsSelf ? '#2e7d32' : '#900'};">${escapeHtml(repAuthor)}</span>
+                        ${repIsSelf ? '<span style="font-size:9px;background:#eaf5ea;color:#2e7d32;padding:1px 4px;border-radius:4px;margin-left:3px;">你</span>' : ''}：
+                        <span>${escapeHtml(repText)}</span>
+                        <div style="font-size:9px;color:#bbb;text-align:right;">${repTime || ''}</div>
                     </div>
-                `).join('') + `</div>`;
+                `}).join('') + `</div>`;
             }
 
             return `
             <div class="ao3-comment-item">
                 <div class="ao3-comment-header">
-                    <span class="ao3-comment-user">${escapeHtml(rev.author)}</span>
-                    <span style="font-size:10px;color:#aaa;">${rev.time || ''}</span>
+                    <span class="ao3-comment-user">${escapeHtml(rAuthor)}</span>
+                    <span style="font-size:10px;color:#aaa;">${rTime || ''}</span>
                 </div>
-                <div class="ao3-comment-text">${escapeHtml(rev.text)}</div>
+                <div class="ao3-comment-text">${escapeHtml(rText)}</div>
                 <div class="ao3-comment-actions">
                     <button class="btn-secondary small" onclick="openAo3ReplyModal('${work._id}', ${rIdx})">💬 回复</button>
                 </div>
@@ -1094,9 +1111,10 @@ async function generateNewBookFromAI(params = {}) {
         ${accountIdentityPrompt}
         ${povPrompt}
         ${promptGuide}
-        【唯一挚爱纯乙女铁律（最重要）】：
-        所有登场角色只能对女主角「${p.ytName}」产生爱意、守护或友谊！
-        绝对严禁描写任何两个男性角色之间的同性恋爱、伴侣关系、接吻、或BL拉郎倾向！如果设定中出现多名男性，他们之间必须是竞争对手或纯粹的兄弟情，绝不能互相爱慕！女主角为纯正女性，情感描写细腻动人。
+        【性别与情感绝对铁律（最重要）】：
+        1. 无论支持 GL(女同)、GB(女攻男受)、还是 BG(男女)，主角「${p.ytName}」绝对是纯正的女性（生理与心理皆为女性，绝无男性生殖器官或扶他特征）！
+        2. 所有登场角色只能对女主角「${p.ytName}」产生爱意、守护或友谊，女主角是绝对的情感核心！
+        3. 绝对严禁描写任何两个男性角色之间的同性恋爱、接吻或拉郎倾向！如果设定中出现多名男性，他们之间必须是竞争对手或纯粹的兄弟情！
         
         请严格按以下标签输出：
         [TITLE]书籍标题[/TITLE]
@@ -1199,9 +1217,9 @@ async function urgeContinueBookChapter(workId) {
         const sysPrompt = `
         你正在 AO3 网站上续写 MC 同人小说《${work.title}》（作者：${work.author}，CP: ${work.pairing || '无'}，简介: ${work.summary}）。
         ${povPrompt}
-        【唯一挚爱纯乙女铁律（最重要）】：
-        坚守纯正乙女女主唯一定位！所有登场男性必须只对女主产生情愫。
-        绝对禁止描写任何两个男性角色之间的同性恋情或拉郎暧昧！如果他们发生互动，只能是情敌竞争或纯纯的兄弟情！
+        【性别与情感铁律（最重要）】：
+        1. 坚守纯正女性主角定位（生理心理皆为女，绝无男性器官）。支持GL/GB/BG但女主是唯一核心！
+        2. 所有登场男性必须只对女主产生情愫。绝对禁止描写任何两个男性角色之间的同性恋情或拉郎暧昧！如果发生互动，只能是情敌竞争或纯粹的兄弟情。
         
         上一章结尾片段如下：
         “${lastSlice}”
@@ -1277,6 +1295,7 @@ async function generateAo3ReviewsByAI(workId) {
         const sysPrompt = `
         你正在模拟 AO3 网站《${work.title}》（CP: ${work.pairing || '无'}）评论区下的真实读者书评。
         ${accountReactionsPrompt}
+        【设定铁律】：本书的主角是生理及心理完全正常的女性。绝不存在男男暧昧。如果有读者在评论区磕男男CP，必须马上安排其他读者痛骂他们（比如回复“腐蟑螂别来沾边”、“别发癫”、“恶心”等词汇）！
         请生成 3 至 4 条读者长短不一的真实评论。表情只能使用标准 Emoji。
         格式要求（每行一条）：
         [REVIEW name=读者昵称]评论正文内容[/REVIEW]
@@ -1397,11 +1416,15 @@ function openAo3ReplyModal(workId, reviewIdx) {
     if (!work || !work.reviews || !work.reviews[reviewIdx]) return;
     const targetRev = work.reviews[reviewIdx];
     const currentAo3Name = (G.ao3User && G.ao3User.username) || G.player.ytName;
+    
+    // 容错防止旧版字符串导致崩溃
+    const targetRevText = typeof targetRev === 'string' ? targetRev : targetRev.text;
+    const targetRevAuthor = typeof targetRev === 'string' ? '匿名粉' : targetRev.author;
 
     openModal(`
-        <h3>💬 回复 @${escapeHtml(targetRev.author)}</h3>
+        <h3>💬 回复 @${escapeHtml(targetRevAuthor)}</h3>
         <div style="font-size:12px;color:#555;background:#f5eee1;padding:8px;border-radius:6px;margin-bottom:10px;">
-            原评：“${escapeHtml(targetRev.text)}”
+            原评：“${escapeHtml(targetRevText)}”
         </div>
         <div class="form-group">
             <textarea id="myAo3ReplyInput" rows="2" placeholder="回复该读者..."></textarea>
@@ -1422,29 +1445,32 @@ function openAo3ReplyModal(workId, reviewIdx) {
             btn.disabled = true; btn.textContent = '⏳ 审核中...';
             const vReason = await OtomeSecurityGuard.judgeSemanticViolation(text);
             if (vReason) {
-                if (!targetRev.replies) targetRev.replies = [];
-                targetRev.replies.push({
-                    author: currentAo3Name + ' (🚨违规回复)',
-                    text: text,
-                    isSelf: true,
-                    time: '待审取证'
-                });
-                autoSaveGame();
-
+                if (typeof targetRev === 'object') {
+                    if (!targetRev.replies) targetRev.replies = [];
+                    targetRev.replies.push({
+                        author: currentAo3Name + ' (🚨违规回复)',
+                        text: text,
+                        isSelf: true,
+                        time: '待审取证'
+                    });
+                    autoSaveGame();
+                }
                 closeModal();
-                OtomeSecurityGuard.triggerDeviceBan(vReason, `[AO3回复读者物证] 针对原评「${targetRev.text}」回复: ${text}`);
+                OtomeSecurityGuard.triggerDeviceBan(vReason, `[AO3回复读者物证] 针对原评「${targetRevText}」回复: ${text}`);
                 return;
             }
             btn.disabled = false; btn.textContent = origText;
         }
 
-        if (!targetRev.replies) targetRev.replies = [];
-        targetRev.replies.push({
-            author: currentAo3Name,
-            text,
-            isSelf: true,
-            time: `${new Date().toLocaleTimeString().slice(0, 5)}`
-        });
+        if (typeof targetRev === 'object') {
+            if (!targetRev.replies) targetRev.replies = [];
+            targetRev.replies.push({
+                author: currentAo3Name,
+                text,
+                isSelf: true,
+                time: `${new Date().toLocaleTimeString().slice(0, 5)}`
+            });
+        }
 
         closeModal();
         showToast('✅ 已回复该读者！', 'success');
@@ -1877,28 +1903,47 @@ function buildYtWatchHTML(videoId) {
         commentsHtml = `<div style="text-align:center;color:#999;font-size:12px;padding:20px 0;">视频刚发布，快点击下方「🎲 生成更多AI评论」或抢沙发！</div>`;
     } else {
         commentsHtml = video.comments.map((c, cIdx) => {
+            // ✅ 核心容错修复：防止以前的旧评论仅是一段纯文本，导致解析不到 user 与 content
+            let cUser = c.user || c.author;
+            let cText = c.content || c.text;
+            let cTime = c.time;
+            if (typeof c === 'string') {
+                cUser = null;
+                cText = c;
+                cTime = '';
+            }
+
             let repliesHtml = '';
             if (c.replies && c.replies.length) {
                 repliesHtml = `<div class="ao3-replies-list" style="border-left-color:#cc0000;">` + c.replies.map(rep => {
-                    const cleanRepAuthor = cleanYtUsername(rep.author);
-                    const cleanRepText = cleanYtCommentText(rep.text);
+                    let repUser = rep.author || rep.user;
+                    let repText = rep.text || rep.content;
+                    let repTime = rep.time;
+                    let repIsSelf = rep.isSelf;
+                    if (typeof rep === 'string') { repUser = null; repText = rep; repTime = ''; repIsSelf = false; }
+                    
+                    const cleanRepAuthor = cleanYtUsername(repUser);
+                    const cleanRepText = cleanYtCommentText(repText);
                     return `
                     <div class="ao3-reply-entry" style="background:#f4f4f4;">
-                        <span style="font-weight:700;color:${rep.isSelf ? '#2e7d32' : '#0f0f0f'};">@${escapeHtml(cleanRepAuthor)}</span>：
+                        <span style="font-weight:700;color:${repIsSelf ? '#2e7d32' : '#0f0f0f'};">@${escapeHtml(cleanRepAuthor)}</span>：
                         <span>${escapeHtml(cleanRepText)}</span>
-                        <div style="font-size:9px;color:#aaa;text-align:right;">${rep.time || ''}</div>
+                        <div style="font-size:9px;color:#aaa;text-align:right;">${repTime || ''}</div>
                     </div>`;
                 }).join('') + `</div>`;
             }
 
-            const cleanAuthor = cleanYtUsername(c.user || c.author);
-            const cleanText = cleanYtCommentText(c.content || c.text || '');
+            const cleanAuthor = cleanYtUsername(cUser);
+            const cleanText = cleanYtCommentText(cText || '');
+
+            // 过滤空评论内容（防止渲染出白板）
+            if (!cleanText) return '';
 
             return `
             <div class="ao3-comment-item" style="border-color:#eee;">
                 <div class="ao3-comment-header">
                     <span style="font-weight:700;font-size:12px;color:#0f0f0f;">@${escapeHtml(cleanAuthor)}</span>
-                    <span style="font-size:10px;color:#aaa;">${c.time || ''}</span>
+                    <span style="font-size:10px;color:#aaa;">${cTime || ''}</span>
                 </div>
                 <div class="ao3-comment-text">${escapeHtml(cleanText)}</div>
                 <div class="ao3-comment-actions">
@@ -1954,7 +1999,7 @@ function buildYtWatchHTML(videoId) {
 
         <div style="padding:12px;">
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                <span style="font-weight:700;font-size:14px;color:#0f0f0f;">评论 (${video.comments.length})</span>
+                <span style="font-weight:700;font-size:14px;color:#0f0f0f;">评论</span>
                 <button class="btn-primary small" id="ytWriteMyCommentBtn" style="margin:0;">✍️ 我要发言</button>
             </div>
             <div style="font-size:11px;color:#888;margin-bottom:10px;">
@@ -2228,8 +2273,9 @@ ${webSearchInfo ? `【当前互联网MC圈最新资讯/模组/热点参考】：
 2. 【全网顶流/模组/技术高玩】：知名的 MC 大主播、红石黑科技 UP、热门模组（如机械动力 Create、灾厄、冰与火等）试玩博主，或展现 Minecraft 最新版奇葩 Bug/特性的整活视频；
 3. 【关于主播本人（${playerName}）的切片/二创】：由粉丝、烤肉组或切片 UP 主上传的关于「${playerName}」的高光反杀剪辑、直播爆笑名场面切片、或针对 ${playerName} 操作的 Reaction（反应）视频！
 
-【🚨 严禁打破第四面墙】：
-这是一个真正的 YouTube 视频社区！严禁出现任何“乙女向/恋爱游戏预告”等词汇，所有视频必须是真实、地道的游戏实况、挑战、微电影、建筑展示或切片！
+【🚨 严禁打破第四面墙，绝不涉及男男拉郎】：
+1. 这是一个真正的 YouTube 视频社区！严禁出现任何“乙女向/恋爱游戏预告”等词汇，所有视频必须是真实、地道的游戏实况、挑战、微电影、建筑展示或切片！
+2. 绝对不允许出现男角色之间的拉郎CP、耽美BL、或男男同人切片！本圈子严打腐向言论！
 
 请生成 3 条推荐视频，严格遵循以下格式（每条以 [VIDEO] 开头，[/VIDEO] 结尾）：
 [VIDEO]
@@ -2446,19 +2492,14 @@ async function generateMoreYtCommentsByAI(videoId) {
         const sysPrompt = `
 你正在模拟 YouTube 游戏频道《${video.title}》（作者：${video.author || '游戏主播'}，内容概要：${video.summary || video.desc || '精彩MC实况分享'}）下方的海外及本土真实观众评论区。
 
-【🚨 严禁打破第四堵墙（绝对的世界观沉浸铁律）】：
-1. 世界观认知：这是一个真实的 Minecraft 游戏与 YouTube 创作者圈子！作者「${video.author || '主播'}」是一位生活在现实世界中的 Minecraft 游戏主播，视频是真实上传到油管的游戏作品！
-2. 绝对严禁打破次元壁！绝对禁止出现任何元游戏词汇，严禁提及：“乙女”、“乙女向”、“男主”、“女主”、“女主角”、“攻略难度”、“攻略男主”、“纸片人”、“鸢尾黎明”、“鸢尾老师”、“工作室”、“预约游戏”等词汇！
-3. 观众们并不知道也不在乎任何乙女属性，他们是在 YouTube 上看游戏实况或 Minecraft 创作视频的真实玩家！
-4. 评论内容必须是真实的油管玩家评论：
-   - 围绕视频内容（红石机关、末地反杀、建筑审美、走位技巧、PvP博弈等）；
-   - 对主播游戏操作与整蛊搞笑的调侃吐槽；
-   - 催更下期、纯路人被封面吸引圈粉、弹幕玩梗等。
-5. 构思 4 到 6 位生动的网友，名字必须像真实的 YouTube/Minecraft 活跃玩家（例如：末影猫猫、DreamWasTakenFan、Redstone_Pro、吃瓜第一线烤肉人、PixelKnight99 等真实网名），严禁使用 YouTuber_数字 或系统编号！
-6. 表情只允许使用标准 Emoji，严禁未闭合字符颜文字。
-7. 严格遵循以下输出格式（每行一条）：
+【🚨 严禁打破第四堵墙与网络喷子设定】：
+1. 这是一个真实的 Minecraft 游戏与 YouTube 创作者圈子！作者「${video.author || '主播'}」是一位纯正女性的主播，支持 GL、GB、BG。
+2. 绝对禁止打破次元壁出现“纸片人”、“乙女向”、“攻略”、“男主”、“鸢尾老师”等元游戏词汇！
+3. 观众只是纯正看实况的粉丝。评论必须聚焦：游戏操作、红石建筑、整活调侃、或者被惊艳到了。
+4. 【社区防线】：这个世界的网民对“磕男男CP/男男拉郎”极度厌恶反感！如果你模拟的 4-6 个网友中有人偶然发癫磕起了男男CP，必须立刻、马上安排另一条或多条网友评论来痛骂反击他们（如：“楼上腐蟑螂是不是看耽美给自己看傻了”、“有病吧恶心死我了”、“别在这发癫！”）！坚决捍卫纯正的环境。
+5. 名字必须像真实的油管活跃玩家（如：末影猫猫、DreamWasTakenFan、纯路人被封面吸引），严禁使用 YouTuber_数字。
+6. 严格遵循以下输出格式（每行一条）：
 [COMMENT user=网友昵称]评论正文[/COMMENT]
-8. 绝对不要在正文里包含“user=”或者角色前缀！
         `;
 
         const raw = await callAI([
@@ -2468,6 +2509,7 @@ async function generateMoreYtCommentsByAI(videoId) {
 
         if (!video.comments) video.comments = [];
         
+        // 更健壮的正则，兼顾各种可能没闭合的情况
         const re = /\[COMMENT(?:\s+user=|\s*:\s*)(["']?)([^\]"'\n]+)\1\]([\s\S]*?)(?:\[\/COMMENT\]|(?=\[COMMENT)|$)/gi;
         let m;
         let cCount = 0;
@@ -2486,13 +2528,15 @@ async function generateMoreYtCommentsByAI(videoId) {
             }
         }
 
+        // 强力兜底回退：如果 AI 完全没有按标签输出，那就按行读取
         if (cCount === 0 && raw.trim()) {
             const lines = raw.split('\n').filter(l => l.trim().length > 3);
             lines.forEach((l) => {
                 let parsedUser = null;
                 let parsedContent = l;
 
-                const nameMatch = l.match(/\[COMMENT\s+user=([^\]]+)\]/i) || l.match(/^([^:：]{2,16})[:：]\s*(.+)$/);
+                // 捕捉 [COMMENT user=XXX] 内容
+                const nameMatch = l.match(/\[COMMENT\s+user=([^\]]+)\](.*)/i) || l.match(/^([^:：]{2,16})[:：]\s*(.+)$/);
                 if (nameMatch) {
                     parsedUser = nameMatch[1];
                     parsedContent = nameMatch[2] || l;
@@ -2625,8 +2669,10 @@ function openYtReplyCommentModal(videoId, commentIdx) {
     }
 
     const targetComment = video.comments[commentIdx];
-    const displayTargetUser = cleanYtUsername(targetComment.user || targetComment.author);
-    const displayTargetText = cleanYtCommentText(targetComment.content || targetComment.text || '');
+    
+    // 容错修复旧字符串
+    const displayTargetUser = cleanYtUsername(typeof targetComment === 'string' ? '匿名粉' : (targetComment.user || targetComment.author));
+    const displayTargetText = cleanYtCommentText(typeof targetComment === 'string' ? targetComment : (targetComment.content || targetComment.text || ''));
     const currentName = (G.ytUser && G.ytUser.username) || G.player.ytName;
 
     openModal(`
@@ -2653,15 +2699,16 @@ function openYtReplyCommentModal(videoId, commentIdx) {
             btn.disabled = true; btn.textContent = '⏳ 审核中...';
             const vReason = await OtomeSecurityGuard.judgeSemanticViolation(replyText);
             if (vReason) {
-                if (!targetComment.replies) targetComment.replies = [];
-                targetComment.replies.push({
-                    author: currentName + ' (🚨违规回复)',
-                    text: replyText,
-                    isSelf: true,
-                    time: '待审取证'
-                });
-                autoSaveGame();
-
+                if (typeof targetComment === 'object') {
+                    if (!targetComment.replies) targetComment.replies = [];
+                    targetComment.replies.push({
+                        author: currentName + ' (🚨违规回复)',
+                        text: replyText,
+                        isSelf: true,
+                        time: '待审取证'
+                    });
+                    autoSaveGame();
+                }
                 closeModal();
                 OtomeSecurityGuard.triggerDeviceBan(vReason, `[油管回复他人物证] 针对原评「${displayTargetText}」回复: ${replyText}`);
                 return;
@@ -2669,13 +2716,15 @@ function openYtReplyCommentModal(videoId, commentIdx) {
             btn.disabled = false; btn.textContent = orig;
         }
 
-        if (!targetComment.replies) targetComment.replies = [];
-        targetComment.replies.push({
-            author: currentName,
-            text: replyText,
-            isSelf: true,
-            time: '刚刚'
-        });
+        if (typeof targetComment === 'object') {
+            if (!targetComment.replies) targetComment.replies = [];
+            targetComment.replies.push({
+                author: currentName,
+                text: replyText,
+                isSelf: true,
+                time: '刚刚'
+            });
+        }
 
         closeModal();
         showToast('✅ 回复发表成功！', 'success', 1200);
@@ -2689,7 +2738,7 @@ function openYtReplyCommentModal(videoId, commentIdx) {
                     const sys = `你正在模拟真实油管游戏玩家「${responder}」。Minecraft主播回复了你的评论：“${replyText}”。请给出风趣简短的接话，只使用标准Emoji表情，字数在30字以内，禁止输出任何标记代码。绝对严禁打破第四面墙，你就是一名看MC视频的普通观众！`;
                     const res = await callAI([{ role: 'system', content: sys }, { role: 'user', content: '请接话。' }], { maxTokens: 80, temperature: 0.9 });
                     const cleanReply = cleanYtCommentText(res);
-                    if (cleanReply) {
+                    if (cleanReply && typeof targetComment === 'object') {
                         targetComment.replies.push({
                             author: responder,
                             text: cleanReply,

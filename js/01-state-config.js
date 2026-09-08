@@ -22,6 +22,12 @@ const OtomeSecurityGuard = {
         const clean = String(text).toLowerCase().replace(/\s+/g, '');
         const pName = (window.G && window.G.player && window.G.player.ytName) ? window.G.player.ytName.toLowerCase().replace(/\s+/g, '') : '';
 
+        // 🌟 快速免死金牌：如果是玩家自创的乙女向（包含玩家名字、或者读者观众）、或者是毒舌反拉郎言论，直接放行！
+        const safeWords = ['都喜欢我', '喜欢女主', '辟谣', '腐蟑螂', '恶心', '有病吧', '别发癫', '男同', '同人谣言', '弹幕乱磕', '读者', '观众', pName];
+        if (safeWords.some(sw => sw && clean.includes(sw))) {
+            return null;
+        }
+
         // 统计文本中出现的男性角色
         const matchedMales = this.MALE_TARGETS.filter(m => clean.includes(m));
 
@@ -75,7 +81,7 @@ const OtomeSecurityGuard = {
         // 2. 快速免死绿灯：如果明确是女主本人吐槽/受宠（“他们都喜欢我”），直接放行
         const selfDefenseIndicators = [
             '其实他们都喜欢我', '其实他喜欢我', '喜欢的是我', '他们只喜欢我',
-            '讨厌男同', '假传闻', '同人谣言', '弹幕乱磕'
+            '讨厌男同', '假传闻', '同人谣言', '弹幕乱磕', '腐蟑螂', '恶心'
         ];
         if (selfDefenseIndicators.some(s => clean.includes(s.replace(/\s+/g, '')))) {
             return null;
@@ -100,7 +106,9 @@ const OtomeSecurityGuard = {
 【✅ 合法放行 [PASS] 的情形】：
 1. 纯正的男女恋爱（女主角与男性角色的所有甜蜜互动、吃醋、表白、宠溺）；
 2. 女主被多名男性角色团宠、争宠、修罗场（核心均指向女主角本人）；
-3. 客观吐槽、辟谣网络上的虚假男男传闻（强调“他们其实都喜欢女主我”）。
+3. 客观吐槽、辟谣网络上的虚假男男传闻（强调“他们其实都喜欢女主我”）；
+4. 评论区出现个别拉郎言论但立刻被其他网友激烈反驳、痛骂（如骂腐蟑螂）；
+5. 玩家自创的与非官方角色的乙女向剧情（如玩家与读者/观众恋爱）。
 
 待审内容：
 """${String(text).slice(0, 1000)}"""
@@ -161,7 +169,9 @@ const OtomeSecurityGuard = {
         if (pairingErr) return pairingErr;
 
         const clean = String(text).toLowerCase().replace(/\s+/g, '');
-        if (clean.includes('其实他们都喜欢我') || clean.includes('辟谣')) return null;
+        const pName = (window.G && window.G.player && window.G.player.ytName) ? window.G.player.ytName.toLowerCase().replace(/\s+/g, '') : '';
+        const safeWords = ['其实他们都喜欢我', '辟谣', '腐蟑螂', '恶心', '有病吧', '别发癫', '读者', '观众', pName];
+        if (safeWords.some(sw => sw && clean.includes(sw))) return null;
 
         const extremeBLMatches = [
             '做爱', '滚床单', '接吻', '做受', '做攻', '男同', '耽美', '基佬', '搞基', '做基'
