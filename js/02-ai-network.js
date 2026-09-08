@@ -1,5 +1,5 @@
 // js/02-ai-network.js
-// AI 模型设置模块（统一的 OpenAI 兼容接口 / 多平台联网搜索：博查、秘塔、Tavily / 多档案 / 纯乙女AI智能安全门禁）
+// AI 模型设置模块（统一的 OpenAI 兼容接口 / 多平台联网搜索含 Bing Local 免 Key / 纯乙女智能安全门禁）
 // ============================================================
 function escapeHtml(str) {
     return String(str == null ? '' : str).replace(/[&<>"']/g, c => ({
@@ -8,7 +8,7 @@ function escapeHtml(str) {
 }
 
 // ============================================================
-// 💭 思维链清洗工具（完全静默滤除，不展示思考过程框）
+// 💭 思维链清洗工具
 // ============================================================
 function stripThought(text) {
     if (!text) return '';
@@ -301,25 +301,22 @@ function bindModelSettingsUI(prefix) {
 }
 
 // ============================================================
-// 🔍 多平台联网搜索模块（博查 Bocha / 秘塔 Metaso / Tavily）
+// 🔍 多平台联网搜索模块（博查 Bocha / 秘塔 Metaso / Tavily / Bing Local 免Key直连）
 // ============================================================
 if (!G.search) {
     G.search = {
         enabled: false,
-        provider: 'bocha',
+        provider: 'bing_local',
         apiKey: '',
-        keys: {
-            bocha: '',
-            metaso: '',
-            tavily: ''
-        }
+        keys: { bocha: '', metaso: '', tavily: '' }
     };
 }
+// 初始化兼容旧数据
 if (!G.search.keys) {
     G.search.keys = {
         bocha: G.search.provider === 'bocha' ? (G.search.apiKey || '') : '',
         metaso: G.search.provider === 'metaso' ? (G.search.apiKey || '') : '',
-        tavily: (G.search.provider === 'tavily' || !G.search.provider) ? (G.search.apiKey || '') : ''
+        tavily: G.search.provider === 'tavily' ? (G.search.apiKey || '') : ''
     };
 }
 
@@ -341,25 +338,45 @@ function loadSearchConfig() {
     } catch (_) {}
 }
 
+// 🌐 统一多平台搜索网络调用
 async function webSearch(query, maxResults = 4) {
-    const provider = G.search.provider || 'bocha';
+    const provider = G.search.provider || 'bing_local';
+    
+    // 🌟 1. Bing (Local) 免 Key 直连爬取
+    if (provider === 'bing_local') {
+        const resp = await fetch('https://www.bing.com/search?q=' + encodeURIComponent(query));
+        if (!resp.ok) throw new Error(`Bing 搜索访问失败 (${resp.status})`);
+        const text = await resp.text();
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(text, 'text/html');
+        const results = [];
+        
+        doc.querySelectorAll('li.b_algo').forEach(el => {
+            const titleEl = el.querySelector('h2');
+            const descEl = el.querySelector('.b_caption p') || el.querySelector('.b_algoSlug') || el.querySelector('.b_lineclamp2') || el.querySelector('.b_lineclamp3') || el.querySelector('.b_lineclamp4');
+            const linkEl = el.querySelector('a');
+            if (titleEl && descEl) {
+                results.push({
+                    title: titleEl.innerText.trim(),
+                    content: descEl.innerText.trim(),
+                    url: linkEl ? linkEl.href : ''
+                });
+            }
+        });
+        
+        if (results.length === 0) throw new Error('Bing 未返回有效网页结果，可能是被验证码拦截或暂无收录。');
+        return { answer: '', results: results.slice(0, maxResults) };
+    }
+
     const key = ((G.search.keys && G.search.keys[provider]) || G.search.apiKey || '').trim();
+    if (!key) throw new Error(`请先填入 ${provider} 的 API Key`);
 
-    if (!key) throw new Error(`请先填入 ${provider === 'bocha' ? '博查 (Bocha)' : provider === 'metaso' ? '秘塔 (Metaso)' : 'Tavily'} 的 API Key`);
-
+    // 2. 🇨🇳 博查搜索 API
     if (provider === 'bocha') {
         const resp = await fetch('https://api.bochaai.com/v1/web-search', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${key}`
-            },
-            body: JSON.stringify({
-                query: query,
-                freshness: 'noLimit',
-                summary: true,
-                count: maxResults
-            })
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+            body: JSON.stringify({ query: query, freshness: 'noLimit', summary: true, count: maxResults })
         });
         if (!resp.ok) {
             const err = await resp.text();
@@ -369,27 +386,18 @@ async function webSearch(query, maxResults = 4) {
         const results = [];
         if (data.data && data.data.webPages && Array.isArray(data.data.webPages.value)) {
             data.data.webPages.value.forEach(item => {
-                results.push({
-                    title: item.name || item.title || '',
-                    content: item.summary || item.snippet || ''
-                });
+                results.push({ title: item.name || item.title || '', content: item.summary || item.snippet || '', url: item.url || '' });
             });
         }
         return { answer: '', results };
     }
 
+    // 3. 🇨🇳 秘塔 AI 搜索 API
     if (provider === 'metaso') {
         const resp = await fetch('https://metaso.cn/api/v1/search', {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': `Bearer ${key}`
-            },
-            body: JSON.stringify({
-                query: query,
-                mode: 'concise',
-                limit: maxResults
-            })
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
+            body: JSON.stringify({ query: query, mode: 'concise', limit: maxResults })
         });
         if (!resp.ok) {
             const err = await resp.text();
@@ -399,30 +407,24 @@ async function webSearch(query, maxResults = 4) {
         const results = [];
         if (Array.isArray(data.results)) {
             data.results.forEach(r => {
-                results.push({
-                    title: r.title || '',
-                    content: r.snippet || r.content || ''
-                });
+                results.push({ title: r.title || '', content: r.snippet || r.content || '', url: r.url || '' });
             });
         }
         return { answer: data.answer || '', results };
     }
 
+    // 4. 🌐 Tavily 国际通用搜索
     const resp = await fetch('https://api.tavily.com/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-        body: JSON.stringify({
-            query: query,
-            search_depth: 'basic',
-            max_results: maxResults,
-            include_answer: true,
-        }),
+        body: JSON.stringify({ query: query, search_depth: 'basic', max_results: maxResults, include_answer: true }),
     });
     if (!resp.ok) {
         const t = await resp.text();
         throw new Error(`Tavily 错误 (${resp.status})：${t.slice(0, 150)}`);
     }
-    return await resp.json();
+    const data = await resp.json();
+    return { answer: data.answer || '', results: data.results || [] };
 }
 
 function formatSearchContext(data) {
@@ -439,8 +441,9 @@ function formatSearchContext(data) {
     return { text, titles };
 }
 
+// 渲染多平台联网设置 UI（含测试预览面板）
 function buildSearchSettingsHTML(prefix) {
-    const curProvider = G.search.provider || 'bocha';
+    const curProvider = G.search.provider || 'bing_local';
     const isEnabled = !!G.search.enabled;
     const bochaKey = (G.search.keys && G.search.keys.bocha) || '';
     const metasoKey = (G.search.keys && G.search.keys.metaso) || '';
@@ -462,93 +465,168 @@ function buildSearchSettingsHTML(prefix) {
                 开启后，AI 将在生成剧情、发布视频与互动时，<b>主动向搜索引擎探查真实的 MC 最新模组、玩法技巧与主播动态</b>！
             </div>
 
+            <!-- 多平台单选勾号卡片 -->
             <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
+                
+                <!-- 平台 0: Bing Local (免配 Key) -->
+                <div class="search-provider-card" data-provider="bing_local" style="border:1.5px solid ${curProvider==='bing_local'?'var(--primary)':'#e0e0e0'};background:${curProvider==='bing_local'?'#f4fbf4':'#fff'};border-radius:10px;padding:10px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;">
+                    <div>
+                        <div style="font-size:13px;font-weight:700;color:#0277bd;">🔍 Bing (Local) <span style="font-size:10px;background:#e3f2fd;color:#0277bd;padding:1px 5px;border-radius:4px;margin-left:4px;">无需配置·直接可用</span></div>
+                        <div style="font-size:11px;color:#666;margin-top:2px;">使用系统本地直连必应搜索网页，完全免费免 Key</div>
+                    </div>
+                    <div style="font-size:18px;font-weight:900;color:var(--primary);width:24px;text-align:center;">${curProvider==='bing_local'?'✔':''}</div>
+                </div>
+
+                <!-- 平台 1: 博查搜索 -->
                 <div class="search-provider-card" data-provider="bocha" style="border:1.5px solid ${curProvider==='bocha'?'var(--primary)':'#e0e0e0'};background:${curProvider==='bocha'?'#f4fbf4':'#fff'};border-radius:10px;padding:10px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;">
                     <div>
-                        <div style="font-size:13px;font-weight:700;color:#1b5e20;">🇨🇳 博查搜索 (Bocha.cn) <span style="font-size:10px;background:#c8e6c9;color:#2e7d32;padding:1px 5px;border-radius:4px;margin-left:4px;">国内推荐·超快直连</span></div>
+                        <div style="font-size:13px;font-weight:700;color:#1b5e20;">🇨🇳 博查搜索 (Bocha.cn) <span style="font-size:10px;background:#c8e6c9;color:#2e7d32;padding:1px 5px;border-radius:4px;margin-left:4px;">超快直连 API</span></div>
                         <div style="font-size:11px;color:#666;margin-top:2px;">专为国内AI打造，直连各大MC论坛、维基百科与视频社群</div>
                     </div>
                     <div style="font-size:18px;font-weight:900;color:var(--primary);width:24px;text-align:center;">${curProvider==='bocha'?'✔':''}</div>
                 </div>
 
+                <!-- 平台 2: 秘塔搜索 -->
                 <div class="search-provider-card" data-provider="metaso" style="border:1.5px solid ${curProvider==='metaso'?'var(--primary)':'#e0e0e0'};background:${curProvider==='metaso'?'#f4fbf4':'#fff'};border-radius:10px;padding:10px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;">
                     <div>
-                        <div style="font-size:13px;font-weight:700;color:#1565c0;">🇨🇳 秘塔 AI 搜索 (Metaso) <span style="font-size:10px;background:#bbdefb;color:#1565c0;padding:1px 5px;border-radius:4px;margin-left:4px;">深度知识·机制全</span></div>
+                        <div style="font-size:13px;font-weight:700;color:#1565c0;">🇨🇳 秘塔 AI 搜索 (Metaso) <span style="font-size:10px;background:#bbdefb;color:#1565c0;padding:1px 5px;border-radius:4px;margin-left:4px;">深度知识 API</span></div>
                         <div style="font-size:11px;color:#666;margin-top:2px;">免翻顶流AI学术与资讯搜索引擎，适合搜硬核红石与冷门模组</div>
                     </div>
                     <div style="font-size:18px;font-weight:900;color:var(--primary);width:24px;text-align:center;">${curProvider==='metaso'?'✔':''}</div>
                 </div>
-
-                <div class="search-provider-card" data-provider="tavily" style="border:1.5px solid ${curProvider==='tavily'?'var(--primary)':'#e0e0e0'};background:${curProvider==='tavily'?'#f4fbf4':'#fff'};border-radius:10px;padding:10px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;">
-                    <div>
-                        <div style="font-size:13px;font-weight:700;color:#e65100;">🌐 Tavily Search <span style="font-size:10px;background:#ffe0b2;color:#e65100;padding:1px 5px;border-radius:4px;margin-left:4px;">海外通用</span></div>
-                        <div style="font-size:11px;color:#666;margin-top:2px;">面向海外生态，抓取 YouTube 原版资讯与海外主播推特</div>
-                    </div>
-                    <div style="font-size:18px;font-weight:900;color:var(--primary);width:24px;text-align:center;">${curProvider==='tavily'?'✔':''}</div>
-                </div>
             </div>
 
+            <!-- 当前选中平台设置与可视化测试区 -->
             <div id="${prefix}SearchKeyConfigArea" style="background:#f9fbf9;border:1px solid #e0ebe0;border-radius:10px;padding:12px;">
-                <div style="font-size:12.5px;font-weight:700;color:#333;margin-bottom:6px;" id="${prefix}SearchKeyLabel">
-                    🔑 当前正在配置的 Key：
+                
+                <div id="${prefix}NoKeyNeededText" style="display:${curProvider==='bing_local' ? 'block' : 'none'};font-size:12.5px;color:#0277bd;font-weight:700;background:#e3f2fd;padding:8px;border-radius:6px;margin-bottom:12px;">
+                    ✅ 此提供商无需额外配置，已可直接在下方测试使用。
                 </div>
-                <div style="display:flex;gap:6px;">
-                    <input type="password" id="${prefix}SearchApiKeyInput" placeholder="输入该平台的 API Key..." value="${escapeHtml(curProvider==='bocha'?bochaKey:curProvider==='metaso'?metasoKey:tavilyKey)}" style="flex:1;">
-                    <button type="button" class="upload-btn" id="${prefix}SearchTestBtn" style="white-space:nowrap;padding:0 12px;">🔌 连通测试</button>
+
+                <div id="${prefix}KeyInputGroup" style="display:${curProvider==='bing_local' ? 'none' : 'block'};margin-bottom:12px;">
+                    <div style="font-size:12.5px;font-weight:700;color:#333;margin-bottom:6px;" id="${prefix}SearchKeyLabel">
+                        🔑 当前正在配置的 Key：
+                    </div>
+                    <div style="display:flex;gap:6px;">
+                        <input type="password" id="${prefix}SearchApiKeyInput" placeholder="输入该平台的 API Key..." value="${escapeHtml(curProvider==='bocha'?bochaKey:curProvider==='metaso'?metasoKey:tavilyKey)}" style="flex:1;">
+                    </div>
+                    <div style="font-size:10.5px;color:#888;margin-top:6px;" id="${prefix}SearchHelpLink"></div>
                 </div>
-                <div style="font-size:10.5px;color:#888;margin-top:6px;" id="${prefix}SearchHelpLink"></div>
+
+                <!-- 🌟 全新搜索测试模块 -->
+                <div style="border-top:1px dashed #ccc;padding-top:10px;">
+                    <div style="font-size:12.5px;font-weight:700;color:#333;margin-bottom:6px;">测试搜索</div>
+                    <div style="display:flex;gap:6px;">
+                        <input type="text" id="${prefix}SearchTestKeyword" placeholder="输入测试关键词" style="flex:1;padding:8px;border-radius:8px;border:1px solid #ccc;font-size:13px;" value="Minecraft 1.21 更新">
+                        <button type="button" class="upload-btn" id="${prefix}SearchTestBtn" style="padding:0 18px;font-size:18px;color:var(--primary);background:#eaf5ea;border:1px solid #b8dbb8;border-radius:8px;cursor:pointer;">▶</button>
+                    </div>
+                    <div id="${prefix}SearchTestResultArea" style="margin-top:10px;max-height:220px;overflow-y:auto;font-size:12px;color:#333;border-radius:6px;">
+                        <!-- 搜索结果将展示在这里 -->
+                    </div>
+                </div>
             </div>
         </div>
     `;
 }
 
 function updateSearchHelpText(prefix) {
-    const prov = G.search.provider || 'bocha';
+    const prov = G.search.provider || 'bing_local';
+    
+    const keyInputGroup = document.getElementById(`${prefix}KeyInputGroup`);
+    const noKeyText = document.getElementById(`${prefix}NoKeyNeededText`);
     const linkEl = document.getElementById(`${prefix}SearchHelpLink`);
     const labelEl = document.getElementById(`${prefix}SearchKeyLabel`);
     const keyInput = document.getElementById(`${prefix}SearchApiKeyInput`);
 
-    if (labelEl) {
-        labelEl.innerHTML = `🔑 <b>${prov === 'bocha' ? '博查 (Bocha)' : prov === 'metaso' ? '秘塔 (Metaso)' : 'Tavily'}</b> 的 API Key：`;
-    }
-    if (keyInput) {
-        keyInput.value = (G.search.keys && G.search.keys[prov]) || '';
-    }
-    if (linkEl) {
-        if (prov === 'bocha') {
-            linkEl.innerHTML = `💡 前往 <a href="https://open.bochaai.com" target="_blank" style="color:var(--primary);font-weight:700;">open.bochaai.com</a> 免费申请（国内秒开，注册即送额度）`;
-        } else if (prov === 'metaso') {
-            linkEl.innerHTML = `💡 前往 <a href="https://metaso.cn" target="_blank" style="color:var(--primary);font-weight:700;">metaso.cn</a> 开发者平台获取搜索 Key`;
-        } else {
-            linkEl.innerHTML = `💡 前往 <a href="https://app.tavily.com" target="_blank" style="color:var(--primary);font-weight:700;">app.tavily.com</a> 获取国际版 Key`;
+    if (prov === 'bing_local') {
+        if (keyInputGroup) keyInputGroup.style.display = 'none';
+        if (noKeyText) noKeyText.style.display = 'block';
+    } else {
+        if (keyInputGroup) keyInputGroup.style.display = 'block';
+        if (noKeyText) noKeyText.style.display = 'none';
+        
+        if (labelEl) {
+            labelEl.innerHTML = `🔑 <b>${prov === 'bocha' ? '博查 (Bocha)' : prov === 'metaso' ? '秘塔 (Metaso)' : 'Tavily'}</b> 的 API Key：`;
+        }
+        if (keyInput) {
+            keyInput.value = (G.search.keys && G.search.keys[prov]) || '';
+        }
+        if (linkEl) {
+            if (prov === 'bocha') {
+                linkEl.innerHTML = `💡 前往 <a href="https://open.bochaai.com" target="_blank" style="color:var(--primary);font-weight:700;">open.bochaai.com</a> 免费申请（国内秒开，注册即送额度）`;
+            } else if (prov === 'metaso') {
+                linkEl.innerHTML = `💡 前往 <a href="https://metaso.cn" target="_blank" style="color:var(--primary);font-weight:700;">metaso.cn</a> 开发者平台获取搜索 Key`;
+            } else {
+                linkEl.innerHTML = `💡 前往 <a href="https://app.tavily.com" target="_blank" style="color:var(--primary);font-weight:700;">app.tavily.com</a> 获取国际版 Key`;
+            }
         }
     }
 }
 
+// 🌟 所见即所得测试面板核心渲染逻辑
 async function testWebSearch(prefix) {
     applySearchConfigFromUI(prefix);
-    const prov = G.search.provider || 'bocha';
+    const prov = G.search.provider || 'bing_local';
     const key = (G.search.keys && G.search.keys[prov]) || '';
-    if (!key) { showToast(`⚠️ 请先填写 ${prov} 的 API Key`); return; }
+    
+    if (prov !== 'bing_local' && !key) { 
+        showToast(`⚠️ 请先填写 ${prov} 的 API Key`); 
+        return; 
+    }
+
+    const keyword = document.getElementById(`${prefix}SearchTestKeyword`)?.value.trim();
+    if (!keyword) { 
+        showToast('请输入测试关键词'); 
+        return; 
+    }
 
     const btn = $(`${prefix}SearchTestBtn`);
-    const originalText = btn.textContent;
-    btn.disabled = true; btn.textContent = '⏳ 测试中...';
+    const resArea = $(`${prefix}SearchTestResultArea`);
+    const originalHTML = btn.innerHTML;
+    btn.disabled = true; 
+    btn.innerHTML = '⏳';
+    resArea.innerHTML = '<div style="color:#666;text-align:center;padding:20px;background:#f5f5f5;border-radius:8px;">正在飞速搜索中，请稍候...</div>';
+    
     try {
-        const data = await webSearch('Minecraft 最新更新与模组', 2);
+        const data = await webSearch(keyword, 4);
         const count = (data.results || []).length;
-        showToast(`✅ ${prov} 联网搜索测试成功！已检索到 ${count} 条最新结果`, 'success', 2500);
+        
+        let html = '';
+        if(count === 0) {
+            html = '<div style="color:#999;text-align:center;padding:20px;background:#f5f5f5;border-radius:8px;">未能搜索到相关结果，请换个关键词试试</div>';
+        } else {
+            data.results.forEach((r, idx) => {
+                html += `
+                <div style="margin-bottom:8px;padding:10px;border:1px solid #e0e0e0;border-radius:8px;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+                    <div style="display:flex;gap:8px;align-items:flex-start;">
+                        <span style="color:#1976d2;font-weight:900;font-size:14px;padding-top:2px;">${idx+1}</span>
+                        <div style="flex:1;min-width:0;">
+                            <div style="font-weight:700;color:#1e293b;margin-bottom:2px;font-size:13.5px;display:flex;justify-content:space-between;">
+                                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(r.title)}</span>
+                                <a href="${escapeHtml(r.url || '#')}" target="_blank" style="color:#999;text-decoration:none;flex-shrink:0;">↗</a>
+                            </div>
+                            <div style="font-size:10px;color:#1976d2;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(r.url || '')}</div>
+                            <div style="color:#555;line-height:1.5;font-size:12px;">${escapeHtml(r.content)}</div>
+                        </div>
+                    </div>
+                </div>`;
+            });
+        }
+        resArea.innerHTML = html;
+        showToast(`✅ 测试成功！已检索到 ${count} 条结果`, 'success', 2000);
     } catch (e) {
-        showToast('❌ 测试失败：' + e.message, 'error', 3500);
+        resArea.innerHTML = `<div style="color:#c62828;padding:15px;background:#ffebee;border-radius:8px;border:1px solid #ffcdd2;">❌ 测试失败：<br>${escapeHtml(e.message)}</div>`;
+        showToast('❌ 测试失败，请查看报错详情', 'error', 3500);
     } finally {
-        btn.disabled = false; btn.textContent = originalText;
+        btn.disabled = false; 
+        btn.innerHTML = originalHTML;
     }
 }
 
 function applySearchConfigFromUI(prefix) {
-    const prov = G.search.provider || 'bocha';
+    const prov = G.search.provider || 'bing_local';
     const keyEl = $(`${prefix}SearchApiKeyInput`);
-    if (keyEl) {
+    if (keyEl && prov !== 'bing_local') {
         const v = keyEl.value.trim();
         if (!G.search.keys) G.search.keys = {};
         G.search.keys[prov] = v;
@@ -568,6 +646,7 @@ function bindSearchSettingsUI(prefix) {
 
     updateSearchHelpText(prefix);
 
+    // 平台卡片勾选切换
     container.querySelectorAll('.search-provider-card').forEach(card => {
         card.onclick = () => {
             applySearchConfigFromUI(prefix);
@@ -583,7 +662,7 @@ function bindSearchSettingsUI(prefix) {
             });
 
             updateSearchHelpText(prefix);
-            showToast(`已选中 ${prov === 'bocha' ? '博查搜索' : prov === 'metaso' ? '秘塔搜索' : 'Tavily'}`, 'info', 1200);
+            showToast(`已选中 ${prov === 'bing_local' ? 'Bing Local' : prov === 'bocha' ? '博查搜索' : prov === 'metaso' ? '秘塔搜索' : 'Tavily'}`, 'info', 1200);
         };
     });
 
@@ -599,6 +678,12 @@ function bindSearchSettingsUI(prefix) {
 
     $(`${prefix}SearchApiKeyInput`)?.addEventListener('change', () => applySearchConfigFromUI(prefix));
     $(`${prefix}SearchTestBtn`)?.addEventListener('click', () => testWebSearch(prefix));
+    $(`${prefix}SearchTestKeyword`)?.addEventListener('keydown', (e) => {
+        if(e.key === 'Enter') {
+            e.preventDefault();
+            testWebSearch(prefix);
+        }
+    });
 }
 
 function openWebSearchSettingsModal() {
@@ -742,7 +827,6 @@ async function callAI(messages, options = {}) {
             content = tkOpen + '\n' + reasoning + '\n' + tkClose + '\n\n' + content;
         }
 
-        // 输出层轻量兜底（由于第一阶段 checkViolation 已增加了“免死金牌”机制，可以直接同步调用，无需造成额外的语义 Token 开销）
         if (typeof OtomeSecurityGuard !== 'undefined') {
             const outViolation = OtomeSecurityGuard.checkViolation(stripThought(content));
             if (outViolation) {

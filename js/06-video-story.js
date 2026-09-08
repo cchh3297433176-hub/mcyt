@@ -1,5 +1,5 @@
 // js/06-video-story.js
-// 视频制作（评论由 AI 实时生成）与多层级记忆联动的核心叙事引擎（按天数结构化、上帝视角实体名归纳、更名历史追踪）
+// 视频制作（评论由 AI 实时生成）与多层级记忆联动的核心叙事引擎（纯粹AI内容编辑、按天数结构化、更名追踪）
 // ============================================================
 function openVideoModal() {
     const availableAP = G.actionPoints;
@@ -297,14 +297,14 @@ function buildSystemPrompt() {
     const p = G.player;
     const activeStoryHistory = (G.storyHistory || []).filter(h => !h.archived);
 
-    // 1. 最近剧情回顾：严格注明具体天数与时段
+    // 1. 最近剧情回顾
     const historySummary = activeStoryHistory.slice(-8).map(h =>
         h.truncated
             ? `[第${h.day}天 · ${getTimeSlotName(h.time)}] （内容不完整已忽略）`
             : `[第${h.day}天 · ${getTimeSlotName(h.time)}] ${stripThought(h.text).slice(0, 130)}...`
     ).join('\n');
 
-    // 2. 全局重大记忆库：按日期精确归类发给 AI
+    // 2. 全局长效记忆库：按日期精确归类发给 AI
     const memoryByDays = {};
     (G.memorySummaries || []).forEach(m => {
         const d = m.day || 1;
@@ -317,7 +317,7 @@ function buildSystemPrompt() {
         return `【📅 游戏第 ${d} 天纪事档案】：\n` + memoryByDays[d].map(txt => `• ${txt}`).join('\n');
     }).join('\n\n');
 
-    // 3. 更名历史履历追踪（防止改名后 AI 产生认知割裂）
+    // 3. 更名历史履历追踪
     let nameHistoryNotice = '';
     if (p._nameHistory && Array.isArray(p._nameHistory) && p._nameHistory.length > 0) {
         nameHistoryNotice = `【🚨 核心姓名与更名履历档案】：
@@ -340,7 +340,7 @@ function buildSystemPrompt() {
         return `[群聊「${grp ? grp.name : gid}」纪要]: ${stripThought(text)}`;
     }).join('\n');
 
-    // 6. 回忆录里程碑：严格按天数前缀
+    // 6. 回忆录里程碑
     const memoirRecent = (G.memoir || []).slice(-12).map(m =>
         `[第${m.day}天]: ${m.event} (${m.details})`
     ).join('\n');
@@ -527,7 +527,7 @@ async function generateStory(tag, userPrompt, useSearch = false, replaceBlock = 
 }
 
 // ============================================================
-// ✏️ 编辑与管理：全面支持所有 AI 生成文章与记忆净化
+// ✏️ 编辑与管理：纯粹专注于 AI 生成内容/文章（移走记忆总结，彻底划清职责）
 // ============================================================
 function refreshStoryBlockDOM(entry) {
     const block = dom.storyArea ? dom.storyArea.querySelector(`.story-block[data-story-id="${entry._id}"]`) : document.querySelector(`.story-block[data-story-id="${entry._id}"]`);
@@ -561,7 +561,7 @@ function buildUnifiedAIEntryHTML(item) {
     </div>`;
 }
 
-function openEditContentModal(defaultTab = 'allAI') {
+function openEditContentModal() {
     const allAIItems = [];
 
     // 1. 主线剧情正文
@@ -647,65 +647,24 @@ function openEditContentModal(defaultTab = 'allAI') {
 
     allAIItems.sort((a, b) => b.order - a.order);
 
-    const summaryEntries = [...(G.memorySummaries || [])].reverse();
-
+    // 🌟 纯粹化设计：只保留 AI 生成内容编辑器，移走记忆标签！
     const html = `
-    <h3 style="margin-bottom:10px;">✏️ 编辑与管理</h3>
-    <div class="btn-row" style="margin-bottom:12px;">
-        <button class="btn-secondary small" id="editTabAIBtn" style="flex:1;">🤖 AI 生成的内容/文章（<span id="aiContentCount">${allAIItems.length}</span>）</button>
-        <button class="btn-secondary small" id="editTabSummaryBtn" style="flex:1;">🧠 统一记忆总结（<span id="summaryContentCount">${summaryEntries.length}</span>）</button>
+    <h3 style="margin-bottom:6px;">✏️ 编辑与管理 AI 生成内容</h3>
+    <div style="font-size:12px;color:#666;margin-bottom:12px;">
+        可自由修改或删除 AI 生成的主线剧情、同人小说、油管脚本、朋友圈动态与聊天内容（共 <span id="aiContentCount">${allAIItems.length}</span> 条）：
     </div>
-    <div id="editTabAI" style="max-height:58vh;overflow-y:auto;">
-        ${allAIItems.length ? allAIItems.map(item => buildUnifiedAIEntryHTML(item)).join('') : '<p style="font-size:12px;color:#999;text-align:center;padding:20px;">暂无生成文章或记录</p>'}
+    <div id="editTabAI" style="max-height:60vh;overflow-y:auto;padding-right:2px;">
+        ${allAIItems.length ? allAIItems.map(item => buildUnifiedAIEntryHTML(item)).join('') : '<p style="font-size:12px;color:#999;text-align:center;padding:30px;">暂无 AI 生成的文章或记录</p>'}
     </div>
-    <div id="editTabSummary" style="max-height:58vh;overflow-y:auto;display:none;">
-        ${summaryEntries.length ? summaryEntries.map(e => {
-            const sumId = e.id || e._id || (typeof e === 'string' ? e : 'sm_' + Math.random());
-            const rawText = stripThought(e.text || e);
-            return `
-            <div class="edit-entry" data-id="${escapeHtml(sumId)}" data-type="summary" style="margin-bottom:8px;border:1px solid rgba(30,60,30,.12);border-radius:10px;background:#fff;overflow:hidden;">
-                <div class="edit-entry-header" style="cursor:pointer;padding:10px 12px;background:#f8faf8;display:flex;justify-content:space-between;align-items:center;">
-                    <div style="flex:1;min-width:0;">
-                        <div style="font-size:12.5px;font-weight:700;color:#166534;">🧠 全局长效记忆 · 游戏第 ${e.day || 1} 天</div>
-                        <div class="edit-entry-preview" style="font-size:12px;color:#777;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(rawText.slice(0, 60))}...</div>
-                    </div>
-                    <span class="chevron" style="color:#999;font-size:12px;">▼</span>
-                </div>
-                <div class="edit-entry-body" style="display:none;padding:10px 12px;border-top:1px solid rgba(30,60,30,.06);">
-                    <div style="font-size:11px;color:#888;margin-bottom:6px;">记忆正文（严格以上帝视角实体名记录）：</div>
-                    <textarea class="edit-textarea" style="width:100%;min-height:110px;padding:8px;border-radius:8px;border:1.5px solid #cbd5e1;background:#fff;color:#1e293b;font-size:13px;font-family:inherit;line-height:1.6;resize:vertical;box-sizing:border-box;">${escapeHtml(rawText)}</textarea>
-                    <div class="btn-row" style="margin-top:8px;display:flex;gap:6px;justify-content:flex-end;">
-                        <button class="btn-secondary edit-del-btn" style="color:#e53935;border-color:#ffcdd2;background:#ffebee;padding:6px 12px;font-size:12px;margin-right:auto;">🗑️ 删除此条</button>
-                        <button class="btn-secondary edit-cancel-btn" style="padding:6px 12px;font-size:12px;">取消</button>
-                        <button class="btn-primary edit-save-btn" style="padding:6px 14px;font-size:12px;background:#16a34a;">💾 保存修改</button>
-                    </div>
-                </div>
-            </div>
-            `;
-        }).join('') : '<p style="font-size:12px;color:#999;text-align:center;padding:20px;">暂无记忆总结</p>'}
-    </div>
-    <div class="btn-row" style="margin-top:12px;">
-        <button class="btn-secondary" onclick="closeModal()">关闭</button>
+    <div class="btn-row" style="margin-top:14px;">
+        <button class="btn-secondary" onclick="closeModal()" style="width:100%;">关闭</button>
     </div>
     `;
     openModal(html);
 
     const aiTab = document.getElementById('editTabAI');
-    const summaryTab = document.getElementById('editTabSummary');
-    const aiBtn = document.getElementById('editTabAIBtn');
-    const summaryBtn = document.getElementById('editTabSummaryBtn');
 
-    function switchView(tab) {
-        aiTab.style.display = tab === 'allAI' ? 'block' : 'none';
-        summaryTab.style.display = tab === 'summary' ? 'block' : 'none';
-        aiBtn.style.opacity = tab === 'allAI' ? '1' : '.55';
-        summaryBtn.style.opacity = tab === 'summary' ? '1' : '.55';
-    }
-    aiBtn.addEventListener('click', () => switchView('allAI'));
-    summaryBtn.addEventListener('click', () => switchView('summary'));
-    switchView(defaultTab);
-
-    document.querySelectorAll('.edit-entry').forEach(el => {
+    aiTab.querySelectorAll('.edit-entry').forEach(el => {
         const header = el.querySelector('.edit-entry-header');
         const body = el.querySelector('.edit-entry-body');
         const chevron = el.querySelector('.chevron');
@@ -722,6 +681,7 @@ function openEditContentModal(defaultTab = 'allAI') {
             chevron.textContent = '▼';
         });
 
+        // 🗑️ 删除此条记录
         el.querySelector('.edit-del-btn')?.addEventListener('click', (e) => {
             e.stopPropagation();
             const id = el.dataset.id;
@@ -762,29 +722,21 @@ function openEditContentModal(defaultTab = 'allAI') {
                     if (cIdx !== -1) G.chatHistory[npcId].splice(cIdx, 1);
                     if (G.currentChatNpc === npcId && typeof renderSocialPanel === 'function') renderSocialPanel();
                 }
-            } else if (type === 'summary') {
-                if (G.memorySummaries) {
-                    const smIdx = G.memorySummaries.findIndex(m => (m.id || m._id) === id || m === id || m.text === id);
-                    if (smIdx !== -1) G.memorySummaries.splice(smIdx, 1);
-                }
             }
 
             el.remove();
             showToast('🗑️ 该条记录已成功删除', 'info', 1500);
 
             const curAiLeft = aiTab.querySelectorAll('.edit-entry').length;
-            const curSumLeft = summaryTab.querySelectorAll('.edit-entry').length;
             const countEl = document.getElementById('aiContentCount');
             if (countEl) countEl.textContent = curAiLeft;
-            const sumCountEl = document.getElementById('summaryContentCount');
-            if (sumCountEl) sumCountEl.textContent = curSumLeft;
 
-            if (curAiLeft === 0) aiTab.innerHTML = '<p style="font-size:12px;color:#999;text-align:center;padding:20px;">暂无生成记录</p>';
-            if (curSumLeft === 0) summaryTab.innerHTML = '<p style="font-size:12px;color:#999;text-align:center;padding:20px;">暂无记忆总结</p>';
+            if (curAiLeft === 0) aiTab.innerHTML = '<p style="font-size:12px;color:#999;text-align:center;padding:30px;">暂无 AI 生成记录</p>';
 
             autoSaveGame();
         });
 
+        // 💾 保存修改
         el.querySelector('.edit-save-btn')?.addEventListener('click', (e) => {
             e.stopPropagation();
             const id = el.dataset.id;
@@ -824,16 +776,6 @@ function openEditContentModal(defaultTab = 'allAI') {
                     msg.text = newText;
                     if (G.currentChatNpc === npcId && typeof renderSocialPanel === 'function') renderSocialPanel();
                 }
-            } else if (type === 'summary') {
-                const sm = (G.memorySummaries || []).find(m => (m.id || m._id) === id || m === id || m.text === id);
-                if (sm) {
-                    if (typeof sm === 'string') {
-                        const sIdx = G.memorySummaries.indexOf(sm);
-                        G.memorySummaries[sIdx] = newText;
-                    } else {
-                        sm.text = newText;
-                    }
-                }
             }
 
             el.querySelector('.edit-entry-preview').textContent = newText.slice(0, 65) + (newText.length > 65 ? '...' : '');
@@ -844,16 +786,16 @@ function openEditContentModal(defaultTab = 'allAI') {
         });
     });
 }
-$('editContentBtn')?.addEventListener('click', () => openEditContentModal('allAI'));
+$('editContentBtn')?.addEventListener('click', () => openEditContentModal());
 
 // ============================================================
-// 🧠 剧情自动归档与检测（🌟 核心铁律：上帝视角、严格实体名、按日期精准分块）
+// 🧠 剧情自动归档与检测（结合记忆配置的阈值驱动）
 // ============================================================
 async function maybeAutoSummarize() {
     const s = G.memoryConfig || {};
-    if (!s.enabled) return;
+    if (s.enabled === false) return;
     const active = (G.storyHistory || []).filter(h => !h.archived);
-    const threshold = s.defaultThreshold || 10;
+    const threshold = s.globalThreshold || s.defaultThreshold || 10;
     const keepRecent = s.defaultKeepRecent || 5;
 
     if (active.length < threshold || G._autoSummarizing) return;
@@ -864,7 +806,6 @@ async function maybeAutoSummarize() {
         const toSummarize = active.slice(0, Math.max(0, active.length - keepRecent));
         if (!toSummarize.length) return;
 
-        // 获取归档涉及的起始和结束天数
         const startDay = toSummarize[0]?.day || G.day;
         const endDay = toSummarize[toSummarize.length - 1]?.day || G.day;
         const daySpanLabel = (startDay === endDay) ? `第${startDay}天` : `第${startDay}~${endDay}天`;

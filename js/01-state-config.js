@@ -9,74 +9,105 @@ const CONFIG = {
 };
 
 // ============================================================
-// 🌸 纯乙女向游戏安全守卫引擎（AI 智能语义意图审核、特赦令牌与防误封系统）
+// 🌸 纯乙女向游戏安全守卫引擎（AI 智能语义意图深度裁决、防卸载持久化封锁与特赦系统）
 // ============================================================
 const OtomeSecurityGuard = {
     ADMIN_SECRET_KEY: 'iris2026',
 
-    // 仅用于快速粗筛的可疑线索（不代表直接违规，只触发智能意图分析）
-    SUSPECT_HINTS: [
-        '男同', '搞基', '做基', '基佬', '耽美', 'bl', '攻受', '男男', '出柜',
-        '做受', '做攻', '接吻', '亲嘴', '上床', '表白', '情侣', '两口子', '结婚', '谈恋爱'
-    ],
+    MALE_TARGETS: ['groxmc', 'grox', 'twixxel', 'xqree', 'dream', 'thatmob', 'whispy'],
 
-    TARGET_MALE_NPCS: ['groxmc', 'grox', 'twixxel', 'xqree', 'dream', 'thatmob', 'whispy'],
-
-    // 快速轻量筛选：判断是否需要唤醒 AI 语义意图裁判
-    hasSuspectElements(text) {
-        if (!text) return false;
+    // 快速启发式特征：检查是否包含两个男角色同时出现且带有伴侣/恋爱标记
+    detectMaleMalePairingPattern(text) {
+        if (!text) return null;
         const clean = String(text).toLowerCase().replace(/\s+/g, '');
-        return this.SUSPECT_HINTS.some(h => clean.includes(h));
+        const pName = (window.G && window.G.player && window.G.player.ytName) ? window.G.player.ytName.toLowerCase().replace(/\s+/g, '') : '';
+
+        // 统计文本中出现的男性角色
+        const matchedMales = this.MALE_TARGETS.filter(m => clean.includes(m));
+
+        // 如果至少出现了两个不同的男性角色
+        if (matchedMales.length >= 2) {
+            // 伴侣、恋爱、拉郎词汇
+            const romanceHints = [
+                '×', 'x', '*', '/', '爱巢', '妻子', '老婆', '丈夫', '老公', '做爱', '上床',
+                '亲吻', '接吻', '情侣', '两口子', '谈恋爱', '在一起', 'cp', '攻受', '男男',
+                '宿敌变妻子', '结婚', '相爱', '同居', '甜文', '肉文', '调教', '同人'
+            ];
+
+            const hasRomance = romanceHints.some(rh => clean.includes(rh));
+            // 如果同时不包含女主角本人作为 CP 方（或者即使有女主，但明显是在撮合这两个男角色）
+            if (hasRomance) {
+                // 如果直接出现 A x B 或 A/B 格式
+                for (let i = 0; i < matchedMales.length; i++) {
+                    for (let j = 0; j < matchedMales.length; j++) {
+                        if (i === j) continue;
+                        const m1 = matchedMales[i];
+                        const m2 = matchedMales[j];
+                        if (clean.includes(`${m1}×${m2}`) || clean.includes(`${m1}x${m2}`) || 
+                            clean.includes(`${m1}/${m2}`) || clean.includes(`${m1}*${m2}`) ||
+                            clean.includes(`${m1}和${m2}谈恋爱`) || clean.includes(`${m1}和${m2}是夫妻`) ||
+                            clean.includes(`${m1}是${m2}的妻子`) || clean.includes(`${m2}是${m1}的妻子`)) {
+                            return `违背纯乙女铁律：严禁男男角色配对拉郎（${m1} 与 ${m2}）！`;
+                        }
+                    }
+                }
+
+                // 启发式命中：两个男角色与恋爱词汇同时出现且缺乏对女主的从属
+                if (!clean.includes('都喜欢我') && !clean.includes('喜欢女主') && !clean.includes('辟谣')) {
+                    return `违背纯乙女铁律：检测到攻略角色（${matchedMales.join('、')}）之间存在非纯乙女向同性恋爱/暧昧倾向！`;
+                }
+            }
+        }
+        return null;
     },
 
-    // 🌟 核心：AI 智能语义意图审查（彻底解决“他们男同文多但其实喜欢我”等误判）
-    async judgeSemanticViolation(text, contextMessages = [], isOutput = false) {
+    // 🌟 核心：AI 智能语义意图审查（彻底杜绝夹心/拉郎漏网，同时保护正常女主自豪吐槽）
+    async judgeSemanticViolation(text, contextMessages = []) {
         if (!text) return null;
         const clean = String(text).toLowerCase().replace(/\s+/g, '');
 
-        // 1. 快速免死绿灯：如果明确包含女主中心/全员爱我的语境，直接放行
-        const pName = (window.G && window.G.player && window.G.player.ytName) ? window.G.player.ytName.toLowerCase() : '';
+        // 1. 优先执行男性角色互配特征检查（例如 Groxmc x Twixxel 宿敌是妻子）
+        const patternReason = this.detectMaleMalePairingPattern(text);
+        if (patternReason) {
+            return patternReason;
+        }
+
+        // 2. 快速免死绿灯：如果明确是女主本人吐槽/受宠（“他们都喜欢我”），直接放行
         const selfDefenseIndicators = [
-            '其实他们都喜欢我', '其实他喜欢我', '喜欢的是我', '他们喜欢我',
-            '辟谣', '无语', '讨厌男同', '吃醋', '假传闻', '同人谣言', '弹幕乱磕'
+            '其实他们都喜欢我', '其实他喜欢我', '喜欢的是我', '他们只喜欢我',
+            '讨厌男同', '假传闻', '同人谣言', '弹幕乱磕'
         ];
         if (selfDefenseIndicators.some(s => clean.includes(s.replace(/\s+/g, '')))) {
             return null;
         }
 
-        // 2. 若完全不含敏感元素，0开销极速放行
-        if (!this.hasSuspectElements(text)) {
-            return null;
-        }
-
-        // 3. 准备调用 AI 进行语义意图分析
+        // 3. 准备调用 AI 进行深度意图裁决
         if (!window.G || !window.G.ai || !window.G.ai.apiKey) {
-            // 如果尚未配置 API，降级为宽松的同步核查，避免卡死
             return this.checkViolation(text);
         }
 
         try {
-            const auditSysPrompt = `你是一名专业、公正的乙女向游戏内容安全审核员。
-游戏核心原则：【纯正乙女向】（所有男性攻略角色只能爱慕女主角一人，严禁出现男男同性恋爱/BL拉郎）。
+            const auditSysPrompt = `你是一名捍卫【纯正女性向（纯乙女）】游戏铁律的安全审核员。
+核心产品定位：【纯正乙女向】——所有男性角色只能倾心、守护、爱慕女主角一人。严禁男男同性恋、耽美BL、男性角色互配拉郎、男男暧昧、或男男同人！
 
-【请仔细甄别用户的真实心理意图】：
-【✅ 合法放行判定标准】：
-1. 玩家在客观提及外界同人谣言、网络八卦，但立足点是“辟谣”或“其实男主们都喜欢女主我”；
-   例如：“他们两个的男同文很多，但是其实他们都喜欢我” -> 绝对合法！这是典型的乙女反向自豪与调侃！
-2. 玩家吐槽、吃醋、抱怨弹幕乱拉郎配；
-3. 纯正的男女主乙女向恋爱、撒娇、互动、吃醋。
+【判断准则】：
+【🚨 必须判定违规 [VIOLATION] 的情形】：
+1. 涉及两个男性角色互为 CP（例如：A×B、某男主是某男主的妻子/伴侣/爱人/宿敌情侣）；
+2. 描写、要求生成、或者设定两个男性角色之间的同性恋爱、接吻、上床、亲密情感羁绊；
+3. 试图篡改主角性别为男性从事同性恋爱；
+4. 任何形式的男男同人小说大纲、剧情梗概。
 
-【🚨 判定违规判定标准】：
-1. 玩家主动下达指令要求两个男性角色之间互相表白、恋爱、接吻、暧昧、上床或做爱；
-2. 玩家主动长篇细致描写两名男性NPC之间的同性性张力与同性恋爱过程；
-3. 玩家刻意篡改主角性别为男性以进行男男恋爱。
+【✅ 合法放行 [PASS] 的情形】：
+1. 纯正的男女恋爱（女主角与男性角色的所有甜蜜互动、吃醋、表白、宠溺）；
+2. 女主被多名男性角色团宠、争宠、修罗场（核心均指向女主角本人）；
+3. 客观吐槽、辟谣网络上的虚假男男传闻（强调“他们其实都喜欢女主我”）。
 
 待审内容：
 """${String(text).slice(0, 1000)}"""
 
-请判断该内容是否存在真实的违规拉郎意图：
-- 如果没有违规意图（包括吐槽、辟谣、正常剧情探讨），请只输出：[PASS]
-- 如果确凿违规（主动撮合/描写男男恋爱），请输出：[VIOLATION:具体的违规原因]`;
+请输出裁决：
+- 若违背纯乙女原则（存在男男拉郎/男性互配/耽美恋情），请立即输出：[VIOLATION:具体原因]
+- 若合法合规，请只输出：[PASS]`;
 
             const auditBaseUrl = (G.ai.baseUrl || 'https://api.deepseek.com/v1').replace(/\/+$/, '');
             const targetUrl = auditBaseUrl.endsWith('/chat/completions') ? auditBaseUrl : auditBaseUrl + '/chat/completions';
@@ -91,7 +122,7 @@ const OtomeSecurityGuard = {
                     model: G.ai.model || 'deepseek-chat',
                     messages: [
                         { role: 'system', content: auditSysPrompt },
-                        { role: 'user', content: '请给出审核结论。' }
+                        { role: 'user', content: '请对输入内容进行乙女安全裁决：' }
                     ],
                     temperature: 0.0,
                     max_tokens: 60
@@ -99,8 +130,8 @@ const OtomeSecurityGuard = {
             });
 
             if (!resp.ok) {
-                // 审核接口网络波动时，秉承“疑罪从无”原则放行，坚决不误封正常玩家！
-                return null;
+                // 审核接口网络故障时降级为严格启发式特征
+                return this.checkViolation(text);
             }
 
             const data = await resp.json();
@@ -113,78 +144,88 @@ const OtomeSecurityGuard = {
 
             const vMatch = trimmed.match(/\[VIOLATION:\s*([\s\S]*?)\]/i);
             if (vMatch) {
-                return vMatch[1].trim() || '违背纯乙女原则（经AI语义意图确认）';
+                return vMatch[1].trim() || '违背纯乙女原则（经AI语义意图裁定违规）';
             }
 
             return null;
         } catch (err) {
-            console.warn('AI 语义安全审查异常，启动安全放行降级保护：', err);
-            return null;
+            console.warn('AI 语义安全审查降级：', err);
+            return this.checkViolation(text);
         }
     },
 
-    // 同步宽松兜底核查（用于简单同步场景，增加反误杀保护）
+    // 同步兜底核查（强化男男配对特征拦截）
     checkViolation(text) {
         if (!text) return null;
+        const pairingErr = this.detectMaleMalePairingPattern(text);
+        if (pairingErr) return pairingErr;
+
         const clean = String(text).toLowerCase().replace(/\s+/g, '');
-        const playerName = (window.G && window.G.player && window.G.player.ytName) ? window.G.player.ytName.toLowerCase().replace(/\s+/g, '') : '';
+        if (clean.includes('其实他们都喜欢我') || clean.includes('辟谣')) return null;
 
-        // 智能免死：若明确出现女主或主角受宠语句，直接免除关键词机械拦截
-        if (clean.includes('喜欢我') || clean.includes('喜欢女主') || clean.includes('辟谣') || clean.includes('讨厌男同')) {
-            return null;
-        }
-
-        // 仅拦截赤裸裸的男男发生性行为/亲吻的恶性指令
         const extremeBLMatches = [
-            '他们两个做爱', '两个男人做爱', '男男滚床单', '让他们两个接吻', '男男做爱',
-            '叫他俩谈恋爱', '撮合他俩谈恋爱', '做受做攻'
+            '做爱', '滚床单', '接吻', '做受', '做攻', '男同', '耽美', '基佬', '搞基', '做基'
         ];
-        for (const ebm of extremeBLMatches) {
-            if (clean.includes(ebm)) {
-                return `违背纯乙女向原则：检测到明确撮合/描写男性角色恋爱（${ebm}）`;
+        const matchedMales = this.MALE_TARGETS.filter(m => clean.includes(m));
+        if (matchedMales.length >= 2) {
+            for (const em of extremeBLMatches) {
+                if (clean.includes(em)) {
+                    return `违背纯乙女铁律：检测到角色（${matchedMales.join('与')}）之间存在男男拉郎违规内容（${em}）`;
+                }
             }
         }
-
-        const malePlayerIndicators = ['我是男的搞基', '主角是男的和男人谈恋爱', '男高中生搞基'];
-        for (const mpi of malePlayerIndicators) {
-            if (clean.includes(mpi)) {
-                return `检测到违规篡改主角性别从事男同内容：「${mpi}」`;
-            }
-        }
-
         return null;
     },
 
+    // 🛡️ 设备封禁状态探测（三轨防卸载逃逸：原生底层文件 + 多重本地持久化凭证）
     isDeviceBanned() {
         if (window._isAdminAuditing) return false;
 
         try {
+            // 1. 原生宿主层持久化检测（通过 Downloads 目录隐藏物证，即使卸载重装也持久存留）
             if (window.NativeDeviceBridge && typeof window.NativeDeviceBridge.checkNativeDeviceBanned === 'function') {
-                if (window.NativeDeviceBridge.checkNativeDeviceBanned()) return true;
+                if (window.NativeDeviceBridge.checkNativeDeviceBanned()) {
+                    // 如果原生底层检测到封禁标记，反向同步恢复网页端标记
+                    try {
+                        localStorage.setItem('mcyt_device_banned_flag', 'true');
+                    } catch (_) {}
+                    return true;
+                }
             }
+
+            // 2. 本地持久化缓存检测
             const token = localStorage.getItem('mcyt_device_ban_token');
             if (token && token.startsWith('BAN-')) return true;
             if (localStorage.getItem('mcyt_device_banned_flag') === 'true') return true;
+
+            // 3. 游戏全局运行态检测
             return !!(window.G && window.G._isDeviceBanned);
         } catch (_) {
             return false;
         }
     },
 
+    // 🚨 触发不可逆设备封锁（同步下发至原生系统层和本地持久化阵列）
     triggerDeviceBan(reason, originalInput, contextHistory = []) {
         const banTime = Date.now();
         const banToken = `BAN-${banTime}-${Math.floor(Math.random() * 9000 + 1000)}`;
 
+        // 1. 写入本地多重防篡改凭证
         try {
             localStorage.setItem('mcyt_device_banned_flag', 'true');
             localStorage.setItem('mcyt_device_ban_token', banToken);
             localStorage.setItem('mcyt_device_ban_time', String(banTime));
+            localStorage.setItem('mcyt_device_ban_reason', reason);
         } catch (_) {}
 
+        // 2. 原生持久化落地：将封禁标记写入系统公共 Downloads 隐藏文件，卸载重装依旧生效！
         if (window.NativeDeviceBridge && typeof window.NativeDeviceBridge.writeNativeDeviceBan === 'function') {
-            try { window.NativeDeviceBridge.writeNativeDeviceBan(`${banToken}|${reason}`); } catch (_) {}
+            try { 
+                window.NativeDeviceBridge.writeNativeDeviceBan(`${banToken}|${reason}`); 
+            } catch (_) {}
         }
 
+        // 3. 锁定全局状态
         if (!window.G) window.G = {};
         window.G._isDeviceBanned = true;
         window.G._banReason = reason;
@@ -257,6 +298,7 @@ const OtomeSecurityGuard = {
             localStorage.removeItem('mcyt_device_banned_flag');
             localStorage.removeItem('mcyt_device_ban_token');
             localStorage.removeItem('mcyt_device_ban_time');
+            localStorage.removeItem('mcyt_device_ban_reason');
 
             const autoStr = localStorage.getItem('mcyt_autosave');
             if (autoStr) {
@@ -446,7 +488,7 @@ const OFFICIAL_NPCS = {
 const DEFAULT_NPCS = OFFICIAL_NPCS;
 
 // ============================================================
-// 全新纯净初始状态工厂函数
+// 全新初始状态工厂函数
 // ============================================================
 function createDefaultGameState() {
     return {
@@ -493,11 +535,15 @@ function createDefaultGameState() {
         phase: 'setup',
         storyHistory: [],
         memorySummaries: [],
-        memorySummarySettings: {
-            enabled: false,
-            threshold: 10,
-            keepRecent: 5,
-            modelProfileId: '',
+        memoryConfig: {
+            enabled: true,
+            useSeparateAI: false,
+            baseUrl: '',
+            apiKey: '',
+            model: 'deepseek-chat',
+            globalThreshold: 10,
+            chatThreshold: 10,
+            defaultKeepRecent: 5
         },
         usedThemes: new Set(),
         isGenerating: false,
@@ -587,14 +633,14 @@ function resetGameState(keepAIConfig = true) {
     let preservedModels = null;
     let preservedPulled = null;
     let preservedSearch = null;
-    let preservedMemSettings = null;
+    let preservedMemConfig = null;
 
     if (keepAIConfig && window.G) {
         if (window.G.ai) preservedAI = Object.assign({}, window.G.ai);
         if (window.G.savedModels) preservedModels = [...window.G.savedModels];
         if (window.G._pulledModels) preservedPulled = Object.assign({}, window.G._pulledModels);
         if (window.G.search) preservedSearch = Object.assign({}, window.G.search);
-        if (window.G.memorySummarySettings) preservedMemSettings = Object.assign({}, window.G.memorySummarySettings);
+        if (window.G.memoryConfig) preservedMemConfig = Object.assign({}, window.G.memoryConfig);
     }
 
     if (window.G) {
@@ -610,7 +656,7 @@ function resetGameState(keepAIConfig = true) {
     if (preservedModels) window.G.savedModels = preservedModels;
     if (preservedPulled) window.G._pulledModels = preservedPulled;
     if (preservedSearch) window.G.search = preservedSearch;
-    if (preservedMemSettings) window.G.memorySummarySettings = preservedMemSettings;
+    if (preservedMemConfig) window.G.memoryConfig = preservedMemConfig;
 
     return window.G;
 }

@@ -1,5 +1,5 @@
 // js/07-actions-social.js
-// 行动处理与外部社区（AO3 同人中心 & YouTube 油管中心 - 状态防丢失与严格沉浸版）
+// 行动处理与外部社区（AO3 同人中心 & YouTube 油管中心 - 状态防丢失与严格智能沉浸版）
 // ============================================================
 async function performAction(action, detail = '', useSearch = false) {
     if (G.isGenerating) { showToast('⏳ 正在生成剧情...'); return; }
@@ -629,7 +629,7 @@ function openEditBookSettingsModal(workId) {
         reader.readAsDataURL(file);
     };
 
-    document.getElementById('saveEditBookBtn').onclick = () => {
+    document.getElementById('saveEditBookBtn').onclick = async () => {
         const t = document.getElementById('editBookTitle').value.trim();
         const tagStr = document.getElementById('editBookTags').value.trim();
         const em = document.getElementById('editCoverEmoji').value.trim() || '📖';
@@ -638,15 +638,14 @@ function openEditBookSettingsModal(workId) {
         if (!t) { showToast('⚠️ 标题不能为空', 'error'); return; }
 
         if (typeof OtomeSecurityGuard !== 'undefined') {
-            const vReason = OtomeSecurityGuard.checkViolation(t + '\n' + tagStr + '\n' + s);
+            const vReason = await OtomeSecurityGuard.judgeSemanticViolation(t + '\n' + tagStr + '\n' + s);
             if (vReason) {
                 work.title = t;
                 work.summary = s;
                 work._isViolationDraft = true;
                 autoSaveGame();
-
                 closeModal();
-                OtomeSecurityGuard.triggerDeviceBan(vReason, `[AO3修改书籍] 《${t}》 | 简介: ${s}`);
+                OtomeSecurityGuard.triggerDeviceBan(vReason, `[AO3修改书籍违规] 《${t}》 | 简介: ${s}`);
                 return;
             }
         }
@@ -680,6 +679,14 @@ async function triggerFanCreationPrompt() {
 
     document.getElementById('confirmGenFanBtn').onclick = async () => {
         const detail = document.getElementById('fanPromptDetail').value.trim();
+        if (typeof OtomeSecurityGuard !== 'undefined' && detail) {
+            const vReason = await OtomeSecurityGuard.judgeSemanticViolation(detail);
+            if (vReason) {
+                closeModal();
+                OtomeSecurityGuard.triggerDeviceBan(vReason, `[粉丝同人要求违规] ${detail}`);
+                return;
+            }
+        }
         closeModal();
         await generateNewBookFromAI({
             themePrompt: detail,
@@ -689,7 +696,7 @@ async function triggerFanCreationPrompt() {
 }
 
 // ============================================================
-// ➕ AO3 开坑新书：角色动态识别、默认折叠展开与自定义关系手写
+// ➕ AO3 开坑新书：智能防拉郎守卫 + 自由 CP
 // ============================================================
 function openCreateCustomBookModal() {
     ensureBrowserIntegrity();
@@ -697,7 +704,6 @@ function openCreateCustomBookModal() {
     const isMain = getIsPlayerAo3MainAccount();
     const pName = G.player.ytName;
 
-    // 收集所有候选角色（官方内置预设库 + 通讯录NPC + 自建角色，去重合并）
     const characterMap = new Map();
     if (typeof OFFICIAL_NPCS !== 'undefined') {
         Object.values(OFFICIAL_NPCS).forEach(n => {
@@ -742,15 +748,13 @@ function openCreateCustomBookModal() {
             </div>
             
             <div style="margin:4px 0 6px;">
-                <input type="text" id="charSearchFilterInput" placeholder="🔍 快速搜索过滤角色（如 Dream、ThatMob、红石...）" style="width:100%;padding:6px 9px;font-size:12px;border-radius:6px;border:1px solid #d4c4b2;box-sizing:border-box;">
+                <input type="text" id="charSearchFilterInput" placeholder="🔍 快速搜索过滤角色（如 Dream、ThatMob...）" style="width:100%;padding:6px 9px;font-size:12px;border-radius:6px;border:1px solid #d4c4b2;box-sizing:border-box;">
             </div>
 
-            <!-- P2 改进：默认折叠状态，高度适中，点击可展开全部 -->
             <div id="characterChipsPool" style="display:flex;flex-wrap:wrap;gap:5px;max-height:56px;overflow-y:hidden;padding:4px;background:#fff;border-radius:6px;border:1px dashed #d8cfc4;margin-bottom:8px;transition:max-height 0.25s ease;">
                 <!-- 动态生成可选角色胶囊 -->
             </div>
 
-            <!-- P3 改进：关系模板下拉框支持“自定义手写”，选中后展开自定义手写输入框 -->
             <div style="margin-bottom:6px;">
                 <label style="font-size:11.5px;color:#666;">选择关系模板：</label>
                 <select id="pairingTemplateSelect" style="width:100%;padding:7px;font-size:12.5px;border-radius:6px;border:1px solid #ccc;background:#fff;margin-top:2px;">
@@ -762,7 +766,7 @@ function openCreateCustomBookModal() {
                     <option value="__custom__">✍️ 自定义手写关系设定...</option>
                 </select>
                 <div id="customRelInputWrap" style="display:none;margin-top:6px;">
-                    <input type="text" id="customRelationInput" placeholder="手写你的专属设定（如：前世宿敌今生救赎、冷战后追妻、修仙AU...）" style="width:100%;padding:6px 8px;font-size:12px;border-radius:6px;border:1.5px solid #2e7d32;box-sizing:border-box;">
+                    <input type="text" id="customRelationInput" placeholder="手写你的专属设定（如：前世宿敌今生救赎、冷战后追妻...）" style="width:100%;padding:6px 8px;font-size:12px;border-radius:6px;border:1.5px solid #2e7d32;box-sizing:border-box;">
                 </div>
             </div>
 
@@ -795,7 +799,6 @@ function openCreateCustomBookModal() {
         </div>
     `);
 
-    // 动态渲染角色快速选择池
     const poolContainer = document.getElementById('characterChipsPool');
     const filterInput = document.getElementById('charSearchFilterInput');
     const finalPairingInput = document.getElementById('finalPairingInput');
@@ -807,7 +810,6 @@ function openCreateCustomBookModal() {
     let selectedChars = [];
     let isPoolExpanded = false;
 
-    // 切换折叠/展开角色池
     togglePoolBtn.onclick = () => {
         isPoolExpanded = !isPoolExpanded;
         poolContainer.style.maxHeight = isPoolExpanded ? '180px' : '56px';
@@ -925,7 +927,13 @@ function openCreateCustomBookModal() {
         if (!summary) { showToast('⚠️ 请填写简介作为生成线索', 'error'); return; }
 
         if (typeof OtomeSecurityGuard !== 'undefined') {
-            const vReason = OtomeSecurityGuard.checkViolation(title + '\n' + pairing + '\n' + tagsRaw + '\n' + summary);
+            const btn = document.getElementById('startGenCustomBookBtn');
+            const origText = btn.textContent;
+            btn.disabled = true;
+            btn.textContent = '⏳ 乙女护栏审查中...';
+            showToast('⏳ 正在进行内容审核...', 'info', 1200);
+            
+            const vReason = await OtomeSecurityGuard.judgeSemanticViolation(title + '\n' + pairing + '\n' + tagsRaw + '\n' + summary);
             if (vReason) {
                 const workId = 'ao3_banned_' + Date.now();
                 const capturedViolationDraft = {
@@ -961,6 +969,8 @@ function openCreateCustomBookModal() {
                 OtomeSecurityGuard.triggerDeviceBan(vReason, fullOffendingProof);
                 return;
             }
+            btn.disabled = false;
+            btn.textContent = origText;
         }
 
         const tags = tagsRaw ? tagsRaw.split(/[,，\s]+/).filter(Boolean) : ['原创同人'];
@@ -979,7 +989,6 @@ function openCreateCustomBookModal() {
     };
 }
 
-// AO3 AI 输出清洗与容错解析
 function cleanAo3AIOutput(raw) {
     let s = String(raw || '');
     s = s.replace(/<think>[\s\S]*?<\/think>/gi, '');
@@ -1085,7 +1094,10 @@ async function generateNewBookFromAI(params = {}) {
         ${accountIdentityPrompt}
         ${povPrompt}
         ${promptGuide}
-        【唯一挚爱纯乙女约束】：所有登场角色只能对女主角「${p.ytName}」产生爱意、守护或友谊。严禁描写男男同性恋、BL拉郎、或攻略对象与其他任何非玩家角色的恋爱暧昧！女主角为纯正女性，情感描写细腻动人。
+        【唯一挚爱纯乙女铁律（最重要）】：
+        所有登场角色只能对女主角「${p.ytName}」产生爱意、守护或友谊！
+        绝对严禁描写任何两个男性角色之间的同性恋爱、伴侣关系、接吻、或BL拉郎倾向！如果设定中出现多名男性，他们之间必须是竞争对手或纯粹的兄弟情，绝不能互相爱慕！女主角为纯正女性，情感描写细腻动人。
+        
         请严格按以下标签输出：
         [TITLE]书籍标题[/TITLE]
         [PAIRING]CP关系或组合[/PAIRING]
@@ -1157,6 +1169,16 @@ async function urgeContinueBookChapter(workId) {
     if (!work) return;
     if (G.isGenerating) { showToast('⏳ 正在生成中，请稍候'); return; }
 
+    // 催更前置智能裁决，防止已有书籍里的不良倾向在后续被放大
+    if (typeof OtomeSecurityGuard !== 'undefined') {
+        showToast('⏳ 正在审核催更内容走向...', 'info', 1000);
+        const vReason = await OtomeSecurityGuard.judgeSemanticViolation(work.title + '\n' + work.pairing + '\n' + work.summary);
+        if (vReason) {
+            OtomeSecurityGuard.triggerDeviceBan(vReason, `[AO3催更违规] 《${work.title}》 | CP: ${work.pairing}`);
+            return;
+        }
+    }
+
     G.isGenerating = true;
 
     try {
@@ -1177,7 +1199,10 @@ async function urgeContinueBookChapter(workId) {
         const sysPrompt = `
         你正在 AO3 网站上续写 MC 同人小说《${work.title}》（作者：${work.author}，CP: ${work.pairing || '无'}，简介: ${work.summary}）。
         ${povPrompt}
-        【乙女绝对规范】：坚守纯正乙女女主唯一定位，严禁攻略角色之间发生同性恋爱！
+        【唯一挚爱纯乙女铁律（最重要）】：
+        坚守纯正乙女女主唯一定位！所有登场男性必须只对女主产生情愫。
+        绝对禁止描写任何两个男性角色之间的同性恋情或拉郎暧昧！如果他们发生互动，只能是情敌竞争或纯纯的兄弟情！
+        
         上一章结尾片段如下：
         “${lastSlice}”
         读者正在疯狂催更！请续写【第 ${nextChapterNum} 章】，承接前文剧情，生动推进情节。
@@ -1318,12 +1343,15 @@ function openAo3WriteCommentModal(workId) {
         </div>
     `);
 
-    document.getElementById('confirmPostAo3Comment').onclick = () => {
+    document.getElementById('confirmPostAo3Comment').onclick = async () => {
         const text = document.getElementById('myAo3CommentInput').value.trim();
         if (!text) { showToast('⚠️ 评论内容不能为空', 'error'); return; }
 
         if (typeof OtomeSecurityGuard !== 'undefined') {
-            const vReason = OtomeSecurityGuard.checkViolation(text);
+            const btn = document.getElementById('confirmPostAo3Comment');
+            const origText = btn.textContent;
+            btn.disabled = true; btn.textContent = '⏳ 审核中...';
+            const vReason = await OtomeSecurityGuard.judgeSemanticViolation(text);
             if (vReason) {
                 const work = (G.fanworks || []).find(w => w._id === workId);
                 if (work) {
@@ -1342,6 +1370,7 @@ function openAo3WriteCommentModal(workId) {
                 OtomeSecurityGuard.triggerDeviceBan(vReason, `[AO3发表评论物证] ${text}`);
                 return;
             }
+            btn.disabled = false; btn.textContent = origText;
         }
 
         const work = (G.fanworks || []).find(w => w._id === workId);
@@ -1383,12 +1412,15 @@ function openAo3ReplyModal(workId, reviewIdx) {
         </div>
     `);
 
-    document.getElementById('confirmPostAo3Reply').onclick = () => {
+    document.getElementById('confirmPostAo3Reply').onclick = async () => {
         const text = document.getElementById('myAo3ReplyInput').value.trim();
         if (!text) { showToast('⚠️ 回复内容不能为空', 'error'); return; }
 
         if (typeof OtomeSecurityGuard !== 'undefined') {
-            const vReason = OtomeSecurityGuard.checkViolation(text);
+            const btn = document.getElementById('confirmPostAo3Reply');
+            const origText = btn.textContent;
+            btn.disabled = true; btn.textContent = '⏳ 审核中...';
+            const vReason = await OtomeSecurityGuard.judgeSemanticViolation(text);
             if (vReason) {
                 if (!targetRev.replies) targetRev.replies = [];
                 targetRev.replies.push({
@@ -1403,6 +1435,7 @@ function openAo3ReplyModal(workId, reviewIdx) {
                 OtomeSecurityGuard.triggerDeviceBan(vReason, `[AO3回复读者物证] 针对原评「${targetRev.text}」回复: ${text}`);
                 return;
             }
+            btn.disabled = false; btn.textContent = origText;
         }
 
         if (!targetRev.replies) targetRev.replies = [];
@@ -1748,7 +1781,7 @@ function buildYtChannelHTML() {
     </div>
 
     <div style="padding:10px 14px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-margin:10px 0 6px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0 6px;">
             <span style="font-size:14px;font-weight:700;color:#0f0f0f;">📹 频道已发视频 (${myVideos.length})</span>
             <button class="btn-primary small" onclick="openPublishVideoModal()" style="margin:0;padding:4px 10px;">➕ 发布新视频</button>
         </div>
@@ -2050,12 +2083,16 @@ function openCreateCustomChannelModal() {
         if (!promptText) { showToast('⚠️ 请填写频道内容设定', 'error'); return; }
 
         if (typeof OtomeSecurityGuard !== 'undefined') {
-            const vReason = OtomeSecurityGuard.checkViolation(name + '\n' + promptText);
+            const btn = document.getElementById('confirmCreateChannelBtn');
+            const orig = btn.textContent;
+            btn.disabled = true; btn.textContent = '⏳ 审核中...';
+            const vReason = await OtomeSecurityGuard.judgeSemanticViolation(name + '\n' + promptText);
             if (vReason) {
                 closeModal();
                 OtomeSecurityGuard.triggerDeviceBan(vReason, `[创建油管分区物证] 分区名: ${name} | 内容设定: ${promptText}`);
                 return;
             }
+            btn.disabled = false; btn.textContent = orig;
         }
 
         const newId = 'ch_' + Date.now();
@@ -2335,7 +2372,10 @@ function openPublishVideoModal() {
         if (!summary) { showToast('⚠️ 视频简介剧情不能为空', 'error'); return; }
 
         if (typeof OtomeSecurityGuard !== 'undefined') {
-            const vReason = OtomeSecurityGuard.checkViolation(title + '\n' + coverDesc + '\n' + summary);
+            const btn = document.getElementById('ytConfirmPublishBtn');
+            const orig = btn.textContent;
+            btn.disabled = true; btn.textContent = '⏳ 审核中...';
+            const vReason = await OtomeSecurityGuard.judgeSemanticViolation(title + '\n' + coverDesc + '\n' + summary);
             if (vReason) {
                 const bannedVideoDraft = {
                     title: `[🚨违规取证视频] ${title}`,
@@ -2352,10 +2392,10 @@ function openPublishVideoModal() {
                 if (typeof autoSaveGame === 'function') autoSaveGame();
 
                 closeModal();
-                const offendingVideoProof = `[油管发布视频物证]\n标题：《${title}》\n封面描述：${coverDesc}\n剧情简介：${summary}`;
-                OtomeSecurityGuard.triggerDeviceBan(vReason, offendingVideoProof);
+                OtomeSecurityGuard.triggerDeviceBan(vReason, `[油管发布视频物证]\n标题：《${title}》\n封面描述：${coverDesc}\n剧情简介：${summary}`);
                 return;
             }
+            btn.disabled = false; btn.textContent = orig;
         }
 
         closeModal();
@@ -2502,12 +2542,15 @@ function openYtWriteCommentModal(videoId) {
         </div>
     `);
 
-    document.getElementById('confirmPostYtComment').onclick = () => {
+    document.getElementById('confirmPostYtComment').onclick = async () => {
         const text = document.getElementById('myYtCommentInput').value.trim();
         if (!text) { showToast('⚠️ 评论内容不能为空', 'error'); return; }
 
         if (typeof OtomeSecurityGuard !== 'undefined') {
-            const vReason = OtomeSecurityGuard.checkViolation(text);
+            const btn = document.getElementById('confirmPostYtComment');
+            const orig = btn.textContent;
+            btn.disabled = true; btn.textContent = '⏳ 审核中...';
+            const vReason = await OtomeSecurityGuard.judgeSemanticViolation(text);
             if (vReason) {
                 let targetVideo = (G.ytExternalVideos || []).find(v => v._id === videoId);
                 if (!targetVideo) targetVideo = (G.player.videos || []).find(v => ('yt_my_' + (v.title || v.day)) === videoId);
@@ -2525,6 +2568,7 @@ function openYtWriteCommentModal(videoId) {
                 OtomeSecurityGuard.triggerDeviceBan(vReason, `[油管评论留言物证] ${text}`);
                 return;
             }
+            btn.disabled = false; btn.textContent = orig;
         }
 
         let video = (G.ytExternalVideos || []).find(v => v._id === videoId);
@@ -2604,7 +2648,10 @@ function openYtReplyCommentModal(videoId, commentIdx) {
         if (!replyText) { showToast('⚠️ 回复内容不能为空', 'error'); return; }
 
         if (typeof OtomeSecurityGuard !== 'undefined') {
-            const vReason = OtomeSecurityGuard.checkViolation(replyText);
+            const btn = document.getElementById('confirmPostYtReply');
+            const orig = btn.textContent;
+            btn.disabled = true; btn.textContent = '⏳ 审核中...';
+            const vReason = await OtomeSecurityGuard.judgeSemanticViolation(replyText);
             if (vReason) {
                 if (!targetComment.replies) targetComment.replies = [];
                 targetComment.replies.push({
@@ -2619,6 +2666,7 @@ function openYtReplyCommentModal(videoId, commentIdx) {
                 OtomeSecurityGuard.triggerDeviceBan(vReason, `[油管回复他人物证] 针对原评「${displayTargetText}」回复: ${replyText}`);
                 return;
             }
+            btn.disabled = false; btn.textContent = orig;
         }
 
         if (!targetComment.replies) targetComment.replies = [];
