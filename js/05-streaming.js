@@ -1,5 +1,5 @@
 // js/05-streaming.js
-// 直播系统（收益随粉丝指数级增长、大主播查房互动、联网现实主播联动、下播主动加好友）
+// 直播系统（收益随粉丝指数级增长、大主播查房互动、联网现实主播联动、下播主动加好友、人设零刻板印象）
 // ============================================================
 function renderStreamPanel() {
     const container = (dom && dom.streamContainer) || document.getElementById('streamContainer');
@@ -51,7 +51,6 @@ function openStreamSetupModal() {
     const npcs = Object.entries(G.npcs);
     let npcOptions = '';
     for (const [id, npc] of npcs) {
-        // 好友度达 15 即可轻松连麦合作
         const disabled = (npc.favor||0) < 15 ? 'disabled' : '';
         npcOptions += `<option value="${id}" ${disabled}>${npc.name} (好感度${npc.favor||0}) ${disabled ? '🔒(需15好感)' : ''}</option>`;
     }
@@ -73,7 +72,7 @@ function openStreamSetupModal() {
     </div>
     <div class="form-group">
         <label>📖 直播主题与高光预设</label>
-        <textarea id="streamDesc" rows="2" placeholder="描述这期直播的硬核挑战、沙雕整蛊或建筑目标...">极限无伤速通与末地下界大冒险</textarea>
+        <textarea id="streamDesc" rows="2" placeholder="描述这期直播的挑战、整蛊或目标...">极限无伤速通与探险</textarea>
     </div>
     <div class="btn-row">
         <button class="btn-secondary" onclick="closeModal()">取消</button>
@@ -106,7 +105,6 @@ function startStream(title, collabNpcId, desc) {
     const multiplier = [1.0, 1.3, 1.8, 2.5, 3.8, 5.5][equipLevel] || 1.0;
     const followers = G.player.followers || 0;
 
-    // 🌟 收益与热度随粉丝指数级跃升：粉丝越多，保底观众与基础盘越庞大
     let baseViewers = 0;
     if (followers < 1000) {
         baseViewers = rand(30, 80) + Math.floor(followers * 0.15);
@@ -122,8 +120,6 @@ function startStream(title, collabNpcId, desc) {
 
     baseViewers = Math.floor(baseViewers * multiplier);
     const viewers = Math.floor(baseViewers * (0.9 + Math.random() * 0.3));
-
-    // 基础金币打赏更慷慨
     const baseMoney = Math.floor(viewers * 0.05) + rand(20, 60) + Math.floor(followers * 0.002);
 
     const streamData = {
@@ -145,7 +141,7 @@ function startStream(title, collabNpcId, desc) {
         replies: 0,
         log: [],
         opening: '',
-        visitedStreamers: [], // 本场查房或空降的大主播
+        visitedStreamers: [],
         equipmentMultiplier: multiplier,
         baseMoney: baseMoney,
     };
@@ -172,27 +168,24 @@ async function generateStreamOpening(streamData) {
         fallbackText = `我笑着轻触麦克风：“大家晚上好呀！欢迎来到我的直播间！今天我们要开播《${streamData.title}》，准备好一起见证高光时刻了吗？”`;
     } else if (pov === 'third') {
         povInstruction = `全文必须使用【第三人称「她」或主播名「${p.ytName}」】进行小说式叙述！禁止使用“你”或“我”。`;
-        fallbackText = `少女调试着麦克风，软糯轻快的声音传入直播间：“大家晚上好！欢迎来到《${streamData.title}》的直播现场，准备好见证精彩瞬间了吗？”`;
+        fallbackText = `少女调试着麦克风，声音传入直播间：“大家晚上好！欢迎来到《${streamData.title}》的直播现场，准备好见证精彩瞬间了吗？”`;
     } else {
         povInstruction = `全文使用【第二人称「你」】进行代入感叙述。`;
         fallbackText = `你笑着调整麦克风：“观众们，欢迎来到我的直播间！今天我们要开始《${streamData.title}》，准备好见证精彩瞬间了吗？”`;
     }
 
-    const voiceRule = p.voiceVoiceChanger 
-        ? `（注意：主播在直播中开启了变声器伪装整蛊）` 
-        : `（注意：主播为女生，声线清澈自然，神态生动灵巧）`;
-
     const prompt = `
     你正在直播 Minecraft，标题是"${streamData.title}"，主题是"${streamData.desc}"，${collabName === '独自' ? '独自开播' : '与 '+collabName+' 合作'}。
     主播设定：
     - 频道名：${p.ytName}
-    - 线上虚拟形象（Live2D皮套）：${p.avatarLive2d || '精致定制Live2D皮套'}
-    - 游戏内角色（MC像素皮肤）：${p.skin || '专属MC定制皮肤'}
-    - 声线与特质：${voiceRule}
-    - 皮上人设：${p.persona || '活泼可爱的MC主播'}
+    - 线上虚拟形象（Live2D皮套）：${p.avatarLive2d || '主播自主设定的网络形象'}
+    - 游戏内角色（MC像素皮肤）：${p.skin || '主播在游戏中使用的MC皮肤'}
+    - 真实皮下样貌：${p.appearanceReal || '未额外限制，由用户自由定义'}
+    - 皮上人设：${p.persona || '自然由用户自定义'}
+    - 玩家身份：女性（请根据玩家人设自由表现其声音特征，不设任何刻板限制）
 
     ${povInstruction}
-    请描写开播的生动开场（200字左右），体现直播间开启推流、Live2D虚拟形象在屏幕一角灵动眨眼、少女与观众弹幕轻快打招呼的画面感。称呼观众为“大家”或“观众们”。只输出正文。
+    请描写开播的生动开场（200字左右），体现直播间开启推流、屏幕前的神态与操作、与观众弹幕互动打招呼的画面感。称呼观众为“大家”或“观众们”。只输出正文。
     `;
 
     try {
@@ -205,17 +198,12 @@ async function generateStreamOpening(streamData) {
     }
 }
 
-// 🌟 核心：AI 生成弹幕 + 查房大主播互动 + 联网圈内名人探查
 async function generateDanmakuAI(st) {
     const followers = G.player.followers || 0;
-    const isBigStream = followers >= 10000;
-
-    // 查房潜入逻辑：高粉丝或概率触发大主播空降查房
     let raidStreamer = null;
     const officialList = (typeof OFFICIAL_NPCS !== 'undefined') ? Object.values(OFFICIAL_NPCS) : [];
     const npcCandidates = officialList.filter(n => n.name !== G.player.ytName && (!st.collabNpc || st.collabNpc.name !== n.name));
 
-    // 联网状态下探查现实大主播
     let webTrendingInfo = '';
     if (typeof webSearch === 'function' && G.search && G.search.enabled && Math.random() < 0.6) {
         try {
@@ -227,7 +215,6 @@ async function generateDanmakuAI(st) {
         } catch (_) {}
     }
 
-    // 触发大主播查房概率（随粉丝升高而升高）
     const raidChance = followers > 50000 ? 0.75 : followers > 10000 ? 0.5 : 0.35;
     if (npcCandidates.length && Math.random() < raidChance && (!st.visitedStreamers || st.visitedStreamers.length < 3)) {
         raidStreamer = pick(npcCandidates);
@@ -242,19 +229,19 @@ async function generateDanmakuAI(st) {
 知名MC主播「${raidStreamer.name}」（${raidStreamer.persona}）潜入了直播间并被弹幕认了出来！
 请务必包含：
 1. 1~2 条属于「${raidStreamer.name}」本人的真实弹幕（带大主播身份标签，如夸奖主播操作、打赏高能礼物或调侃）；
-2. 观众集体震惊沸腾的弹幕（例如：“卧槽？！是 ${raidStreamer.name} 本人？！”、“主播排面拉满了！”）。
+2. 观众集体震惊沸腾的弹幕。
 ` : '';
 
     const sys = `
 你正在模拟主播「${G.player.ytName}」（粉丝量：${followers}）的 MC 直播间观众实时弹幕流。
 当前直播：《${st.title}》（当前在线人气：${st.viewers}人，直播方向：${st.desc}）。
-主播线上形象：${G.player.avatarLive2d || '精美Live2D皮套'}。
+主播线上形象：${G.player.avatarLive2d || '主播网络形象'}。
 ${webTrendingInfo ? `【圈内热点氛围参考】：${webTrendingInfo}` : ''}
 ${raidPrompt}
 
 【要求】：
 1. 生成 5 到 8 条生动的观众即时弹幕。
-2. 粉丝基数大，弹幕中应包含高额投喂（如“投喂了火箭/潜影盒大礼包”）、红石硬核技术讨论、对主播Live2D神态的喜爱、以及催更后续。
+2. 粉丝基数大，弹幕中应包含高额投喂、游戏技巧探讨、对主播个性的喜爱、以及催更后续。
 3. 表情只允许标准 Emoji。
 格式严格如下（每行一条）：
 [DM user=观众昵称]弹幕内容[/DM]
@@ -300,12 +287,10 @@ async function nextStreamRound() {
     st.viewers = Math.max(50, st.viewers + change);
     if (st.viewers > st.maxViewers) st.maxViewers = st.viewers;
 
-    // 弹幕全量由 AI 结合情境与查房动态实时生成
     const newDanmaku = await generateDanmakuAI(st);
     st.danmaku = st.danmaku.concat(newDanmaku);
     st.totalDanmaku += newDanmaku.length;
 
-    // 粉丝越多，每回合打赏金币与粉丝涨幅越丰厚！
     const roundBonus = Math.floor(st.viewers * 0.035) + rand(15, 60) + Math.floor(followers * 0.001);
     const roundFans = rand(5, 30) + Math.floor(st.viewers * 0.008);
 
@@ -403,7 +388,7 @@ async function executeStreamAction(type, userInput) {
     if (pov === 'first') {
         povInstruction = `全文必须严格使用【第一人称「我」】叙述，表达“我”在直播间的真实操作与心理！严禁使用“你”。`;
     } else if (pov === 'third') {
-        povInstruction = `全文必须使用【第三人称「她」或频道名「${p.ytName}」】叙述，描写少女在直播间执行该动作。严禁使用“你”或“我”。`;
+        povInstruction = `全文必须使用【第三人称「她」或频道名「${p.ytName}」】叙述，描写主播在直播间执行该动作。严禁使用“你”或“我”。`;
     } else {
         povInstruction = `全文使用【第二人称「你」】叙述主播的动作与直播间反馈。`;
     }
@@ -411,8 +396,8 @@ async function executeStreamAction(type, userInput) {
     try {
         showLoading();
         const sys = `你是 MC 女主播，正在进行 Minecraft 直播。
-主播信息：频道「${p.ytName}」，Live2D皮套【${p.avatarLive2d || '精美Live2D皮套'}】，游戏像素皮【${p.skin || '专属MC皮肤'}】。
-${p.voiceVoiceChanger ? '（使用了变声器伪装）' : '（少女天然声线）'}
+主播信息：频道「${p.ytName}」，线上皮套【${p.avatarLive2d || '主播网络形象'}】，游戏像素皮【${p.skin || '主播MC皮肤'}】。
+主播性格人设与真实状态：${p.persona || '自由发挥'}，${p.appearanceReal || '自由发挥'}。
 这一轮选择了【${actName}】，内容："${userInput}"。
 ${povInstruction}
 请写出 150 字生动的行动描述与直播间观众反馈弹幕的火爆场面。只输出正文。`;
@@ -431,7 +416,6 @@ ${povInstruction}
     }
 }
 
-// 🌟 直播圆满结算：结算超高收益，并触发空降大主播主动递交好友申请！
 function endStream() {
     const st = G.currentStream;
     if (!st) return;
@@ -448,7 +432,6 @@ function endStream() {
     });
     G.totalStreams++;
 
-    // 🌟 核心高光：本场直播中前来查房的大主播，下播后立刻主动向玩家递交好友申请！
     let raidNoticeHtml = '';
     if (st.visitedStreamers && st.visitedStreamers.length > 0) {
         if (!G.friendRequests) G.friendRequests = [];
@@ -485,7 +468,6 @@ function endStream() {
         }
     }
 
-    // 顺带触发常规社交热度提升
     if (typeof checkSocialRequestsTrigger === 'function') {
         checkSocialRequestsTrigger();
     }
@@ -506,4 +488,3 @@ function endStream() {
     }
     autoSaveGame();
 }
-// ============================================================

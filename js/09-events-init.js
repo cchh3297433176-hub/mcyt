@@ -1,5 +1,5 @@
 // js/09-events-init.js
-// 事件绑定与公告系统（v1.604 更新说明与正版声明，支持三大场景形象与全局人称全面编辑）
+// 事件绑定与公告系统（v1.604 更新说明与正版声明，支持三大场景形象与全局人称全面编辑，零刻板限制版）
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
     // 开始游戏按钮（直达开局，不再强行拦截弹窗清空人设）
@@ -81,7 +81,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof openClockSettingsModal === 'function') openClockSettingsModal();
     });
 
-    // 联网切换按钮：打开支持博查/秘塔/Tavily的联网搜索中心
+    // 联网切换按钮：打开支持 Bing Local / 博查 / 秘塔 / Tavily 的联网搜索中心
     $('webSearchToggleBtn')?.addEventListener('click', () => {
         if (typeof openWebSearchSettingsModal === 'function') {
             openWebSearchSettingsModal();
@@ -232,7 +232,7 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ============================================================
-// 📢 双页滑动公告系统（v1.604 纯正声明与最新优化记录）
+// 📢 双页滑动公告系统
 // ============================================================
 function checkAndShowVersionNoticeModal(forceOpen = false) {
     const ver = window.CURRENT_APP_VERSION || '1.604';
@@ -251,7 +251,6 @@ function openVersionNoticeModal(version) {
 
     <div class="notice-slider-wrap">
         <div class="notice-slider-track" id="noticeSliderTrack">
-            <!-- 第 1 页：主公告与正版声明 -->
             <div class="notice-slide-page">
                 <div class="notice-card-box">
                     <h4>📜 关于本项目与正版声明</h4>
@@ -267,30 +266,16 @@ function openVersionNoticeModal(version) {
                 </div>
             </div>
 
-            <!-- 第 2 页：v1.604 最新更新与修复说明 -->
             <div class="notice-slide-page">
                 <div class="notice-card-box" style="max-height:60vh;overflow-y:auto;">
                     <h4 style="color:#2e7d32;margin-bottom:8px;">🚀 v${version} 修复与优化内容</h4>
                     
-                    <div style="font-size:13px;font-weight:700;color:#1e293b;margin-top:6px;">🛠️ Bug 修复与功能恢复：</div>
+                    <div style="font-size:13px;font-weight:700;color:#1e293b;margin-top:6px;">🛠️ Bug 修复与功能升级：</div>
                     <ol style="padding-left:18px;margin:4px 0 8px;font-size:12px;color:#334155;line-height:1.7;">
-                        <li><b>恢复角色与玩家人设编辑</b>：
-                            <div style="font-size:11.5px;color:#64748b;margin-top:2px;">
-                                • 轻点（单击）：打开角色私聊，秒进窗口；<br>
-                                • 长按（按住 0.45 秒）：带有手机微震反馈，立即弹出《✏️ 编辑角色资料与人设》弹窗，可自由调整角色姓名、自定义上传头像、修改人设性格、皮肤形象、口头禅与赛道；左上角头像亦支持全能修改。
-                            </div>
-                        </li>
-                        <li><b>删除冗余废弃选项</b>：移除了聊天加号菜单中冗余的旁白选项，防止误导他人，全面由「屏幕那边的TA」感知系统接管。</li>
-                        <li><b>修复串号覆盖恶性 Bug</b>：修复了查房及重开游戏时可能导致他人角色记忆串号残留的严重问题。</li>
-                        <li><b>修复好友申请卡顿 Bug</b>：彻底修复了社交中心点击添加好友/群邀请卡住无反应的异常。</li>
-                        <li><b>解决签名冲突问题</b>：固定统一签名密钥，后续更新版本均可直接覆盖安装，无需卸载旧版。</li>
-                    </ol>
-
-                    <div style="font-size:13px;font-weight:700;color:#1e293b;margin-top:10px;">✨ 体验优化方面：</div>
-                    <ol style="padding-left:18px;margin:4px 0 6px;font-size:12px;color:#334155;line-height:1.7;">
-                        <li><b>编辑管理功能全能升级</b>：不仅能修改通知，还能重新编辑 AO3 小说正文、油管长文与剧情，不喜欢的剧情随时改！</li>
-                        <li><b>导出记忆卡 Key 隐私保护开关</b>：新增连带导出 API Key 选项（默认关闭），防止导出记忆卡发给他人时泄露个人密匙。</li>
-                        <li><b>提示词世界观深度隔离</b>：彻底将作者公告与现实信息从大模型提示词中剥离，严禁网友和 NPC 打破第四面墙，防止愚蠢的 AI 把玩家和世界观认错！</li>
+                        <li><b>高自由度三大场景形象</b>：全面支持线上虚拟皮套、游戏像素皮肤、线下真实样貌独立定义，彻底剔除所有刻板印象词汇。</li>
+                        <li><b>支持全局人称自由选择</b>：剧情与同人支持第一/第二/第三人称视角无缝切换。</li>
+                        <li><b>更名履历档案追踪</b>：换名字不再导致 AI 认错角色或遗忘前尘羁绊。</li>
+                        <li><b>智能语义防拉郎护栏</b>：告别粗暴机械误封，精准识别辟谣与反向调侃。</li>
                     </ol>
                 </div>
             </div>
@@ -355,7 +340,7 @@ function openVersionNoticeModal(version) {
 }
 
 // ============================================================
-// 🧑 个人资料与人设全面编辑弹窗（三大场景形象细分 + 全局人称切换）
+// 🧑 个人资料与人设全面编辑弹窗（三大场景形象细分 + 全局人称切换，零刻板限制）
 // ============================================================
 function openEditPlayerProfileModal() {
     const p = G.player || {};
@@ -367,7 +352,6 @@ function openEditPlayerProfileModal() {
     const currentAppearanceReal = p.appearanceReal || '';
     const currentCategory = p.category || '剧情';
     const currentPov = p.pov || 'second';
-    const currentVoiceChanger = !!p.voiceVoiceChanger;
 
     const categories = ['剧情', '建筑', '红石', 'PvP', '生存挑战', '模组实况', '整活搞笑', '追杀', '休闲', '混合'];
     const categoryOptions = categories.map(cat => `
@@ -407,33 +391,28 @@ function openEditPlayerProfileModal() {
                 </div>
             </div>
 
-            <div class="form-group checkbox-group" style="margin:8px 0;">
-                <input type="checkbox" id="editVoiceChangerInput" ${currentVoiceChanger ? 'checked' : ''}>
-                <label for="editVoiceChangerInput">🎙️ 直播/视频出镜时使用变声器（不勾选即为自然真实清澈女声）</label>
-            </div>
-
             <div style="background:#f8faf8;border:1.5px solid #dceedc;border-radius:12px;padding:10px;margin:10px 0;">
-                <div style="font-weight:700;font-size:13px;color:#1e4620;margin-bottom:6px;">🎭 形象三大场景分层（AI精准呈现）</div>
+                <div style="font-weight:700;font-size:13px;color:#1e4620;margin-bottom:6px;">🎭 形象三大场景分层（自主自由定义）</div>
 
                 <div class="form-group" style="margin-bottom:8px;">
-                    <label style="font-size:12px;">1. 🖥️ 线上虚拟形象（Live2D / Vtuber皮套） <span class="required">*</span></label>
-                    <textarea id="editPlayerLive2dInput" rows="2" placeholder="开播或录视频出镜时，观众看到的动态立绘形象..." style="width:100%;padding:7px;border-radius:6px;border:1px solid #ccc;font-size:12.5px;">${escapeHtml(currentLive2d)}</textarea>
+                    <label style="font-size:12px;">1. 🖥️ 线上虚拟形象（Live2D / Vtuber皮套）</label>
+                    <textarea id="editPlayerLive2dInput" rows="2" placeholder="可选：描述直播与录视频出镜时观众看到的虚拟形象特征..." style="width:100%;padding:7px;border-radius:6px;border:1px solid #ccc;font-size:12.5px;">${escapeHtml(currentLive2d)}</textarea>
                 </div>
 
                 <div class="form-group" style="margin-bottom:8px;">
-                    <label style="font-size:12px;">2. 🎮 游戏形象（Minecraft 像素皮肤） <span class="required">*</span></label>
-                    <textarea id="editPlayerSkinInput" rows="2" placeholder="在MC游戏中操纵角色的方块人皮肤、披风、外观..." style="width:100%;padding:7px;border-radius:6px;border:1px solid #ccc;font-size:12.5px;">${escapeHtml(currentSkin)}</textarea>
+                    <label style="font-size:12px;">2. 🎮 游戏形象（Minecraft 像素皮肤）</label>
+                    <textarea id="editPlayerSkinInput" rows="2" placeholder="可选：描述你在MC方块世界操纵角色的像素皮肤外观、披风..." style="width:100%;padding:7px;border-radius:6px;border:1px solid #ccc;font-size:12.5px;">${escapeHtml(currentSkin)}</textarea>
                 </div>
 
                 <div class="form-group" style="margin-bottom:0;">
-                    <label style="font-size:12px;">3. 🏠 线下真实形象（现实皮下素颜） <span class="required">*</span></label>
-                    <textarea id="editPlayerAppearanceRealInput" rows="2" placeholder="摘下耳机后的素颜相貌、身姿气质与日常居家私服穿搭..." style="width:100%;padding:7px;border-radius:6px;border:1px solid #ccc;font-size:12.5px;">${escapeHtml(currentAppearanceReal)}</textarea>
+                    <label style="font-size:12px;">3. 🏠 线下真实形象（现实皮下样貌）</label>
+                    <textarea id="editPlayerAppearanceRealInput" rows="2" placeholder="可选：描述现实生活中的真实相貌体态、日常穿搭风格..." style="width:100%;padding:7px;border-radius:6px;border:1px solid #ccc;font-size:12.5px;">${escapeHtml(currentAppearanceReal)}</textarea>
                 </div>
             </div>
 
             <div class="form-group">
-                <label>主播性格人设 (Persona)</label>
-                <textarea id="editPlayerPersonaInput" rows="2" placeholder="例如：充满活力的冒险家，偶尔整活..." style="width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;font-size:13px;">${escapeHtml(currentPersona)}</textarea>
+                <label>主播性格与声音人设 (Persona)</label>
+                <textarea id="editPlayerPersonaInput" rows="2" placeholder="可选：描述你的性格人设、声音风格、语言习惯等..." style="width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;font-size:13px;">${escapeHtml(currentPersona)}</textarea>
             </div>
 
             <div class="form-group">
@@ -486,7 +465,6 @@ function openEditPlayerProfileModal() {
         const newAppearanceReal = document.getElementById('editPlayerAppearanceRealInput')?.value.trim();
         const newCategory = document.getElementById('editPlayerCategorySelect')?.value || '剧情';
         const newPov = document.getElementById('editPlayerPovSelect')?.value || 'second';
-        const newVoiceChanger = document.getElementById('editVoiceChangerInput')?.checked || false;
 
         if (!newName) { showToast('⚠️ 频道名不能为空', 'error'); return; }
 
@@ -501,7 +479,6 @@ function openEditPlayerProfileModal() {
         G.player.appearanceReal = newAppearanceReal;
         G.player.category = newCategory;
         G.player.pov = newPov;
-        G.player.voiceVoiceChanger = newVoiceChanger;
 
         if (typeof detectPersonaStyle === 'function') {
             G.player.personaStyle = detectPersonaStyle(newPersona);
@@ -520,7 +497,7 @@ function openEditPlayerProfileModal() {
             appendStory(`📢 你的频道正式更名为「${newName}」，粉丝与好友们都在为你庆祝新起点！`, '📢 频道更名');
         }
 
-        const updateMemo = `【主角三大形象设定更新】：第 ${G.day} 天，${newName} 线上Live2D更新为：“${newLive2d.slice(0, 30)}...”，MC像素皮换为：“${newSkin.slice(0, 30)}...”，线下样貌为：“${newAppearanceReal.slice(0, 30)}...”。`;
+        const updateMemo = `【主角形象设定更新】：第 ${G.day} 天，${newName} 线上形象更新为：“${newLive2d.slice(0, 30)}...”，MC像素皮换为：“${newSkin.slice(0, 30)}...”，真实样貌为：“${newAppearanceReal.slice(0, 30)}...”。`;
         G.memorySummaries.push({ id: 'gm_profile_' + Date.now(), day: G.day, text: updateMemo, time: '刚刚' });
 
         updateUI();
@@ -551,13 +528,13 @@ function openActionModal(action) {
     const title = actionNames[action] || '🎮 行动';
     const placeholder = placeholders[action] || '描述行动...';
     
-    const hasSearchConfigured = !!(G.search && (G.search.apiKey || (G.search.keys && Object.values(G.search.keys).some(k => !!k))));
+    const hasSearchConfigured = !!(G.search && (G.search.enabled || G.search.apiKey || (G.search.keys && Object.values(G.search.keys).some(k => !!k))));
 
     const searchCheckboxHtml = hasSearchConfigured ? `
     <div class="form-group" style="display:flex;align-items:center;gap:8px;margin-top:2px;">
         <label style="font-size:13px;margin-bottom:0;display:flex;align-items:center;gap:6px;cursor:pointer;">
             <input type="checkbox" id="modalUseSearch" ${G.search.enabled ? 'checked' : ''} style="width:16px;height:16px;accent-color:var(--primary);">
-            🌐 本次启用实时联网检索 (博查/秘塔/Tavily)
+            🌐 本次启用实时联网检索 (Bing Local / 博查 / 秘塔 / Tavily)
         </label>
     </div>` : '';
 

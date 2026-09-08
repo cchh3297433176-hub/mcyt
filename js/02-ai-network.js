@@ -1,5 +1,5 @@
 // js/02-ai-network.js
-// AI 模型设置模块（统一的 OpenAI 兼容接口 / 多平台联网搜索含 Bing Local 免 Key、Tavily、博查、秘塔 / 纯乙女智能安全门禁）
+// AI 模型设置模块（统一的 OpenAI 兼容接口 / 多平台联网搜索含 Bing Local 双通道免Key直连、Tavily、博查、秘塔 / 纯乙女智能安全门禁）
 // ============================================================
 function escapeHtml(str) {
     return String(str == null ? '' : str).replace(/[&<>"']/g, c => ({
@@ -301,7 +301,7 @@ function bindModelSettingsUI(prefix) {
 }
 
 // ============================================================
-// 🔍 多平台联网搜索模块（Bing Local 免Key直连 / 博查 Bocha / 秘塔 Metaso / Tavily）
+// 🔍 多平台联网搜索模块（Bing Local 双通道免Key直连 / 博查 / 秘塔 / Tavily）
 // ============================================================
 if (!G.search) {
     G.search = {
@@ -337,76 +337,81 @@ function loadSearchConfig() {
     } catch (_) {}
 }
 
-// 🌐 健壮性满级的多平台统一网络搜索
+// 🌐 健壮性满级的多平台统一网络搜索（解决跨域白屏问题）
 async function webSearch(query, maxResults = 4) {
     const provider = G.search.provider || 'bing_local';
     
-    // 🌟 1. Bing (Local) 免 Key 直连爬取（健壮性处理：超时控制、双节点切换、多选择器提取与容错兜底）
+    // 🌟 1. Bing (Local) 免 Key 直连 + 跨域网桥双通道抓取
     if (provider === 'bing_local') {
-        const fetchBingNode = async (endpoint) => {
-            const controller = new AbortController();
-            const timer = setTimeout(() => controller.abort(), 10000); // 10秒超时熔断
-            try {
-                const resp = await fetch(endpoint + encodeURIComponent(query), {
-                    signal: controller.signal,
-                    headers: {
-                        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-                        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8'
-                    }
-                });
-                clearTimeout(timer);
-                if (!resp.ok) return null;
-                return await resp.text();
-            } catch (err) {
-                clearTimeout(timer);
-                return null;
-            }
-        };
-
-        // 优先国际版，异常时秒切国内版节点
-        let htmlText = await fetchBingNode('https://www.bing.com/search?q=');
-        if (!htmlText) {
-            htmlText = await fetchBingNode('https://cn.bing.com/search?q=');
-        }
-
-        if (!htmlText) {
-            console.warn('Bing (Local) 访问超时或网络受阻，返回空结果以保护流程继续运行');
-            return { answer: '', results: [] };
-        }
-
-        try {
+        const parseBingHTML = (htmlText) => {
+            if (!htmlText || htmlText.length < 200) return [];
             const parser = new DOMParser();
             const doc = parser.parseFromString(htmlText, 'text/html');
-            const results = [];
-
-            // 多选择器容错匹配
-            const items = doc.querySelectorAll('li.b_algo, div.b_algo');
-            items.forEach(el => {
+            const list = [];
+            
+            // 兼容各种 Bing 模板节点
+            const nodes = doc.querySelectorAll('li.b_algo, div.b_algo');
+            nodes.forEach(el => {
                 const titleEl = el.querySelector('h2 a') || el.querySelector('h2');
                 const linkEl = el.querySelector('h2 a') || el.querySelector('a');
-                const descEl = el.querySelector('.b_caption p') || el.querySelector('.b_algoSlug') || el.querySelector('.b_lineclamp2') || el.querySelector('.b_lineclamp3') || el.querySelector('.b_lineclamp4') || el.querySelector('p');
+                const descEl = el.querySelector('.b_caption p') || el.querySelector('.b_algoSlug') || 
+                               el.querySelector('.b_lineclamp2') || el.querySelector('.b_lineclamp3') || 
+                               el.querySelector('.b_lineclamp4') || el.querySelector('p');
                 
-                if (titleEl && (descEl || linkEl)) {
-                    const titleText = (titleEl.innerText || titleEl.textContent || '').trim();
-                    const descText = descEl ? (descEl.innerText || descEl.textContent || '').trim() : '';
-                    let urlStr = linkEl ? (linkEl.getAttribute('href') || '') : '';
-                    if (urlStr.startsWith('/')) urlStr = 'https://www.bing.com' + urlStr;
+                if (titleEl) {
+                    const title = (titleEl.innerText || titleEl.textContent || '').trim();
+                    const snippet = descEl ? (descEl.innerText || descEl.textContent || '').trim() : '';
+                    let url = linkEl ? (linkEl.getAttribute('href') || '') : '';
+                    if (url.startsWith('/')) url = 'https://cn.bing.com' + url;
 
-                    if (titleText && !titleText.includes('必应') && !titleText.includes('Bing')) {
-                        results.push({
-                            title: titleText,
-                            content: descText || titleText,
-                            url: urlStr
-                        });
+                    if (title && !title.includes('必应') && !title.includes('Microsoft Bing')) {
+                        list.push({ title, content: snippet || title, url });
                     }
                 }
             });
+            return list;
+        };
 
-            return { answer: '', results: results.slice(0, maxResults) };
-        } catch (parseErr) {
-            console.warn('Bing 页面结构解析失败，返回空结果安全降级：', parseErr);
-            return { answer: '', results: [] };
+        // 通道 A：优先走安全公共网桥直接拉取必应网页内容（突破 WebView / 浏览器的跨域拦截）
+        const targetUrl = 'https://cn.bing.com/search?q=' + encodeURIComponent(query);
+        const bridgeEndpoints = [
+            'https://api.allorigins.win/raw?url=' + encodeURIComponent(targetUrl),
+            'https://corsproxy.io/?' + encodeURIComponent(targetUrl)
+        ];
+
+        for (const bridge of bridgeEndpoints) {
+            try {
+                const controller = new AbortController();
+                const timeoutId = setTimeout(() => controller.abort(), 9000);
+                const resp = await fetch(bridge, { signal: controller.signal });
+                clearTimeout(timeoutId);
+                if (resp.ok) {
+                    const html = await resp.text();
+                    const results = parseBingHTML(html);
+                    if (results.length > 0) {
+                        return { answer: '', results: results.slice(0, maxResults) };
+                    }
+                }
+            } catch (_) {}
         }
+
+        // 通道 B：直连探测备选
+        try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 6000);
+            const resp = await fetch(targetUrl, { signal: controller.signal });
+            clearTimeout(timeoutId);
+            if (resp.ok) {
+                const html = await resp.text();
+                const results = parseBingHTML(html);
+                if (results.length > 0) {
+                    return { answer: '', results: results.slice(0, maxResults) };
+                }
+            }
+        } catch (_) {}
+
+        // 安全容错：如果网络完全阻断，返回空列表，保护游戏主线绝不报错崩溃
+        return { answer: '', results: [] };
     }
 
     const key = ((G.search.keys && G.search.keys[provider]) || G.search.apiKey || '').trim();
@@ -454,7 +459,7 @@ async function webSearch(query, maxResults = 4) {
         return { answer: data.answer || '', results };
     }
 
-    // 4. 🌐 Tavily 国际通用搜索（完整保留）
+    // 4. 🌐 Tavily 国际通用搜索
     if (provider === 'tavily') {
         const resp = await fetch('https://api.tavily.com/search', {
             method: 'POST',
@@ -466,13 +471,7 @@ async function webSearch(query, maxResults = 4) {
             throw new Error(`Tavily 错误 (${resp.status})：${t.slice(0, 150)}`);
         }
         const data = await resp.json();
-        const results = [];
-        if (Array.isArray(data.results)) {
-            data.results.forEach(r => {
-                results.push({ title: r.title || '', content: r.content || r.snippet || '', url: r.url || '' });
-            });
-        }
-        return { answer: data.answer || '', results };
+        return { answer: data.answer || '', results: data.results || [] };
     }
 
     return { answer: '', results: [] };
@@ -546,7 +545,7 @@ function buildSearchSettingsHTML(prefix) {
                     <div style="font-size:18px;font-weight:900;color:var(--primary);width:24px;text-align:center;">${curProvider==='metaso'?'✔':''}</div>
                 </div>
 
-                <!-- 平台 3: Tavily Search (完整回归) -->
+                <!-- 平台 3: Tavily Search -->
                 <div class="search-provider-card" data-provider="tavily" style="border:1.5px solid ${curProvider==='tavily'?'var(--primary)':'#e0e0e0'};background:${curProvider==='tavily'?'#f4fbf4':'#fff'};border-radius:10px;padding:10px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;">
                     <div>
                         <div style="font-size:13px;font-weight:700;color:#e65100;">🌐 Tavily Search <span style="font-size:10px;background:#ffe0b2;color:#e65100;padding:1px 5px;border-radius:4px;margin-left:4px;">国际顶流生态</span></div>
@@ -573,7 +572,7 @@ function buildSearchSettingsHTML(prefix) {
                     <div style="font-size:10.5px;color:#888;margin-top:6px;" id="${prefix}SearchHelpLink"></div>
                 </div>
 
-                <!-- 🌟 全新搜索测试模块（带序号、标题、网址与摘要列表展示） -->
+                <!-- 测试搜索模块 -->
                 <div style="border-top:1px dashed #ccc;padding-top:10px;">
                     <div style="font-size:12.5px;font-weight:700;color:#333;margin-bottom:6px;">测试搜索</div>
                     <div style="display:flex;gap:6px;">
@@ -581,7 +580,6 @@ function buildSearchSettingsHTML(prefix) {
                         <button type="button" class="upload-btn" id="${prefix}SearchTestBtn" style="padding:0 18px;font-size:18px;color:var(--primary);background:#eaf5ea;border:1px solid #b8dbb8;border-radius:8px;cursor:pointer;">▶</button>
                     </div>
                     <div id="${prefix}SearchTestResultArea" style="margin-top:10px;max-height:220px;overflow-y:auto;font-size:12px;color:#333;border-radius:6px;">
-                        <!-- 搜索结果将展示在这里 -->
                     </div>
                 </div>
             </div>
@@ -623,7 +621,6 @@ function updateSearchHelpText(prefix) {
     }
 }
 
-// 可视化测试逻辑
 async function testWebSearch(prefix) {
     applySearchConfigFromUI(prefix);
     const prov = G.search.provider || 'bing_local';
@@ -653,7 +650,7 @@ async function testWebSearch(prefix) {
         
         let html = '';
         if(count === 0) {
-            html = '<div style="color:#999;text-align:center;padding:20px;background:#f5f5f5;border-radius:8px;">未能搜索到相关结果（可能暂未被引擎收录或被反爬拦截，建议换词重试）</div>';
+            html = '<div style="color:#999;text-align:center;padding:20px;background:#f5f5f5;border-radius:8px;">未能搜索到相关结果（可能由于网络拦截或暂无收录，可切换国内博查或秘塔试用）</div>';
         } else {
             data.results.forEach((r, idx) => {
                 html += `

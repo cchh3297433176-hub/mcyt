@@ -1,5 +1,5 @@
 // js/06-video-story.js
-// 视频制作（评论由 AI 实时生成）与多层级记忆联动的核心叙事引擎（纯粹AI内容编辑、按天数结构化、更名追踪）
+// 视频制作（评论由 AI 实时生成）与多层级记忆联动的核心叙事引擎（纯粹AI内容编辑、按天数结构化、更名追踪、高自由度人设尊重）
 // ============================================================
 function openVideoModal() {
     const availableAP = G.actionPoints;
@@ -17,7 +17,7 @@ function openVideoModal() {
         `<button class="style-btn ${s.id === 'epic' ? 'selected' : ''}" data-style="${s.id}">${s.label}</button>`
     ).join('');
 
-    const hasSearchConfigured = !!(G.search && (G.search.apiKey || (G.search.keys && Object.values(G.search.keys).some(k => !!k))));
+    const hasSearchConfigured = !!(G.search && (G.search.enabled || G.search.apiKey || (G.search.keys && Object.values(G.search.keys).some(k => !!k))));
 
     const html = `
     <h3>🎬 制作视频</h3>
@@ -34,7 +34,7 @@ function openVideoModal() {
     <div class="form-group" style="display:flex;align-items:center;gap:8px;margin-top:-6px;">
         <label style="font-size:13px;margin-bottom:0;display:flex;align-items:center;gap:6px;cursor:pointer;">
             <input type="checkbox" id="videoUseSearch" ${G.search.enabled ? 'checked' : ''} style="width:16px;height:16px;accent-color:var(--primary);">
-            🌐 启用实时联网搜索真实资讯 (博查/秘塔/Tavily)
+            🌐 启用实时联网搜索真实资讯 (Bing Local / 博查 / 秘塔 / Tavily)
         </label>
     </div>` : ''}
     <div class="form-group">
@@ -135,7 +135,6 @@ function openVideoModal() {
     });
 }
 
-// 🌟 核心：AI 结合视频标题与描述，实时生成生动的网友评论
 async function generateVideoCommentsAI(title, style, desc) {
     const styleNameMap = {
         teach: '硬核教学', entertain: '娱乐整活', epic: '高燃剪辑', survival: '生存实况', movie: '剧情微电影', animation: 'MC动画'
@@ -279,7 +278,7 @@ async function createVideo(title, style, duration, collectionName, collectionInd
     const pov = G.player.pov || 'second';
     let storyPrefix = '你';
     if (pov === 'first') storyPrefix = '我';
-    else if (pov === 'third') storyPrefix = `${G.player.ytName || '少女'}`;
+    else if (pov === 'third') storyPrefix = `${G.player.ytName || '主播'}`;
     const storyText = `${storyPrefix}发布了视频「${title}」${seriesText}，风格${style}，${duration === 'short' ? '短' : '长'}视频。播放量 ${baseViews}，点赞 ${baseLikes}，评论 ${comments.length} 条。${descText}`;
     
     generateStory('🎬 视频发布', storyText, useSearch).then(() => {
@@ -291,20 +290,18 @@ async function createVideo(title, style, duration, collectionName, collectionInd
 }
 
 // ============================================================
-// 通用剧情生成与深度多层级记忆构建（按日期分类、更名档案追踪、上帝视角纯实体名）
+// 通用剧情生成与多层记忆构建（高自由度人设尊重）
 // ============================================================
 function buildSystemPrompt() {
     const p = G.player;
     const activeStoryHistory = (G.storyHistory || []).filter(h => !h.archived);
 
-    // 1. 最近剧情回顾
     const historySummary = activeStoryHistory.slice(-8).map(h =>
         h.truncated
             ? `[第${h.day}天 · ${getTimeSlotName(h.time)}] （内容不完整已忽略）`
             : `[第${h.day}天 · ${getTimeSlotName(h.time)}] ${stripThought(h.text).slice(0, 130)}...`
     ).join('\n');
 
-    // 2. 全局长效记忆库：按日期精确归类发给 AI
     const memoryByDays = {};
     (G.memorySummaries || []).forEach(m => {
         const d = m.day || 1;
@@ -317,16 +314,14 @@ function buildSystemPrompt() {
         return `【📅 游戏第 ${d} 天纪事档案】：\n` + memoryByDays[d].map(txt => `• ${txt}`).join('\n');
     }).join('\n\n');
 
-    // 3. 更名历史履历追踪
     let nameHistoryNotice = '';
     if (p._nameHistory && Array.isArray(p._nameHistory) && p._nameHistory.length > 0) {
-        nameHistoryNotice = `【🚨 核心姓名与更名履历档案】：
+        nameHistoryNotice = `【核心姓名与更名履历档案】：
 主角当前的主播名字为「${p.ytName}」。
 历史曾用名记录：${p._nameHistory.join(' → ')}。
 【极其重要】：历史记忆中记载的曾用名指的均是主角「${p.ytName}」本人，严禁误认为这是不同的角色！\n`;
     }
 
-    // 4. NPC 专属关系与记忆
     const npcDetailedMemories = Object.values(G.npcs || {}).map(n => {
         let mem = `【${n.name}】(好感度: ${n.favor||0}${n._relationship === 'dating' ? ' 💕恋人' : ''})`;
         if (n.memorySummary) mem += `\n  - 专属承诺与互动记忆: ${stripThought(n.memorySummary)}`;
@@ -334,54 +329,43 @@ function buildSystemPrompt() {
         return mem;
     }).join('\n');
 
-    // 5. 群聊公共纪要
     const groupMemoriesList = Object.entries(G.groupMemories || {}).map(([gid, text]) => {
         const grp = G.groups[gid];
         return `[群聊「${grp ? grp.name : gid}」纪要]: ${stripThought(text)}`;
     }).join('\n');
 
-    // 6. 回忆录里程碑
     const memoirRecent = (G.memoir || []).slice(-12).map(m =>
         `[第${m.day}天]: ${m.event} (${m.details})`
     ).join('\n');
 
-    // 🌟 全局人称叙事规则
     const pov = p.pov || 'second';
     let povInstruction = '';
     if (pov === 'first') {
         povInstruction = `【叙事人称铁律】：全文必须严格使用【第一人称「我」】进行沉浸式主观叙事！禁止使用“你”称呼主角，所有心理、动作、语言均以“我”的视角展现。`;
     } else if (pov === 'third') {
-        povInstruction = `【叙事人称铁律】：全文必须使用【第三人称「她」或频道名「${p.ytName}」】进行小说式叙事！严禁使用“你”或“我”来称呼主角，以旁观客观叙述其精彩经历。`;
+        povInstruction = `【叙事人称铁律】：全文必须使用【第三人称「她」或频道名「${p.ytName}」】进行小说式叙事！严禁使用“你”或“我”来称呼主角，以旁观客观叙述其经历。`;
     } else {
         povInstruction = `【叙事人称铁律】：全文使用【第二人称「你」】进行代入感叙事！引导主角进行体验。`;
     }
-
-    // 🌸 女性玩家与声音设定
-    const voiceInstruction = p.voiceVoiceChanger 
-        ? `玩家在网络直播/视频中使用了变声器伪装（变声器设定），但现实皮下依然是真实的女性。`
-        : `玩家为纯正的女性！声线天然为少女音/清澈女声，描写玩家的嗓音、体态、神态时必须完全符合女性特质，严禁使用“兄弟”、“哥们”等男性化粗鲁称呼。`;
 
     return `
 你是一个专业且富有创意的 MC YouTube 模拟器叙事 AI。
 根据玩家行动生成生动、连贯、细节饱满的沉浸式剧情。
 
 ${povInstruction}
-【🌸 玩家真实身份约束】：
-玩家为女性！${voiceInstruction}
+【🌸 玩家真实身份】：
+玩家为女性。请完全尊重玩家在下文自定义的形象与人设描写（包括但不限于声音质感、外貌特征、年龄体态等，女性可以有任何多样化的声音与形象，严禁带入任何刻板标签）。
 ${nameHistoryNotice}
-【🎭 玩家形象三大维度（重点分层，严禁混淆）】：
-1. 🖥️【线上虚拟形象 / Live2D皮套】：${p.avatarLive2d || '精美定制Live2D虚拟形象'}
-   （适用场景：开直播、录视频、Vtuber联动出镜、观众视角所见到的动态立绘形态）
-2. 🎮【游戏形象 / Minecraft像素皮肤】：${p.skin || '专属MC定制皮肤与披风'}
-   （适用场景：在Minecraft游戏中挖矿、建筑、PvP战斗、被怪物追击、方块世界联机时的操作角色）
-3. 🏠【线下真实形象 / 现实皮下素颜】：${p.appearanceReal || '清秀灵动的少女，身姿轻盈，日常居家族穿搭'}
-   （适用场景：摘下耳机后的现实生活、喝水休息、线下聚会偶遇、私信视频通话等皮下生活）
+【🎭 玩家自定义三大形象（完全尊重用户输入，未填写则不妄加预设）】：
+1. 🖥️【线上虚拟形象 / Live2D皮套】：${p.avatarLive2d || '主播自主决定的网络虚拟形象'}
+2. 🎮【游戏形象 / Minecraft像素皮肤】：${p.skin || '主播在游戏内使用的MC像素皮肤'}
+3. 🏠【线下真实形象 / 现实皮下样貌】：${p.appearanceReal || '主播在现实生活中的真实容貌与日常状态'}
 
 【玩家频道与属性】
-- 主播频道：${p.ytName} | 身份：${p.identity === 'new' ? '新主播' : p.identity === 'fans' ? '小有名气主播' : '老牌主播'} | 赛道：${p.category} | 人设形象：${p.persona}
+- 主播频道：${p.ytName} | 身份：${p.identity === 'new' ? '新主播' : p.identity === 'fans' ? '小有名气主播' : '老牌主播'} | 赛道：${p.category} | 人设风格：${p.persona || '自然由用户自定义'}
 - 数据统计：粉丝 ${p.followers} | 金币 ${p.money} | 点赞 ${p.likes}
 
-【🌐 统一全局长效记忆档案（已按游戏天数清晰归档，注意时间先后演进）】
+【🌐 统一全局长效记忆档案（已按游戏天数清晰归档）】
 ${formattedDayMemories || '暂无全局历史摘要'}
 
 【👥 群聊公开话题与纪要】
@@ -398,7 +382,7 @@ ${memoirRecent || '暂无'}
 
 【核心叙事铁律】
 1. 必须精准继承【统一全局长效记忆档案】与【NPC关系与专属记忆】中的所有历史设定与承诺。
-2. 密切注意【当前游戏天数：第 ${G.day} 天 · ${getTimeSlotName(G.timeSlot)}】，严格依照时间先后顺序推进，绝不把多天前的早晨事件当成今天发生。
+2. 密切注意【当前游戏天数：第 ${G.day} 天 · ${getTimeSlotName(G.timeSlot)}】，严格依照时间先后顺序推进。
 3. 每次生成剧情不少于 800 字，皮上游戏实况（走位、红石、追杀博弈、反杀高光）与皮下生活（日常互动、微信消息联动、主播八卦）巧妙交织。
 4. 行文生动写实，代入感强烈。只输出剧情正文，禁止角色扮演外的额外说明。
 `;
@@ -451,13 +435,13 @@ async function generateStory(tag, userPrompt, useSearch = false, replaceBlock = 
         let searchNote = '';
 
         const searchActive = (useSearch || (G.search && G.search.enabled));
-        const hasSearchKey = !!(G.search && (G.search.apiKey || (G.search.keys && Object.values(G.search.keys).some(k => !!k))));
+        const hasSearchKey = !!(G.search && (G.search.enabled || G.search.apiKey || (G.search.keys && Object.values(G.search.keys).some(k => !!k))));
 
         if (searchActive && hasSearchKey && typeof webSearch === 'function') {
             try {
                 const query = deriveSmartSearchQuery(userPrompt);
-                const currentProvider = G.search.provider || 'bocha';
-                const providerName = currentProvider === 'bocha' ? '博查搜索' : currentProvider === 'metaso' ? '秘塔搜索' : 'Tavily';
+                const currentProvider = G.search.provider || 'bing_local';
+                const providerName = currentProvider === 'bing_local' ? 'Bing Local' : currentProvider === 'bocha' ? '博查搜索' : currentProvider === 'metaso' ? '秘塔搜索' : 'Tavily';
 
                 showToast(`🌐 ${providerName} 正在检索最新资料...`, 'info', 1200);
 
@@ -526,9 +510,6 @@ async function generateStory(tag, userPrompt, useSearch = false, replaceBlock = 
     }
 }
 
-// ============================================================
-// ✏️ 编辑与管理：纯粹专注于 AI 生成内容/文章（移走记忆总结，彻底划清职责）
-// ============================================================
 function refreshStoryBlockDOM(entry) {
     const block = dom.storyArea ? dom.storyArea.querySelector(`.story-block[data-story-id="${entry._id}"]`) : document.querySelector(`.story-block[data-story-id="${entry._id}"]`);
     if (!block) return;
@@ -564,7 +545,6 @@ function buildUnifiedAIEntryHTML(item) {
 function openEditContentModal() {
     const allAIItems = [];
 
-    // 1. 主线剧情正文
     (G.storyHistory || []).forEach((s, idx) => {
         allAIItems.push({
             _id: s._id || ('story_' + idx),
@@ -575,7 +555,6 @@ function openEditContentModal() {
         });
     });
 
-    // 2. AO3 同人文小说正文
     (G.fanworks || []).forEach(fw => {
         if (Array.isArray(fw.chapters) && fw.chapters.length) {
             fw.chapters.forEach((chap, cIdx) => {
@@ -601,7 +580,6 @@ function openEditContentModal() {
         }
     });
 
-    // 3. YouTube 视频脚本剧情
     (G.player?.videos || []).forEach((v, vIdx) => {
         if (v.desc || v.description) {
             allAIItems.push({
@@ -615,7 +593,6 @@ function openEditContentModal() {
         }
     });
 
-    // 4. 朋友圈动态正文
     (G.feed || []).forEach(f => {
         allAIItems.push({
             _id: `feed_${f.id}`,
@@ -627,7 +604,6 @@ function openEditContentModal() {
         });
     });
 
-    // 5. 私聊对话
     for (const [npcId, msgs] of Object.entries(G.chatHistory || {})) {
         const npc = G.npcs[npcId];
         const name = npc ? npc.name : npcId;
@@ -647,7 +623,6 @@ function openEditContentModal() {
 
     allAIItems.sort((a, b) => b.order - a.order);
 
-    // 🌟 纯粹化设计：只保留 AI 生成内容编辑器，移走记忆标签！
     const html = `
     <h3 style="margin-bottom:6px;">✏️ 编辑与管理 AI 生成内容</h3>
     <div style="font-size:12px;color:#666;margin-bottom:12px;">
@@ -681,7 +656,6 @@ function openEditContentModal() {
             chevron.textContent = '▼';
         });
 
-        // 🗑️ 删除此条记录
         el.querySelector('.edit-del-btn')?.addEventListener('click', (e) => {
             e.stopPropagation();
             const id = el.dataset.id;
@@ -736,7 +710,6 @@ function openEditContentModal() {
             autoSaveGame();
         });
 
-        // 💾 保存修改
         el.querySelector('.edit-save-btn')?.addEventListener('click', (e) => {
             e.stopPropagation();
             const id = el.dataset.id;
@@ -788,9 +761,6 @@ function openEditContentModal() {
 }
 $('editContentBtn')?.addEventListener('click', () => openEditContentModal());
 
-// ============================================================
-// 🧠 剧情自动归档与检测（结合记忆配置的阈值驱动）
-// ============================================================
 async function maybeAutoSummarize() {
     const s = G.memoryConfig || {};
     if (s.enabled === false) return;
