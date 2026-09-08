@@ -45,7 +45,7 @@
                 </div>
                 <div class="form-group">
                     <label>📅 年龄 <span class="required">*</span></label>
-                    <input type="number" id="ageInput" placeholder="例如 18" min="8" max="99" value="18">
+                    <input type="number" id="ageInput" placeholder="例如 18" min="1" max="150" value="18">
                 </div>
                 <div class="form-group">
                     <label>📺 YouTube 账号名 <span class="required">*</span></label>
@@ -63,33 +63,28 @@
 
                 <div class="form-group" style="background:#f9fbf9;border:1.5px solid #dceedc;border-radius:12px;padding:12px;margin:10px 0;">
                     <div style="font-weight:700;font-size:13.5px;color:#1e4620;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
-                        <span>🎭 形象三大维度细分设定（AI精准场景分层）</span>
+                        <span>🎭 形象三大维度细分设定（纯净空白，自由定制）</span>
                     </div>
 
                     <div class="form-group" style="margin-bottom:8px;">
-                        <label style="font-size:12px;">1. 🖥️ 线上虚拟形象（Live2D / Vtuber皮套） <span class="required">*</span></label>
-                        <textarea id="avatarLive2dInput" placeholder="描述直播与视频出镜时观众看到的虚拟立绘形象..." style="min-height:45px;">清纯可爱的薄荷绿长发少女，戴着猫耳监听耳机，身穿学院风白色水手连帽衫，Live2D表情灵动丰富。</textarea>
+                        <label style="font-size:12px;">1. 🖥️ 线上虚拟形象（Live2D / Vtuber皮套）</label>
+                        <textarea id="avatarLive2dInput" placeholder="可选：描述直播与视频出镜时观众看到的虚拟形象风格（如皮套立绘、特征等）..." style="min-height:45px;"></textarea>
                     </div>
 
                     <div class="form-group" style="margin-bottom:8px;">
-                        <label style="font-size:12px;">2. 🎮 游戏形象（Minecraft 像素皮肤） <span class="required">*</span></label>
-                        <textarea id="skinInput" placeholder="描述你在Minecraft世界操作的像素方块人角色外观、披风..." style="min-height:45px;">身穿钻石战甲，头戴金色附魔头盔，背后有红色鞘翅披风，左眼处有一道帅气的战斗伤疤。</textarea>
+                        <label style="font-size:12px;">2. 🎮 游戏形象（Minecraft 像素皮肤）</label>
+                        <textarea id="skinInput" placeholder="可选：描述你在Minecraft方块世界操纵角色的像素皮肤、披风、外观..." style="min-height:45px;"></textarea>
                     </div>
 
                     <div class="form-group" style="margin-bottom:0;">
-                        <label style="font-size:12px;">3. 🏠 线下真实形象（现实皮下素颜） <span class="required">*</span></label>
-                        <textarea id="appearanceRealInput" placeholder="描述现实生活中的素颜容貌、身形气质与日常私服..." style="min-height:45px;">眉眼清秀干净的年轻少女，素颜灵动，乌黑柔顺的长发微卷，身材轻盈匀称，日常喜欢穿宽松舒服的居服卫衣。</textarea>
+                        <label style="font-size:12px;">3. 🏠 线下真实形象（现实皮下素颜）</label>
+                        <textarea id="appearanceRealInput" placeholder="可选：描述现实生活中的真实容貌、体态声音、穿搭特征..." style="min-height:45px;"></textarea>
                     </div>
                 </div>
 
-                <div class="form-group checkbox-group" style="margin-bottom:10px;">
-                    <input type="checkbox" id="voiceChangerInput">
-                    <label for="voiceChangerInput">🎙️ 直播/视频出镜时使用变声器（不勾选即为自然真实清澈女声）</label>
-                </div>
-
                 <div class="form-group">
-                    <label>🎭 性格人设简介 <span class="required">*</span></label>
-                    <textarea id="personaInput" placeholder="描述你的主播性格人设..." style="min-height:40px;">一位充满活力的冒险家，擅长红石科技，偶尔整活，声音富有感染力。</textarea>
+                    <label>🎭 性格人设简介</label>
+                    <textarea id="personaInput" placeholder="可选：描述你的性格人设、声音风格、语言习惯等..." style="min-height:40px;"></textarea>
                 </div>
 
                 <div class="form-group">
@@ -112,7 +107,6 @@
                     <div class="skill-input-group"><label>⚔️</label><input type="range" id="skillPvp" min="0" max="100" value="20"><input type="number" id="skillPvpNum" min="0" max="100" value="20"></div>
                     <div class="skill-input-group"><label>🌲</label><input type="range" id="skillSurvival" min="0" max="100" value="20"><input type="number" id="skillSurvivalNum" min="0" max="100" value="20"></div>
                     <div class="skill-input-group"><label>🏹</label><input type="range" id="skillHunting" min="0" max="100" value="20"><input type="number" id="skillHuntingNum" min="0" max="100" value="20"></div>
-                    <div style="font-size:11px;color:var(--text2);margin-top:2px;">💡 性格人设中的关键词会额外加成</div>
                 </div>
                 <button class="btn-primary" id="startGameBtn">🚀 填入Key，开始游戏</button>
                 <button class="btn-secondary" id="setupLoadGameBtn" style="width:100%;margin-top:8px;">📂 读取已有存档</button>
@@ -143,7 +137,7 @@
             </div>
             <!-- 右侧主区域 -->
             <div class="game-main">
-                <!-- 头部栏：采用自适应双行平衡布局 -->
+                <!-- 头部栏 -->
                 <div class="game-header">
                     <div class="game-header-top">
                         <div class="left">
