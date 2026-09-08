@@ -2003,6 +2003,14 @@ window.renderMemoryModalView = renderMemoryModalView;
 // 💬 私聊窗口渲染
 // ============================================================
 function renderSingleChatWindow(container) {
+    // 修复：_chatShowFullHistory / _behindScreenActive 这两个字段如果因为
+    // 新建存档、读档等流程用一份"全新的 G"把旧对象整个换掉，就会丢失
+    // （文件顶部的 if(!G.xxx) 初始化只在脚本刚加载时跑过一次，换档后不会重新执行）。
+    // 这里进函数后立刻自愈式补上，避免下面直接按 [key] 取值时因为对象是 undefined 而抛异常，
+    // 导致私聊窗口渲染中途崩溃、界面停在原地（看起来就像"点了没反应，进不去聊天"）。
+    if (!window.G._chatShowFullHistory) window.G._chatShowFullHistory = {};
+    if (!window.G._behindScreenActive) window.G._behindScreenActive = {};
+
     const npcId = window.G.currentChatNpc;
     const npc = window.G.npcs[npcId];
     if (!npc) { closeChat(); return; }
@@ -2144,6 +2152,7 @@ function renderSingleChatWindow(container) {
 window.renderSingleChatWindow = renderSingleChatWindow;
 
 window.toggleBehindScreen = function(npcId) {
+    if (!window.G._behindScreenActive) window.G._behindScreenActive = {};
     window.G._behindScreenActive[npcId] = !window.G._behindScreenActive[npcId];
     showToast(window.G._behindScreenActive[npcId] ? '👁️ 已开启「屏幕那边的TA」动作感知' : '已关闭线下动作感知', 'info', 1500);
     renderSingleChatWindow((dom && dom.socialTab) || document.getElementById('socialTab'));
@@ -2561,6 +2570,7 @@ function findStickerByKeyword(kw) {
 }
 
 window.triggerAIReplyForSingle = async function(npcId) {
+    if (!window.G._behindScreenActive) window.G._behindScreenActive = {};
     const npc = window.G.npcs[npcId];
     if (!npc) return;
     const activeAcc = getActiveAccountInfo();
