@@ -99,7 +99,10 @@ function bindLongPressEvent(element, onClick, onLongPress, threshold = 450) {
             e.preventDefault();
             return;
         }
-        if (!isMoved && (Date.now() - startTime < 380)) {
+        // 修复：只要长按计时器还没触发（isLongPressTriggered 为 false）且手指没有滑动，
+        // 就应当判定为一次有效短按；不再使用与 threshold(450ms) 脱节的独立 380ms 魔法数字，
+        // 避免出现"松手时间在 380ms~450ms 之间，既不算短按也不算长按"的死区。
+        if (!isMoved) {
             if (typeof onClick === 'function') {
                 e.preventDefault();
                 onClick(e);
