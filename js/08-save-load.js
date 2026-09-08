@@ -1,5 +1,5 @@
 // js/08-save-load.js
-// 存档/读档/初始化模块（v1.607 全量数据保护、同人/油管防丢、开局表单防清空版）
+// 存档/读档/初始化模块（v1.610 全量数据保护、三大场景形象细分、人称与更名履历无损存取版）
 // ============================================================
 const CURRENT_APP_VERSION = '1.610';
 
@@ -7,12 +7,16 @@ let _gameInitialized = false;
 let _skipStartChoiceOnce = false;
 
 function initGame() {
-    // 1. 优先安全锁存玩家填写的全新人设
+    // 1. 优先安全锁存玩家填写的全新人设与三大场景形象
     const newYtName = $('ytNameInput')?.value.trim() || 'MC_CraftMaster';
     const newAge = parseInt($('ageInput')?.value) || 18;
     const newPersona = $('personaInput')?.value.trim() || '';
+    const newLive2d = $('avatarLive2dInput')?.value.trim() || '';
     const newSkin = $('skinInput')?.value.trim() || '';
+    const newAppearanceReal = $('appearanceRealInput')?.value.trim() || '';
     const newCategory = $('categorySelect')?.value || '剧情';
+    const newPov = $('povSelect')?.value || 'second';
+    const newVoiceChanger = $('voiceChangerInput')?.checked || false;
     const idVal = document.querySelector('input[name="identity"]:checked')?.value || 'new';
 
     const skillVals = {};
@@ -33,7 +37,7 @@ function initGame() {
     _gameInitialized = true;
     window.G.phase = 'playing';
 
-    // 4. 将全新人设与数据注入全局状态
+    // 4. 将全新人设与三大形象数据注入全局状态
     window.G.day = 1;
     window.G.timeSlot = 0;
     window.G.actionPoints = 6;
@@ -42,9 +46,14 @@ function initGame() {
     window.G.player.ytName = newYtName;
     window.G.player.age = newAge;
     window.G.player.persona = newPersona;
+    window.G.player.avatarLive2d = newLive2d;
     window.G.player.skin = newSkin;
+    window.G.player.appearanceReal = newAppearanceReal;
     window.G.player.category = newCategory;
     window.G.player.identity = idVal;
+    window.G.player.pov = newPov;
+    window.G.player.voiceVoiceChanger = newVoiceChanger;
+    window.G.player._nameHistory = [newYtName];
 
     if (idVal === 'fans') {
         window.G.player.followers = 5000;
@@ -112,8 +121,11 @@ function initGame() {
 function appendInitialWelcomeStory() {
     const p = window.G.player;
     const text = `🎮 欢迎，${p.ytName}！\n\n` +
-        `你是一位新晋 MC 主播，擅长 ${p.category} 赛道。\n` +
-        `你的皮上形象是：${p.persona || '一位充满活力的主播'}，皮肤是：${p.skin || '经典装扮'}。\n\n` +
+        `你是一位新晋 MC 女主播，擅长 ${p.category} 赛道。\n` +
+        `【🖥️ 线上虚拟皮套】：${p.avatarLive2d || '未设定'}\n` +
+        `【🎮 MC像素皮肤】：${p.skin || '经典装扮'}\n` +
+        `【🏠 线下真实容貌】：${p.appearanceReal || '清秀灵动的少女'}\n` +
+        `【🎭 性格人设风格】：${p.persona || '充满活力的冒险家'}\n\n` +
         `今天是你在 MC 油管世界的第 1 天，你是一名学生，正值暑假。\n` +
         `你有 6 个行动点（每2点推进一个时段），规划你的主播生涯吧！\n\n` +
         `💡 提示：新人主播在联系人列表中初始没有大主播好友，随着你提升粉丝热度与作品曝光，主播们与粉丝们会主动向你递来好友申请与粉丝群邀请！`;
@@ -138,7 +150,7 @@ function autoSaveGame() {
     }
 }
 
-// 🛡️ 构建精简取证数据（仅在被封禁模式下裁剪最近 10 次生成与对话记录，保护用户隐私）
+// 🛡️ 构建精简取证数据
 function buildAuditSanitizedPayload(originalPayload) {
     const cloned = JSON.parse(JSON.stringify(originalPayload));
 
@@ -213,7 +225,7 @@ function openBackupModal() {
     }
 }
 
-// 打开恢复流程（支持选取 .png 存档图、.json 文件）
+// 打开恢复流程
 function openRestoreModal() {
     let fileInput = document.getElementById('restoreJsonFileInputDynamic');
     if (!fileInput) {
@@ -640,7 +652,7 @@ function confirmExitGame() {
     }
 }
 
-// 🛡️ 全量数据打包
+// 🛡️ 全量数据打包（三大场景形象、更名履历、全局人称随心保存）
 function serializeGameState() {
     const g = window.G;
     return {
@@ -694,7 +706,17 @@ function applyDeserializedGameState(data) {
     if (!data) return;
     const g = window.G;
 
-    if (data.player) g.player = Object.assign({}, g.player, data.player);
+    if (data.player) {
+        g.player = Object.assign({}, g.player, data.player);
+        if (!g.player._nameHistory) {
+            g.player._nameHistory = [g.player.ytName || 'MC_CraftMaster'];
+        }
+        if (!g.player.pov) g.player.pov = 'second';
+        if (g.player.voiceVoiceChanger === undefined) g.player.voiceVoiceChanger = false;
+        if (!g.player.avatarLive2d) g.player.avatarLive2d = '';
+        if (!g.player.appearanceReal) g.player.appearanceReal = '';
+    }
+
     if (data.day !== undefined) g.day = data.day;
     if (data.timeSlot !== undefined) g.timeSlot = data.timeSlot;
     if (data.actionPoints !== undefined) g.actionPoints = data.actionPoints;

@@ -1,5 +1,5 @@
 // js/09-events-init.js
-// 事件绑定与公告系统（v1.604 更新说明与正版声明）
+// 事件绑定与公告系统（v1.604 更新说明与正版声明，支持三大场景形象与全局人称全面编辑）
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
     // 开始游戏按钮（直达开局，不再强行拦截弹窗清空人设）
@@ -60,7 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // 左上角头像：采用手势防抖引擎，触屏秒开《编辑个人资料人设》
+    // 左上角头像：采用手势防抖引擎，触屏秒开《编辑主播个人人设与资料》
     const headerAvatarEl = $('headerAvatar');
     if (headerAvatarEl) {
         if (typeof bindLongPressEvent === 'function') {
@@ -93,7 +93,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // 重说按钮（全局追踪式增强）
+    // 重说按钮
     $('rerollBtn')?.addEventListener('click', () => {
         if (G.isGenerating) { showToast('⏳ 正在生成中，请稍候'); return; }
         if (typeof G._lastRegenerate !== 'function') { showToast('暂无可重新生成的内容', 'error', 1800); return; }
@@ -355,24 +355,28 @@ function openVersionNoticeModal(version) {
 }
 
 // ============================================================
-// 🧑 个人资料与人设全面编辑弹窗
+// 🧑 个人资料与人设全面编辑弹窗（三大场景形象细分 + 全局人称切换）
 // ============================================================
 function openEditPlayerProfileModal() {
     const p = G.player || {};
     const currentName = p.ytName || '主播';
     const currentAvatar = p.avatar || '';
     const currentPersona = p.persona || '';
+    const currentLive2d = p.avatarLive2d || '';
     const currentSkin = p.skin || '';
+    const currentAppearanceReal = p.appearanceReal || '';
     const currentCategory = p.category || '剧情';
+    const currentPov = p.pov || 'second';
+    const currentVoiceChanger = !!p.voiceVoiceChanger;
 
-    const categories = ['剧情', '建筑', '红石', 'PvP', '生存挑战', '模组实况', '整活搞笑'];
+    const categories = ['剧情', '建筑', '红石', 'PvP', '生存挑战', '模组实况', '整活搞笑', '追杀', '休闲', '混合'];
     const categoryOptions = categories.map(cat => `
         <option value="${cat}" ${cat === currentCategory ? 'selected' : ''}>${cat}</option>
     `).join('');
 
     openModal(`
         <h3>🧑 编辑主播个人人设与资料</h3>
-        <p style="font-size:12px;color:#666;line-height:1.5;">自由调整你的频道名称、皮上形象、皮肤与赛道。修改后 AI 主线与私聊将立即同步感知！</p>
+        <p style="font-size:12px;color:#666;line-height:1.5;">自由调整你的频道名称、三大场景形象、叙事人称与赛道。修改后 AI 主线与私聊将立即同步感知！</p>
         
         <div style="max-height:68vh;overflow-y:auto;padding-right:4px;">
             <div class="form-group">
@@ -392,13 +396,44 @@ function openEditPlayerProfileModal() {
             </div>
 
             <div class="form-group">
-                <label>主播性格人设 (Persona)</label>
-                <textarea id="editPlayerPersonaInput" rows="3" placeholder="例如：性格活泼开朗的女高中生，偶尔有些小傲娇，喜欢红石和建筑..." style="width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;font-size:13px;">${escapeHtml(currentPersona)}</textarea>
+                <label>📖 全局剧情叙事人称 (POV)</label>
+                <select id="editPlayerPovSelect" style="width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;font-size:13px;background:#fff;">
+                    <option value="second" ${currentPov === 'second' ? 'selected' : ''}>第二人称【你】（经典沉浸代入式）</option>
+                    <option value="first" ${currentPov === 'first' ? 'selected' : ''}>第一人称【我】（身临其境自述视点）</option>
+                    <option value="third" ${currentPov === 'third' ? 'selected' : ''}>第三人称【她 / 频道名】（小说客观记录视点）</option>
+                </select>
+                <div style="font-size:11px;color:#2e7d32;margin-top:2px;">
+                    💡 无论所选人称是什么，长效记忆中枢均严格以上帝视角与<b>双方具体姓名</b>留存，绝不指代混淆！
+                </div>
+            </div>
+
+            <div class="form-group checkbox-group" style="margin:8px 0;">
+                <input type="checkbox" id="editVoiceChangerInput" ${currentVoiceChanger ? 'checked' : ''}>
+                <label for="editVoiceChangerInput">🎙️ 直播/视频出镜时使用变声器（不勾选即为自然真实清澈女声）</label>
+            </div>
+
+            <div style="background:#f8faf8;border:1.5px solid #dceedc;border-radius:12px;padding:10px;margin:10px 0;">
+                <div style="font-weight:700;font-size:13px;color:#1e4620;margin-bottom:6px;">🎭 形象三大场景分层（AI精准呈现）</div>
+
+                <div class="form-group" style="margin-bottom:8px;">
+                    <label style="font-size:12px;">1. 🖥️ 线上虚拟形象（Live2D / Vtuber皮套） <span class="required">*</span></label>
+                    <textarea id="editPlayerLive2dInput" rows="2" placeholder="开播或录视频出镜时，观众看到的动态立绘形象..." style="width:100%;padding:7px;border-radius:6px;border:1px solid #ccc;font-size:12.5px;">${escapeHtml(currentLive2d)}</textarea>
+                </div>
+
+                <div class="form-group" style="margin-bottom:8px;">
+                    <label style="font-size:12px;">2. 🎮 游戏形象（Minecraft 像素皮肤） <span class="required">*</span></label>
+                    <textarea id="editPlayerSkinInput" rows="2" placeholder="在MC游戏中操纵角色的方块人皮肤、披风、外观..." style="width:100%;padding:7px;border-radius:6px;border:1px solid #ccc;font-size:12.5px;">${escapeHtml(currentSkin)}</textarea>
+                </div>
+
+                <div class="form-group" style="margin-bottom:0;">
+                    <label style="font-size:12px;">3. 🏠 线下真实形象（现实皮下素颜） <span class="required">*</span></label>
+                    <textarea id="editPlayerAppearanceRealInput" rows="2" placeholder="摘下耳机后的素颜相貌、身姿气质与日常居家私服穿搭..." style="width:100%;padding:7px;border-radius:6px;border:1px solid #ccc;font-size:12.5px;">${escapeHtml(currentAppearanceReal)}</textarea>
+                </div>
             </div>
 
             <div class="form-group">
-                <label>皮肤/形象外观 (Skin)</label>
-                <input type="text" id="editPlayerSkinInput" value="${escapeHtml(currentSkin)}" placeholder="例如：浅棕色双马尾，戴着猫耳耳机，身穿绿色连帽卫衣...">
+                <label>主播性格人设 (Persona)</label>
+                <textarea id="editPlayerPersonaInput" rows="2" placeholder="例如：充满活力的冒险家，偶尔整活..." style="width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;font-size:13px;">${escapeHtml(currentPersona)}</textarea>
             </div>
 
             <div class="form-group">
@@ -446,51 +481,52 @@ function openEditPlayerProfileModal() {
     document.getElementById('savePlayerProfileBtn')?.addEventListener('click', () => {
         const newName = document.getElementById('editPlayerNameInput')?.value.trim();
         const newPersona = document.getElementById('editPlayerPersonaInput')?.value.trim();
+        const newLive2d = document.getElementById('editPlayerLive2dInput')?.value.trim();
         const newSkin = document.getElementById('editPlayerSkinInput')?.value.trim();
+        const newAppearanceReal = document.getElementById('editPlayerAppearanceRealInput')?.value.trim();
         const newCategory = document.getElementById('editPlayerCategorySelect')?.value || '剧情';
+        const newPov = document.getElementById('editPlayerPovSelect')?.value || 'second';
+        const newVoiceChanger = document.getElementById('editVoiceChangerInput')?.checked || false;
 
         if (!newName) { showToast('⚠️ 频道名不能为空', 'error'); return; }
 
         const oldName = G.player.ytName;
-        const oldPersona = G.player.persona;
-        const oldSkin = G.player.skin;
-
         const nameChanged = oldName !== newName;
-        const personaChanged = oldPersona !== newPersona;
-        const skinChanged = oldSkin !== newSkin;
 
         G.player.ytName = newName;
         G.player.avatar = newAvatarData;
         G.player.persona = newPersona;
+        G.player.avatarLive2d = newLive2d;
         G.player.skin = newSkin;
+        G.player.appearanceReal = newAppearanceReal;
         G.player.category = newCategory;
+        G.player.pov = newPov;
+        G.player.voiceVoiceChanger = newVoiceChanger;
 
         if (typeof detectPersonaStyle === 'function') {
             G.player.personaStyle = detectPersonaStyle(newPersona);
         }
 
+        if (!G.player._nameHistory) G.player._nameHistory = [];
         if (!G.memorySummaries) G.memorySummaries = [];
 
         if (nameChanged) {
+            if (!G.player._nameHistory.includes(oldName)) {
+                G.player._nameHistory.push(oldName);
+            }
             const memoText = `【更名记录】：第 ${G.day} 天，主角将频道名称由「${oldName}」正式更改为「${newName}」。所有NPC、粉丝与AI剧情中，「${oldName}」与「${newName}」均为同一人，人际关系与历史成就完全继承。`;
-            G.memorySummaries.push(memoText);
+            G.memorySummaries.push({ id: 'gm_rename_' + Date.now(), day: G.day, text: memoText, time: '刚刚' });
             addMemoir('更名启事', `频道名由「${oldName}」更改为「${newName}」`);
             appendStory(`📢 你的频道正式更名为「${newName}」，粉丝与好友们都在为你庆祝新起点！`, '📢 频道更名');
         }
 
-        if (personaChanged || skinChanged) {
-            const updateDetails = [];
-            if (personaChanged) updateDetails.push(`性格人设变更为：“${newPersona}”`);
-            if (skinChanged) updateDetails.push(`形象皮肤换为：“${newSkin}”`);
-            const updateMemo = `【主角形象与人设更新】：第 ${G.day} 天，主角${updateDetails.join('，')}。`;
-            G.memorySummaries.push(updateMemo);
-            addMemoir('形象与人设更新', updateDetails.join('；'));
-        }
+        const updateMemo = `【主角三大形象设定更新】：第 ${G.day} 天，${newName} 线上Live2D更新为：“${newLive2d.slice(0, 30)}...”，MC像素皮换为：“${newSkin.slice(0, 30)}...”，线下样貌为：“${newAppearanceReal.slice(0, 30)}...”。`;
+        G.memorySummaries.push({ id: 'gm_profile_' + Date.now(), day: G.day, text: updateMemo, time: '刚刚' });
 
         updateUI();
         renderAllPanels();
         closeModal();
-        showToast('✅ 主播资料与人设已保存生效！', 'success', 2500);
+        showToast('✅ 主播资料、三大形象与人称已保存生效！', 'success', 2500);
         autoSaveGame();
     });
 }

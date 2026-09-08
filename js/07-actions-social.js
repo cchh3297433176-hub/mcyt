@@ -689,7 +689,7 @@ async function triggerFanCreationPrompt() {
 }
 
 // ============================================================
-// ➕ AO3 开坑新书：角色动态识别、模糊搜索与人称选项
+// ➕ AO3 开坑新书：角色动态识别、默认折叠展开与自定义关系手写
 // ============================================================
 function openCreateCustomBookModal() {
     ensureBrowserIntegrity();
@@ -732,29 +732,41 @@ function openCreateCustomBookModal() {
         </div>
 
         <div class="form-group" style="background:#fdfcf9;padding:10px;border-radius:8px;border:1px solid #efe5d8;">
-            <label style="display:flex;justify-content:space-between;align-items:center;">
-                <span>👥 涉及角色与核心羁绊 <span style="font-size:11px;color:#2e7d32;">(🌸纯乙女：仅限女主)</span></span>
-            </label>
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                <label style="font-weight:700;font-size:12.5px;margin:0;">
+                    👥 涉及角色与羁绊 <span style="font-size:11px;color:#2e7d32;">(🌸纯乙女原则)</span>
+                </label>
+                <button type="button" id="btnTogglePoolExpand" style="border:none;background:none;color:#900;font-size:11px;font-weight:700;cursor:pointer;padding:2px 4px;">
+                    🔽 展开全部 (${allCharacters.length})
+                </button>
+            </div>
             
             <div style="margin:4px 0 6px;">
                 <input type="text" id="charSearchFilterInput" placeholder="🔍 快速搜索过滤角色（如 Dream、ThatMob、红石...）" style="width:100%;padding:6px 9px;font-size:12px;border-radius:6px;border:1px solid #d4c4b2;box-sizing:border-box;">
             </div>
 
-            <div id="characterChipsPool" style="display:flex;flex-wrap:wrap;gap:5px;max-height:100px;overflow-y:auto;padding:4px;background:#fff;border-radius:6px;border:1px dashed #d8cfc4;margin-bottom:8px;">
+            <!-- P2 改进：默认折叠状态，高度适中，点击可展开全部 -->
+            <div id="characterChipsPool" style="display:flex;flex-wrap:wrap;gap:5px;max-height:56px;overflow-y:hidden;padding:4px;background:#fff;border-radius:6px;border:1px dashed #d8cfc4;margin-bottom:8px;transition:max-height 0.25s ease;">
                 <!-- 动态生成可选角色胶囊 -->
             </div>
 
-            <div style="display:flex;gap:6px;margin-bottom:6px;">
-                <select id="pairingTemplateSelect" style="flex:1;padding:6px;font-size:12px;border-radius:6px;border:1px solid #ccc;background:#fff;">
+            <!-- P3 改进：关系模板下拉框支持“自定义手写”，选中后展开自定义手写输入框 -->
+            <div style="margin-bottom:6px;">
+                <label style="font-size:11.5px;color:#666;">选择关系模板：</label>
+                <select id="pairingTemplateSelect" style="width:100%;padding:7px;font-size:12.5px;border-radius:6px;border:1px solid #ccc;background:#fff;margin-top:2px;">
                     <option value="独宠专一向">独宠专一向</option>
                     <option value="欢喜冤家向">欢喜冤家向</option>
                     <option value="互宠甜文向">互宠甜文向</option>
-                    <option value="全员修罗场向">全员团宠修罗场向</option>
+                    <option value="全员团宠修罗场向">全员团宠修罗场向</option>
                     <option value="战友救赎向">战友救赎向</option>
+                    <option value="__custom__">✍️ 自定义手写关系设定...</option>
                 </select>
+                <div id="customRelInputWrap" style="display:none;margin-top:6px;">
+                    <input type="text" id="customRelationInput" placeholder="手写你的专属设定（如：前世宿敌今生救赎、冷战后追妻、修仙AU...）" style="width:100%;padding:6px 8px;font-size:12px;border-radius:6px;border:1.5px solid #2e7d32;box-sizing:border-box;">
+                </div>
             </div>
 
-            <label style="font-size:11.5px;color:#777;">最终生成的 CP / 关系设定（可随意手动修改或输入自定义NPC）：</label>
+            <label style="font-size:11.5px;color:#777;">最终生成的 CP / 关系设定（可随意手动直接修改）：</label>
             <input type="text" id="finalPairingInput" value="全员向 / 友情向 (无固定CP)" style="width:100%;padding:7px;font-size:13px;border-radius:6px;border:1px solid #b8a694;box-sizing:border-box;font-weight:700;color:#900;">
         </div>
 
@@ -788,14 +800,31 @@ function openCreateCustomBookModal() {
     const filterInput = document.getElementById('charSearchFilterInput');
     const finalPairingInput = document.getElementById('finalPairingInput');
     const templateSelect = document.getElementById('pairingTemplateSelect');
+    const customRelWrap = document.getElementById('customRelInputWrap');
+    const customRelInput = document.getElementById('customRelationInput');
+    const togglePoolBtn = document.getElementById('btnTogglePoolExpand');
 
     let selectedChars = [];
+    let isPoolExpanded = false;
+
+    // 切换折叠/展开角色池
+    togglePoolBtn.onclick = () => {
+        isPoolExpanded = !isPoolExpanded;
+        poolContainer.style.maxHeight = isPoolExpanded ? '180px' : '56px';
+        poolContainer.style.overflowY = isPoolExpanded ? 'auto' : 'hidden';
+        togglePoolBtn.textContent = isPoolExpanded ? '🔼 收起' : `🔽 展开全部 (${allCharacters.length})`;
+    };
 
     function updateFinalPairingText() {
+        let relStyle = templateSelect.value;
+        if (relStyle === '__custom__') {
+            relStyle = customRelInput.value.trim() || '自定义关系';
+        }
         if (!selectedChars.length) {
-            finalPairingInput.value = '全员向 / 友情向 (无固定CP)';
+            finalPairingInput.value = (templateSelect.value === '__custom__' && customRelInput.value.trim()) 
+                ? `全员向 (${relStyle})` 
+                : '全员向 / 友情向 (无固定CP)';
         } else {
-            const relStyle = templateSelect.value;
             const joinedNames = selectedChars.join(' & ');
             finalPairingInput.value = `${joinedNames} × ${pName} (${relStyle})`;
         }
@@ -827,7 +856,7 @@ function openCreateCustomBookModal() {
         if (!filtered.length && q) {
             html += `
             <button type="button" class="ao3-char-chip" data-name="${escapeHtml(q)}" style="border:1px dashed #2e7d32;background:#e8f5e9;color:#2e7d32;padding:3px 8px;border-radius:12px;font-size:11px;cursor:pointer;">
-                ➕ 快捷选用自定义角色: "${escapeHtml(q)}"
+                ➕ 选用自定义角色: "${escapeHtml(q)}"
             </button>
             `;
         }
@@ -853,8 +882,21 @@ function openCreateCustomBookModal() {
         });
     }
 
-    filterInput.oninput = () => renderChips(filterInput.value);
-    templateSelect.onchange = () => updateFinalPairingText();
+    filterInput.oninput = () => {
+        renderChips(filterInput.value);
+        if (filterInput.value.trim() && !isPoolExpanded) {
+            togglePoolBtn.click();
+        }
+    };
+
+    templateSelect.onchange = () => {
+        const isCust = templateSelect.value === '__custom__';
+        customRelWrap.style.display = isCust ? 'block' : 'none';
+        if (isCust) customRelInput.focus();
+        updateFinalPairingText();
+    };
+
+    customRelInput.oninput = () => updateFinalPairingText();
 
     renderChips();
 
@@ -1378,9 +1420,7 @@ function openAo3ReplyModal(workId, reviewIdx) {
     };
 }
 
-// ============================================================
 // 真实的 MC 游戏圈网友昵称生成池
-// ============================================================
 function getRandomRealisticNetName() {
     const realisticNames = [
         'DreamWasTakenFan', 'George_Goggles', 'Techno_NeverDies', 'Enderman_007',
@@ -1708,7 +1748,7 @@ function buildYtChannelHTML() {
     </div>
 
     <div style="padding:10px 14px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin:10px 0 6px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-margin:10px 0 6px;">
             <span style="font-size:14px;font-weight:700;color:#0f0f0f;">📹 频道已发视频 (${myVideos.length})</span>
             <button class="btn-primary small" onclick="openPublishVideoModal()" style="margin:0;padding:4px 10px;">➕ 发布新视频</button>
         </div>
