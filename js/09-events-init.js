@@ -1,8 +1,8 @@
 // js/09-events-init.js
-// 事件绑定与公告系统（v1.604 更新说明与正版声明，支持三大场景形象与全局人称全面编辑，零刻板限制版）
+// 事件绑定与全新三页滑动公告系统（v1.611 严格保留李敏原话的三页完整公告）
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
-    // 开始游戏按钮（直达开局，不再强行拦截弹窗清空人设）
+    // 开始游戏按钮
     $('startGameBtn')?.addEventListener('click', function() {
         if (typeof OtomeSecurityGuard !== 'undefined' && OtomeSecurityGuard.isDeviceBanned()) {
             if (typeof showDeviceBanLockScreen === 'function') showDeviceBanLockScreen();
@@ -60,7 +60,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
-    // 左上角头像：采用手势防抖引擎，触屏秒开《编辑主播个人人设与资料》
+    // 左上角头像点击：打开修改主播个人人设弹窗
     const headerAvatarEl = $('headerAvatar');
     if (headerAvatarEl) {
         if (typeof bindLongPressEvent === 'function') {
@@ -126,7 +126,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
     $('exitGameBtn')?.addEventListener('click', confirmExitGame);
 
-    // 导出与恢复（游戏内头部按钮）
+    // 导出与恢复
     $('exportSaveBtn')?.addEventListener('click', () => {
         if (typeof openBackupModal === 'function') openBackupModal();
     });
@@ -134,7 +134,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (typeof openRestoreModal === 'function') openRestoreModal();
     });
 
-    // 导出与恢复（初始设定页按钮）
     $('setupImportSaveBtn')?.addEventListener('click', () => {
         if (typeof openRestoreModal === 'function') openRestoreModal();
     });
@@ -232,10 +231,10 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ============================================================
-// 📢 双页滑动公告系统
+// 📢 全新三页滑动公告系统（严格保持咩咩原话，精心优雅排版）
 // ============================================================
 function checkAndShowVersionNoticeModal(forceOpen = false) {
-    const ver = window.CURRENT_APP_VERSION || '1.604';
+    const ver = window.CURRENT_APP_VERSION || '1.611';
     const dismissedVersion = localStorage.getItem('mcyt_dismissed_notice_ver');
 
     if (forceOpen || dismissedVersion !== ver) {
@@ -249,51 +248,93 @@ function openVersionNoticeModal(version) {
         <h3 style="margin:0;display:flex;align-items:center;gap:6px;">📢 系统公告 <span style="font-size:11px;background:rgba(46,125,50,0.12);color:var(--primary);padding:2px 8px;border-radius:10px;font-weight:700;">v${version}</span></h3>
     </div>
 
-    <div class="notice-slider-wrap">
-        <div class="notice-slider-track" id="noticeSliderTrack">
-            <div class="notice-slide-page">
-                <div class="notice-card-box">
-                    <h4>📜 关于本项目与正版声明</h4>
-                    <p style="margin-bottom:8px;line-height:1.6;">
-                        本软件为抖音：<b>@鸢尾黎明</b> 老师的 mcyt 模拟器<b>二改版本</b>，为代入向乙女 Airp 游戏，<b>禁止用于磕 CP，禁止二传</b>。
+    <div class="notice-slider-wrap" style="overflow:hidden;position:relative;width:100%;border-radius:10px;">
+        <div class="notice-slider-track" id="noticeSliderTrack" style="display:flex;width:300%;transition:transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);">
+            
+            <!-- 第 1 页：声明与获取渠道（严格李敏原话） -->
+            <div class="notice-slide-page" style="flex:0 0 33.3333%;width:33.3333%;box-sizing:border-box;">
+                <div class="notice-card-box" style="max-height:58vh;overflow-y:auto;padding:12px;background:#fff;border-radius:8px;border:1px solid #e2e8e2;box-sizing:border-box;">
+                    <p style="margin-bottom:10px;line-height:1.75;font-size:13px;color:#333;">
+                        本软件为代入向乙女Airp游戏，禁男禁cp，目前唯一获取渠道为进鸢尾黎明老师的群聊。
                     </p>
-                    <p style="margin-bottom:8px;color:#c62828;font-weight:700;">
-                        ⚠️ 本游戏纯免无收费！如果你需要付费，代表你被骗了！
-                    </p>
-                    <p style="margin-bottom:8px;line-height:1.6;">
-                        目前唯一正版获取渠道为进<b>鸢尾黎明</b>老师的官方群聊。前往抖音搜索 <b>@鸢尾黎明</b> 老师那边即可进群免费获得本软件，群里有老师制作的很多乙女香香饭，欢迎加入！💕
+                    <p style="margin-bottom:10px;line-height:1.75;font-size:13px;color:#c62828;font-weight:700;background:#fef2f2;padding:8px 10px;border-radius:6px;border:1px solid #fecaca;">
+                        无需付费获取，如果你不是在鸢尾黎明群里获得的，可以前往抖音@鸢尾黎明老师那边即可进QQ群获得本软件，群里有大量老师制作很多乙女香香饭，欢迎加入!
                     </p>
                 </div>
             </div>
 
-            <div class="notice-slide-page">
-                <div class="notice-card-box" style="max-height:60vh;overflow-y:auto;">
-                    <h4 style="color:#2e7d32;margin-bottom:8px;">🚀 v${version} 修复与优化内容</h4>
-                    
-                    <div style="font-size:13px;font-weight:700;color:#1e293b;margin-top:6px;">🛠️ Bug 修复与功能升级：</div>
-                    <ol style="padding-left:18px;margin:4px 0 8px;font-size:12px;color:#334155;line-height:1.7;">
-                        <li><b>高自由度三大场景形象</b>：全面支持线上虚拟皮套、游戏像素皮肤、线下真实样貌独立定义，彻底剔除所有刻板印象词汇。</li>
-                        <li><b>支持全局人称自由选择</b>：剧情与同人支持第一/第二/第三人称视角无缝切换。</li>
-                        <li><b>更名履历档案追踪</b>：换名字不再导致 AI 认错角色或遗忘前尘羁绊。</li>
-                        <li><b>智能语义防拉郎护栏</b>：告别粗暴机械误封，精准识别辟谣与反向调侃。</li>
-                    </ol>
+            <!-- 第 2 页：更新内容（严格李敏原话） -->
+            <div class="notice-slide-page" style="flex:0 0 33.3333%;width:33.3333%;box-sizing:border-box;">
+                <div class="notice-card-box" style="max-height:58vh;overflow-y:auto;padding:12px;background:#fff;border-radius:8px;border:1px solid #e2e8e2;box-sizing:border-box;">
+                    <div style="font-size:12.5px;color:#334155;line-height:1.8;">
+                        <div>1.优化油管刷新机制</div>
+                        <div>2.增加人称选择</div>
+                        <div>3.优化ao 3</div>
+                        <div>4.优化提高主播加好友几率</div>
+                        <div>5.用户形象分为</div>
+                        <div style="padding-left:14px;color:#64748b;">
+                            -线下<br>
+                            -直播形象<br>
+                            -游戏皮肤形象
+                        </div>
+                        <div>6.优化封禁逻辑</div>
+                        <div>7.新增免费搜索渠道bing，无需key，但是不稳定，最好还是用Tavily</div>
+                        <div>8.恢复群聊，更换群图标功能</div>
+                    </div>
                 </div>
             </div>
+
+            <!-- 第 3 页：致谢名单（严格李敏原话） -->
+            <div class="notice-slide-page" style="flex:0 0 33.3333%;width:33.3333%;box-sizing:border-box;">
+                <div class="notice-card-box" style="max-height:58vh;overflow-y:auto;padding:12px;background:#fff;border-radius:8px;border:1px solid #e2e8e2;box-sizing:border-box;">
+                    <h4 style="margin-top:0;color:#2e7d32;margin-bottom:8px;">致谢名单</h4>
+                    
+                    <div style="font-size:12.5px;color:#334155;line-height:1.75;">
+                        <p style="margin:0 0 8px;">
+                            鸢尾黎明老师的模拟器 此模拟器为鸢尾黎明老师的mcyt模拟器二改！
+                        </p>
+                        <p style="margin:0 0 8px;">
+                            感谢柏柏老师的公益图床！
+                        </p>
+                        <p style="margin:0 0 4px;">
+                            感谢Gemini，Claude以及Chatgpt这御三家给我干活
+                        </p>
+                        <div style="background:#f8faf8;padding:6px 10px;border-radius:6px;font-size:12px;color:#475569;margin-bottom:8px;line-height:1.6;">
+                            -Gemini，虽然老是骂它，但是基本上都是它在勤勤恳恳干活，软件大半都是它的成果<br>
+                            -Claude帮助了我很多，聪明能干还温柔，克之伟大无需多言！<br>
+                            -Chatgpt好像帮了忙，但是好像又没帮……<br>
+                            起到了一个添乱的作用
+                        </div>
+                        <p style="margin:0 0 8px;">
+                            感谢伟大的github，github还是太全面了，解决了我的燃眉之急！
+                        </p>
+                        <p style="margin:0 0 8px;">
+                            感谢kelivo，基于本项目部分搜索功能代码参考自开源项目 Kelivo（AGPL-3.0 协议），感谢原作者的贡献。
+                        </p>
+                        <p style="margin:0;color:#166534;font-weight:700;">
+                            以及感谢群友的鼓励和支持，没有大家的鼓励支持我真的不可能有耐心做那么多！
+                        </p>
+                    </div>
+                </div>
+            </div>
+
         </div>
     </div>
 
-    <div class="notice-dots-wrap">
-        <div class="notice-dot active" id="noticeDot0"></div>
-        <div class="notice-dot" id="noticeDot1"></div>
+    <!-- 底部三点指示器 -->
+    <div class="notice-dots-wrap" style="display:flex;justify-content:center;gap:6px;margin:8px 0 6px;">
+        <div class="notice-dot active" id="noticeDot0" style="width:7px;height:7px;border-radius:50%;background:var(--primary);cursor:pointer;"></div>
+        <div class="notice-dot" id="noticeDot1" style="width:7px;height:7px;border-radius:50%;background:#ccc;cursor:pointer;"></div>
+        <div class="notice-dot" id="noticeDot2" style="width:7px;height:7px;border-radius:50%;background:#ccc;cursor:pointer;"></div>
     </div>
 
-    <div class="notice-footer-opt">
-        <label class="notice-checkbox-label">
+    <div class="notice-footer-opt" style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
+        <label class="notice-checkbox-label" style="display:flex;align-items:center;gap:5px;font-size:12px;color:#666;cursor:pointer;">
             <input type="checkbox" id="dismissVersionNoticeCheck" style="accent-color:var(--primary);width:15px;height:15px;">
             <span>本次版本不再提示</span>
         </label>
         <div style="display:flex;gap:6px;">
-            <button class="btn-secondary small" id="noticeNavSlideBtn" style="padding:5px 12px;font-weight:700;">下一页：更新说明 ➡️</button>
+            <button class="btn-secondary small" id="noticeNavSlideBtn" style="padding:5px 12px;font-weight:700;">下一页 ➡️</button>
             <button class="btn-primary small" id="noticeCloseBtn" style="margin:0;padding:5px 14px;">关 闭</button>
         </div>
     </div>
@@ -305,27 +346,37 @@ function openVersionNoticeModal(version) {
     const track = document.getElementById('noticeSliderTrack');
     const dot0 = document.getElementById('noticeDot0');
     const dot1 = document.getElementById('noticeDot1');
+    const dot2 = document.getElementById('noticeDot2');
     const navBtn = document.getElementById('noticeNavSlideBtn');
+
+    const btnTextMap = [
+        '下一页：更新内容 ➡️',
+        '下一页：致谢名单 ➡️',
+        '⬅️ 返回第一页'
+    ];
 
     const updateSliderUI = (page) => {
         currentPage = page;
         if (track) {
-            track.style.transform = `translateX(-${currentPage * 50}%)`;
+            track.style.transform = `translateX(-${currentPage * (100 / 3)}%)`;
         }
-        if (dot0 && dot1) {
-            dot0.classList.toggle('active', currentPage === 0);
-            dot1.classList.toggle('active', currentPage === 1);
+        if (dot0 && dot1 && dot2) {
+            dot0.style.background = currentPage === 0 ? 'var(--primary)' : '#ccc';
+            dot1.style.background = currentPage === 1 ? 'var(--primary)' : '#ccc';
+            dot2.style.background = currentPage === 2 ? 'var(--primary)' : '#ccc';
         }
         if (navBtn) {
-            navBtn.textContent = currentPage === 0 ? '下一页：更新说明 ➡️' : '⬅️ 返回主公告';
+            navBtn.textContent = btnTextMap[currentPage];
         }
     };
 
     dot0?.addEventListener('click', () => updateSliderUI(0));
     dot1?.addEventListener('click', () => updateSliderUI(1));
+    dot2?.addEventListener('click', () => updateSliderUI(2));
 
     navBtn?.addEventListener('click', () => {
-        updateSliderUI(currentPage === 0 ? 1 : 0);
+        const next = (currentPage + 1) % 3;
+        updateSliderUI(next);
     });
 
     document.getElementById('noticeCloseBtn')?.addEventListener('click', () => {

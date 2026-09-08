@@ -1,7 +1,7 @@
 // js/08-save-load.js
-// 存档/读档/初始化模块（v1.610 全量数据保护、三大场景形象细分、人称与更名履历无损存取版）
+// 存档/读档/初始化模块（v1.611 全量数据保护、三大场景形象细分、人称与更名履历无损存取版）
 // ============================================================
-const CURRENT_APP_VERSION = '1.610';
+const CURRENT_APP_VERSION = '1.611';
 
 let _gameInitialized = false;
 let _skipStartChoiceOnce = false;
@@ -16,7 +16,6 @@ function initGame() {
     const newAppearanceReal = $('appearanceRealInput')?.value.trim() || '';
     const newCategory = $('categorySelect')?.value || '剧情';
     const newPov = $('povSelect')?.value || 'second';
-    const newVoiceChanger = $('voiceChangerInput')?.checked || false;
     const idVal = document.querySelector('input[name="identity"]:checked')?.value || 'new';
 
     const skillVals = {};
@@ -52,7 +51,6 @@ function initGame() {
     window.G.player.category = newCategory;
     window.G.player.identity = idVal;
     window.G.player.pov = newPov;
-    window.G.player.voiceVoiceChanger = newVoiceChanger;
     window.G.player._nameHistory = [newYtName];
 
     if (idVal === 'fans') {
@@ -122,10 +120,10 @@ function appendInitialWelcomeStory() {
     const p = window.G.player;
     const text = `🎮 欢迎，${p.ytName}！\n\n` +
         `你是一位新晋 MC 女主播，擅长 ${p.category} 赛道。\n` +
-        `【🖥️ 线上虚拟皮套】：${p.avatarLive2d || '未设定'}\n` +
-        `【🎮 MC像素皮肤】：${p.skin || '经典装扮'}\n` +
-        `【🏠 线下真实容貌】：${p.appearanceReal || '清秀灵动的少女'}\n` +
-        `【🎭 性格人设风格】：${p.persona || '充满活力的冒险家'}\n\n` +
+        `【🖥️ 线上虚拟皮套】：${p.avatarLive2d || '主播自主决定'}\n` +
+        `【🎮 MC像素皮肤】：${p.skin || '主播自主选择'}\n` +
+        `【🏠 线下真实样貌】：${p.appearanceReal || '自由定制'}\n` +
+        `【🎭 性格人设风格】：${p.persona || '自然由用户自定义'}\n\n` +
         `今天是你在 MC 油管世界的第 1 天，你是一名学生，正值暑假。\n` +
         `你有 6 个行动点（每2点推进一个时段），规划你的主播生涯吧！\n\n` +
         `💡 提示：新人主播在联系人列表中初始没有大主播好友，随着你提升粉丝热度与作品曝光，主播们与粉丝们会主动向你递来好友申请与粉丝群邀请！`;
@@ -712,7 +710,6 @@ function applyDeserializedGameState(data) {
             g.player._nameHistory = [g.player.ytName || 'MC_CraftMaster'];
         }
         if (!g.player.pov) g.player.pov = 'second';
-        if (g.player.voiceVoiceChanger === undefined) g.player.voiceVoiceChanger = false;
         if (!g.player.avatarLive2d) g.player.avatarLive2d = '';
         if (!g.player.appearanceReal) g.player.appearanceReal = '';
     }
