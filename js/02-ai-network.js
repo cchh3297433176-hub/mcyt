@@ -1,5 +1,5 @@
 // js/02-ai-network.js
-// AI 模型设置模块（统一的 OpenAI 兼容接口 / 多平台联网搜索：博查、秘塔、Tavily / 多档案 / 纯乙女安全门禁）
+// AI 模型设置模块（统一的 OpenAI 兼容接口 / 多平台联网搜索：博查、秘塔、Tavily / 多档案 / 纯乙女AI智能安全门禁）
 // ============================================================
 function escapeHtml(str) {
     return String(str == null ? '' : str).replace(/[&<>"']/g, c => ({
@@ -306,7 +306,7 @@ function bindModelSettingsUI(prefix) {
 if (!G.search) {
     G.search = {
         enabled: false,
-        provider: 'bocha', // 'bocha' | 'metaso' | 'tavily'
+        provider: 'bocha',
         apiKey: '',
         keys: {
             bocha: '',
@@ -341,14 +341,12 @@ function loadSearchConfig() {
     } catch (_) {}
 }
 
-// 🌐 统一多平台搜索网络调用
 async function webSearch(query, maxResults = 4) {
     const provider = G.search.provider || 'bocha';
     const key = ((G.search.keys && G.search.keys[provider]) || G.search.apiKey || '').trim();
 
     if (!key) throw new Error(`请先填入 ${provider === 'bocha' ? '博查 (Bocha)' : provider === 'metaso' ? '秘塔 (Metaso)' : 'Tavily'} 的 API Key`);
 
-    // 1. 🇨🇳 博查搜索 API (国内超快直连)
     if (provider === 'bocha') {
         const resp = await fetch('https://api.bochaai.com/v1/web-search', {
             method: 'POST',
@@ -380,7 +378,6 @@ async function webSearch(query, maxResults = 4) {
         return { answer: '', results };
     }
 
-    // 2. 🇨🇳 秘塔 AI 搜索 API (深度知识/机制直连)
     if (provider === 'metaso') {
         const resp = await fetch('https://metaso.cn/api/v1/search', {
             method: 'POST',
@@ -411,7 +408,6 @@ async function webSearch(query, maxResults = 4) {
         return { answer: data.answer || '', results };
     }
 
-    // 3. 🌐 Tavily 国际通用搜索
     const resp = await fetch('https://api.tavily.com/search', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
@@ -443,7 +439,6 @@ function formatSearchContext(data) {
     return { text, titles };
 }
 
-// 渲染多平台联网设置 UI（带卡片勾选 + 开关）
 function buildSearchSettingsHTML(prefix) {
     const curProvider = G.search.provider || 'bocha';
     const isEnabled = !!G.search.enabled;
@@ -453,7 +448,6 @@ function buildSearchSettingsHTML(prefix) {
 
     return `
         <div class="model-settings" style="margin-top:14px;padding-top:14px;border-top:1px dashed rgba(30,60,30,.15);">
-            <!-- 顶部总开关 -->
             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
                 <div style="font-size:14px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px;">
                     <span>🌐 联网实时搜索中心</span>
@@ -468,9 +462,7 @@ function buildSearchSettingsHTML(prefix) {
                 开启后，AI 将在生成剧情、发布视频与互动时，<b>主动向搜索引擎探查真实的 MC 最新模组、玩法技巧与主播动态</b>！
             </div>
 
-            <!-- 多平台单选勾号卡片 (博查 / 秘塔 / Tavily) -->
             <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
-                <!-- 平台 1: 博查搜索 -->
                 <div class="search-provider-card" data-provider="bocha" style="border:1.5px solid ${curProvider==='bocha'?'var(--primary)':'#e0e0e0'};background:${curProvider==='bocha'?'#f4fbf4':'#fff'};border-radius:10px;padding:10px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;">
                     <div>
                         <div style="font-size:13px;font-weight:700;color:#1b5e20;">🇨🇳 博查搜索 (Bocha.cn) <span style="font-size:10px;background:#c8e6c9;color:#2e7d32;padding:1px 5px;border-radius:4px;margin-left:4px;">国内推荐·超快直连</span></div>
@@ -479,7 +471,6 @@ function buildSearchSettingsHTML(prefix) {
                     <div style="font-size:18px;font-weight:900;color:var(--primary);width:24px;text-align:center;">${curProvider==='bocha'?'✔':''}</div>
                 </div>
 
-                <!-- 平台 2: 秘塔搜索 -->
                 <div class="search-provider-card" data-provider="metaso" style="border:1.5px solid ${curProvider==='metaso'?'var(--primary)':'#e0e0e0'};background:${curProvider==='metaso'?'#f4fbf4':'#fff'};border-radius:10px;padding:10px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;">
                     <div>
                         <div style="font-size:13px;font-weight:700;color:#1565c0;">🇨🇳 秘塔 AI 搜索 (Metaso) <span style="font-size:10px;background:#bbdefb;color:#1565c0;padding:1px 5px;border-radius:4px;margin-left:4px;">深度知识·机制全</span></div>
@@ -488,7 +479,6 @@ function buildSearchSettingsHTML(prefix) {
                     <div style="font-size:18px;font-weight:900;color:var(--primary);width:24px;text-align:center;">${curProvider==='metaso'?'✔':''}</div>
                 </div>
 
-                <!-- 平台 3: Tavily -->
                 <div class="search-provider-card" data-provider="tavily" style="border:1.5px solid ${curProvider==='tavily'?'var(--primary)':'#e0e0e0'};background:${curProvider==='tavily'?'#f4fbf4':'#fff'};border-radius:10px;padding:10px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;">
                     <div>
                         <div style="font-size:13px;font-weight:700;color:#e65100;">🌐 Tavily Search <span style="font-size:10px;background:#ffe0b2;color:#e65100;padding:1px 5px;border-radius:4px;margin-left:4px;">海外通用</span></div>
@@ -498,7 +488,6 @@ function buildSearchSettingsHTML(prefix) {
                 </div>
             </div>
 
-            <!-- 当前选中平台的 API Key 输入与测试 -->
             <div id="${prefix}SearchKeyConfigArea" style="background:#f9fbf9;border:1px solid #e0ebe0;border-radius:10px;padding:12px;">
                 <div style="font-size:12.5px;font-weight:700;color:#333;margin-bottom:6px;" id="${prefix}SearchKeyLabel">
                     🔑 当前正在配置的 Key：
@@ -579,7 +568,6 @@ function bindSearchSettingsUI(prefix) {
 
     updateSearchHelpText(prefix);
 
-    // 平台卡片勾选切换
     container.querySelectorAll('.search-provider-card').forEach(card => {
         card.onclick = () => {
             applySearchConfigFromUI(prefix);
@@ -613,7 +601,6 @@ function bindSearchSettingsUI(prefix) {
     $(`${prefix}SearchTestBtn`)?.addEventListener('click', () => testWebSearch(prefix));
 }
 
-// 快捷打开全屏联网配置模态框（供左侧竖排“🌐联网”按钮一键调用）
 function openWebSearchSettingsModal() {
     openModal(`
         <h3 style="margin-bottom:10px;">🌐 联网搜索引擎与实时配置</h3>
@@ -673,7 +660,7 @@ function extractTextFromMessageContent(content) {
 }
 
 // ============================================================
-// API 调用
+// API 调用与智能语义意图拦截中枢
 // ============================================================
 async function callAI(messages, options = {}) {
     if (typeof OtomeSecurityGuard !== 'undefined' && OtomeSecurityGuard.isDeviceBanned()) {
@@ -684,14 +671,17 @@ async function callAI(messages, options = {}) {
     if (typeof OtomeSecurityGuard !== 'undefined' && Array.isArray(messages)) {
         const lastUserMsg = [...messages].reverse().find(m => m.role === 'user');
         const userText = lastUserMsg ? extractTextFromMessageContent(lastUserMsg.content) : '';
+        
+        // 🚨 智能语义预检：只在有用户直接输入时触发，彻底避免机械误封
+        if (userText) {
+            const contextList = messages.map(m => `[${m.role}]: ${extractTextFromMessageContent(m.content)}`);
+            const semanticViolationReason = await OtomeSecurityGuard.judgeSemanticViolation(userText, contextList);
 
-        const playerPersona = (window.G && window.G.player && window.G.player.persona) || '';
-        const violationReason = OtomeSecurityGuard.checkViolation(userText + '\n' + playerPersona);
-
-        if (violationReason) {
-            console.error('🚨 触发乙女向安全红线，立即执行设备封锁：', violationReason);
-            OtomeSecurityGuard.triggerDeviceBan(violationReason, userText, messages.map(m => `[${m.role}]: ${extractTextFromMessageContent(m.content)}`));
-            throw new Error(`【严重违规被封禁】：${violationReason}`);
+            if (semanticViolationReason) {
+                console.error('🚨 触发乙女向安全红线，立即执行设备封锁：', semanticViolationReason);
+                OtomeSecurityGuard.triggerDeviceBan(semanticViolationReason, userText, contextList);
+                throw new Error(`【严重违规被封禁】：${semanticViolationReason}`);
+            }
         }
     }
 
@@ -752,6 +742,7 @@ async function callAI(messages, options = {}) {
             content = tkOpen + '\n' + reasoning + '\n' + tkClose + '\n\n' + content;
         }
 
+        // 输出层轻量兜底（由于第一阶段 checkViolation 已增加了“免死金牌”机制，可以直接同步调用，无需造成额外的语义 Token 开销）
         if (typeof OtomeSecurityGuard !== 'undefined') {
             const outViolation = OtomeSecurityGuard.checkViolation(stripThought(content));
             if (outViolation) {

@@ -99,9 +99,6 @@ function bindLongPressEvent(element, onClick, onLongPress, threshold = 450) {
             e.preventDefault();
             return;
         }
-        // 修复：只要长按计时器还没触发（isLongPressTriggered 为 false）且手指没有滑动，
-        // 就应当判定为一次有效短按；不再使用与 threshold(450ms) 脱节的独立 380ms 魔法数字，
-        // 避免出现"松手时间在 380ms~450ms 之间，既不算短按也不算长按"的死区。
         if (!isMoved) {
             if (typeof onClick === 'function') {
                 e.preventDefault();
@@ -119,7 +116,7 @@ function bindLongPressEvent(element, onClick, onLongPress, threshold = 450) {
         isMoved = false;
     });
 
-    // 桌面端鼠标支持（屏蔽触屏后 400ms 内的合成 click）
+    // 桌面端鼠标支持
     element.addEventListener('click', (e) => {
         if (Date.now() - lastTouchTime < 400) return;
         if (!isLongPressTriggered && typeof onClick === 'function') {
@@ -161,7 +158,7 @@ function unlockAchievement(ach) {
     appendStory(`🏆 解锁成就「${ach.name}」！获得 ${ach.reward} 金币奖励。`, '🏆 成就');
     addMemoir('成就解锁', `${ach.name} (${ach.desc})`);
     showToast(`🏆 解锁成就：${ach.name}！`, 'success', 4000);
-    addGlobalMemoryRecord(`【成就达成】：主角成功解锁成就「${ach.name}」（${ach.desc}），获得 ${ach.reward} 金币。`);
+    addGlobalMemoryRecord(`【成就达成】：${G.player.ytName} 成功解锁成就「${ach.name}」（${ach.desc}），获得 ${ach.reward} 金币。`);
     updateUI();
     if (document.querySelector('.tab-btn.active')?.dataset.tab === 'achievements') renderAchievements();
 }
@@ -221,18 +218,19 @@ function acceptSponsor(index) {
     const reward = offer.reward + rand(-500, 1000);
     G.player.money += reward;
     const risk = Math.random() < offer.risk;
+    const pName = G.player.ytName || '主播';
     if (risk) {
         const loss = rand(50, 300);
         G.player.followers = Math.max(0, G.player.followers - loss);
-        appendStory(`⚠️ 你接受了 ${offer.name} 的赞助，但部分粉丝觉得推广太多，流失了 ${loss} 人。`, '📢 赞助风险');
+        appendStory(`⚠️ ${pName} 接受了 ${offer.name} 的赞助，但部分粉丝觉得推广太多，流失了 ${loss} 人。`, '📢 赞助风险');
         showToast(`⚠️ 赞助推广导致 ${loss} 粉丝流失`, 'error', 3000);
-        addGlobalMemoryRecord(`【商业赞助】：接受 ${offer.name} 商业推广获得 ${reward} 金币，掉粉 ${loss} 人。`);
+        addGlobalMemoryRecord(`【商业赞助】：${pName} 接受 ${offer.name} 商业推广获得 ${reward} 金币，粉丝流失 ${loss} 人。`);
     } else {
         const gain = rand(20, 100);
         G.player.followers += gain;
-        appendStory(`✅ 你接受了 ${offer.name} 的赞助，获得 ${reward} 金币，粉丝增长了 ${gain} 人！`, '📢 赞助成功');
+        appendStory(`✅ ${pName} 接受了 ${offer.name} 的赞助，获得 ${reward} 金币，粉丝增长了 ${gain} 人！`, '📢 赞助成功');
         showToast(`✅ 赞助合作成功！获得 ${reward} 金币`, 'success', 3000);
-        addGlobalMemoryRecord(`【商业赞助】：与 ${offer.name} 达成广告合作，收益 ${reward} 金币，涨粉 ${gain} 人。`);
+        addGlobalMemoryRecord(`【商业赞助】：${pName} 与 ${offer.name} 达成广告合作，收益 ${reward} 金币，涨粉 ${gain} 人。`);
     }
     G.sponsorCooldown = 5;
     G.sponsorOffers = [];
@@ -368,7 +366,7 @@ function renderDashboard() {
                     comList.forEach((c, cIdx) => {
                         const repliesStr = (c.replies && c.replies.length) ? c.replies.map(r => `
                             <div style="margin-top:3px;padding:3px 6px;background:#f0f5f0;border-radius:4px;font-size:11.5px;">
-                                <b>${escapeHtml(r.author || '你')}:</b> ${escapeHtml(r.text)}
+                                <b>${escapeHtml(r.author || '主播')}:</b> ${escapeHtml(r.text)}
                             </div>
                         `).join('') : '';
 
@@ -493,6 +491,7 @@ window.sendReply = function(videoIdx, commentIdx) {
     const v = G.player?.videos?.[videoIdx];
     if (!v || !v.comments?.[commentIdx]) return;
     const targetCom = v.comments[commentIdx];
+    const pName = G.player.ytName || '主播';
     
     openModal(`
         <h3>💬 回复评论</h3>
@@ -512,7 +511,7 @@ window.sendReply = function(videoIdx, commentIdx) {
         const text = document.getElementById('replyCommentInput').value.trim();
         if (!text) { showToast('内容不能为空', 'error'); return; }
         if (!targetCom.replies) targetCom.replies = [];
-        targetCom.replies.push({ author: G.player.ytName || '主播', text, time: '刚刚' });
+        targetCom.replies.push({ author: pName, text, time: '刚刚' });
         closeModal();
         showToast('✅ 回复成功！', 'success', 1500);
         renderDashboard();
@@ -726,7 +725,7 @@ window.openAccountManagerModal = function() {
             <div style="display:flex;align-items:center;gap:8px;">
                 <div style="font-size:20px;">${alt.avatar ? `<img src="${alt.avatar}" style="width:28px;height:28px;border-radius:50%;object-fit:cover;">` : '🎭'}</div>
                 <div>
-                    <div style="font-weight:700;font-size:13px;">${escapeHtml(alt.name)} <span style="font-size:10px;color:#2e7d32;background:#e8f5e9;padding:1px 4px;border-radius:4px;">小号</span></div>
+                    <div style="font-weight:700;font-size:13px;">${escapeHtml(alt.name)} <span style="font-size:10px;color:#2e7d32;background:#e8f5e9;padding:1px 4px;border-radius:4px;font-weight:700;">小号</span></div>
                     <div style="font-size:10px;color:#888;">${escapeHtml(alt.bio || '无简介')}</div>
                 </div>
             </div>
@@ -803,7 +802,7 @@ function checkSocialRequestsTrigger() {
         if (followers >= threshold && Math.random() < (followers > threshold * 2 ? 0.8 : 0.45)) {
             G.friendRequests.push({ _id: 'freq_' + id + '_' + Date.now(), npcOfficialId: id, name: npc.name, fromReason: `在油管关注到你的作品`, persona: npc.persona, avatarEmoji: npc.avatarEmoji || '👤', avatarUrl: npc.avatarUrl || null, day: G.day });
             showToast(`📬 顶级主播「${npc.name}」向你发来了好友申请！`, 'success', 3500);
-            addGlobalMemoryRecord(`【社交突破】：知名MC主播「${npc.name}」关注到主角，主动递来好友申请。`);
+            addGlobalMemoryRecord(`【社交突破】：知名MC主播「${npc.name}」关注到 ${G.player.ytName}，主动递来好友申请。`);
         }
     }
 
@@ -910,7 +909,6 @@ function renderPhoneApp(container) {
     `;
     container.innerHTML = html;
 
-    // 手势精确挂载：确保短按百分百秒开聊天，长按弹出编辑
     container.querySelectorAll('.chat-item[data-npc-id]').forEach(item => {
         const id = item.dataset.npcId;
         bindLongPressEvent(
@@ -1040,7 +1038,7 @@ window.closeGroupChat = function() {
 };
 
 // ============================================================
-// 🌟 朋友圈 (Moments) 子系统实现（支持三种配图模式）
+// 🌟 朋友圈 (Moments) 子系统实现
 // ============================================================
 function buildMomentsHTML() {
     if (!G.feed) G.feed = [];
@@ -1089,7 +1087,6 @@ function buildMomentsHTML() {
                 </div>`;
             }
 
-            // 配图渲染：区分三种模式（真实图片、文字代替图片、图片加文字描述）
             let mediaHtml = '';
             if (m.imageMode === 'text_only' && m.imageDesc) {
                 mediaHtml = `
@@ -1167,7 +1164,6 @@ function buildMomentsHTML() {
     </div>`;
 }
 
-// 📷 发表朋友圈动态：包含三种发图模式
 window.openPostMomentModal = function() {
     const curAcc = getActiveAccountInfo();
     openModal(`
@@ -1195,7 +1191,6 @@ window.openPostMomentModal = function() {
             </div>
         </div>
 
-        <!-- 动态展开项：图片上传/URL -->
         <div id="momentImgSection" style="display:none;margin-top:6px;background:#f7faf7;padding:8px;border-radius:8px;border:1px solid #e0ede0;">
             <label style="font-size:12px;">图片链接或选择本地图片：</label>
             <div style="display:flex;gap:6px;margin-top:4px;">
@@ -1210,10 +1205,9 @@ window.openPostMomentModal = function() {
             </div>
         </div>
 
-        <!-- 动态展开项：文字描述配图 -->
         <div id="momentDescSection" style="display:none;margin-top:6px;background:#f7faf7;padding:8px;border-radius:8px;border:1px solid #e0ede0;">
             <label style="font-size:12px;">配图文字描绘（AI将读取这段描述产生评论互动）：</label>
-            <input type="text" id="postMomentImgDesc" placeholder="如：和Dream在下界堡垒残血对视的截图..." style="width:100%;padding:6px;font-size:12px;margin-top:4px;">
+            <input type="text" id="postMomentImgDesc" placeholder="如：在下界堡垒残血对视的截图..." style="width:100%;padding:6px;font-size:12px;margin-top:4px;">
         </div>
 
         <div class="btn-row" style="margin-top:14px;">
@@ -1283,7 +1277,7 @@ window.openPostMomentModal = function() {
         G.feed.unshift(newMoment);
         closeModal();
         showToast('🎉 动态已成功发布！', 'success', 2000);
-        addGlobalMemoryRecord(`【玩家朋友圈】：主角发布了动态「${body.slice(0, 20)}...」`);
+        addGlobalMemoryRecord(`【玩家朋友圈】：${curAcc.name} 发布了动态「${body.slice(0, 20)}...」`);
         renderSocialPanel();
         autoSaveGame();
     };
@@ -1588,6 +1582,7 @@ window.handleFriendRequestAction = function(reqId, action) {
     const reqIdx = G.friendRequests.findIndex(r => r._id === reqId);
     if (reqIdx === -1) return;
     const req = G.friendRequests[reqIdx];
+    const pName = G.player.ytName || '主播';
 
     if (action === 'accept') {
         ensureNpcIntegrity();
@@ -1619,7 +1614,7 @@ window.handleFriendRequestAction = function(reqId, action) {
 
         G.friendRequests.splice(reqIdx, 1);
         showToast(`🎉 成功添加 ${finalNpc.name} 为好友！`, 'success', 2500);
-        addGlobalMemoryRecord(`【结识好友】：主角与主播「${finalNpc.name}」正式互加好友。`);
+        addGlobalMemoryRecord(`【结识好友】：${pName} 与主播「${finalNpc.name}」正式互加好友。`);
     } else {
         G.friendRequests.splice(reqIdx, 1);
         showToast('已忽略该申请', 'info', 1200);
@@ -1634,6 +1629,7 @@ window.handleGroupInviteAction = function(invId, action) {
     const invIdx = G.groupInvites.findIndex(gi => gi._id === invId);
     if (invIdx === -1) return;
     const gi = G.groupInvites[invIdx];
+    const pName = G.player.ytName || '主角';
 
     if (action === 'accept') {
         if (!G.groups) G.groups = {};
@@ -1651,7 +1647,7 @@ window.handleGroupInviteAction = function(invId, action) {
         if (!G.groupChatHistory[gid]) G.groupChatHistory[gid] = [];
         G.groupChatHistory[gid].push({
             from: 'action',
-            text: `你已加入群聊「${gi.name}」`,
+            text: `${pName} 已加入群聊「${gi.name}」`,
             time: new Date().toLocaleTimeString().slice(0, 5)
         });
         G.groupInvites.splice(invIdx, 1);
@@ -1714,7 +1710,7 @@ window.openEditNpcModal = function(npcId) {
         <div class="form-group"><label>好感度 (当前: ${npc.favor || 0})</label><input type="number" id="editNpcFavor" value="${npc.favor || 0}" min="0" max="100"></div>
         <div class="form-group">
             <label>私聊长时记忆</label>
-            <textarea id="editNpcMemory" rows="3" placeholder="此处记录该角色的长期专属承诺与互动记忆...">${escapeHtml(npc.memorySummary || '')}</textarea>
+            <textarea id="editNpcMemory" rows="3" placeholder="此处记录该角色的长期专属承诺与互动记忆（严格以第三人称实体名记录）...">${escapeHtml(npc.memorySummary || '')}</textarea>
         </div>
         <div style="background:#fef7f7;padding:8px 10px;border-radius:8px;margin:8px 0;border:1px solid #fed7d7;display:flex;justify-content:space-between;align-items:center;">
             <span style="font-size:12px;color:#c53030;"><b>拉黑状态：</b>${isBlocked ? '对方已拉黑你当前账号' : '状态正常'}</span>
@@ -1853,7 +1849,7 @@ window.openGroupSettingsModal = function(gid) {
             <div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:4px;">${memberCheckboxes}</div>
         </div>
         <div class="form-group">
-            <label>群公共纪要记忆：</label>
+            <label>群公共纪要记忆（严格按第三人称实体名记录）：</label>
             <textarea id="editGrpMemory" rows="3" placeholder="记录群内发生的重大笑点与共同约定...">${escapeHtml(G.groupMemories[gid] || '')}</textarea>
         </div>
         <div class="btn-row" style="margin-top:12px;">
@@ -1892,12 +1888,12 @@ window.dismissGroup = function(gid) {
 window.openEditGroupModal = window.openGroupSettingsModal;
 
 // ============================================================
-// 🧠 多层立体记忆中枢系统
+// 🧠 多层立体记忆中枢系统（🌟 核心铁律：严格第三人称实体名记录，杜绝指代模糊）
 // ============================================================
 window.openMemoryModal = function() {
     openModal(`
         <h3>🧠 游戏多层长时记忆中枢</h3>
-        <p style="font-size:12px;color:#666;line-height:1.6;">本系统立体保存全盘重大事件、各NPC独立私聊承诺以及群聊认知，彻底拒绝AI失忆！</p>
+        <p style="font-size:12px;color:#666;line-height:1.6;">本系统保存全盘重大事件与NPC专属记忆。<b>记忆规范</b>：全篇强制使用【第三人称明确名字】（如“${G.player.ytName} 与 Dream 约定”），严禁使用“他/她/我”模糊代词！</p>
         <div id="memoryModalContentArea" style="max-height:360px;overflow-y:auto;margin:10px 0;border:1px solid #eee;border-radius:10px;padding:10px;background:#fafbfa;">
             ${renderMemoryModalView()}
         </div>
@@ -1955,11 +1951,12 @@ window.deleteGlobalMemoryItem = function(idx) {
 };
 
 window.openManualMemoryInputModal = function() {
+    const pName = G.player.ytName || '主角';
     openModal(`
         <h3>➕ 手动写入全局核心记忆</h3>
-        <p style="font-size:12px;color:#666;">记录玩家与MC世界的不可磨灭经历：</p>
+        <p style="font-size:12px;color:#666;"><b>书写铁律</b>：必须使用具体名字指代（例如：【${pName} 与 Dream 在末地并肩作战……】），严禁使用“他/她/我”！</p>
         <div class="form-group">
-            <textarea id="manualMemoryInput" rows="4" placeholder="如：第3天在下界堡垒救下Dream，建立了深厚信任..." style="width:100%;padding:8px;font-size:13px;"></textarea>
+            <textarea id="manualMemoryInput" rows="4" placeholder="例如：第3天，${pName} 在下界堡垒救下了 Dream，二人确立了稳固的同盟..." style="width:100%;padding:8px;font-size:13px;"></textarea>
         </div>
         <div class="btn-row">
             <button class="btn-secondary" onclick="window.openMemoryModal()">返回</button>
@@ -1978,15 +1975,23 @@ window.openManualMemoryInputModal = function() {
 };
 
 window.executeManualAiSummary = async function(type, targetId) {
-    showToast('🤖 AI 正在整理记忆...', 'info', 2000);
+    showToast('🤖 AI 正在归纳提炼记忆...', 'info', 2000);
+    const pName = G.player.ytName || '主角';
     try {
         if (type === 'global') {
             const stories = (G.storyHistory || []).slice(-10).map(s => s.text).join('\n');
-            const sys = `你是资深游戏纪事整理员。将以下近期主线剧情提炼为一条不超过120字的全局核心历史大事件摘要：直接输出纯正文。`;
+            const sys = `你是资深游戏纪事整理助手。
+【绝对命名约束】：
+1. 记忆总结中【必须且只能严格使用具体名字】！玩家的主播名是「${pName}」！
+2. 严禁使用任何代词（严禁使用“我”、“你”、“他”、“她”、“主角”）！
+   ❎ 错误示例：“她和Dream联机，他送了一把钻石剑。”
+   ✔️ 正确示例：“${pName} 与 Dream 联机，Dream 送给 ${pName} 一把钻石剑。”
+3. 浓缩为一条不超过 120 字的核心历史大事件。直接输出纯正文。`;
+
             const raw = await callMemoryAI([{ role: 'system', content: sys }, { role: 'user', content: stories || '暂无剧情' }], { maxTokens: 250 });
             const clean = stripThought(raw.trim());
             if (clean) addGlobalMemoryRecord(clean);
-            showToast('✅ 全局记忆提炼完成！', 'success', 2000);
+            showToast('✅ 全局记忆已按实体名提炼完成！', 'success', 2000);
         } else if (type === 'npc') {
             await checkNpcMemorySummarize(targetId);
         }
@@ -2003,11 +2008,6 @@ window.renderMemoryModalView = renderMemoryModalView;
 // 💬 私聊窗口渲染
 // ============================================================
 function renderSingleChatWindow(container) {
-    // 修复：_chatShowFullHistory / _behindScreenActive 这两个字段如果因为
-    // 新建存档、读档等流程用一份"全新的 G"把旧对象整个换掉，就会丢失
-    // （文件顶部的 if(!G.xxx) 初始化只在脚本刚加载时跑过一次，换档后不会重新执行）。
-    // 这里进函数后立刻自愈式补上，避免下面直接按 [key] 取值时因为对象是 undefined 而抛异常，
-    // 导致私聊窗口渲染中途崩溃、界面停在原地（看起来就像"点了没反应，进不去聊天"）。
     if (!window.G._chatShowFullHistory) window.G._chatShowFullHistory = {};
     if (!window.G._behindScreenActive) window.G._behindScreenActive = {};
 
@@ -2346,7 +2346,7 @@ window.showMessageActionSheet = function(msgId, targetType, targetId) {
         const origText = msg.text;
         const isSeenByNpc = Math.random() < 0.5;
         msg.from = 'action';
-        msg.text = '你撤回了一条消息';
+        msg.text = '撤回了一条消息';
         msg._recalled = true;
         msg._originalText = origText;
         msg._seenByNpc = isSeenByNpc;
@@ -2457,7 +2457,7 @@ window.openCollabVideoPublishModal = function(targetType, targetId) {
             const n = G.npcs[id];
             if (n) {
                 n.favor = Math.min(100, (n.favor || 0) + rand(3, 7));
-                n.memorySummary = (n.memorySummary || '') + `\n【合作拍摄】：与主角合拍了视频《${fullTitle}》。`;
+                n.memorySummary = (n.memorySummary || '') + `\n【合作拍摄】：${G.player.ytName} 与 ${n.name} 合拍了共创视频《${fullTitle}》。`;
             }
         });
 
@@ -2465,8 +2465,8 @@ window.openCollabVideoPublishModal = function(targetType, targetId) {
         G.player.money = (G.player.money || 0) + rand(60, 180);
 
         closeModal();
-        appendStory(`🎬 你与 ${partnerNames.join('、')} 发布了共创视频《${fullTitle}》！`, '🤜 合作共创');
-        addGlobalMemoryRecord(`【共创发布】：与 ${partnerNames.join('、')} 合作发布了视频《${fullTitle}》。`);
+        appendStory(`🎬 ${G.player.ytName} 与 ${partnerNames.join('、')} 发布了共创视频《${fullTitle}》！`, '🤜 合作共创');
+        addGlobalMemoryRecord(`【共创发布】：${G.player.ytName} 与 ${partnerNames.join('、')} 合作发布了视频《${fullTitle}》。`);
         showToast(`🎉 发布成功！`, 'success', 2500);
         if (typeof advanceTimeSlot === 'function') advanceTimeSlot();
         updateUI(); autoSaveGame(); renderSocialPanel(); checkSocialRequestsTrigger();
@@ -2505,6 +2505,7 @@ window.openNpcProfileCardModal = function(npcId) {
     `);
 };
 
+// 🧠 单人私聊记忆提炼：严格要求使用第三人称实体全名
 async function checkNpcMemorySummarize(npcId) {
     const memCfg = G.memoryConfig || {};
     if (memCfg.enabled === false) return;
@@ -2516,15 +2517,23 @@ async function checkNpcMemorySummarize(npcId) {
 
     if (history.length >= threshold && !npc._summarizing) {
         npc._summarizing = true;
+        const pName = G.player.ytName || '主角';
         try {
             const toSummarize = history.slice(0, Math.max(1, history.length - keepRecent));
-            const textToSummarize = toSummarize.map(m => `${m.from === 'player' ? '主角' : npc.name}: ${stripThought(m.text || '')}`).join('\n');
+            const textToSummarize = toSummarize.map(m => `${m.from === 'player' ? pName : npc.name}: ${stripThought(m.text || '')}`).join('\n');
             const prior = npc.memorySummary ? `【此前已有记忆】：\n${npc.memorySummary}\n\n` : '';
-            const sys = `你是精炼的角色长期记忆整理助手。请将主角与「${npc.name}」的最新对话与此前记忆提炼合并，输出一段不超过180字的精炼记忆摘要。直接输出摘要正文，严禁废话。`;
+            const sys = `你是精炼的角色长期记忆整理助手。
+【绝对实体命名要求】：
+1. 记忆总结中【严禁使用模糊代词】（严禁使用“他”、“她”、“它”、“我”、“你”）！
+2. 必须明确指名道姓！例如：主角名字是「${pName}」，好友名字是「${npc.name}」！
+   ❎ 严禁输出：“她和他约定去末地。”
+   ✔️ 必须输出：“${pName} 与 ${npc.name} 约定前往末地冒险。”
+3. 将对话与此前记忆提炼合并，输出一段不超过180字的精炼记忆摘要。直接输出正文，不要角色名前缀。`;
+
             const summary = await callMemoryAI([{ role: 'system', content: sys }, { role: 'user', content: `${prior}【需归纳的新对话】：\n${textToSummarize}` }], { maxTokens: 400, temperature: 0.35 });
             npc.memorySummary = stripThought(summary.trim());
             autoSaveGame();
-            showToast(`🧠 已自动整理与 ${npc.name} 的私聊记忆！`, 'info', 2000);
+            showToast(`🧠 已自动整理与 ${npc.name} 的实体记忆！`, 'info', 2000);
         } catch (e) {
             showMemoryFailNoticeModal(`角色「${npc.name}」私聊记忆`, e.message);
         } finally {
@@ -2591,7 +2600,7 @@ window.triggerAIReplyForSingle = async function(npcId) {
         if (m.from === 'action') return `[旁白: ${m.text}]`;
         if (m.from === 'behind_screen') return `[此前你屏幕那边的线下动作: ${m.text}]`;
         if (m.sharedMoment) return `[对方转发了朋友圈动态给你: "${m.sharedMoment.body}"]`;
-        return `${m.from === 'player' ? (m.senderAccount || '主角') : npc.name}: ${m.sticker ? `[发送了表情包: ${m.sticker.desc}]` : stripThought(m.text || '')}`;
+        return `${m.from === 'player' ? (m.senderAccount || G.player.ytName) : npc.name}: ${m.sticker ? `[发送了表情包: ${m.sticker.desc}]` : stripThought(m.text || '')}`;
     }).join('\n') : '（尚未开始对话，双方此前没有任何私聊记录）';
 
     let npcMemoryContext = '';
@@ -2623,6 +2632,7 @@ window.triggerAIReplyForSingle = async function(npcId) {
     const behindScreenPrompt = isBehindScreenActive ? `\n【屏幕那边的TA（线下第三人称动作感知）】：\n玩家已开启线下动作感知。请在输出完聊天消息后，额外输出一个独立块 [BEHIND_SCREEN]...[/BEHIND_SCREEN]，细腻描写你在屏幕那边的真实线下动作（30~60字）。\n` : '';
 
     const sysPrompt = `你正在扮演真实沉浸的 Minecraft 主播/好友「${npc.name}」（性格人设：${npc.persona || '同伴'}）。
+玩家是一名女性主播（名字：${G.player.ytName}，Live2D皮套：${G.player.avatarLive2d || '精美皮套'}，像素皮肤：${G.player.skin || 'MC皮肤'}）。
 ${favorStageRule}
 ${tzContext}
 ${npcMemoryContext}
@@ -2688,6 +2698,7 @@ ${behindScreenPrompt}`;
     }
 };
 
+// 👥 群聊公共纪要提炼：严格要求使用第三人称实体全名
 async function checkGroupMemorySummarize(gid) {
     const memCfg = G.memoryConfig || {};
     if (memCfg.enabled === false) return;
@@ -2703,7 +2714,13 @@ async function checkGroupMemorySummarize(gid) {
             const toSummarize = history.slice(0, Math.max(1, history.length - keepRecent));
             const textToSummarize = toSummarize.map(m => `${m.senderName}: ${stripThought(m.text || '')}`).join('\n');
             const prior = G.groupMemories[gid] ? `【群聊已有纪要】：\n${G.groupMemories[gid]}\n\n` : '';
-            const sys = `你是群聊记忆纪要整理员。提炼一段150字以内的核心纪要，包含八卦、共同约定、关键笑点与事件。直接输出纪要正文。`;
+            const sys = `你是群聊记忆纪要整理员。
+【绝对实体命名要求】：
+1. 总结中【严禁使用模糊代词】（严禁使用“他们”、“大家”、“我们”、“某人”）！
+2. 必须明确指出哪位具体成员做了什么！
+   ✔️ 例如：“Dream 提议周五联机，${G.player.ytName} 表示赞同。”
+3. 提炼一段150字以内的核心纪要，包含八卦、共同约定、关键笑点与事件。直接输出纪要正文。`;
+
             const summary = await callMemoryAI([{ role: 'system', content: sys }, { role: 'user', content: `${prior}【最新群聊记录】：\n${textToSummarize}` }], { maxTokens: 350, temperature: 0.35 });
             const cleanSummary = stripThought(summary.trim());
             G.groupMemories[gid] = cleanSummary;
@@ -2992,12 +3009,12 @@ window.sendStickerMessage = function(targetType, targetId, stickerObj) {
 };
 
 // ============================================================
-// 🕒 游戏时钟与时区管理（支持现实时间、游戏时间、自定义与纬度时区）
+// 🕒 游戏时钟与时区管理
 // ============================================================
 function openClockSettingsModal() {
     if (!G.clockConfig) {
         G.clockConfig = {
-            mode: 'game', // 'real' | 'game' | 'custom'
+            mode: 'game',
             customCountry: '中国 (东八区 UTC+8)',
             customTimeStr: ''
         };
@@ -3132,7 +3149,7 @@ window.recallMoment = function(id) {
     G.feed.splice(itemIdx, 1);
     if (isSeen) {
         showToast('👀 你撤回了动态，但有好友在你撤回前正好看到了！', 'info', 3000);
-        addGlobalMemoryRecord(`【朋友圈撤回】：撤回动态"${item.body.slice(0, 20)}"被发现。`);
+        addGlobalMemoryRecord(`【朋友圈撤回】：${G.player.ytName} 撤回动态"${item.body.slice(0, 20)}"被好友发现。`);
     } else {
         showToast('↩️ 动态已悄悄撤回，没人发现', 'success', 2000);
     }
@@ -3166,6 +3183,88 @@ window.jumpToMomentCard = function(momentId) {
         if (card) { card.scrollIntoView({ behavior: 'smooth', block: 'center' }); }
     }, 150);
 };
+
+// ============================================================
+// 👤 玩家个人资料与全局人称/三维立体形象修改弹窗
+// ============================================================
+function openEditPlayerProfileModal() {
+    const p = G.player || {};
+    const curPov = p.pov || 'second';
+
+    openModal(`
+        <h3>👤 修改主播人设与偏好</h3>
+        <p style="font-size:12px;color:#666;">配置叙事人称与三大场景形象，AI 剧情与直播将更生动准确！</p>
+        
+        <div class="form-group">
+            <label>主播频道名</label>
+            <input type="text" id="editPlayerYtName" value="${escapeHtml(p.ytName || '')}">
+        </div>
+
+        <div class="form-group">
+            <label>📖 全局剧情叙事人称 (POV)</label>
+            <select id="editPlayerPov" style="width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;font-size:13px;background:#fff;">
+                <option value="second" ${curPov === 'second' ? 'selected' : ''}>第二人称【你】（经典代入交互式）</option>
+                <option value="first" ${curPov === 'first' ? 'selected' : ''}>第一人称【我】（身临其境主播自述）</option>
+                <option value="third" ${curPov === 'third' ? 'selected' : ''}>第三人称【她 / 频道名】（小说客观记录视点）</option>
+            </select>
+            <div style="font-size:11px;color:#2e7d32;margin-top:3px;">
+                💡 无论所选人称是什么，长效记忆中枢均严格以<b>双方具体姓名</b>精确留存，绝不混淆！
+            </div>
+        </div>
+
+        <div class="form-group checkbox-group" style="margin-top:6px;">
+            <input type="checkbox" id="editPlayerVoiceChanger" ${p.voiceVoiceChanger ? 'checked' : ''}>
+            <label for="editPlayerVoiceChanger">🎙️ 直播/视频出镜时使用变声器（默认勾选为天然清澈女声）</label>
+        </div>
+
+        <div style="border-top:1px dashed #ddd;padding-top:10px;margin-top:10px;">
+            <div style="font-weight:700;font-size:13.5px;color:#2e7d32;margin-bottom:8px;">🎭 形象三大维度细分设定</div>
+            
+            <div class="form-group">
+                <label>1. 🖥️ 线上虚拟形象 / Live2D皮套</label>
+                <textarea id="editPlayerLive2d" rows="2" placeholder="描写你的Vtuber虚拟形象（开播、录视频出镜时观众看到的立绘）...">${escapeHtml(p.avatarLive2d || '')}</textarea>
+            </div>
+
+            <div class="form-group">
+                <label>2. 🎮 游戏形象 / MC像素皮肤</label>
+                <textarea id="editPlayerSkin" rows="2" placeholder="描写你在Minecraft方块世界操作的角色外观、披风等...">${escapeHtml(p.skin || '')}</textarea>
+            </div>
+
+            <div class="form-group">
+                <label>3. 🏠 线下真实形象 / 现实皮下样貌</label>
+                <textarea id="editPlayerAppearanceReal" rows="2" placeholder="描写现实生活素颜容貌、身形气质与日常私服穿搭（线下生活剧情）...">${escapeHtml(p.appearanceReal || '')}</textarea>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>主播风格性格/人设简介</label>
+            <textarea id="editPlayerPersona" rows="2">${escapeHtml(p.persona || '')}</textarea>
+        </div>
+
+        <div class="btn-row" style="margin-top:14px;">
+            <button class="btn-secondary" onclick="closeModal()">取消</button>
+            <button class="btn-primary" id="btnSavePlayerProfile">💾 保存修改</button>
+        </div>
+    `);
+
+    document.getElementById('btnSavePlayerProfile').onclick = () => {
+        const name = document.getElementById('editPlayerYtName').value.trim();
+        if (!name) { showToast('⚠️ 频道名不能为空', 'error'); return; }
+        
+        p.ytName = name;
+        p.pov = document.getElementById('editPlayerPov').value;
+        p.voiceVoiceChanger = document.getElementById('editPlayerVoiceChanger').checked;
+        p.avatarLive2d = document.getElementById('editPlayerLive2d').value.trim();
+        p.skin = document.getElementById('editPlayerSkin').value.trim();
+        p.appearanceReal = document.getElementById('editPlayerAppearanceReal').value.trim();
+        p.persona = document.getElementById('editPlayerPersona').value.trim();
+
+        showToast('✅ 主播资料与形象设定已更新！', 'success', 1800);
+        closeModal();
+        updateUI();
+        autoSaveGame();
+    };
+}
 
 // ============================================================
 // 暴露全部全局函数（保障跨文件调用绝不报错）
@@ -3207,3 +3306,4 @@ window.executeManualAiSummary = executeManualAiSummary;
 window.openManualMemoryInputModal = openManualMemoryInputModal;
 window.renderDashboard = renderDashboard;
 window.sendReply = sendReply;
+window.openEditPlayerProfileModal = openEditPlayerProfileModal;

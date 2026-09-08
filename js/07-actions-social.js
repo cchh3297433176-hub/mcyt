@@ -226,11 +226,18 @@ function buildAo3HomeHTML() {
                 ? `<span style="background:#fef2f2;color:#dc2626;border:1px solid #fca5a5;border-radius:4px;padding:1px 5px;font-size:10px;font-weight:800;margin-left:4px;">🚨 违规待审取证稿</span>`
                 : '';
 
+            const povBadgeMap = {
+                first: '<span style="font-size:10px;background:#e8f5e9;color:#2e7d32;padding:1px 5px;border-radius:4px;margin-left:4px;">第一人称</span>',
+                second: '<span style="font-size:10px;background:#e0f2fe;color:#0369a1;padding:1px 5px;border-radius:4px;margin-left:4px;">第二人称</span>',
+                third: '<span style="font-size:10px;background:#fef3c7;color:#b45309;padding:1px 5px;border-radius:4px;margin-left:4px;">第三人称</span>'
+            };
+            const povBadge = povBadgeMap[w.pov] || '';
+
             return `
             <div class="ao3-work-entry" data-work-id="${w._id}" style="${isViolationDraft ? 'border-left:4px solid #dc2626;background:#fffbfb;' : ''}">
                 <div class="ao3-work-cover">${coverHtml}</div>
                 <div class="ao3-work-meta">
-                    <div class="ao3-work-title">${escapeHtml(w.title)} ${violationBadge}</div>
+                    <div class="ao3-work-title">${escapeHtml(w.title)} ${violationBadge} ${povBadge}</div>
                     <div class="ao3-work-author">by <span style="color:#900;font-weight:600;">${escapeHtml(w.author || '匿名粉')}</span> ${authorBadge}${w.pairing ? ` · CP: <b>${escapeHtml(w.pairing)}</b>` : ''}</div>
                     <div>${tags}</div>
                     <div class="ao3-work-summary">${escapeHtml(w.summary || '暂无简介')}</div>
@@ -681,17 +688,29 @@ async function triggerFanCreationPrompt() {
     };
 }
 
+// ============================================================
+// ➕ AO3 开坑新书：角色动态识别、模糊搜索与人称选项
+// ============================================================
 function openCreateCustomBookModal() {
     ensureBrowserIntegrity();
     const currentAo3Name = (G.ao3User && G.ao3User.username) || G.player.ytName;
     const isMain = getIsPlayerAo3MainAccount();
     const pName = G.player.ytName;
 
-    const maleNpcs = ['ThatMob', 'Twixxel', 'Groxmc', 'Dream', 'xqree', 'Whispy'];
-    const pairingOptions = `
-        <option value="全员向 / 友情向">全员向 / 友情向 (无固定CP)</option>
-        ${maleNpcs.map(n => `<option value="${n} × ${escapeHtml(pName)}">${n} × ${escapeHtml(pName)} (独宠专一向)</option>`).join('')}
-    `;
+    // 收集所有候选角色（官方内置预设库 + 通讯录NPC + 自建角色，去重合并）
+    const characterMap = new Map();
+    if (typeof OFFICIAL_NPCS !== 'undefined') {
+        Object.values(OFFICIAL_NPCS).forEach(n => {
+            if (n && n.name) characterMap.set(n.name.trim(), { name: n.name.trim(), desc: n.persona || '官方MC大主播' });
+        });
+    }
+    if (G.npcs) {
+        Object.values(G.npcs).forEach(n => {
+            if (n && n.name) characterMap.set(n.name.trim(), { name: n.name.trim(), desc: n.persona || (n.isCustom ? '自建好友' : '通讯录好友') });
+        });
+    }
+
+    const allCharacters = Array.from(characterMap.values());
 
     openModal(`
         <h3>➕ AO3 开坑新书</h3>
@@ -702,12 +721,43 @@ function openCreateCustomBookModal() {
             <label>书籍名称 <span class="required">*</span></label>
             <input type="text" id="newBookTitle" placeholder="如：《下界回响：红石冒险录》">
         </div>
+
         <div class="form-group">
-            <label>涉及 CP / 核心关系 <span style="font-size:11px;color:#2e7d32;">(🌸纯乙女原则：仅限女主)</span></label>
-            <select id="newBookPairingSelect" style="width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;background:#fff;font-size:13px;">
-                ${pairingOptions}
+            <label>📖 同人文叙事人称 (POV)</label>
+            <select id="newBookPovSelect" style="width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;background:#fff;font-size:13px;">
+                <option value="third" selected>第三人称【她 / 主角名】（经典同人小说视角）</option>
+                <option value="second">第二人称【你】（沉浸式代入交互视角）</option>
+                <option value="first">第一人称【我】（女主第一视点自白）</option>
             </select>
         </div>
+
+        <div class="form-group" style="background:#fdfcf9;padding:10px;border-radius:8px;border:1px solid #efe5d8;">
+            <label style="display:flex;justify-content:space-between;align-items:center;">
+                <span>👥 涉及角色与核心羁绊 <span style="font-size:11px;color:#2e7d32;">(🌸纯乙女：仅限女主)</span></span>
+            </label>
+            
+            <div style="margin:4px 0 6px;">
+                <input type="text" id="charSearchFilterInput" placeholder="🔍 快速搜索过滤角色（如 Dream、ThatMob、红石...）" style="width:100%;padding:6px 9px;font-size:12px;border-radius:6px;border:1px solid #d4c4b2;box-sizing:border-box;">
+            </div>
+
+            <div id="characterChipsPool" style="display:flex;flex-wrap:wrap;gap:5px;max-height:100px;overflow-y:auto;padding:4px;background:#fff;border-radius:6px;border:1px dashed #d8cfc4;margin-bottom:8px;">
+                <!-- 动态生成可选角色胶囊 -->
+            </div>
+
+            <div style="display:flex;gap:6px;margin-bottom:6px;">
+                <select id="pairingTemplateSelect" style="flex:1;padding:6px;font-size:12px;border-radius:6px;border:1px solid #ccc;background:#fff;">
+                    <option value="独宠专一向">独宠专一向</option>
+                    <option value="欢喜冤家向">欢喜冤家向</option>
+                    <option value="互宠甜文向">互宠甜文向</option>
+                    <option value="全员修罗场向">全员团宠修罗场向</option>
+                    <option value="战友救赎向">战友救赎向</option>
+                </select>
+            </div>
+
+            <label style="font-size:11.5px;color:#777;">最终生成的 CP / 关系设定（可随意手动修改或输入自定义NPC）：</label>
+            <input type="text" id="finalPairingInput" value="全员向 / 友情向 (无固定CP)" style="width:100%;padding:7px;font-size:13px;border-radius:6px;border:1px solid #b8a694;box-sizing:border-box;font-weight:700;color:#900;">
+        </div>
+
         <div class="form-group">
             <label>标签 Tags（用逗号隔开）</label>
             <input type="text" id="newBookTags" placeholder="如：冒险, 团宠, 甜文, 互宠日常">
@@ -725,13 +775,88 @@ function openCreateCustomBookModal() {
         </div>
         <div class="form-group">
             <label>故事简介与梗概 <span class="required">*</span></label>
-            <textarea id="newBookSummary" rows="3" placeholder="写写这本书的主线设定（纯乙女向，严禁描写男主与非玩家角色恋爱）..."></textarea>
+            <textarea id="newBookSummary" rows="3" placeholder="写写这本书的主线设定（纯乙女向，所有攻略对象仅爱慕女主角本人）..."></textarea>
         </div>
         <div class="btn-row">
             <button class="btn-secondary" onclick="closeModal()">取消</button>
             <button class="btn-primary" id="startGenCustomBookBtn">🚀 启动 AI 生成第 1 章</button>
         </div>
     `);
+
+    // 动态渲染角色快速选择池
+    const poolContainer = document.getElementById('characterChipsPool');
+    const filterInput = document.getElementById('charSearchFilterInput');
+    const finalPairingInput = document.getElementById('finalPairingInput');
+    const templateSelect = document.getElementById('pairingTemplateSelect');
+
+    let selectedChars = [];
+
+    function updateFinalPairingText() {
+        if (!selectedChars.length) {
+            finalPairingInput.value = '全员向 / 友情向 (无固定CP)';
+        } else {
+            const relStyle = templateSelect.value;
+            const joinedNames = selectedChars.join(' & ');
+            finalPairingInput.value = `${joinedNames} × ${pName} (${relStyle})`;
+        }
+    }
+
+    function renderChips(filterTxt = '') {
+        const q = filterTxt.trim().toLowerCase();
+        let html = `
+        <button type="button" class="ao3-char-chip ${!selectedChars.length ? 'selected' : ''}" data-name="__all__" style="border:1px solid #ccc;background:${!selectedChars.length ? '#900' : '#f5f5f5'};color:${!selectedChars.length ? '#fff' : '#333'};padding:3px 8px;border-radius:12px;font-size:11px;cursor:pointer;">
+            🌟 全员向
+        </button>
+        `;
+
+        const filtered = allCharacters.filter(c => {
+            if (!q) return true;
+            return c.name.toLowerCase().includes(q) || c.desc.toLowerCase().includes(q);
+        });
+
+        filtered.forEach(c => {
+            const isSel = selectedChars.includes(c.name);
+            html += `
+            <button type="button" class="ao3-char-chip" data-name="${escapeHtml(c.name)}" style="border:1px solid ${isSel ? '#900' : '#ccc'};background:${isSel ? '#ffebee' : '#fff'};color:${isSel ? '#900' : '#333'};padding:3px 8px;border-radius:12px;font-size:11px;cursor:pointer;display:inline-flex;align-items:center;gap:3px;" title="${escapeHtml(c.desc)}">
+                <span>${isSel ? '❤️' : '➕'}</span>
+                <span>${escapeHtml(c.name)}</span>
+            </button>
+            `;
+        });
+
+        if (!filtered.length && q) {
+            html += `
+            <button type="button" class="ao3-char-chip" data-name="${escapeHtml(q)}" style="border:1px dashed #2e7d32;background:#e8f5e9;color:#2e7d32;padding:3px 8px;border-radius:12px;font-size:11px;cursor:pointer;">
+                ➕ 快捷选用自定义角色: "${escapeHtml(q)}"
+            </button>
+            `;
+        }
+
+        poolContainer.innerHTML = html;
+
+        poolContainer.querySelectorAll('.ao3-char-chip').forEach(btn => {
+            btn.onclick = () => {
+                const cName = btn.dataset.name;
+                if (cName === '__all__') {
+                    selectedChars = [];
+                } else {
+                    const idx = selectedChars.indexOf(cName);
+                    if (idx !== -1) {
+                        selectedChars.splice(idx, 1);
+                    } else {
+                        selectedChars.push(cName);
+                    }
+                }
+                renderChips(filterInput.value);
+                updateFinalPairingText();
+            };
+        });
+    }
+
+    filterInput.oninput = () => renderChips(filterInput.value);
+    templateSelect.onchange = () => updateFinalPairingText();
+
+    renderChips();
 
     let loadedCoverUrl = '';
     document.getElementById('newBookCoverFile').onchange = function(e) {
@@ -749,9 +874,10 @@ function openCreateCustomBookModal() {
     document.getElementById('startGenCustomBookBtn').onclick = async () => {
         const title = document.getElementById('newBookTitle').value.trim();
         const summary = document.getElementById('newBookSummary').value.trim();
-        const pairing = document.getElementById('newBookPairingSelect').value;
+        const pairing = finalPairingInput.value.trim() || '全员向 / 独宠女主';
         const tagsRaw = document.getElementById('newBookTags').value.trim();
         const coverEmoji = document.getElementById('newBookEmoji').value.trim() || '📕';
+        const pov = document.getElementById('newBookPovSelect').value || 'third';
 
         if (!title) { showToast('⚠️ 请输入书籍名称', 'error'); return; }
         if (!summary) { showToast('⚠️ 请填写简介作为生成线索', 'error'); return; }
@@ -765,6 +891,7 @@ function openCreateCustomBookModal() {
                     _isViolationDraft: true,
                     title: title,
                     pairing: pairing,
+                    pov: pov,
                     tags: tagsRaw ? tagsRaw.split(/[,，\s]+/).filter(Boolean) : ['违规取证'],
                     summary: summary,
                     author: currentAo3Name,
@@ -778,7 +905,7 @@ function openCreateCustomBookModal() {
                     chapters: [{
                         chapterNum: 1,
                         title: '【违规草稿梗概未过审】',
-                        content: `【涉嫌违规被安全系统拦截的原作大纲】：\n\n书名：《${title}》\nCP关系：${pairing}\n标签：${tagsRaw}\n简介/梗概：\n${summary}\n\n⚠️ 该书籍在向 AI 发送生成请求前已被纯乙女安全守卫拦截并锁定为物证。`,
+                        content: `【涉嫌违规被安全系统拦截的原作大纲】：\n\n书名：《${title}》\nCP关系：${pairing}\n视角：${pov}\n标签：${tagsRaw}\n简介/梗概：\n${summary}\n\n⚠️ 该书籍在向 AI 发送生成请求前已被纯乙女安全守卫拦截并锁定为物证。`,
                         day: G.day || 1
                     }]
                 };
@@ -801,6 +928,7 @@ function openCreateCustomBookModal() {
             customTitle: title,
             customSummary: summary,
             pairing,
+            pov,
             tags,
             coverUrl: loadedCoverUrl,
             coverEmoji,
@@ -809,11 +937,9 @@ function openCreateCustomBookModal() {
     };
 }
 
-// AO3 AI 输出清洗与容错解析：兼容带 <think>、Markdown 代码围栏、中文冒号，
-// 以及模型漏写结束标签的情况，避免整段提示词/标签被塞进章节标题和正文。
+// AO3 AI 输出清洗与容错解析
 function cleanAo3AIOutput(raw) {
     let s = String(raw || '');
-    // 去掉常见推理块；非贪婪处理，避免影响正文。
     s = s.replace(/<think>[\s\S]*?<\/think>/gi, '');
     s = s.replace(/<analysis>[\s\S]*?<\/analysis>/gi, '');
     s = s.replace(/```(?:text|markdown)?\s*/gi, '').replace(/```/g, '');
@@ -823,10 +949,8 @@ function cleanAo3AIOutput(raw) {
 function grabAo3Tag(raw, tag) {
     const s = cleanAo3AIOutput(raw);
     const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    // 标准：[TAG]内容[/TAG]
     let m = s.match(new RegExp(`\\[${escaped}\\]\\s*([\\s\\S]*?)\\s*\\[\\/${escaped}\\]`, 'i'));
     if (m) return m[1].trim();
-    // 容错：[TAG]: 内容 或 [TAG] 内容；遇到下一个已知字段即停止。
     const known = ['TITLE','PAIRING','TAGS','SUMMARY','CHAPTER_TITLE','CONTENT'];
     m = s.match(new RegExp(`\\[${escaped}\\]\\s*[:：]?\\s*([\\s\\S]*?)(?=\\s*\\[(?:${known.join('|')})\\]\\s*[:：]?|$)`, 'i'));
     return m ? m[1].trim() : '';
@@ -853,7 +977,6 @@ function normalizeAo3Work(work) {
     if (chapterTitle) ch.title = chapterTitle;
     if (content) ch.content = content;
     else {
-        // 至少清除已经泄漏进正文的元数据；若模型真的没有正文，明确标记而不是显示整坨原始标签。
         let cleaned = cleanAo3AIOutput(ch.content || '');
         cleaned = cleaned
             .replace(/\[TITLE\][\s\S]*?(?=\[PAIRING\]|\[CHAPTER_TITLE\]|\[CONTENT\]|$)/gi, '')
@@ -877,7 +1000,16 @@ async function generateNewBookFromAI(params = {}) {
         const p = G.player;
         const authorName = params.author || (G.ao3User && G.ao3User.username) || p.ytName;
         const isAuthorMe = (authorName.trim() === p.ytName.trim());
-        const npcNames = Object.values(G.npcs).map(n => n.name).join('、');
+        const pov = params.pov || 'third';
+
+        let povPrompt = '';
+        if (pov === 'first') {
+            povPrompt = `【文章叙事人称】：严格使用【第一人称「我」】以女主角「${p.ytName}」的心境自述展开小说！`;
+        } else if (pov === 'second') {
+            povPrompt = `【文章叙事人称】：严格使用【第二人称「你」】以沉浸式交互视角描摹女主角的遭遇！`;
+        } else {
+            povPrompt = `【文章叙事人称】：严格使用【第三人称「她 / ${p.ytName}」】以经典同人小说视角展开行文！`;
+        }
 
         let accountIdentityPrompt = '';
         if (isAuthorMe) {
@@ -897,10 +1029,11 @@ async function generateNewBookFromAI(params = {}) {
             请创作第 1 章节，字数 500-800 字。
             `;
         } else {
+            const npcNames = Object.values(G.npcs).map(n => n.name).join('、');
             promptGuide = `
             【随机同人创作】
-            围绕主播「${p.ytName}」（人设：${p.persona}，赛道：${p.category}）。
-            相关主播：${npcNames}。
+            围绕女主播「${p.ytName}」（人设：${p.persona}，赛道：${p.category}）。
+            相关角色池：${npcNames}。
             灵感线索：${params.themePrompt || '自由发挥，符合MC世界与主播生活趣味'}。
             `;
         }
@@ -908,15 +1041,16 @@ async function generateNewBookFromAI(params = {}) {
         const sysPrompt = `
         你是一名热爱 Minecraft 主播圈的资深同人文作者，正在 AO3 网站发布小说。
         ${accountIdentityPrompt}
+        ${povPrompt}
         ${promptGuide}
-        【唯一挚爱纯乙女约束】：所有角色只能对女主角「${p.ytName}」产生爱意或友谊。严禁描写男男同性恋、BL拉郎、或攻略对象与其他任何非玩家角色的恋爱暧昧！
+        【唯一挚爱纯乙女约束】：所有登场角色只能对女主角「${p.ytName}」产生爱意、守护或友谊。严禁描写男男同性恋、BL拉郎、或攻略对象与其他任何非玩家角色的恋爱暧昧！女主角为纯正女性，情感描写细腻动人。
         请严格按以下标签输出：
         [TITLE]书籍标题[/TITLE]
         [PAIRING]CP关系或组合[/PAIRING]
         [TAGS]标签1, 标签2, 标签3[/TAGS]
         [SUMMARY]一段引人入胜的简介（100字左右）[/SUMMARY]
         [CHAPTER_TITLE]第1章标题[/CHAPTER_TITLE]
-        [CONTENT]第1章正文内容（500-800字，行文细腻生动，画面感强烈）[/CONTENT]
+        [CONTENT]第1章正文内容（500-800字，行文细腻生动，画面感强烈，文笔极佳）[/CONTENT]
         `;
 
         const raw = await callAI([
@@ -937,6 +1071,7 @@ async function generateNewBookFromAI(params = {}) {
             _id: workId,
             title,
             pairing,
+            pov,
             tags,
             summary,
             author: authorName,
@@ -962,7 +1097,7 @@ async function generateNewBookFromAI(params = {}) {
         G.player.likes += rand(5, 20);
 
         showToast(`🎉 成功在 AO3 上线新书《${title}》！`, 'success', 2500);
-        appendStory(`🎨 AO3 上线了小说《${title}》（作者：${authorName}）！`, '🎨 同人新作');
+        appendStory(`🎨 AO3 上线了小说《${title}》（作者：${authorName}，CP: ${pairing}）！`, '🎨 同人新作');
         autoSaveGame();
 
         openAo3Reader(workId);
@@ -986,9 +1121,20 @@ async function urgeContinueBookChapter(workId) {
         const nextChapterNum = work.chapters.length + 1;
         const lastChapter = work.chapters[work.chapters.length - 1];
         const lastSlice = (lastChapter && lastChapter.content) ? lastChapter.content.slice(-400) : '';
+        const pov = work.pov || 'third';
+
+        let povPrompt = '';
+        if (pov === 'first') {
+            povPrompt = `【续写人称约束】：延续第一人称「我」的女主主观视角续写！`;
+        } else if (pov === 'second') {
+            povPrompt = `【续写人称约束】：延续第二人称「你」的交互式视角续写！`;
+        } else {
+            povPrompt = `【续写人称约束】：延续第三人称「她」的视角续写！`;
+        }
 
         const sysPrompt = `
         你正在 AO3 网站上续写 MC 同人小说《${work.title}》（作者：${work.author}，CP: ${work.pairing || '无'}，简介: ${work.summary}）。
+        ${povPrompt}
         【乙女绝对规范】：坚守纯正乙女女主唯一定位，严禁攻略角色之间发生同性恋爱！
         上一章结尾片段如下：
         “${lastSlice}”
@@ -1256,8 +1402,12 @@ function ensureYtIntegrity() {
         G.ytState = {
             view: 'feed',
             activeVideoId: null,
-            activeChannelId: 'all'
+            activeChannelId: 'all',
+            feedExpanded: false
         };
+    }
+    if (G.ytState.feedExpanded === undefined) {
+        G.ytState.feedExpanded = false;
     }
     if (!G.ytUser) {
         G.ytUser = {
@@ -1269,7 +1419,9 @@ function ensureYtIntegrity() {
     if (!G.ytCustomChannels) {
         G.ytCustomChannels = [
             { id: 'ch_funny', name: '日常搞笑', prompt: '搞笑整活、沙雕操作、MC日常互怼' },
-            { id: 'ch_tech', name: '红石黑科技', prompt: '高深红石电脑、自动化农场、黑科技机关' }
+            { id: 'ch_tech', name: '红石黑科技', prompt: '高深红石电脑、自动化农场、黑科技机关' },
+            { id: 'ch_mod', name: '模组大赏', prompt: '机械动力、灾厄变兽、生活调味品等最新热门MC模组与玩法演示' },
+            { id: 'ch_cut', name: '高光切片', prompt: '关于MC知名主播以及玩家的高光击杀切片、直播爆笑Reaction、技术解析' }
         ];
     }
 }
@@ -1332,6 +1484,7 @@ function renderYouTubePanel() {
 }
 
 function initDefaultYtFeed() {
+    const pName = (G.player && G.player.ytName) || 'MC主播';
     const preset = [
         {
             _id: 'yt_ext_1',
@@ -1359,14 +1512,26 @@ function initDefaultYtFeed() {
         },
         {
             _id: 'yt_ext_3',
-            title: '路人MC迷：盘点最近油管上升最快的新星MC主播TOP5！',
-            author: 'MineCraft_Daily',
+            title: `【高能切片】盘点 ${pName} 在直播中那些惊为天人的名场面TOP5！`,
+            author: 'MC爆笑烤肉组',
             authorId: null,
-            views: '12万',
-            time: '5小时前',
-            duration: '09:12',
-            thumbnailEmoji: '🏆',
-            summary: `深度分析了新晋主播 ${G.player.ytName} 和同行们的视频技术风格与快速涨粉密码。`,
+            views: '58万',
+            time: '8小时前',
+            duration: '08:42',
+            thumbnailEmoji: '🍿',
+            summary: `全程高能！从绝境极限反杀到搞笑掉进岩浆，回顾 ${pName} 最火爆的直播名场面，弹幕笑到打鸣！`,
+            comments: []
+        },
+        {
+            _id: 'yt_ext_4',
+            title: '【机械动力】用齿轮与蒸汽造出全自动自动化火车物流网！',
+            author: 'Redstone_Crafter',
+            authorId: null,
+            views: '89万',
+            time: '2天前',
+            duration: '21:15',
+            thumbnailEmoji: '⚙️',
+            summary: '超硬核的 Create 模组大型工程！不仅全自动运转，还能穿梭于各个矿区运送物资。',
             comments: []
         }
     ];
@@ -1417,11 +1582,16 @@ function buildYtFeedHTML() {
         <div style="text-align:center;padding:50px 20px;color:#888;">
             <div style="font-size:32px;margin-bottom:8px;">📺</div>
             <div style="font-weight:700;font-size:14px;">该频道暂无推送视频</div>
-            <div style="font-size:12px;margin-top:4px;">点击右上角 🔄 图标，AI 将根据该频道设定为你立刻生成专属视频流！</div>
+            <div style="font-size:12px;margin-top:4px;">点击右上角 🔄 图标，AI 将结合圈内热搜与最新模组为你生成专属视频流！</div>
         </div>
         `;
     } else {
-        allCards.forEach(v => {
+        const MAX_VISIBLE = 15;
+        const isExpanded = !!G.ytState.feedExpanded;
+        const visibleCards = (allCards.length > MAX_VISIBLE && !isExpanded) ? allCards.slice(0, MAX_VISIBLE) : allCards;
+        const hiddenCount = allCards.length - MAX_VISIBLE;
+
+        visibleCards.forEach(v => {
             const npcObj = v.authorId ? G.npcs[v.authorId] : null;
             let avatarHtml = '<span>👤</span>';
             if (v.isPlayer) {
@@ -1456,6 +1626,16 @@ function buildYtFeedHTML() {
             </div>
             `;
         });
+
+        if (hiddenCount > 0) {
+            feedHtml += `
+            <div style="padding:14px 10px;text-align:center;">
+                <button class="btn-secondary" id="ytToggleCollapseBtn" style="font-size:12px;padding:8px 18px;border-radius:20px;display:inline-flex;align-items:center;gap:6px;">
+                    ${isExpanded ? '🔼 收起多余旧视频' : `🔽 展开更多历史推荐 (还有 ${hiddenCount} 个视频)`}
+                </button>
+            </div>
+            `;
+        }
     }
 
     return `
@@ -1736,6 +1916,11 @@ function bindYtPanelEvents(container) {
         openCreateCustomChannelModal();
     });
 
+    document.getElementById('ytToggleCollapseBtn')?.addEventListener('click', () => {
+        G.ytState.feedExpanded = !G.ytState.feedExpanded;
+        renderYouTubePanel();
+    });
+
     container.querySelectorAll('.yt-feed-card[data-vid]').forEach(card => {
         card.onclick = () => {
             G.ytState.view = 'watch';
@@ -1914,42 +2099,75 @@ async function refreshYtExternalFeedByAI() {
         ensureYtIntegrity();
         const activeChId = G.ytState.activeChannelId || 'all';
         const curCh = (G.ytCustomChannels || []).find(c => c.id === activeChId);
+        const playerName = (G.player && G.player.ytName) || 'MC主播';
 
         const contactsList = Object.values(G.npcs).map(n => `【${n.name}】(${n.persona || 'MC主播'})`).join('、');
+
+        let webSearchInfo = '';
+        if (typeof webSearch === 'function' && G.searchConfig && G.searchConfig.enabled) {
+            try {
+                const searchKeywords = [
+                    'Minecraft 热门模组 流行新玩法',
+                    'Minecraft YouTube trending challenges gameplay',
+                    '我的世界 最新大热更新 模组推荐 bug特性展示',
+                    curCh ? `Minecraft ${curCh.name} 热门实况` : 'Minecraft 最火爆整活实况 挑战'
+                ];
+                const q = pick(searchKeywords);
+                const sRes = await webSearch(q);
+                if (sRes && sRes.results && sRes.results.length) {
+                    if (typeof formatSearchContext === 'function') {
+                        webSearchInfo = formatSearchContext(sRes.results);
+                    } else {
+                        webSearchInfo = sRes.results.slice(0, 3).map(r => `【${r.title}】：${r.content}`).join('\n');
+                    }
+                }
+            } catch (err) {
+                console.warn('油管刷新联网搜索降级：', err);
+            }
+        }
 
         let categoryPrompt = '';
         if (curCh) {
             categoryPrompt = `
             【当前专区限定】：该专区为「${curCh.name}」，内容设定要求为：${curCh.prompt}。
-            所有推荐视频必须紧密贴合该专区的主题（不仅限于MC，根据设定自由呈现）！
+            所有推荐视频必须紧密贴合该专区的主题！
             `;
         } else {
             categoryPrompt = `
-            【内容主题】：Minecraft 我的世界实况专区，兼顾趣味娱乐与大神操作。
+            【内容主题】：Minecraft 我的世界油管实况与社区大热专区，兼顾大神技术、流行模组、硬核挑战、爆笑沙雕与同圈互动。
             `;
         }
 
         const sysPrompt = `
-        你正在模拟 YouTube 游戏与生活视频推荐流。
-        ${categoryPrompt}
-        玩家通讯录中的主播与NPC好友包括：${contactsList}。
-        【要求】：
-        1. 这是一个真实的 Minecraft YouTube 创作者圈子！严禁出现任何“乙女向/恋爱游戏预告”等打破第四面墙的设定！所有视频必须是真正的游戏实况、挑战、微电影、建筑或日常记录！
-        2. 随机挑选 1 到 2 位上述通讯录中的好友主播发布的新视频，同时搭配 1 到 2 位路人高手的视频。
-        3. 总共输出 3 条热门推荐视频，格式必须严格如下（每条以 [VIDEO] 开头，[/VIDEO] 结尾）：
-        [VIDEO]
-        TITLE: 视频爆款吸睛标题
-        AUTHOR: 主播名字或地道网名
-        VIEWS: 播放量（如：85万次观看）
-        TIME: 发布时间（如：2小时前）
-        SUMMARY: 视频核心内容与高光描述（80字左右）
-        [/VIDEO]
+你正在模拟 YouTube 游戏与生活视频推荐流系统。
+${categoryPrompt}
+${webSearchInfo ? `【当前互联网MC圈最新资讯/模组/热点参考】：\n${webSearchInfo}\n` : ''}
+玩家频道名：「${playerName}」（人设风格：${G.player.persona || 'MC主播'}）。
+玩家的好友与同行NPC包括：${contactsList}。
+
+【创作者与视频类型丰富性（重点）】：
+请从以下 3 种来源中随机组合，生成 3 条热门推荐视频：
+1. 【圈内同行好友】：从通讯录好友（如 Dream, Twixxel, ThatMob, Whispy 等）中选择 1 位发布的新作；
+2. 【全网顶流/模组/技术高玩】：知名的 MC 大主播、红石黑科技 UP、热门模组（如机械动力 Create、灾厄、冰与火等）试玩博主，或展现 Minecraft 最新版奇葩 Bug/特性的整活视频；
+3. 【关于主播本人（${playerName}）的切片/二创】：由粉丝、烤肉组或切片 UP 主上传的关于「${playerName}」的高光反杀剪辑、直播爆笑名场面切片、或针对 ${playerName} 操作的 Reaction（反应）视频！
+
+【🚨 严禁打破第四面墙】：
+这是一个真正的 YouTube 视频社区！严禁出现任何“乙女向/恋爱游戏预告”等词汇，所有视频必须是真实、地道的游戏实况、挑战、微电影、建筑展示或切片！
+
+请生成 3 条推荐视频，严格遵循以下格式（每条以 [VIDEO] 开头，[/VIDEO] 结尾）：
+[VIDEO]
+TITLE: 视频爆款吸睛标题
+AUTHOR: 主播名字或地道网名
+VIEWS: 播放量（如：85万次观看）
+TIME: 发布时间（如：2小时前、刚刚）
+SUMMARY: 视频核心内容与高光描述（80字左右，可提及流行模组、特性或主角的高光操作）
+[/VIDEO]
         `;
 
         const raw = await callAI([
             { role: 'system', content: sysPrompt },
-            { role: 'user', content: '请刷新3条热门推荐视频。' }
-        ], { maxTokens: 900, temperature: 0.95 });
+            { role: 'user', content: '请刷新 3 条贴合圈内热点的热门推荐视频。' }
+        ], { maxTokens: 950, temperature: 0.95 });
 
         const newCards = [];
         const blocks = raw.split('[VIDEO]').slice(1);
@@ -1973,19 +2191,15 @@ async function refreshYtExternalFeedByAI() {
                 views: views.trim(),
                 time: time.trim(),
                 duration: `${rand(8, 25)}:${rand(10, 59)}`,
-                thumbnailEmoji: pick(['🎮', '🏹', '🏰', '🔴', '💣', '🌲', '💎', '🔥', '✨']),
+                thumbnailEmoji: pick(['🎮', '🏹', '🏰', '🔴', '💣', '🌲', '💎', '🔥', '✨', '⚙️', '🍿']),
                 summary: summary.trim(),
                 comments: []
             });
         });
 
         if (newCards.length) {
-            if (activeChId === 'all') {
-                G.ytExternalVideos = newCards;
-            } else {
-                G.ytExternalVideos = [...newCards, ...(G.ytExternalVideos || []).filter(v => v.channelId !== activeChId)];
-            }
-            showToast('✅ 视频推荐已刷新！', 'success', 1500);
+            G.ytExternalVideos = [...newCards, ...(G.ytExternalVideos || [])];
+            showToast('✅ 视频推荐已刷新，最新热点已送达！', 'success', 1500);
             renderYouTubePanel();
             autoSaveGame();
         }
@@ -2297,7 +2511,7 @@ function openYtWriteCommentModal(videoId) {
 
             if (isMain && video.authorId && G.npcs[video.authorId]) {
                 const targetNpc = G.npcs[video.authorId];
-                const note = `【油管评论互动】：玩家在你的视频《${video.title}》下方实名留言：“${text}”。在后续私聊中有可能以此开话题。`;
+                const note = `【油管评论互动】：${G.player.ytName} 在你的视频《${video.title}》下方留言：“${text}”。`;
                 targetNpc.memorySummary = (targetNpc.memorySummary || '') + `\n${note}`;
                 showToast(`🌟 主播 ${targetNpc.name} 注意到了你的留言！`, 'success', 2500);
             }

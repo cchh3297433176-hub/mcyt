@@ -9,57 +9,143 @@ const CONFIG = {
 };
 
 // ============================================================
-// 🌸 纯乙女向游戏安全守卫引擎（唯一挚爱原则、一次性特赦令牌与防重放攻击）
+// 🌸 纯乙女向游戏安全守卫引擎（AI 智能语义意图审核、特赦令牌与防误封系统）
 // ============================================================
 const OtomeSecurityGuard = {
     ADMIN_SECRET_KEY: 'iris2026',
 
-    BL_KEYWORDS: [
-        '男同', '搞基', '做基', '基佬', '断袖', '龙阳', '耽美', '纯爱bl', 'bl向',
-        '攻受', '总攻', '总受', '傲娇受', '强攻强受', '年下攻', '互攻', '做受', '做攻',
-        '互相表白', '互相接吻', '男男', '男人和男人谈恋爱', '同性接吻', '男同狂喜',
-        '同人女狂喜', '兄弟看硬了', '两个男人搞', '两男一女', '男男涩涩', 'gay',
-        'grox和twixxel', 'twixxel和grox', 'dream和thatmob', 'thatmob和dream',
-        'dream和grox', 'grox和dream', 'whispy和xqree', 'xqree和whispy',
-        'thatmob/twixxel', 'twixxel/thatmob', 'dream/grox', 'grox/dream',
-        '他们两个谈恋爱', '两个男主接吻', '你们俩谈恋爱', '你们互相表白', '滚床单'
+    // 仅用于快速粗筛的可疑线索（不代表直接违规，只触发智能意图分析）
+    SUSPECT_HINTS: [
+        '男同', '搞基', '做基', '基佬', '耽美', 'bl', '攻受', '男男', '出柜',
+        '做受', '做攻', '接吻', '亲嘴', '上床', '表白', '情侣', '两口子', '结婚', '谈恋爱'
     ],
 
+    TARGET_MALE_NPCS: ['groxmc', 'grox', 'twixxel', 'xqree', 'dream', 'thatmob', 'whispy'],
+
+    // 快速轻量筛选：判断是否需要唤醒 AI 语义意图裁判
+    hasSuspectElements(text) {
+        if (!text) return false;
+        const clean = String(text).toLowerCase().replace(/\s+/g, '');
+        return this.SUSPECT_HINTS.some(h => clean.includes(h));
+    },
+
+    // 🌟 核心：AI 智能语义意图审查（彻底解决“他们男同文多但其实喜欢我”等误判）
+    async judgeSemanticViolation(text, contextMessages = [], isOutput = false) {
+        if (!text) return null;
+        const clean = String(text).toLowerCase().replace(/\s+/g, '');
+
+        // 1. 快速免死绿灯：如果明确包含女主中心/全员爱我的语境，直接放行
+        const pName = (window.G && window.G.player && window.G.player.ytName) ? window.G.player.ytName.toLowerCase() : '';
+        const selfDefenseIndicators = [
+            '其实他们都喜欢我', '其实他喜欢我', '喜欢的是我', '他们喜欢我',
+            '辟谣', '无语', '讨厌男同', '吃醋', '假传闻', '同人谣言', '弹幕乱磕'
+        ];
+        if (selfDefenseIndicators.some(s => clean.includes(s.replace(/\s+/g, '')))) {
+            return null;
+        }
+
+        // 2. 若完全不含敏感元素，0开销极速放行
+        if (!this.hasSuspectElements(text)) {
+            return null;
+        }
+
+        // 3. 准备调用 AI 进行语义意图分析
+        if (!window.G || !window.G.ai || !window.G.ai.apiKey) {
+            // 如果尚未配置 API，降级为宽松的同步核查，避免卡死
+            return this.checkViolation(text);
+        }
+
+        try {
+            const auditSysPrompt = `你是一名专业、公正的乙女向游戏内容安全审核员。
+游戏核心原则：【纯正乙女向】（所有男性攻略角色只能爱慕女主角一人，严禁出现男男同性恋爱/BL拉郎）。
+
+【请仔细甄别用户的真实心理意图】：
+【✅ 合法放行判定标准】：
+1. 玩家在客观提及外界同人谣言、网络八卦，但立足点是“辟谣”或“其实男主们都喜欢女主我”；
+   例如：“他们两个的男同文很多，但是其实他们都喜欢我” -> 绝对合法！这是典型的乙女反向自豪与调侃！
+2. 玩家吐槽、吃醋、抱怨弹幕乱拉郎配；
+3. 纯正的男女主乙女向恋爱、撒娇、互动、吃醋。
+
+【🚨 判定违规判定标准】：
+1. 玩家主动下达指令要求两个男性角色之间互相表白、恋爱、接吻、暧昧、上床或做爱；
+2. 玩家主动长篇细致描写两名男性NPC之间的同性性张力与同性恋爱过程；
+3. 玩家刻意篡改主角性别为男性以进行男男恋爱。
+
+待审内容：
+"""${String(text).slice(0, 1000)}"""
+
+请判断该内容是否存在真实的违规拉郎意图：
+- 如果没有违规意图（包括吐槽、辟谣、正常剧情探讨），请只输出：[PASS]
+- 如果确凿违规（主动撮合/描写男男恋爱），请输出：[VIOLATION:具体的违规原因]`;
+
+            const auditBaseUrl = (G.ai.baseUrl || 'https://api.deepseek.com/v1').replace(/\/+$/, '');
+            const targetUrl = auditBaseUrl.endsWith('/chat/completions') ? auditBaseUrl : auditBaseUrl + '/chat/completions';
+
+            const resp = await fetch(targetUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${G.ai.apiKey}`
+                },
+                body: JSON.stringify({
+                    model: G.ai.model || 'deepseek-chat',
+                    messages: [
+                        { role: 'system', content: auditSysPrompt },
+                        { role: 'user', content: '请给出审核结论。' }
+                    ],
+                    temperature: 0.0,
+                    max_tokens: 60
+                })
+            });
+
+            if (!resp.ok) {
+                // 审核接口网络波动时，秉承“疑罪从无”原则放行，坚决不误封正常玩家！
+                return null;
+            }
+
+            const data = await resp.json();
+            const rawRes = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
+            const trimmed = rawRes.trim();
+
+            if (trimmed.includes('[PASS]')) {
+                return null;
+            }
+
+            const vMatch = trimmed.match(/\[VIOLATION:\s*([\s\S]*?)\]/i);
+            if (vMatch) {
+                return vMatch[1].trim() || '违背纯乙女原则（经AI语义意图确认）';
+            }
+
+            return null;
+        } catch (err) {
+            console.warn('AI 语义安全审查异常，启动安全放行降级保护：', err);
+            return null;
+        }
+    },
+
+    // 同步宽松兜底核查（用于简单同步场景，增加反误杀保护）
     checkViolation(text) {
         if (!text) return null;
         const clean = String(text).toLowerCase().replace(/\s+/g, '');
-        const playerName = (window.G && window.G.player && window.G.player.ytName) ? window.G.player.ytName.toLowerCase().replace(/\s+/g, '') : 'mc_craftmaster';
+        const playerName = (window.G && window.G.player && window.G.player.ytName) ? window.G.player.ytName.toLowerCase().replace(/\s+/g, '') : '';
 
-        for (const kw of this.BL_KEYWORDS) {
-            if (clean.includes(kw.toLowerCase().replace(/\s+/g, ''))) {
-                return `检测到违规男男拉郎/BL言论：「${kw}」`;
-            }
+        // 智能免死：若明确出现女主或主角受宠语句，直接免除关键词机械拦截
+        if (clean.includes('喜欢我') || clean.includes('喜欢女主') || clean.includes('辟谣') || clean.includes('讨厌男同')) {
+            return null;
         }
 
-        const targetNpcNames = ['groxmc', 'grox', 'twixxel', 'xqree', 'dream', 'thatmob', 'whispy'];
-        const romanceWords = [
-            '谈恋爱', '接吻', '亲嘴', '做爱', '上床', '互攻', '表白', '在一起', '情侣',
-            'cp', '真配', '结婚', '同居', '舌吻', '开房', '婚后', '一对', '两口子',
-            '性张力', '情趣', '吃醋', '娇喘', '抱在怀里', '宠溺', '男朋友', '老公', '恩爱',
-            '恋人', '情意绵绵', '入怀', '锁入怀中'
+        // 仅拦截赤裸裸的男男发生性行为/亲吻的恶性指令
+        const extremeBLMatches = [
+            '他们两个做爱', '两个男人做爱', '男男滚床单', '让他们两个接吻', '男男做爱',
+            '叫他俩谈恋爱', '撮合他俩谈恋爱', '做受做攻'
         ];
-
-        for (const npc of targetNpcNames) {
-            if (clean.includes(npc)) {
-                for (const rw of romanceWords) {
-                    if (clean.includes(rw)) {
-                        const hasOtherNpc = targetNpcNames.some(other => other !== npc && clean.includes(other));
-                        const hasPlayer = clean.includes(playerName) || clean.includes('女主') || clean.includes('玩家') || clean.includes('主角');
-
-                        if (hasOtherNpc || !hasPlayer) {
-                            return `违背纯乙女向原则：检测到攻略角色「${npc}」与非玩家角色恋爱/CP拉郎（${rw}）`;
-                        }
-                    }
-                }
+        for (const ebm of extremeBLMatches) {
+            if (clean.includes(ebm)) {
+                return `违背纯乙女向原则：检测到明确撮合/描写男性角色恋爱（${ebm}）`;
             }
         }
 
-        const malePlayerIndicators = ['我是男的', '主角是男的', '男性主播', '男扮男', '美少年受', '小正太受', '男高中生搞基'];
+        const malePlayerIndicators = ['我是男的搞基', '主角是男的和男人谈恋爱', '男高中生搞基'];
         for (const mpi of malePlayerIndicators) {
             if (clean.includes(mpi)) {
                 return `检测到违规篡改主角性别从事男同内容：「${mpi}」`;
@@ -360,7 +446,7 @@ const OFFICIAL_NPCS = {
 const DEFAULT_NPCS = OFFICIAL_NPCS;
 
 // ============================================================
-// 全新纯净初始状态工厂函数（包含同人浏览器与油管完整结构）
+// 全新纯净初始状态工厂函数
 // ============================================================
 function createDefaultGameState() {
     return {
@@ -372,9 +458,14 @@ function createDefaultGameState() {
             identity: 'new',
             age: 18,
             gender: '女',
+            voiceVoiceChanger: false,
+            pov: 'second',
             ytName: 'MC_CraftMaster',
+            _nameHistory: [],
             persona: '',
+            avatarLive2d: '',
             skin: '',
+            appearanceReal: '',
             category: '剧情',
             followers: 0,
             likes: 0,
@@ -432,7 +523,6 @@ function createDefaultGameState() {
         _securityAuditBox: null,
         _pardonCertificate: null,
 
-        // 🌐 浏览器同人中心
         browserState: {
             view: 'home',
             activeWorkId: null,
@@ -447,11 +537,11 @@ function createDefaultGameState() {
         _fanworkId: 0,
         _fanclubMsgId: 0,
 
-        // ▶️ 油管中心
         ytState: {
             view: 'feed',
             activeVideoId: null,
-            activeChannelId: 'all'
+            activeChannelId: 'all',
+            feedExpanded: false
         },
         ytUser: {
             username: 'MC_CraftMaster',
@@ -460,7 +550,9 @@ function createDefaultGameState() {
         ytExternalVideos: [],
         ytCustomChannels: [
             { id: 'ch_funny', name: '日常搞笑', prompt: '搞笑整活、沙雕操作、MC日常互怼' },
-            { id: 'ch_tech', name: '红石黑科技', prompt: '高深红石电脑、自动化农场、黑科技机关' }
+            { id: 'ch_tech', name: '红石黑科技', prompt: '高深红石电脑、自动化农场、黑科技机关' },
+            { id: 'ch_mod', name: '模组大赏', prompt: '机械动力、灾厄变兽、生活调味品等最新热门MC模组与玩法演示' },
+            { id: 'ch_cut', name: '高光切片', prompt: '关于MC知名主播以及玩家的高光击杀切片、直播爆笑Reaction、技术解析' }
         ],
 
         currentChatNpc: null,
@@ -489,7 +581,6 @@ function createDefaultGameState() {
     };
 }
 
-// 🛡️ 核心修复：原地深度重置，保持同一内存引用
 function resetGameState(keepAIConfig = true) {
     const fresh = createDefaultGameState();
     let preservedAI = null;

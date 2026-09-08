@@ -1,5 +1,5 @@
 // js/06-video-story.js
-// 视频制作（评论由 AI 实时生成）与多层级记忆联动的核心叙事引擎（支持博查/秘塔/Tavily主动探查联网，支持全量AI生成文章/剧情编辑与管理）
+// 视频制作（评论由 AI 实时生成）与多层级记忆联动的核心叙事引擎（按天数结构化、上帝视角实体名归纳、更名历史追踪）
 // ============================================================
 function openVideoModal() {
     const availableAP = G.actionPoints;
@@ -276,7 +276,11 @@ async function createVideo(title, style, duration, collectionName, collectionInd
 
     const seriesText = collectionName ? `（合集：${collectionName}，第${collectionIndex}集）` : '';
     const descText = description ? ` 内容描述：${description}` : '';
-    const storyText = `你发布了视频「${title}」${seriesText}，风格${style}，${duration === 'short' ? '短' : '长'}视频。播放量 ${baseViews}，点赞 ${baseLikes}，评论 ${comments.length} 条。${descText}`;
+    const pov = G.player.pov || 'second';
+    let storyPrefix = '你';
+    if (pov === 'first') storyPrefix = '我';
+    else if (pov === 'third') storyPrefix = `${G.player.ytName || '少女'}`;
+    const storyText = `${storyPrefix}发布了视频「${title}」${seriesText}，风格${style}，${duration === 'short' ? '短' : '长'}视频。播放量 ${baseViews}，点赞 ${baseLikes}，评论 ${comments.length} 条。${descText}`;
     
     generateStory('🎬 视频发布', storyText, useSearch).then(() => {
         showToast(`🎬 视频「${title}」发布成功！`, 'success', 2000);
@@ -287,46 +291,98 @@ async function createVideo(title, style, duration, collectionName, collectionInd
 }
 
 // ============================================================
-// 通用剧情生成与深度多层级记忆构建
+// 通用剧情生成与深度多层级记忆构建（按日期分类、更名档案追踪、上帝视角纯实体名）
 // ============================================================
 function buildSystemPrompt() {
     const p = G.player;
     const activeStoryHistory = (G.storyHistory || []).filter(h => !h.archived);
+
+    // 1. 最近剧情回顾：严格注明具体天数与时段
     const historySummary = activeStoryHistory.slice(-8).map(h =>
         h.truncated
-            ? `[第${h.day}天 ${getTimeSlotName(h.time)}] （内容不完整已忽略）`
-            : `[第${h.day}天 ${getTimeSlotName(h.time)}] ${stripThought(h.text).slice(0, 120)}...`
+            ? `[第${h.day}天 · ${getTimeSlotName(h.time)}] （内容不完整已忽略）`
+            : `[第${h.day}天 · ${getTimeSlotName(h.time)}] ${stripThought(h.text).slice(0, 130)}...`
     ).join('\n');
 
-    const globalMemories = (G.memorySummaries || []).map(m =>
-        `[统一全局记忆 · 第${m.day || 1}天] ${stripThought(m.text || m)}`
-    ).join('\n');
+    // 2. 全局重大记忆库：按日期精确归类发给 AI
+    const memoryByDays = {};
+    (G.memorySummaries || []).forEach(m => {
+        const d = m.day || 1;
+        if (!memoryByDays[d]) memoryByDays[d] = [];
+        const cleanTxt = stripThought(m.text || m);
+        memoryByDays[d].push(cleanTxt);
+    });
 
+    const formattedDayMemories = Object.keys(memoryByDays).sort((a, b) => Number(a) - Number(b)).map(d => {
+        return `【📅 游戏第 ${d} 天纪事档案】：\n` + memoryByDays[d].map(txt => `• ${txt}`).join('\n');
+    }).join('\n\n');
+
+    // 3. 更名历史履历追踪（防止改名后 AI 产生认知割裂）
+    let nameHistoryNotice = '';
+    if (p._nameHistory && Array.isArray(p._nameHistory) && p._nameHistory.length > 0) {
+        nameHistoryNotice = `【🚨 核心姓名与更名履历档案】：
+主角当前的主播名字为「${p.ytName}」。
+历史曾用名记录：${p._nameHistory.join(' → ')}。
+【极其重要】：历史记忆中记载的曾用名指的均是主角「${p.ytName}」本人，严禁误认为这是不同的角色！\n`;
+    }
+
+    // 4. NPC 专属关系与记忆
     const npcDetailedMemories = Object.values(G.npcs || {}).map(n => {
-        let mem = `${n.name}: 好感度 ${n.favor||0}${n._relationship === 'dating' ? ' 💕恋人' : ''}`;
-        if (n.memorySummary) mem += ` | 私聊记忆: ${stripThought(n.memorySummary)}`;
-        if (n.knownGroupEvents) mem += ` | 群聊知晓: ${stripThought(n.knownGroupEvents)}`;
+        let mem = `【${n.name}】(好感度: ${n.favor||0}${n._relationship === 'dating' ? ' 💕恋人' : ''})`;
+        if (n.memorySummary) mem += `\n  - 专属承诺与互动记忆: ${stripThought(n.memorySummary)}`;
+        if (n.knownGroupEvents) mem += `\n  - 群聊获悉事件: ${stripThought(n.knownGroupEvents)}`;
         return mem;
     }).join('\n');
 
+    // 5. 群聊公共纪要
     const groupMemoriesList = Object.entries(G.groupMemories || {}).map(([gid, text]) => {
         const grp = G.groups[gid];
         return `[群聊「${grp ? grp.name : gid}」纪要]: ${stripThought(text)}`;
     }).join('\n');
 
+    // 6. 回忆录里程碑：严格按天数前缀
     const memoirRecent = (G.memoir || []).slice(-12).map(m =>
-        `第${m.day}天: ${m.event} ${m.details}`
+        `[第${m.day}天]: ${m.event} (${m.details})`
     ).join('\n');
+
+    // 🌟 全局人称叙事规则
+    const pov = p.pov || 'second';
+    let povInstruction = '';
+    if (pov === 'first') {
+        povInstruction = `【叙事人称铁律】：全文必须严格使用【第一人称「我」】进行沉浸式主观叙事！禁止使用“你”称呼主角，所有心理、动作、语言均以“我”的视角展现。`;
+    } else if (pov === 'third') {
+        povInstruction = `【叙事人称铁律】：全文必须使用【第三人称「她」或频道名「${p.ytName}」】进行小说式叙事！严禁使用“你”或“我”来称呼主角，以旁观客观叙述其精彩经历。`;
+    } else {
+        povInstruction = `【叙事人称铁律】：全文使用【第二人称「你」】进行代入感叙事！引导主角进行体验。`;
+    }
+
+    // 🌸 女性玩家与声音设定
+    const voiceInstruction = p.voiceVoiceChanger 
+        ? `玩家在网络直播/视频中使用了变声器伪装（变声器设定），但现实皮下依然是真实的女性。`
+        : `玩家为纯正的女性！声线天然为少女音/清澈女声，描写玩家的嗓音、体态、神态时必须完全符合女性特质，严禁使用“兄弟”、“哥们”等男性化粗鲁称呼。`;
 
     return `
 你是一个专业且富有创意的 MC YouTube 模拟器叙事 AI。
-根据玩家行动生成生动、连贯的剧情。注意：玩家为女性，所有称呼使用"你"或"她"，不得使用"兄弟"、"哥们"。
-【玩家设定】
+根据玩家行动生成生动、连贯、细节饱满的沉浸式剧情。
+
+${povInstruction}
+【🌸 玩家真实身份约束】：
+玩家为女性！${voiceInstruction}
+${nameHistoryNotice}
+【🎭 玩家形象三大维度（重点分层，严禁混淆）】：
+1. 🖥️【线上虚拟形象 / Live2D皮套】：${p.avatarLive2d || '精美定制Live2D虚拟形象'}
+   （适用场景：开直播、录视频、Vtuber联动出镜、观众视角所见到的动态立绘形态）
+2. 🎮【游戏形象 / Minecraft像素皮肤】：${p.skin || '专属MC定制皮肤与披风'}
+   （适用场景：在Minecraft游戏中挖矿、建筑、PvP战斗、被怪物追击、方块世界联机时的操作角色）
+3. 🏠【线下真实形象 / 现实皮下素颜】：${p.appearanceReal || '清秀灵动的少女，身姿轻盈，日常居家族穿搭'}
+   （适用场景：摘下耳机后的现实生活、喝水休息、线下聚会偶遇、私信视频通话等皮下生活）
+
+【玩家频道与属性】
 - 主播频道：${p.ytName} | 身份：${p.identity === 'new' ? '新主播' : p.identity === 'fans' ? '小有名气主播' : '老牌主播'} | 赛道：${p.category} | 人设形象：${p.persona}
 - 数据统计：粉丝 ${p.followers} | 金币 ${p.money} | 点赞 ${p.likes}
 
-【🌐 统一全局记忆库（主角的核心履历与转折）】
-${globalMemories || '暂无全局历史摘要'}
+【🌐 统一全局长效记忆档案（已按游戏天数清晰归档，注意时间先后演进）】
+${formattedDayMemories || '暂无全局历史摘要'}
 
 【👥 群聊公开话题与纪要】
 ${groupMemoriesList || '暂无群聊大事件'}
@@ -334,24 +390,30 @@ ${groupMemoriesList || '暂无群聊大事件'}
 【👤 NPC 关系与专属记忆】
 ${npcDetailedMemories || '暂无NPC'}
 
-【最近剧情回顾】
+【最近时段行动回顾】
 ${historySummary || '暂无'}
 
-【重要事件回忆】
+【重要履历大事记】
 ${memoirRecent || '暂无'}
 
-【核心要求】
-1. 必须精准继承【统一全局记忆】与【NPC关系与专属记忆】中的所有设定、承诺与更名记录。
-2. 每次生成剧情不少于 800 字，皮上游戏实况（走位、红石、追杀博弈、反杀高光）与皮下生活（日常互动、微信消息联动、主播八卦）巧妙交织。
-3. 行文生动写实，代入感强烈。只输出剧情正文，禁止角色扮演外的额外说明。
+【核心叙事铁律】
+1. 必须精准继承【统一全局长效记忆档案】与【NPC关系与专属记忆】中的所有历史设定与承诺。
+2. 密切注意【当前游戏天数：第 ${G.day} 天 · ${getTimeSlotName(G.timeSlot)}】，严格依照时间先后顺序推进，绝不把多天前的早晨事件当成今天发生。
+3. 每次生成剧情不少于 800 字，皮上游戏实况（走位、红石、追杀博弈、反杀高光）与皮下生活（日常互动、微信消息联动、主播八卦）巧妙交织。
+4. 行文生动写实，代入感强烈。只输出剧情正文，禁止角色扮演外的额外说明。
 `;
 }
 
 function buildUserPrompt(action, detail = '') {
     const timeStr = getTimeSlotName(G.timeSlot);
-    let base = `第${G.day}天 ${timeStr}，玩家选择「${action}」`;
+    const pov = G.player.pov || 'second';
+    let subject = '玩家';
+    if (pov === 'first') subject = '我';
+    else if (pov === 'third') subject = G.player.ytName || '她';
+
+    let base = `第${G.day}天 ${timeStr}，${subject}选择「${action}」`;
     if (detail) base += `，具体内容：${detail}`;
-    base += `。请生成详细的剧情发展，不少于800字。`;
+    base += `。请结合上下文与历史天数进展生成详细剧情，不少于800字。`;
     return base;
 }
 
@@ -465,7 +527,7 @@ async function generateStory(tag, userPrompt, useSearch = false, replaceBlock = 
 }
 
 // ============================================================
-// ✏️ 编辑与管理：全面支持所有 AI 生成文章（AO3同人文、剧情正文、油管长文、动态）与记忆净化
+// ✏️ 编辑与管理：全面支持所有 AI 生成文章与记忆净化
 // ============================================================
 function refreshStoryBlockDOM(entry) {
     const block = dom.storyArea ? dom.storyArea.querySelector(`.story-block[data-story-id="${entry._id}"]`) : document.querySelector(`.story-block[data-story-id="${entry._id}"]`);
@@ -513,7 +575,7 @@ function openEditContentModal(defaultTab = 'allAI') {
         });
     });
 
-    // 2. AO3 同人文小说正文（包含自建或 AI 生成的作品各章节长文）
+    // 2. AO3 同人文小说正文
     (G.fanworks || []).forEach(fw => {
         if (Array.isArray(fw.chapters) && fw.chapters.length) {
             fw.chapters.forEach((chap, cIdx) => {
@@ -539,7 +601,7 @@ function openEditContentModal(defaultTab = 'allAI') {
         }
     });
 
-    // 3. YouTube 视频脚本剧情与高光描述
+    // 3. YouTube 视频脚本剧情
     (G.player?.videos || []).forEach((v, vIdx) => {
         if (v.desc || v.description) {
             allAIItems.push({
@@ -575,7 +637,7 @@ function openEditContentModal(defaultTab = 'allAI') {
                     _id: m._id,
                     _type: 'chat',
                     _npcId: npcId,
-                    title: `💬 私信 · ${m.from === 'player' ? '🧑 我' : `🤖 ${name}`} · ${m.time || ''}`,
+                    title: `💬 私信 · ${m.from === 'player' ? '🧑 ' + G.player.ytName : `🤖 ${name}`} · ${m.time || ''}`,
                     text: m.text,
                     order: 50
                 });
@@ -583,10 +645,8 @@ function openEditContentModal(defaultTab = 'allAI') {
         });
     }
 
-    // 排序倒序展示
     allAIItems.sort((a, b) => b.order - a.order);
 
-    // 全局记忆总结列表（支持删除旧卡他人记忆）
     const summaryEntries = [...(G.memorySummaries || [])].reverse();
 
     const html = `
@@ -606,13 +666,13 @@ function openEditContentModal(defaultTab = 'allAI') {
             <div class="edit-entry" data-id="${escapeHtml(sumId)}" data-type="summary" style="margin-bottom:8px;border:1px solid rgba(30,60,30,.12);border-radius:10px;background:#fff;overflow:hidden;">
                 <div class="edit-entry-header" style="cursor:pointer;padding:10px 12px;background:#f8faf8;display:flex;justify-content:space-between;align-items:center;">
                     <div style="flex:1;min-width:0;">
-                        <div style="font-size:12.5px;font-weight:700;color:#166534;">🧠 全局长效记忆 · 截至第${e.day || 1}天</div>
+                        <div style="font-size:12.5px;font-weight:700;color:#166534;">🧠 全局长效记忆 · 游戏第 ${e.day || 1} 天</div>
                         <div class="edit-entry-preview" style="font-size:12px;color:#777;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(rawText.slice(0, 60))}...</div>
                     </div>
                     <span class="chevron" style="color:#999;font-size:12px;">▼</span>
                 </div>
                 <div class="edit-entry-body" style="display:none;padding:10px 12px;border-top:1px solid rgba(30,60,30,.06);">
-                    <div style="font-size:11px;color:#888;margin-bottom:6px;">记忆正文（若发现他人残留数据可直接删除）：</div>
+                    <div style="font-size:11px;color:#888;margin-bottom:6px;">记忆正文（严格以上帝视角实体名记录）：</div>
                     <textarea class="edit-textarea" style="width:100%;min-height:110px;padding:8px;border-radius:8px;border:1.5px solid #cbd5e1;background:#fff;color:#1e293b;font-size:13px;font-family:inherit;line-height:1.6;resize:vertical;box-sizing:border-box;">${escapeHtml(rawText)}</textarea>
                     <div class="btn-row" style="margin-top:8px;display:flex;gap:6px;justify-content:flex-end;">
                         <button class="btn-secondary edit-del-btn" style="color:#e53935;border-color:#ffcdd2;background:#ffebee;padding:6px 12px;font-size:12px;margin-right:auto;">🗑️ 删除此条</button>
@@ -662,7 +722,6 @@ function openEditContentModal(defaultTab = 'allAI') {
             chevron.textContent = '▼';
         });
 
-        // 🗑️ 删除此条记录（彻底抹去脏数据与残留）
         el.querySelector('.edit-del-btn')?.addEventListener('click', (e) => {
             e.stopPropagation();
             const id = el.dataset.id;
@@ -726,7 +785,6 @@ function openEditContentModal(defaultTab = 'allAI') {
             autoSaveGame();
         });
 
-        // 💾 保存修改（支持长篇小说正文、剧情、记忆修改落地）
         el.querySelector('.edit-save-btn')?.addEventListener('click', (e) => {
             e.stopPropagation();
             const id = el.dataset.id;
@@ -789,7 +847,7 @@ function openEditContentModal(defaultTab = 'allAI') {
 $('editContentBtn')?.addEventListener('click', () => openEditContentModal('allAI'));
 
 // ============================================================
-// 🧠 剧情自动归档与检测
+// 🧠 剧情自动归档与检测（🌟 核心铁律：上帝视角、严格实体名、按日期精准分块）
 // ============================================================
 async function maybeAutoSummarize() {
     const s = G.memoryConfig || {};
@@ -800,21 +858,47 @@ async function maybeAutoSummarize() {
 
     if (active.length < threshold || G._autoSummarizing) return;
     G._autoSummarizing = true;
+    const pName = G.player.ytName || '主角';
+
     try {
         const toSummarize = active.slice(0, Math.max(0, active.length - keepRecent));
         if (!toSummarize.length) return;
-        const priorSummaries = (G.memorySummaries || []).map(m => stripThought(m.text || m)).join('\n');
-        const combinedText = toSummarize.map(h => `[第${h.day}天 ${getTimeSlotName(h.time)}] ${stripThought(h.text)}`).join('\n\n');
 
-        const sys = `你是剧情记忆总结助手。请将以下主播模拟游戏剧情浓缩为精炼总结（250字以内），保留关键成长事件与人际关系，去除废话。直接输出正文。`;
-        const userMsg = `${priorSummaries ? `【已有总结】\n${priorSummaries}\n\n` : ''}【需要归纳的新剧情】\n${combinedText}`;
+        // 获取归档涉及的起始和结束天数
+        const startDay = toSummarize[0]?.day || G.day;
+        const endDay = toSummarize[toSummarize.length - 1]?.day || G.day;
+        const daySpanLabel = (startDay === endDay) ? `第${startDay}天` : `第${startDay}~${endDay}天`;
+
+        const priorSummaries = (G.memorySummaries || []).map(m => `[第${m.day||1}天]: ${stripThought(m.text || m)}`).join('\n');
+        const combinedText = toSummarize.map(h => `[第${h.day}天 · ${getTimeSlotName(h.time)}] ${stripThought(h.text)}`).join('\n\n');
+
+        const sys = `你是 MC 主播养成历史纪实归档系统。
+【🌟 上帝视角纯实体全称铁律（最高优先级）】：
+1. 你的总结必须使用【客观公正的第三人称上帝视角】！
+2. 绝对严禁使用任何代词（严禁使用“我”、“你”、“他”、“她”、“它”、“二人”、“双方”）！
+3. 主角的名字是「${pName}」！所有事件必须严格写出主角与各个NPC的具体名字！
+   ❎ 绝对错误：“她和Dream联机，他救了她。”
+   ❎ 绝对错误：“主角在末地击败了末影龙，随后他开播了。”
+   ✔️ 绝对正确：“${pName} 与 Dream 联机，Dream 协助 ${pName} 击败了末影龙；随后 ${pName} 开启了直播。”
+4. 请将此阶段（${daySpanLabel}）的剧情浓缩为精炼客观的总结（200字以内），保留核心游戏成就、重要人际进展与重大转折。直接输出正文。`;
+
+        const userMsg = `${priorSummaries ? `【此前历史归档纪实】\n${priorSummaries}\n\n` : ''}【本阶段待归纳剧情（${daySpanLabel}）】\n${combinedText}`;
 
         const summaryText = await callMemoryAI([
             { role: 'system', content: sys },
             { role: 'user', content: userMsg },
         ], { maxTokens: 600, temperature: 0.35 });
 
-        addGlobalMemoryRecord(summaryText.trim());
+        const cleanSummary = stripThought(summaryText.trim());
+        if (cleanSummary) {
+            if (!G.memorySummaries) G.memorySummaries = [];
+            G.memorySummaries.push({
+                id: 'gm_' + Date.now() + '_' + rand(100, 999),
+                day: endDay,
+                text: cleanSummary,
+                time: new Date().toLocaleTimeString().slice(0, 5)
+            });
+        }
 
         const idsToArchive = new Set(toSummarize.map(h => h._id));
         G.storyHistory.forEach(h => {
@@ -823,7 +907,7 @@ async function maybeAutoSummarize() {
                 refreshStoryBlockDOM(h);
             }
         });
-        showToast('🧠 已在后台自动整理并归档剧情记忆', 'info', 2200);
+        showToast(`🧠 已将${daySpanLabel}的经历按实体全名归档入长效记忆库！`, 'info', 2200);
         autoSaveGame();
     } catch (e) {
         console.warn('剧情后台自动总结跳过:', e);

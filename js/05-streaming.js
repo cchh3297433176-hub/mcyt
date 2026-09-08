@@ -1,4 +1,5 @@
-// 直播系统（弹幕由 AI 实时生成）
+// js/05-streaming.js
+// 直播系统（弹幕由 AI 实时生成，完美适配全局人称与三维立体形象体系）
 // ============================================================
 function renderStreamPanel() {
     const container = (dom && dom.streamContainer) || document.getElementById('streamContainer');
@@ -137,17 +138,44 @@ function startStream(title, collabNpcId, desc) {
 async function generateStreamOpening(streamData) {
     const p = G.player;
     const collabName = streamData.collabNpc ? streamData.collabNpc.name : '独自';
+    const pov = p.pov || 'second';
+
+    let povInstruction = '';
+    let fallbackText = '';
+    if (pov === 'first') {
+        povInstruction = `全文必须严格使用【第一人称「我」】进行沉浸式主观叙事（例如：“我笑着调试好麦克风，开启了今天的直播……”）！禁止使用“你”。`;
+        fallbackText = `我笑着轻触麦克风：“大家晚上好呀！欢迎来到我的直播间！今天我们要开播《${streamData.title}》，准备好一起见证高光时刻了吗？”`;
+    } else if (pov === 'third') {
+        povInstruction = `全文必须使用【第三人称「她」或主播名「${p.ytName}」】进行小说式叙述（例如：“少女熟练地开启了直播间推流……”）！禁止使用“你”或“我”。`;
+        fallbackText = `少女调试着麦克风，软糯轻快的女声传入直播间：“大家晚上好！欢迎来到《${streamData.title}》的直播现场，准备好见证精彩瞬间了吗？”`;
+    } else {
+        povInstruction = `全文使用【第二人称「你」】进行代入感叙述（例如：“你笑着调整麦克风……”）。`;
+        fallbackText = `你笑着调整麦克风：“观众们，欢迎来到我的直播间！今天我们要开始《${streamData.title}》，准备好见证精彩瞬间了吗？”`;
+    }
+
+    const voiceRule = p.voiceVoiceChanger 
+        ? `（注意：主播在直播中开启了变声器伪装整蛊）` 
+        : `（注意：主播为女生，声线清澈自然，神态生动灵巧）`;
+
     const prompt = `
-    你正在直播MC，标题是"${streamData.title}"，主题是"${streamData.desc}"，${collabName === '独自' ? '独自开播' : '与 '+collabName+' 合作'}。
-    女主播皮上人设：${p.persona}。
-    请用第二人称"你"写一段200字左右生动的直播开场白，称呼观众为"观众们"。只输出文本。
+    你正在直播 Minecraft，标题是"${streamData.title}"，主题是"${streamData.desc}"，${collabName === '独自' ? '独自开播' : '与 '+collabName+' 合作'}。
+    主播设定：
+    - 频道名：${p.ytName}
+    - 线上虚拟形象（Live2D皮套）：${p.avatarLive2d || '精致定制Live2D皮套'}
+    - 游戏内角色（MC像素皮肤）：${p.skin || '专属MC定制皮肤'}
+    - 声线与特质：${voiceRule}
+    - 皮上人设：${p.persona || '活泼可爱的MC主播'}
+
+    ${povInstruction}
+    请描写开播的生动开场（200字左右），体现直播间开启推流、Live2D虚拟形象在屏幕一角灵动眨眼、少女与观众弹幕轻快打招呼的画面感。称呼观众为“大家”或“观众们”。只输出文本正文。
     `;
+
     try {
-        const reply = await callAI([{ role: 'system', content: '你是MC女主播，描述直播开场。' }, { role: 'user', content: prompt }], { maxTokens: 400, temperature: 0.8 });
+        const reply = await callAI([{ role: 'system', content: '你是专业MC女主播模拟器叙事助手。' }, { role: 'user', content: prompt }], { maxTokens: 400, temperature: 0.8 });
         streamData.opening = reply;
         appendStory(`🔴 开启直播「${streamData.title}」\n\n${reply}`, '🔴 直播开场');
     } catch (e) {
-        streamData.opening = `你笑着调整麦克风：“观众们，欢迎来到我的直播间！今天我们要开始《${streamData.title}》，准备好见证精彩瞬间了吗？”`;
+        streamData.opening = fallbackText;
         appendStory(`🔴 开启直播「${streamData.title}」\n\n${streamData.opening}`, '🔴 直播开场');
     }
 }
@@ -157,7 +185,8 @@ async function generateDanmakuAI(st) {
     const sys = `
     你正在模拟主播「${G.player.ytName}」的 MC 直播间观众实时弹幕。
     当前直播：《${st.title}》（方向：${st.desc}，当前在线：${st.viewers}人）。
-    请生成 4 到 7 条生动的观众即时弹幕，包括提问、催主播操作、刷梗、应援等。
+    主播线上形象为：${G.player.avatarLive2d || '精美Live2D皮套'}。
+    请生成 4 到 7 条生动的观众即时弹幕，包括对主播操作的惊呼、对Live2D皮套表情的调侃、技术探讨、刷梗或投喂应援等。
     格式必须严格如下（每行一条）：
     [DM user=观众昵称]弹幕内容[/DM]
     `;
@@ -170,7 +199,7 @@ async function generateDanmakuAI(st) {
             danmaku.push({ user: m[1].trim(), text: stripThought(m[2].trim()), type: 'viewer', time: Date.now() });
         }
         return danmaku.length ? danmaku : [
-            { user: '观众' + rand(100, 999), text: '主播这波操作学到了！', type: 'viewer', time: Date.now() },
+            { user: '观众' + rand(100, 999), text: '主播这波操作学到了！皮套好可爱！', type: 'viewer', time: Date.now() },
             { user: 'MC玩家' + rand(10, 99), text: '前方高能注意！', type: 'viewer', time: Date.now() }
         ];
     } catch (e) {
@@ -279,10 +308,28 @@ async function executeStreamAction(type, userInput) {
     if (!st || !st.isActive) return;
     const names = { reply: '回复弹幕', task: '打赏任务', game: '游戏操作' };
     const actName = names[type] || '行动';
+    const p = G.player;
+    const pov = p.pov || 'second';
+
+    let povInstruction = '';
+    if (pov === 'first') {
+        povInstruction = `全文必须严格使用【第一人称「我」】叙述，表达“我”在直播间的真实操作与心理！严禁使用“你”。`;
+    } else if (pov === 'third') {
+        povInstruction = `全文必须使用【第三人称「她」或频道名「${p.ytName}」】叙述，描写少女在直播间执行该动作。严禁使用“你”或“我”。`;
+    } else {
+        povInstruction = `全文使用【第二人称「你」】叙述主播的动作与直播间反馈。`;
+    }
+
     try {
         showLoading();
-        const sys = `你是 MC 女主播，正在直播。你在这一轮选择了【${actName}】，内容："${userInput}"。请用第二人称"你"写出 150 字生动的行动描述与观众反馈。只输出文本。`;
-        const reply = await callAI([{ role: 'system', content: sys }, { role: 'user', content: '请描述行动。' }], { maxTokens: 400, temperature: 0.8 });
+        const sys = `你是 MC 女主播，正在进行 Minecraft 直播。
+主播信息：频道「${p.ytName}」，Live2D皮套【${p.avatarLive2d || '精美Live2D皮套'}】，游戏像素皮【${p.skin || '专属MC皮肤'}】。
+${p.voiceVoiceChanger ? '（使用了变声器伪装）' : '（少女天然声线）'}
+这一轮选择了【${actName}】，内容："${userInput}"。
+${povInstruction}
+请写出 150 字生动的行动描述与直播间观众反馈弹幕的火爆场面。只输出正文。`;
+
+        const reply = await callAI([{ role: 'system', content: sys }, { role: 'user', content: '请描述行动与反馈。' }], { maxTokens: 400, temperature: 0.8 });
         hideLoading();
         if (!st.log) st.log = [];
         st.log.push(`📝 ${actName}：${reply}`);
