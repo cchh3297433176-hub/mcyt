@@ -1,8 +1,8 @@
 /**
  * js/apps/theme/theme-app.js
- * 个性化与主题中心 App
- * 职责：本地壁纸自选与确认保存、专业正等边三角 HSV 拾色系统、水滴吸色器、底盘明暗自适应、
- *       粉色像素指针单选、本地/CSS/HTML 字体装载与关键词匹配、多套主题配置方案管理
+ * 🎀 个性化与主题中心 App
+ * 职责：壁纸选取与保存/恢复、正等边三角形专业 HSV 色相盘、支持放大缩放的水滴双环吸色器、
+ *       仿 Windows 复古粉白方案命名弹窗、多套主题 Profile 管理、扩展字体导入与关键词匹配
  */
 
 (function () {
@@ -10,13 +10,13 @@
 
     // 内部 HSV 拾色器全局状态
     let hsvState = {
-        h: 61,   // 对应截图标准色相
-        s: 82,   // 饱和度
-        v: 89,   // 明度
+        h: 61,   // 色相 0 ~ 360
+        s: 82,   // 饱和度 0 ~ 100
+        v: 89,   // 明度 0 ~ 100
         activeDrag: null // 'ring' | 'triangle' | null
     };
 
-    // 暂存壁纸变量（提供选取后确认保存机制）
+    // 暂存壁纸变量
     let pendingLockBg = null;
     let pendingDesktopBg = null;
 
@@ -116,9 +116,15 @@
                         ${pendingLockBg || pendingDesktopBg ? '已载入自定义壁纸' : '当前使用默认壁纸'}
                     </div>
 
-                    <button class="btn-secondary" style="width:100%;border-color:var(--primary);font-weight:700;" onclick="window.confirmSaveWallpapersOnly()">
-                        确认保存当前壁纸
-                    </button>
+                    <!-- 壁纸确认保存与恢复原样并排 -->
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn-primary" style="flex:2;" onclick="window.confirmSaveWallpapersOnly()">
+                            确认保存当前壁纸
+                        </button>
+                        <button class="btn-secondary" style="flex:1;" onclick="window.restoreDefaultWallpapersOnly()">
+                            恢复默认壁纸
+                        </button>
+                    </div>
                 </div>
             </div>
 
@@ -131,7 +137,7 @@
                     当背景过亮时自动反色变深，或指定固定风格。
                 </div>
 
-                <!-- 指针项容器 -->
+                <!-- 指针单选项 -->
                 <div class="theme-pointer-group">
                     <div class="theme-pointer-item" onclick="window.onThemeModeRadioChange('auto')">
                         <input type="radio" name="themeModeRadio" id="modeAuto" value="auto" ${currentThemeMode === 'auto' ? 'checked' : ''}>
@@ -151,18 +157,18 @@
                     </div>
                 </div>
 
-                <!-- 高级 HSV 色相环 + 正等边三角形拾色器面盘 -->
+                <!-- 高级 HSV 色相环 + 绝对正等边三角形拾色面盘 -->
                 <div id="themeHsvPickerWrap" style="display:${currentThemeMode === 'custom' ? 'block' : 'none'};">
                     <div class="hsv-picker-container ${isCurrentPlateDark ? 'theme-dark-plate' : 'theme-light-plate'}" id="hsvPickerContainer">
                         
                         <!-- 色相环与正等边三角形绘制容器 -->
                         <div class="hsv-wheel-box" id="hsvWheelBox">
-                            <canvas id="hsvWheelCanvas" class="hsv-wheel-canvas" width="440" height="440"></canvas>
+                            <canvas id="hsvWheelCanvas" class="hsv-wheel-canvas" width="460" height="460"></canvas>
                             <div class="hsv-ring-handle" id="hsvRingHandle"></div>
                             <div class="hsv-triangle-handle" id="hsvTriangleHandle"></div>
                         </div>
 
-                        <!-- 截图同款：水滴带加号吸色器按键 -->
+                        <!-- 截图同款：水滴带加号吸色器图标按键 -->
                         <div class="hsv-tools-row">
                             <input type="file" id="pipetteImageInput" accept="image/*" style="display:none;" onchange="window.handlePipetteImageSelected(event)">
                             <button class="hsv-pipette-btn" title="导入参考图片吸色" onclick="document.getElementById('pipetteImageInput').click()">
@@ -174,7 +180,7 @@
                             </button>
                         </div>
 
-                        <!-- 底部 H / S / V 微调滑动条与双向数字输入 -->
+                        <!-- 底部 H / S / V 微调滑动条与双向可输入数字框 -->
                         <div class="hsv-slider-group">
                             <div class="hsv-slider-row">
                                 <span class="hsv-slider-label">H</span>
@@ -203,13 +209,10 @@
                     </div>
                 </div>
 
-                <!-- 统一保存与重置操作按钮区 -->
+                <!-- 单一主键：保存并应用设置（彻底移除恢复原样按键） -->
                 <div class="theme-action-bar">
-                    <button class="btn-primary" style="flex:2;" onclick="window.saveAndApplyAllThemes()">
+                    <button class="btn-primary" style="width:100%;" onclick="window.saveAndApplyColorThemeOnly()">
                         保存并应用设置
-                    </button>
-                    <button class="btn-secondary" style="flex:1;" onclick="window.restoreDefaultWallpapersAndColor()">
-                        恢复原样
                     </button>
                 </div>
             </div>
@@ -226,7 +229,7 @@
                     保存当前的壁纸、色彩与字体配置，随时自由切换。
                 </div>
                 <div class="profile-chip-list" id="themeProfileList">
-                    <!-- 动态注入预设列表 -->
+                    <!-- 动态注入方案列表 -->
                 </div>
             </div>
 
@@ -302,7 +305,7 @@
         }
     }
 
-    // 3. 正等边三角形 HSV 拾色器绘制与触控交互核心
+    // 3. 正等边三角形 HSV 拾色器绘制与触控交互核心（绝对等边几何公式）
     function initHsvCanvasPicker() {
         const box = document.getElementById('hsvWheelBox');
         const canvas = document.getElementById('hsvWheelCanvas');
@@ -311,28 +314,38 @@
         if (!box || !canvas || !rHandle || !tHandle) return;
 
         const ctx = canvas.getContext('2d');
-        const size = 440;
+        const size = 460;
         const center = size / 2;
-        const outerR = size / 2 - 10;
-        const innerR = outerR - 26;
-        const triR = innerR - 12;
+        // 色相环加粗：外半径保持，内半径缩小，宽度由 26 增至 30px
+        const outerR = size / 2 - 8;
+        const innerR = outerR - 30;
 
-        // 计算标准正等边三角形顶点（三边长度绝对相等）
-        // 顶点 1：纯白 (S=0, V=100)；顶点 2：纯黑 (V=0)；顶点 3：纯色 Hue (S=100, V=100)
+        // 正等边三角形：内切在 innerR 内，留出 10px 安全边距
+        // 等边三角形外接圆半径 R = innerR - 10
+        const triR = innerR - 10;
+
+        // 正等边三角形顶点绝对几何坐标：
+        // 顶点 1（纯白）：角位 150°
+        // 顶点 2（纯黑）：角位 210°
+        // 顶点 3（纯色 Hue）：角位 0°（正右方）
         function getEquilateralTriangleVertices() {
+            const cos30 = Math.cos(Math.PI / 6); // √3 / 2 ≈ 0.866025
+            const sin30 = Math.sin(Math.PI / 6); // 0.5
             return {
                 top: {
-                    x: center - triR * Math.cos(Math.PI / 6),
-                    y: center - triR * Math.sin(Math.PI / 6)
+                    x: center - triR * cos30,
+                    y: center - triR * sin30
                 },
                 bottom: {
-                    x: center - triR * Math.cos(Math.PI / 6),
-                    y: center + triR * Math.sin(Math.PI / 6)
+                    x: center - triR * cos30,
+                    y: center + triR * sin30
                 },
                 right: {
                     x: center + triR,
                     y: center
-                }
+                },
+                sideLength: 2 * triR * cos30,
+                height: 1.5 * triR
             };
         }
 
@@ -340,7 +353,7 @@
         function renderColorWheel() {
             ctx.clearRect(0, 0, size, size);
 
-            // 1. 绘制外层 360 度色相圆环
+            // 1. 绘制外层加粗 360 度色相圆环
             const step = 0.5;
             for (let deg = 0; deg < 360; deg += step) {
                 const radStart = (deg - 90) * Math.PI / 180;
@@ -354,7 +367,7 @@
                 ctx.fill();
             }
 
-            // 2. 绘制内部正等边三角形
+            // 2. 绘制内部绝对正等边三角形
             const v = getEquilateralTriangleVertices();
 
             ctx.save();
@@ -365,7 +378,7 @@
             ctx.closePath();
             ctx.clip();
 
-            // 底层水平渐变：白 -> 纯色 Hue
+            // 底层渐变：从左底边向右顶点过渡（纯白 -> 纯色 Hue）
             const pureRgb = hsvToRgb(hsvState.h, 100, 100);
             const horizGrad = ctx.createLinearGradient(v.top.x, center, v.right.x, center);
             horizGrad.addColorStop(0, '#ffffff');
@@ -373,7 +386,7 @@
             ctx.fillStyle = horizGrad;
             ctx.fillRect(0, 0, size, size);
 
-            // 叠加垂直渐变：从底边纯黑向顶部透明过渡
+            // 叠加渐变：从左下底角向左上底角过渡纯黑（透明 -> 纯黑）
             const vertGrad = ctx.createLinearGradient(center, v.top.y, center, v.bottom.y);
             vertGrad.addColorStop(0, 'rgba(0,0,0,0)');
             vertGrad.addColorStop(1, '#000000');
@@ -385,12 +398,12 @@
             updateHandlesAndSliders();
         }
 
-        // 更新手柄与输入框
+        // 更新手柄位置与滑动条
         function updateHandlesAndSliders() {
             const boxRect = box.getBoundingClientRect();
             const scale = boxRect.width / size;
 
-            // 1. 色相环手柄
+            // 1. 色相环外手柄
             const rad = (hsvState.h - 90) * Math.PI / 180;
             const ringMidR = (outerR + innerR) / 2;
             const ringX = (center + ringMidR * Math.cos(rad)) * scale;
@@ -400,18 +413,18 @@
             const pureRgb = hsvToRgb(hsvState.h, 100, 100);
             rHandle.style.backgroundColor = `rgb(${pureRgb.r},${pureRgb.g},${pureRgb.b})`;
 
-            // 2. 正等边三角形手柄
+            // 2. 正等边三角形内手柄
             const v = getEquilateralTriangleVertices();
             const sat = hsvState.s / 100;
             const val = hsvState.v / 100;
 
-            const curLeftX = v.top.x;
-            const curRightX = v.right.x;
-            const x = curLeftX + (curRightX - curLeftX) * sat * val;
+            const leftX = v.top.x;
+            const rightX = v.right.x;
+            const x = leftX + (rightX - leftX) * sat * val;
 
-            const topY = v.top.y + (v.right.y - v.top.y) * sat;
-            const botY = v.bottom.y + (v.right.y - v.bottom.y) * sat;
-            const y = topY + (botY - topY) * (1 - val);
+            const curTopY = v.top.y + (v.right.y - v.top.y) * sat;
+            const curBotY = v.bottom.y + (v.right.y - v.bottom.y) * sat;
+            const y = curTopY + (curBotY - curTopY) * (1 - val);
 
             tHandle.style.left = `${x * scale}px`;
             tHandle.style.top = `${y * scale}px`;
@@ -434,7 +447,7 @@
             if (nS) nS.value = hsvState.s;
             if (nV) nV.value = hsvState.v;
 
-            // 实时应用视觉
+            // 实时预览色彩
             const hex = rgbToHex(curRgb.r, curRgb.g, curRgb.b);
             previewColorLive(hex);
         }
@@ -511,7 +524,6 @@
         window.addEventListener('touchmove', onPointerMove, { passive: true });
         window.addEventListener('touchend', onPointerUp, { passive: true });
 
-        // 滑块输入监听
         const sH = document.getElementById('sliderH');
         const sS = document.getElementById('sliderS');
         const sV = document.getElementById('sliderV');
@@ -523,22 +535,20 @@
         renderColorWheel();
     }
 
-    // 数字输入框双向输入响应
+    // 双向数字输入框变更响应
     window.onHsvNumInputChange = function (channel, value) {
         let num = parseInt(value) || 0;
         if (channel === 'h') {
             num = Math.max(0, Math.min(360, num));
             hsvState.h = num;
-            if (window.refreshHsvWheelCanvas) window.refreshHsvWheelCanvas();
         } else if (channel === 's') {
             num = Math.max(0, Math.min(100, num));
             hsvState.s = num;
-            if (window.refreshHsvWheelCanvas) window.refreshHsvWheelCanvas();
         } else if (channel === 'v') {
             num = Math.max(0, Math.min(100, num));
             hsvState.v = num;
-            if (window.refreshHsvWheelCanvas) window.refreshHsvWheelCanvas();
         }
+        if (window.refreshHsvWheelCanvas) window.refreshHsvWheelCanvas();
     };
 
     // 实时预览色彩
@@ -550,7 +560,7 @@
         root.style.setProperty('--star-glow-color', hex);
     }
 
-    // 4. 水滴吸色器（Pipette）实现：载入临时图、取色后彻底释放销毁
+    // 4. 水滴吸色器：自由平移缩放画布 + 截图同款双黑边环准星（截图二标准）
     window.handlePipetteImageSelected = function (event) {
         const file = event.target.files && event.target.files[0];
         if (!file) return;
@@ -577,64 +587,141 @@
         }
 
         overlay.innerHTML = `
-            <div style="color:#ffffff;font-size:13px;font-weight:600;margin-bottom:8px;">
-                轻触或拖动准星吸取色彩
+            <div style="color:#ffffff;font-size:13px;font-weight:600;margin-bottom:8px;text-align:center;">
+                双指/滚轮自由缩放拖动，轻触准星取色
             </div>
             <div class="pipette-view-wrap" id="pipetteViewWrap">
-                <canvas id="pipetteCanvas" class="pipette-canvas"></canvas>
-                <div id="pipetteLoupe" class="pipette-loupe"></div>
+                <div class="pipette-canvas-viewport" id="pipetteViewport">
+                    <canvas id="pipetteCanvas"></canvas>
+                </div>
+                <!-- 截图二标准：双黑边环 + 环内色彩显示 + 中心十字准星 -->
+                <div id="pipetteReticle" class="pipette-reticle"></div>
             </div>
             <div style="display:flex;gap:12px;width:100%;max-width:320px;margin-top:12px;">
                 <button class="btn-secondary" style="flex:1;" id="pipetteCancelBtn">取消</button>
-                <button class="btn-primary" style="flex:1;" id="pipetteConfirmBtn">选取颜色</button>
+                <button class="btn-primary" style="flex:1;" id="pipetteConfirmBtn">选取此颜色</button>
             </div>
         `;
 
+        const viewWrap = document.getElementById('pipetteViewWrap');
+        const viewport = document.getElementById('pipetteViewport');
         const canvas = document.getElementById('pipetteCanvas');
-        const loupe = document.getElementById('pipetteLoupe');
+        const reticle = document.getElementById('pipetteReticle');
         const ctx = canvas.getContext('2d');
 
-        // 计算等比自适应尺寸
-        const maxW = window.innerWidth - 32;
-        const maxH = window.innerHeight - 160;
-        let w = loadedImg.width;
-        let h = loadedImg.height;
-        const scale = Math.min(maxW / w, maxH / h, 1);
-        canvas.width = Math.round(w * scale);
-        canvas.height = Math.round(h * scale);
-        ctx.drawImage(loadedImg, 0, 0, canvas.width, canvas.height);
+        canvas.width = loadedImg.width;
+        canvas.height = loadedImg.height;
+        ctx.drawImage(loadedImg, 0, 0);
 
+        // 缩放平移交互状态
+        let currentScale = 1;
+        let panX = 0;
+        let panY = 0;
         let pickedRgb = { r: 255, g: 255, b: 255 };
 
-        function sampleColor(clientX, clientY) {
-            const rect = canvas.getBoundingClientRect();
-            const x = Math.round(clientX - rect.left);
-            const y = Math.round(clientY - rect.top);
-            if (x < 0 || x >= canvas.width || y < 0 || y >= canvas.height) return;
+        // 居中初始自适应适配尺寸
+        const wrapRect = viewWrap.getBoundingClientRect();
+        const initScale = Math.min(wrapRect.width / loadedImg.width, wrapRect.height / loadedImg.height, 1) * 0.95;
+        currentScale = initScale;
+        updateViewportTransform();
 
-            const pixel = ctx.getImageData(x, y, 1, 1).data;
-            pickedRgb = { r: pixel[0], g: pixel[1], b: pixel[2] };
-
-            // 更新放大镜
-            loupe.style.display = 'block';
-            loupe.style.left = `${clientX}px`;
-            loupe.style.top = `${clientY - 46}px`;
-            loupe.style.borderColor = `rgb(${pixel[0]},${pixel[1]},${pixel[2]})`;
-            loupe.style.backgroundColor = `rgb(${pixel[0]},${pixel[1]},${pixel[2]})`;
+        function updateViewportTransform() {
+            viewport.style.transform = `translate(${panX}px, ${panY}px) scale(${currentScale})`;
         }
 
-        function onTouch(e) {
-            const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-            const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-            sampleColor(clientX, clientY);
+        // 采样并更新截图同款准星
+        function sampleColorAtClientPoint(clientX, clientY) {
+            const canvasRect = canvas.getBoundingClientRect();
+            const relX = (clientX - canvasRect.left) / currentScale;
+            const relY = (clientY - canvasRect.top) / currentScale;
+
+            const pixelX = Math.round(relX);
+            const pixelY = Math.round(relY);
+
+            if (pixelX < 0 || pixelX >= canvas.width || pixelY < 0 || pixelY >= canvas.height) return;
+
+            const p = ctx.getImageData(pixelX, pixelY, 1, 1).data;
+            pickedRgb = { r: p[0], g: p[1], b: p[2] };
+
+            // 定位准星并给双黑边中间环填充色彩
+            reticle.style.display = 'block';
+            reticle.style.left = `${clientX}px`;
+            reticle.style.top = `${clientY}px`;
+            reticle.style.backgroundColor = `rgb(${p[0]},${p[1]},${p[2]})`;
         }
 
-        canvas.addEventListener('mousedown', onTouch);
-        canvas.addEventListener('mousemove', (e) => { if (e.buttons === 1) onTouch(e); });
-        canvas.addEventListener('touchstart', onTouch, { passive: true });
-        canvas.addEventListener('touchmove', onTouch, { passive: true });
+        // 手势拖拽与双指缩放
+        let isDragging = false;
+        let startX = 0, startY = 0;
+        let initialPinchDist = 0;
+        let pinchBaseScale = 1;
 
-        // 退出与清理函数（彻底释放参考图内存）
+        function getDistance(t1, t2) {
+            const dx = t1.clientX - t2.clientX;
+            const dy = t1.clientY - t2.clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        viewWrap.addEventListener('touchstart', function (e) {
+            if (e.touches.length === 1) {
+                isDragging = true;
+                startX = e.touches[0].clientX - panX;
+                startY = e.touches[0].clientY - panY;
+                sampleColorAtClientPoint(e.touches[0].clientX, e.touches[0].clientY);
+            } else if (e.touches.length === 2) {
+                isDragging = false;
+                initialPinchDist = getDistance(e.touches[0], e.touches[1]);
+                pinchBaseScale = currentScale;
+            }
+        }, { passive: true });
+
+        viewWrap.addEventListener('touchmove', function (e) {
+            if (e.touches.length === 1 && isDragging) {
+                panX = e.touches[0].clientX - startX;
+                panY = e.touches[0].clientY - startY;
+                updateViewportTransform();
+                sampleColorAtClientPoint(e.touches[0].clientX, e.touches[0].clientY);
+            } else if (e.touches.length === 2) {
+                const dist = getDistance(e.touches[0], e.touches[1]);
+                const factor = dist / initialPinchDist;
+                currentScale = Math.max(0.2, Math.min(8.0, pinchBaseScale * factor));
+                updateViewportTransform();
+            }
+        }, { passive: true });
+
+        viewWrap.addEventListener('touchend', function () {
+            isDragging = false;
+        }, { passive: true });
+
+        // 鼠标滚轮缩放与鼠标拖拽
+        viewWrap.addEventListener('wheel', function (e) {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? 0.9 : 1.1;
+            currentScale = Math.max(0.2, Math.min(8.0, currentScale * delta));
+            updateViewportTransform();
+            sampleColorAtClientPoint(e.clientX, e.clientY);
+        }, { passive: false });
+
+        viewWrap.addEventListener('mousedown', function (e) {
+            isDragging = true;
+            startX = e.clientX - panX;
+            startY = e.clientY - panY;
+            sampleColorAtClientPoint(e.clientX, e.clientY);
+        });
+
+        window.addEventListener('mousemove', function (e) {
+            if (!isDragging) return;
+            panX = e.clientX - startX;
+            panY = e.clientY - startY;
+            updateViewportTransform();
+            sampleColorAtClientPoint(e.clientX, e.clientY);
+        });
+
+        window.addEventListener('mouseup', function () {
+            isDragging = false;
+        });
+
+        // 退出与清理参考图资源
         function cleanup() {
             overlay.remove();
             loadedImg.src = '';
@@ -651,7 +738,7 @@
         };
     }
 
-    // 5. 本地壁纸上传与确认单独保存机制
+    // 5. 本地壁纸上传、单独保存与单独恢复出厂壁纸
     window.handleWallpaperUpload = function (event, targetType) {
         const file = event.target.files && event.target.files[0];
         if (!file) return;
@@ -690,12 +777,33 @@
         }
 
         const tip = document.getElementById('wallpaperStatusTip');
-        if (tip) tip.textContent = '自定义壁纸已生效并保存';
+        if (tip) tip.textContent = '自定义壁纸已永久保存！';
 
         if (typeof showToast === 'function') {
             showToast('当前壁纸已永久保存！');
-        } else {
-            alert('当前壁纸已永久保存！');
+        }
+    };
+
+    window.restoreDefaultWallpapersOnly = function () {
+        localStorage.removeItem('mcyt_custom_lock_bg');
+        localStorage.removeItem('mcyt_custom_desktop_bg');
+        pendingLockBg = null;
+        pendingDesktopBg = null;
+
+        const root = document.documentElement;
+        root.style.setProperty('--lock-bg-url', `url('assets/system/default_lock.jpg')`);
+        root.style.setProperty('--desktop-bg-url', `url('assets/system/default_desktop.jpg')`);
+
+        if (currentThemeMode === 'auto' && typeof window.analyzeImageLuminance === 'function') {
+            window.analyzeImageLuminance('assets/system/default_lock.jpg', window.applyColorTheme);
+        }
+
+        const tip = document.getElementById('wallpaperStatusTip');
+        if (tip) tip.textContent = '当前使用默认壁纸';
+        detectBackgroundLuminanceForPlate();
+
+        if (typeof showToast === 'function') {
+            showToast('已恢复为默认壁纸');
         }
     };
 
@@ -725,12 +833,9 @@
         }
     };
 
-    // 7. 保存并应用所有设置
-    window.saveAndApplyAllThemes = function () {
+    // 7. 单独保存字体与状态栏颜色设置（彻底移除恢复原样按键）
+    window.saveAndApplyColorThemeOnly = function () {
         localStorage.setItem('mcyt_phone_theme_mode', currentThemeMode);
-
-        if (pendingLockBg) localStorage.setItem('mcyt_custom_lock_bg', pendingLockBg);
-        if (pendingDesktopBg) localStorage.setItem('mcyt_custom_desktop_bg', pendingDesktopBg);
 
         const curRgb = hsvToRgb(hsvState.h, hsvState.s, hsvState.v);
         const hex = rgbToHex(curRgb.r, curRgb.g, curRgb.b);
@@ -746,42 +851,50 @@
         }
 
         if (typeof showToast === 'function') {
-            showToast('主题与个性化设置已保存完毕');
-        } else {
-            alert('主题与个性化设置已保存完毕');
+            showToast('颜色与个性模式已成功保存');
         }
     };
 
-    // 8. 恢复默认出厂设置
-    window.restoreDefaultWallpapersAndColor = function () {
-        localStorage.removeItem('mcyt_custom_lock_bg');
-        localStorage.removeItem('mcyt_custom_desktop_bg');
-        localStorage.removeItem('mcyt_phone_theme_mode');
-        localStorage.removeItem('mcyt_phone_custom_color');
+    // 8. 仿 Windows 复古粉白甜心弹窗（Win98 Pink Sweetheart）驱动
+    function openRetroPinkModal(title, bodyHTML, onConfirm, showCancel) {
+        let overlay = document.getElementById('modal');
+        let titleEl = document.getElementById('retroModalTitle');
+        let bodyEl = document.getElementById('modalBody');
+        let closeBtn = document.getElementById('modalClose');
 
-        pendingLockBg = null;
-        pendingDesktopBg = null;
-        currentThemeMode = 'auto';
+        if (!overlay || !bodyEl) return;
 
-        const root = document.documentElement;
-        root.style.setProperty('--lock-bg-url', `url('assets/system/default_lock.jpg')`);
-        root.style.setProperty('--desktop-bg-url', `url('assets/system/default_desktop.jpg')`);
+        if (titleEl) titleEl.textContent = title || '系统提示';
 
-        if (typeof window.analyzeImageLuminance === 'function') {
-            window.analyzeImageLuminance('assets/system/default_lock.jpg', window.applyColorTheme);
+        bodyEl.innerHTML = `
+            ${bodyHTML}
+            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:14px;">
+                ${showCancel ? `<button class="btn-secondary" id="retroModalCancelBtn" style="padding:6px 14px;">取消</button>` : ''}
+                <button class="btn-primary" id="retroModalConfirmBtn" style="width:auto;padding:6px 18px;">确定</button>
+            </div>
+        `;
+
+        overlay.classList.add('open');
+
+        function closeModal() {
+            overlay.classList.remove('open');
         }
 
-        const appModalBody = document.getElementById('appModalBody');
-        if (appModalBody) {
-            window.renderThemeApp(appModalBody);
-        }
+        if (closeBtn) closeBtn.onclick = closeModal;
+        const cancelBtn = document.getElementById('retroModalCancelBtn');
+        if (cancelBtn) cancelBtn.onclick = closeModal;
 
-        if (typeof showToast === 'function') {
-            showToast('已恢复为出厂默认设置');
-        } else {
-            alert('已恢复为出厂默认设置');
+        const confirmBtn = document.getElementById('retroModalConfirmBtn');
+        if (confirmBtn) {
+            confirmBtn.onclick = function () {
+                if (typeof onConfirm === 'function') {
+                    const result = onConfirm();
+                    if (result === false) return; // 校验不通过不关闭
+                }
+                closeModal();
+            };
         }
-    };
+    }
 
     // 9. 字体库折叠、多格式解析与关键词自动匹配
     window.toggleFontLibraryCollapse = function () {
@@ -797,7 +910,6 @@
         }
     };
 
-    // 本地字体文件处理
     window.handleThemeFontUpload = function (event) {
         const file = event.target.files && event.target.files[0];
         if (!file) return;
@@ -825,7 +937,6 @@
         reader.readAsArrayBuffer(file);
     };
 
-    // CSS / HTML 代码字体导入
     window.handleCodeFontImport = function () {
         const codeInput = document.getElementById('fontCodeInput');
         const remarkInput = document.getElementById('fontRemarkInput');
@@ -843,7 +954,6 @@
 
         let familyName = 'CodeFont_' + Date.now();
 
-        // 如果是 HTML <link>
         if (rawCode.includes('<link') && rawCode.includes('href=')) {
             const match = rawCode.match(/href=["']([^"']+)["']/);
             if (match && match[1]) {
@@ -853,12 +963,10 @@
                 document.head.appendChild(linkEl);
             }
         } else {
-            // 如果是纯 CSS
             const styleEl = document.createElement('style');
             styleEl.innerHTML = rawCode;
             document.head.appendChild(styleEl);
 
-            // 尝试提取 font-family
             const famMatch = rawCode.match(/font-family:\s*['"]?([^'";\n]+)['"]?/i);
             if (famMatch && famMatch[1]) {
                 familyName = famMatch[1].trim();
@@ -963,7 +1071,7 @@
         const activeName = localStorage.getItem('mcyt_active_profile_name') || '';
 
         if (profiles.length === 0) {
-            container.innerHTML = `<div style="font-size:11.5px;color:var(--text2);">暂无已存方案，点击上方“新建方案”以保存当前状态</div>`;
+            container.innerHTML = `<div style="font-size:11.5px;color:var(--text2);">暂无已存方案，点击上方“新建方案”以保存当前配置</div>`;
             return;
         }
 
@@ -975,37 +1083,51 @@
         `).join('');
     }
 
+    // 使用复古 Win98 甜心弹窗新建方案（彻底消灭原生丑陋 prompt）
     window.promptSaveNewProfile = function () {
-        const name = prompt('请输入当前配置方案的备注名称：', '甜心配色方案');
-        if (!name || !name.trim()) return;
+        const html = `
+            <div style="font-size:13px;color:var(--text);margin-bottom:8px;font-weight:600;">
+                请输入当前配置方案的备注名称：
+            </div>
+            <input type="text" id="profileNamePromptInput" value="甜心配色方案" style="width:100%;padding:8px 10px;border-radius:6px;border:1.5px solid #d48093;font-size:13px;outline:none;background:#fff;color:#2e1a22;">
+        `;
 
-        const profiles = getStoredProfiles();
-        const curRgb = hsvToRgb(hsvState.h, hsvState.s, hsvState.v);
-        const hex = rgbToHex(curRgb.r, curRgb.g, curRgb.b);
+        openRetroPinkModal('保存方案', html, function () {
+            const input = document.getElementById('profileNamePromptInput');
+            const name = (input && input.value || '').trim();
+            if (!name) {
+                if (typeof showToast === 'function') showToast('方案名称不能为空！');
+                return false;
+            }
 
-        const newProfile = {
-            name: name.trim(),
-            mode: currentThemeMode,
-            customColor: hex,
-            lockBg: pendingLockBg || localStorage.getItem('mcyt_custom_lock_bg'),
-            desktopBg: pendingDesktopBg || localStorage.getItem('mcyt_custom_desktop_bg'),
-            savedAt: Date.now()
-        };
+            const profiles = getStoredProfiles();
+            const curRgb = hsvToRgb(hsvState.h, hsvState.s, hsvState.v);
+            const hex = rgbToHex(curRgb.r, curRgb.g, curRgb.b);
 
-        const existingIdx = profiles.findIndex(p => p.name === newProfile.name);
-        if (existingIdx >= 0) {
-            profiles[existingIdx] = newProfile;
-        } else {
-            profiles.push(newProfile);
-        }
+            const newProfile = {
+                name: name,
+                mode: currentThemeMode,
+                customColor: hex,
+                lockBg: pendingLockBg || localStorage.getItem('mcyt_custom_lock_bg'),
+                desktopBg: pendingDesktopBg || localStorage.getItem('mcyt_custom_desktop_bg'),
+                savedAt: Date.now()
+            };
 
-        localStorage.setItem('mcyt_theme_profiles', JSON.stringify(profiles));
-        localStorage.setItem('mcyt_active_profile_name', newProfile.name);
-        renderProfileChips();
+            const existingIdx = profiles.findIndex(p => p.name === newProfile.name);
+            if (existingIdx >= 0) {
+                profiles[existingIdx] = newProfile;
+            } else {
+                profiles.push(newProfile);
+            }
 
-        if (typeof showToast === 'function') {
-            showToast('方案 [' + newProfile.name + '] 已成功保存！');
-        }
+            localStorage.setItem('mcyt_theme_profiles', JSON.stringify(profiles));
+            localStorage.setItem('mcyt_active_profile_name', newProfile.name);
+            renderProfileChips();
+
+            if (typeof showToast === 'function') {
+                showToast('方案 [' + newProfile.name + '] 已成功保存！');
+            }
+        }, true);
     };
 
     window.applyThemeProfile = function (profileName) {
@@ -1033,7 +1155,6 @@
             document.documentElement.style.setProperty('--desktop-bg-url', `url('${target.desktopBg}')`);
         }
 
-        // 重新刷新视图
         const appModalBody = document.getElementById('appModalBody');
         if (appModalBody) {
             window.renderThemeApp(appModalBody);
@@ -1053,15 +1174,27 @@
         }
     };
 
+    // 使用复古 Win98 甜心弹窗确认删除（彻底消灭原生 confirm）
     window.deleteThemeProfile = function (profileName) {
-        if (!confirm(`确定要删除方案 [${profileName}] 吗？`)) return;
-        let profiles = getStoredProfiles();
-        profiles = profiles.filter(p => p.name !== profileName);
-        localStorage.setItem('mcyt_theme_profiles', JSON.stringify(profiles));
+        const html = `
+            <div style="font-size:13px;color:var(--text);line-height:1.5;">
+                确定要彻底删除配置方案 <strong>[${profileName}]</strong> 吗？
+            </div>
+        `;
 
-        if (localStorage.getItem('mcyt_active_profile_name') === profileName) {
-            localStorage.removeItem('mcyt_active_profile_name');
-        }
-        renderProfileChips();
+        openRetroPinkModal('删除方案', html, function () {
+            let profiles = getStoredProfiles();
+            profiles = profiles.filter(p => p.name !== profileName);
+            localStorage.setItem('mcyt_theme_profiles', JSON.stringify(profiles));
+
+            if (localStorage.getItem('mcyt_active_profile_name') === profileName) {
+                localStorage.removeItem('mcyt_active_profile_name');
+            }
+            renderProfileChips();
+
+            if (typeof showToast === 'function') {
+                showToast('已删除方案: ' + profileName);
+            }
+        }, true);
     };
 })();
