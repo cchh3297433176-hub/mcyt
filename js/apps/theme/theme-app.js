@@ -1,7 +1,7 @@
 /**
  * js/apps/theme/theme-app.js
  * 🎀 个性化与主题中心 App
- * 职责：壁纸自适应裁剪、正等边三角形专业 HSV 色相盘（优雅粉白边框与紧凑居中适配）、
+ * 职责：壁纸自适应裁剪、正等边三角形专业 HSV 色相盘（严格 1:1 还原参考图排版）、
  *       水滴吸色器、多配置方案管理器、扩展字体多格式导入（CSS/HTML自由切换+全局强制生效）
  */
 
@@ -18,7 +18,6 @@
     let pendingLockBg = null;
     let pendingDesktopBg = null;
     let currentThemeMode = 'auto';
-    let isCurrentPlateDark = true;
     let currentFontFormat = 'html';
 
     function hsvToRgb(h, s, v) {
@@ -71,7 +70,6 @@
         return { h, s, v };
     }
 
-    // 1. 渲染主视窗
     window.renderThemeApp = function (container) {
         if (!container) return;
 
@@ -82,8 +80,6 @@
         pendingLockBg = localStorage.getItem('mcyt_custom_lock_bg');
         pendingDesktopBg = localStorage.getItem('mcyt_custom_desktop_bg');
 
-        detectBackgroundLuminanceForPlate();
-
         container.innerHTML = `
             <!-- 卡片 1：壁纸设置 -->
             <div class="theme-setting-card">
@@ -91,7 +87,7 @@
                     <span>壁纸设置（本地相册导入）</span>
                 </div>
                 <div class="theme-setting-desc">
-                    选取手机相册图片，支持按当前屏幕真实比例自由缩放拖动裁剪。
+                    选取手机相册照片，导入时可按当前屏幕比例自由平移缩放裁剪。
                 </div>
 
                 <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:6px;">
@@ -122,7 +118,7 @@
                 </div>
             </div>
 
-            <!-- 卡片 2：色彩模式与自适应 HSV 拾色器 -->
+            <!-- 卡片 2：色彩模式与参考图 1:1 拾色器 -->
             <div class="theme-setting-card">
                 <div class="theme-setting-title">
                     <span>字体与状态栏颜色模式</span>
@@ -150,59 +146,67 @@
                     </div>
                 </div>
 
-                <!-- 🌟 优雅粉白边框容器（恢复精致边框与紧凑居中） -->
+                <!-- 🌟 严格还原参考图：专业深灰底板卡片，布局居中无溢出 -->
                 <div id="themeHsvPickerWrap" style="display:${currentThemeMode === 'custom' ? 'block' : 'none'};margin-top:10px;">
-                    <div class="hsv-picker-container" id="hsvPickerContainer" style="width:100%;max-width:290px;margin:0 auto;box-sizing:border-box;background:#fff8fa;border:2px solid #ffccd9;border-radius:18px;padding:12px 10px;box-shadow:inset 0 1px 3px #ffffff, 0 4px 14px rgba(216, 27, 96, 0.06);">
+                    <div class="hsv-pixel-perfect-plate" style="background:#2b2b2b;border-radius:20px;padding:20px 16px;box-shadow:inset 0 2px 8px rgba(0,0,0,0.5), 0 6px 18px rgba(0,0,0,0.25);width:100%;max-width:320px;margin:0 auto;box-sizing:border-box;">
                         
-                        <!-- 水滴吸色器安放在右上角 -->
-                        <div class="hsv-tools-row" style="position:relative;display:flex;justify-content:flex-end;margin-bottom:4px;">
+                        <!-- 色相环 + 正等边三角形居中盒子 -->
+                        <div class="hsv-wheel-box" id="hsvWheelBox" style="width:230px;height:230px;margin:0 auto 12px auto;position:relative;user-select:none;touch-action:none;">
+                            <canvas id="hsvWheelCanvas" class="hsv-wheel-canvas" width="460" height="460" style="width:100%;height:100%;border-radius:50%;display:block;"></canvas>
+                            <!-- 白色空心圆环手柄 -->
+                            <div class="hsv-ring-handle" id="hsvRingHandle" style="position:absolute;width:24px;height:24px;border:3px solid #ffffff;border-radius:50%;box-shadow:0 0 5px rgba(0,0,0,0.6);transform:translate(-50%,-50%);pointer-events:none;box-sizing:border-box;"></div>
+                            <div class="hsv-triangle-handle" id="hsvTriangleHandle" style="position:absolute;width:20px;height:20px;border:3px solid #ffffff;border-radius:50%;box-shadow:0 0 5px rgba(0,0,0,0.6);transform:translate(-50%,-50%);pointer-events:none;box-sizing:border-box;"></div>
+                        </div>
+
+                        <!-- 居中左右排布的工具按钮行（左侧 ...，右侧带加号的水滴吸色） -->
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding:0 8px 14px 8px;">
+                            <div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:#888;cursor:pointer;" onclick="if(typeof showToast==='function')showToast('HSV色彩空间取色中');">
+                                <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:#888;stroke-width:2;"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+                            </div>
                             <input type="file" id="pipetteImageInput" accept="image/*" style="display:none;" onchange="window.handlePipetteImageSelected(event)">
-                            <button class="hsv-pipette-btn" title="导入图片吸色" style="width:28px;height:28px;border-radius:50%;background:#ffffff;border:1px solid #ffccd9;display:flex;align-items:center;justify-content:center;cursor:pointer;" onclick="document.getElementById('pipetteImageInput').click()">
-                                <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:var(--primary,#ff5c8a);stroke-width:2;">
+                            <div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;" onclick="document.getElementById('pipetteImageInput').click()" title="从图片吸色">
+                                <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:none;stroke:#d0d0d0;stroke-width:1.8;">
                                     <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
                                     <path d="M12 11v4" stroke-linecap="round"></path>
                                     <path d="M10 13h4" stroke-linecap="round"></path>
                                 </svg>
-                            </button>
-                        </div>
-
-                        <!-- 紧凑精致色相环 -->
-                        <div class="hsv-wheel-box" id="hsvWheelBox" style="width:180px;height:180px;margin:0 auto 10px auto;position:relative;">
-                            <canvas id="hsvWheelCanvas" class="hsv-wheel-canvas" width="360" height="360" style="width:100%;height:100%;display:block;"></canvas>
-                            <div class="hsv-ring-handle" id="hsvRingHandle"></div>
-                            <div class="hsv-triangle-handle" id="hsvTriangleHandle"></div>
-                        </div>
-
-                        <!-- 滑块与输入框 -->
-                        <div class="hsv-slider-group">
-                            <div class="hsv-slider-row">
-                                <span class="hsv-slider-label">H</span>
-                                <div class="hsv-slider-track-wrap">
-                                    <input type="range" class="hsv-slider-input" id="sliderH" min="0" max="360" value="${hsvState.h}">
-                                </div>
-                                <input type="number" class="hsv-num-input" id="inputNumH" min="0" max="360" value="${hsvState.h}" onchange="window.onHsvNumInputChange('h', this.value)">
-                            </div>
-
-                            <div class="hsv-slider-row">
-                                <span class="hsv-slider-label">S</span>
-                                <div class="hsv-slider-track-wrap">
-                                    <input type="range" class="hsv-slider-input" id="sliderS" min="0" max="100" value="${hsvState.s}">
-                                </div>
-                                <input type="number" class="hsv-num-input" id="inputNumS" min="0" max="100" value="${hsvState.s}" onchange="window.onHsvNumInputChange('s', this.value)">
-                            </div>
-
-                            <div class="hsv-slider-row">
-                                <span class="hsv-slider-label">V</span>
-                                <div class="hsv-slider-track-wrap">
-                                    <input type="range" class="hsv-slider-input" id="sliderV" min="0" max="100" value="${hsvState.v}">
-                                </div>
-                                <input type="number" class="hsv-num-input" id="inputNumV" min="0" max="100" value="${hsvState.v}" onchange="window.onHsvNumInputChange('v', this.value)">
                             </div>
                         </div>
+
+                        <!-- 严格还原的三条渐变轨 + 右侧纯文本数字（无方框） -->
+                        <div style="display:flex;flex-direction:column;gap:14px;padding:0 6px;">
+                            <!-- H 滑块 -->
+                            <div style="display:flex;align-items:center;gap:12px;">
+                                <span style="font-size:13px;font-family:serif;color:#a0a0a0;width:12px;font-weight:bold;">H</span>
+                                <div style="flex:1;position:relative;display:flex;align-items:center;">
+                                    <input type="range" id="sliderH" min="0" max="360" value="${hsvState.h}" style="width:100%;height:6px;border-radius:3px;appearance:none;-webkit-appearance:none;outline:none;background:linear-gradient(to right, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%);">
+                                </div>
+                                <span id="textValH" style="font-size:13px;color:#a0a0a0;width:24px;text-align:right;font-family:monospace;">${hsvState.h}</span>
+                            </div>
+
+                            <!-- S 滑块 -->
+                            <div style="display:flex;align-items:center;gap:12px;">
+                                <span style="font-size:13px;font-family:serif;color:#a0a0a0;width:12px;font-weight:bold;">S</span>
+                                <div style="flex:1;position:relative;display:flex;align-items:center;">
+                                    <input type="range" id="sliderS" min="0" max="100" value="${hsvState.s}" style="width:100%;height:6px;border-radius:3px;appearance:none;-webkit-appearance:none;outline:none;" id="sliderSTrack">
+                                </div>
+                                <span id="textValS" style="font-size:13px;color:#a0a0a0;width:24px;text-align:right;font-family:monospace;">${hsvState.s}</span>
+                            </div>
+
+                            <!-- V 滑块 -->
+                            <div style="display:flex;align-items:center;gap:12px;">
+                                <span style="font-size:13px;font-family:serif;color:#a0a0a0;width:12px;font-weight:bold;">V</span>
+                                <div style="flex:1;position:relative;display:flex;align-items:center;">
+                                    <input type="range" id="sliderV" min="0" max="100" value="${hsvState.v}" style="width:100%;height:6px;border-radius:3px;appearance:none;-webkit-appearance:none;outline:none;" id="sliderVTrack">
+                                </div>
+                                <span id="textValV" style="font-size:13px;color:#a0a0a0;width:24px;text-align:right;font-family:monospace;">${hsvState.v}</span>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
 
-                <div class="theme-action-bar">
+                <div class="theme-action-bar" style="margin-top:16px;">
                     <button class="btn-primary" style="width:100%;" onclick="window.saveAndApplyColorThemeOnly()">
                         保存并应用设置
                     </button>
@@ -289,21 +293,7 @@
         }
     };
 
-    function detectBackgroundLuminanceForPlate() {
-        const desktopBg = pendingDesktopBg || localStorage.getItem('mcyt_custom_desktop_bg');
-        if (!desktopBg) {
-            isCurrentPlateDark = true;
-            return;
-        }
-
-        if (typeof window.analyzeImageLuminance === 'function') {
-            window.analyzeImageLuminance(desktopBg, function (isLightBg) {
-                isCurrentPlateDark = !isLightBg;
-            });
-        }
-    }
-
-    // 2. 正等边三角形 HSV 拾色器绘制
+    // 2. 正等边三角形 HSV 拾色器绘制（严格像素对准参考图）
     function initHsvCanvasPicker() {
         const box = document.getElementById('hsvWheelBox');
         const canvas = document.getElementById('hsvWheelCanvas');
@@ -312,11 +302,11 @@
         if (!box || !canvas || !rHandle || !tHandle) return;
 
         const ctx = canvas.getContext('2d');
-        const size = 360;
+        const size = 460;
         const center = size / 2;
-        const outerR = size / 2 - 6;
-        const innerR = outerR - 22;
-        const triR = innerR - 6;
+        const outerR = size / 2 - 8;
+        const innerR = outerR - 36;
+        const triR = innerR - 8;
 
         function getEquilateralTriangleVertices() {
             const cos30 = Math.cos(Math.PI / 6);
@@ -374,8 +364,9 @@
 
         function updateHandlesAndSliders() {
             const boxRect = box.getBoundingClientRect();
-            const scale = (boxRect.width || 180) / size;
+            const scale = (boxRect.width || 230) / size;
 
+            // 色相环白色空心圆环
             const rad = (hsvState.h - 90) * Math.PI / 180;
             const ringMidR = (outerR + innerR) / 2;
             const ringX = (center + ringMidR * Math.cos(rad)) * scale;
@@ -385,6 +376,7 @@
             const pureRgb = hsvToRgb(hsvState.h, 100, 100);
             rHandle.style.backgroundColor = `rgb(${pureRgb.r},${pureRgb.g},${pureRgb.b})`;
 
+            // 三角形白色空心圆环
             const v = getEquilateralTriangleVertices();
             const sat = hsvState.s / 100;
             const val = hsvState.v / 100;
@@ -402,20 +394,27 @@
             const curRgb = hsvToRgb(hsvState.h, hsvState.s, hsvState.v);
             tHandle.style.backgroundColor = `rgb(${curRgb.r},${curRgb.g},${curRgb.b})`;
 
+            // 滑块数值与背景渐变更新
             const sH = document.getElementById('sliderH');
             const sS = document.getElementById('sliderS');
             const sV = document.getElementById('sliderV');
-            const nH = document.getElementById('inputNumH');
-            const nS = document.getElementById('inputNumS');
-            const nV = document.getElementById('inputNumV');
+            const txtH = document.getElementById('textValH');
+            const txtS = document.getElementById('textValS');
+            const txtV = document.getElementById('textValV');
 
             if (sH) sH.value = hsvState.h;
-            if (sS) sS.value = hsvState.s;
-            if (sV) sV.value = hsvState.v;
+            if (sS) {
+                sS.value = hsvState.s;
+                sS.style.background = `linear-gradient(to right, #ffffff, rgb(${pureRgb.r},${pureRgb.g},${pureRgb.b}))`;
+            }
+            if (sV) {
+                sV.value = hsvState.v;
+                sV.style.background = `linear-gradient(to right, #000000, rgb(${pureRgb.r},${pureRgb.g},${pureRgb.b}))`;
+            }
 
-            if (nH) nH.value = hsvState.h;
-            if (nS) nS.value = hsvState.s;
-            if (nV) nV.value = hsvState.v;
+            if (txtH) txtH.textContent = hsvState.h;
+            if (txtS) txtS.textContent = hsvState.s;
+            if (txtV) txtV.textContent = hsvState.v;
 
             const hex = rgbToHex(curRgb.r, curRgb.g, curRgb.b);
             previewColorLive(hex);
@@ -433,7 +432,7 @@
             const dy = py - center;
             const dist = Math.sqrt(dx * dx + dy * dy);
 
-            if (dist >= innerR - 8 && dist <= outerR + 8) {
+            if (dist >= innerR - 10 && dist <= outerR + 10) {
                 hsvState.activeDrag = 'ring';
                 updateRingFromPoint(dx, dy);
             } else {
@@ -502,14 +501,6 @@
         window.refreshHsvWheelCanvas = renderColorWheel;
         renderColorWheel();
     }
-
-    window.onHsvNumInputChange = function (channel, value) {
-        let num = parseInt(value) || 0;
-        if (channel === 'h') hsvState.h = Math.max(0, Math.min(360, num));
-        else if (channel === 's') hsvState.s = Math.max(0, Math.min(100, num));
-        else if (channel === 'v') hsvState.v = Math.max(0, Math.min(100, num));
-        if (window.refreshHsvWheelCanvas) window.refreshHsvWheelCanvas();
-    };
 
     function previewColorLive(hex) {
         const root = document.documentElement;
@@ -740,7 +731,6 @@
             }
             const tip = document.getElementById('wallpaperStatusTip');
             if (tip) tip.textContent = '壁纸已就绪（请点击保存）';
-            detectBackgroundLuminanceForPlate();
         }
 
         document.getElementById('cropCancelBtn').onclick = () => cropOverlay.remove();
@@ -803,7 +793,6 @@
 
         const tip = document.getElementById('wallpaperStatusTip');
         if (tip) tip.textContent = '当前使用默认壁纸';
-        detectBackgroundLuminanceForPlate();
         if (typeof showToast === 'function') showToast('已恢复为默认壁纸');
     };
 
