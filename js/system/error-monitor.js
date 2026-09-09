@@ -1,6 +1,6 @@
 // js/system/error-monitor.js
 // 🐞 双模态悬浮球（运行排查日志 + AI 智能向导）
-// 特性：透明底皮肤绝无死板背景色、粉白系统确认弹窗彻底替代原生 alert、新对话纯图标对齐
+// 特性：智能多气泡聊天分段、Markdown优雅解析自动换行、透明底皮肤无死板背景色、粉白系统弹窗
 // ============================================================
 
 (function(window) {
@@ -45,7 +45,7 @@
 
         if (retroModalTitle) retroModalTitle.textContent = title || '系统提示';
         modalBody.innerHTML = `
-            <div style="font-size:12.5px;line-height:1.6;color:#2e1a22;padding:6px 2px;">
+            <div style="font-size:12.5px;line-height:1.6;color:#2e1a22;padding:6px 2px;word-break:break-word;">
                 ${escapeHtml(message)}
             </div>
             <div style="margin-top:14px;text-align:right;">
@@ -53,6 +53,46 @@
             </div>
         `;
         modal.classList.add('open');
+    }
+
+    // 智能排版解析：清洗 Markdown 符号并支持优雅排版
+    function formatAssistantText(rawText) {
+        if (!rawText) return '';
+        let str = String(rawText);
+        // 清洗无意义的 markdown 标题井号
+        str = str.replace(/^#{1,6}\s*/gm, '');
+        // 转义 HTML
+        str = escapeHtml(str);
+        // 恢复支持加粗 **text** -> <strong>text</strong>
+        str = str.replace(/\*\*([^*]+)\*\*/g, '<strong style="color:var(--primary,#ff5c8a);font-weight:750;">$1</strong>');
+        // 换行替换
+        str = str.replace(/\n/g, '<br>');
+        return str;
+    }
+
+    // 拆分长消息为多个自然分段气泡（模拟微信分句发送，告别一大坨死板文字）
+    function splitIntoBubbles(text) {
+        if (!text) return [];
+        // 按双换行或明显的序号分段
+        const rawParagraphs = text.split(/\n{2,}/);
+        const bubbles = [];
+
+        rawParagraphs.forEach(p => {
+            const trimmed = p.trim();
+            if (!trimmed) return;
+            // 如果某一段依然非常长且包含 1. 2. 列表，进行二次优雅微拆
+            if (trimmed.length > 180 && /\d+\.\s+/.test(trimmed)) {
+                const subParts = trimmed.split(/(?=\d+\.\s+)/);
+                subParts.forEach(sp => {
+                    const st = sp.trim();
+                    if (st) bubbles.push(st);
+                });
+            } else {
+                bubbles.push(trimmed);
+            }
+        });
+
+        return bubbles.length ? bubbles : [text];
     }
 
     function saveConfig() {
@@ -113,7 +153,6 @@
         }
     }
 
-    // 核心：所有形状均保持完全透明底，绝不强制填充粉块或投下死板阴影
     function applyOrbStyle() {
         if (!orbElement) return;
         const s = config.size;
@@ -126,7 +165,7 @@
         orbElement.style.backgroundImage = '';
         orbElement.style.backgroundSize = '';
         orbElement.style.backgroundPosition = '';
-        orbElement.style.backgroundColor = 'transparent'; // 绝不填粉色死底
+        orbElement.style.backgroundColor = 'transparent';
         orbElement.classList.add('orb-transparent-skin');
 
         const innerIcon = orbElement.querySelector('.orb-inner-icon');
@@ -276,6 +315,7 @@
         });
     }
 
+    // 双模态窗口渲染
     function openDualOrbModal() {
         const modal = document.getElementById('modal');
         const modalBody = document.getElementById('modalBody');
@@ -291,6 +331,38 @@
             ? window.MCYT_ASSISTANT_AGENT.getGreeting()
             : '你好！我是你的手机系统智能向导。如果你对这部手机的任何按键、功能或独立 App 感到疑惑，随时问我，我可以直接为你解答或带路。';
 
+        // 渲染对话气泡序列（支持助手多气泡自然呈现）
+        let bubblesHTML = `
+            <div style="display:flex;flex-direction:column;gap:4px;max-width:88%;">
+                <div style="background:#fff;border:1px solid #ffd4e0;padding:8px 12px;border-radius:10px;font-size:12px;line-height:1.55;color:#2e1a22;white-space:pre-wrap;word-break:break-word;box-shadow:0 2px 6px rgba(216,27,96,0.03);">
+                    ${formatAssistantText(greetingText)}
+                </div>
+            </div>
+        `;
+
+        history.forEach(m => {
+            if (m.role === 'user') {
+                bubblesHTML += `
+                    <div style="display:flex;justify-content:flex-end;width:100%;">
+                        <div style="background:var(--primary,#ff5c8a);color:#fff;padding:8px 12px;border-radius:10px;font-size:12px;line-height:1.5;max-width:85%;white-space:pre-wrap;word-break:break-word;box-shadow:0 2px 6px rgba(216,27,96,0.15);">
+                            ${escapeHtml(m.content)}
+                        </div>
+                    </div>
+                `;
+            } else {
+                const subBubbles = splitIntoBubbles(m.content);
+                bubblesHTML += `
+                    <div style="display:flex;flex-direction:column;gap:5px;max-width:90%;">
+                        ${subBubbles.map(sub => `
+                            <div style="background:#fff;border:1px solid #ffd4e0;padding:8px 12px;border-radius:10px;font-size:12px;line-height:1.55;color:#2e1a22;white-space:pre-wrap;word-break:break-word;box-shadow:0 2px 6px rgba(216,27,96,0.03);">
+                                ${formatAssistantText(sub)}
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+            }
+        });
+
         modalBody.innerHTML = `
             <div>
                 <!-- 切换 Tab -->
@@ -303,11 +375,10 @@
                     </button>
                 </div>
 
-                <!-- 视图 1：智能向导对话区 -->
+                <!-- 视图 1：智能向导多气泡对话区 -->
                 <div id="orbViewMaruko" style="display:${currentModalTab === 'maruko' ? 'block' : 'none'};">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;font-size:11px;color:#7a505f;">
                         <span>随时提问功能与按键指南：</span>
-                        <!-- 纯图标刷新新对话，杜绝文字挤占排版 -->
                         <button class="retro-pink-btn" id="marukoResetMemoryBtn" title="开启新对话" style="width:24px;height:22px;padding:0;display:flex;align-items:center;justify-content:center;">
                             <svg style="width:13px;height:13px;fill:currentColor;" viewBox="0 0 24 24">
                                 <path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
@@ -315,24 +386,14 @@
                         </button>
                     </div>
 
-                    <div id="marukoDialogBox" style="height:230px;overflow-y:auto;background:#fff8fa;border:1px solid #ffd4e0;border-radius:6px;padding:8px;display:flex;flex-direction:column;gap:8px;">
-                        <div style="display:flex;gap:6px;align-items:flex-start;">
-                            <div style="background:#fff;border:1px solid #ffd4e0;padding:6px 10px;border-radius:8px;font-size:12px;line-height:1.4;color:#2e1a22;max-width:92%;">
-                                ${escapeHtml(greetingText)}
-                            </div>
-                        </div>
-                        ${history.map(m => `
-                            <div style="display:flex;gap:6px;align-items:flex-start;${m.role === 'user' ? 'justify-content:flex-end;' : ''}">
-                                <div style="background:${m.role === 'user' ? 'var(--primary,#ff5c8a)' : '#fff'};color:${m.role === 'user' ? '#fff' : '#2e1a22'};border:${m.role === 'user' ? 'none' : '1px solid #ffd4e0'};padding:6px 10px;border-radius:8px;font-size:12px;line-height:1.4;max-width:88%;word-break:break-all;">
-                                    ${escapeHtml(m.content)}
-                                </div>
-                            </div>
-                        `).join('')}
+                    <div id="marukoDialogBox" style="height:240px;overflow-y:auto;background:#fff8fa;border:1px solid #ffd4e0;border-radius:8px;padding:10px 8px;display:flex;flex-direction:column;gap:8px;">
+                        ${bubblesHTML}
                     </div>
 
+                    <!-- 输入框彻底去除强塞的预置文字，空白留给用户输入 -->
                     <div style="display:flex;gap:6px;margin-top:8px;">
-                        <input type="text" id="marukoInputText" placeholder="问问向导功能怎么用，或输入「带我去换壁纸」..." style="flex:1;padding:6px 8px;border-radius:6px;border:1px solid #ffccd9;font-size:12px;outline:none;">
-                        <button class="retro-pink-btn" id="marukoSendBtn" style="width:54px;height:30px;font-size:12px;color:#ad1457;font-weight:750;">发送</button>
+                        <input type="text" id="marukoInputText" placeholder="问问向导功能怎么用，或输入「带我去换壁纸」..." style="flex:1;padding:7px 10px;border-radius:8px;border:1px solid #ffccd9;font-size:12px;outline:none;background:#ffffff;">
+                        <button class="retro-pink-btn" id="marukoSendBtn" style="width:54px;height:32px;font-size:12px;color:#ad1457;font-weight:750;">发送</button>
                     </div>
                 </div>
 
@@ -397,9 +458,10 @@
             if (!text) return;
             input.value = '';
 
+            // 用户气泡上屏
             dialogBox.innerHTML += `
-                <div style="display:flex;gap:6px;align-items:flex-start;justify-content:flex-end;">
-                    <div style="background:var(--primary,#ff5c8a);color:#fff;padding:6px 10px;border-radius:8px;font-size:12px;line-height:1.4;max-width:88%;word-break:break-all;">
+                <div style="display:flex;justify-content:flex-end;width:100%;">
+                    <div style="background:var(--primary,#ff5c8a);color:#fff;padding:8px 12px;border-radius:10px;font-size:12px;line-height:1.5;max-width:85%;white-space:pre-wrap;word-break:break-word;box-shadow:0 2px 6px rgba(216,27,96,0.15);">
                         ${escapeHtml(text)}
                     </div>
                 </div>
@@ -412,12 +474,17 @@
             window.MCYT_ASSISTANT_AGENT.ask(text, (reply, goApp) => {
                 sendBtn.disabled = false;
                 sendBtn.textContent = '发送';
+
+                // 拆分为多个自然气泡连续展现
+                const subBubbles = splitIntoBubbles(reply);
                 dialogBox.innerHTML += `
-                    <div style="display:flex;gap:6px;align-items:flex-start;">
-                        <div style="background:#fff;border:1px solid #ffd4e0;padding:6px 10px;border-radius:8px;font-size:12px;line-height:1.4;color:#2e1a22;max-width:88%;">
-                            ${escapeHtml(reply)}
-                            ${goApp ? `<div style="margin-top:4px;font-size:10px;color:var(--primary);font-weight:700;">正在为你跳转打开对应应用...</div>` : ''}
-                        </div>
+                    <div style="display:flex;flex-direction:column;gap:5px;max-width:90%;">
+                        ${subBubbles.map(sub => `
+                            <div style="background:#fff;border:1px solid #ffd4e0;padding:8px 12px;border-radius:10px;font-size:12px;line-height:1.55;color:#2e1a22;white-space:pre-wrap;word-break:break-word;box-shadow:0 2px 6px rgba(216,27,96,0.03);">
+                                ${formatAssistantText(sub)}
+                            </div>
+                        `).join('')}
+                        ${goApp ? `<div style="padding:4px 8px;font-size:11px;color:var(--primary);font-weight:700;">✨ 正在为你跳转打开对应应用...</div>` : ''}
                     </div>
                 `;
                 dialogBox.scrollTop = dialogBox.scrollHeight;
@@ -428,7 +495,7 @@
                 sendBtn.disabled = false;
                 sendBtn.textContent = '发送';
                 dialogBox.innerHTML += `
-                    <div style="font-size:11px;color:#c62828;text-align:center;">
+                    <div style="font-size:11px;color:#c62828;text-align:center;padding:4px;">
                         向导思考超时或异常：${escapeHtml(err.message)}
                     </div>
                 `;
@@ -454,7 +521,6 @@
             };
         }
 
-        // 彻底消除系统 alert，统一调用 showRetroPinkAlert
         const copyBtn = document.getElementById('copyAllErrorsBtn');
         if (copyBtn) {
             copyBtn.onclick = () => {
@@ -600,7 +666,6 @@
         };
     }
 
-    // 暴露 API
     window.ErrorMonitor = {
         init: initOrbDOM,
         getConfig: () => Object.assign({}, config),
