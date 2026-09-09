@@ -1,7 +1,7 @@
 /**
  * js/shell/phone-shell.js
  * 📱 虚拟手机硬件外壳与操作系统驱动层
- * 职责：时钟、硬件电量、壁纸加载、冷启动主题持久化恢复、自动明暗反色引擎、手势解锁与 App 调度
+ * 职责：时钟、硬件电量、网络/蓝牙感知、壁纸加载、冷启动主题恢复、自动明暗反色引擎、手势解锁与 App 调度
  */
 
 (function () {
@@ -12,6 +12,12 @@
         level: 100,
         charging: false,
         supported: false
+    };
+
+    window._phoneNetworkState = {
+        type: 'wifi',     // 'wifi' | 'cellular' | 'none'
+        online: true,
+        bluetooth: false
     };
 
     // 获取当前设备的时段分类名称与真实状态
@@ -46,7 +52,8 @@
             minute,
             timeSlotName,
             isLateNight,
-            battery: Object.assign({}, window._phoneBatteryState)
+            battery: Object.assign({}, window._phoneBatteryState),
+            network: Object.assign({}, window._phoneNetworkState)
         };
     };
 
@@ -74,7 +81,63 @@
         }
     }
 
-    // 2. 硬件电量与呼吸灯监听
+    // 2. 真实网络与蓝牙状态嗅探
+    function bindPhoneNetworkAndBluetooth() {
+        const wifiSvg = document.getElementById('wifiSvg');
+        const cellSvg = document.getElementById('statusCellularSvg');
+        const btSvg = document.getElementById('statusBluetoothSvg');
+
+        function updateNetworkDisplay() {
+            const isOnline = navigator.onLine !== false;
+            window._phoneNetworkState.online = isOnline;
+
+            const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+            let isCellular = false;
+
+            if (conn) {
+                const type = conn.type;
+                if (type === 'cellular' || type === 'wimax' || conn.effectiveType === '4g' || conn.effectiveType === '3g' || conn.effectiveType === '2g') {
+                    isCellular = true;
+                }
+            }
+
+            window._phoneNetworkState.type = isCellular ? 'cellular' : (isOnline ? 'wifi' : 'none');
+
+            if (!isOnline) {
+                if (wifiSvg) { wifiSvg.style.display = 'block'; wifiSvg.style.opacity = '0.35'; }
+                if (cellSvg) { cellSvg.style.display = 'none'; }
+            } else if (isCellular) {
+                if (wifiSvg) wifiSvg.style.display = 'none';
+                if (cellSvg) { cellSvg.style.display = 'block'; cellSvg.style.opacity = '1'; }
+            } else {
+                if (wifiSvg) { wifiSvg.style.display = 'block'; wifiSvg.style.opacity = '1'; }
+                if (cellSvg) cellSvg.style.display = 'none';
+            }
+        }
+
+        updateNetworkDisplay();
+        window.addEventListener('online', updateNetworkDisplay);
+        window.addEventListener('offline', updateNetworkDisplay);
+
+        const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+        if (conn && typeof conn.addEventListener === 'function') {
+            conn.addEventListener('change', updateNetworkDisplay);
+        }
+
+        // 蓝牙状态探测
+        try {
+            if ('bluetooth' in navigator && btSvg) {
+                if (typeof navigator.bluetooth.getAvailability === 'function') {
+                    navigator.bluetooth.getAvailability().then(available => {
+                        window._phoneNetworkState.bluetooth = !!available;
+                        btSvg.style.display = available ? 'block' : 'none';
+                    }).catch(() => {});
+                }
+            }
+        } catch (_) {}
+    }
+
+    // 3. 硬件电量与呼吸灯监听
     async function bindPhoneBattery() {
         try {
             const core = document.getElementById('batteryCoreBar');
@@ -89,7 +152,6 @@
                     text.textContent = `${level}%`;
                     core.style.width = `${level}%`;
                     
-                    // 记录全局硬件状态供智能向导与系统读取
                     window._phoneBatteryState.level = level;
                     window._phoneBatteryState.charging = !!battery.charging;
                     window._phoneBatteryState.supported = true;
@@ -109,7 +171,7 @@
         }
     }
 
-    // 3. Canvas 内存壁纸取色引擎（强化容错，解决本地路径跨域报错导致的反色失败）
+    // 4. Canvas 内存壁纸取色引擎
     window.analyzeImageLuminance = function (imageUrl, callback) {
         if (!imageUrl) {
             if (typeof callback === 'function') callback(false);
@@ -117,7 +179,6 @@
         }
         try {
             const img = new Image();
-            // 仅对非 Base64 的网络图片开启 crossOrigin，防止本地路径触发 CORS 污染
             if (!imageUrl.startsWith('data:')) {
                 img.crossOrigin = "Anonymous";
             }
@@ -127,7 +188,6 @@
                     const ctx = canvas.getContext('2d');
                     canvas.width = 100;
                     canvas.height = 100;
-                    // 取顶部 35% 区域计算状态栏与时钟下方的明度
                     ctx.drawImage(img, 0, 0, 100, 35, 0, 0, 100, 35);
                     const imgData = ctx.getImageData(0, 0, 100, 35).data;
                     let totalLuminance = 0;
@@ -136,16 +196,13 @@
                         const r = imgData[i];
                         const g = imgData[i + 1];
                         const b = imgData[i + 2];
-                        // ITU-R BT.709 亮度加权感知公式
                         const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
                         totalLuminance += luma;
                         count++;
                     }
                     const avgLuma = totalLuminance / (count || 1);
-                    // 亮度 > 140 视为浅色明亮背景，需要变黑；否则变纯白
                     if (typeof callback === 'function') callback(avgLuma > 140);
                 } catch (err) {
-                    // 如果被本地 CORS 拦截，给予安全白字兜底
                     if (typeof callback === 'function') callback(false);
                 }
             };
@@ -158,7 +215,7 @@
         }
     };
 
-    // 4. 全局主题颜色生效核心（支持 auto, dark, light, custom 4种模式）
+    // 5. 全局主题颜色生效核心
     window.applyColorTheme = function (isLightBg) {
         try {
             const root = document.documentElement;
@@ -174,13 +231,11 @@
             }
 
             if (mode === 'dark' || (!isLightBg && mode === 'auto')) {
-                // 背景暗 -> 字体/图标纯白质感
                 root.style.setProperty('--status-color', '#ffffff');
                 root.style.setProperty('--lock-text-color', '#ffffff');
                 root.style.setProperty('--status-svg-fill', '#ffffff');
                 root.style.setProperty('--star-glow-color', 'rgba(255, 255, 255, 0.9)');
             } else {
-                // 背景亮 -> 字体/图标黑巧深色
                 root.style.setProperty('--status-color', '#2e1a22');
                 root.style.setProperty('--lock-text-color', '#2e1a22');
                 root.style.setProperty('--status-svg-fill', '#2e1a22');
@@ -189,7 +244,7 @@
         } catch (e) {}
     };
 
-    // 5. 手机冷启动：完整读取并恢复用户壁纸与主题配置（解决删后台失效问题）
+    // 6. 手机冷启动主题与壁纸恢复
     function initPhoneThemeAndWallpapers() {
         try {
             const root = document.documentElement;
@@ -198,7 +253,6 @@
             const savedMode = localStorage.getItem('mcyt_phone_theme_mode') || 'auto';
             window.currentThemeMode = savedMode;
 
-            // 恢复壁纸
             if (savedLock && savedLock.startsWith('data:image')) {
                 root.style.setProperty('--lock-bg-url', `url('${savedLock}')`);
             } else {
@@ -211,15 +265,13 @@
                 root.style.setProperty('--desktop-bg-url', `url('assets/system/default_desktop.jpg')`);
             }
 
-            // 恢复色彩模式
             if (savedMode === 'custom') {
                 window.applyColorTheme(false);
             } else if (savedMode === 'dark') {
-                window.applyColorTheme(false); // 强制纯白
+                window.applyColorTheme(false);
             } else if (savedMode === 'light') {
-                window.applyColorTheme(true);  // 强制深黑
+                window.applyColorTheme(true);
             } else {
-                // 自动模式：即时分析壁纸
                 const targetWallpaper = (savedLock && savedLock.startsWith('data:image')) ? savedLock : 'assets/system/default_lock.jpg';
                 window.analyzeImageLuminance(targetWallpaper, window.applyColorTheme);
             }
@@ -228,7 +280,7 @@
         }
     }
 
-    // 6. 锁屏全屏手势与解锁机制
+    // 7. 锁屏手势与解锁机制
     function initLockGestures() {
         const screenLock = document.getElementById('screenLock');
         const lockBtn = document.getElementById('lockBtn');
@@ -275,7 +327,7 @@
         }
     }
 
-    // 7. 全屏 App 窗口生命周期调度
+    // 8. 全屏 App 窗口生命周期调度
     window.openPhoneApp = function (appKey) {
         const appModal = document.getElementById('appModal');
         const appModalTitle = document.getElementById('appModalTitle');
@@ -285,6 +337,12 @@
         if (appKey === 'theme' && typeof window.renderThemeApp === 'function') {
             appModalTitle.textContent = "🎀 个性化与主题";
             window.renderThemeApp(appModalBody);
+            appModal.classList.add('opened');
+            return;
+        }
+
+        if (appKey === 'settings' && typeof window.renderSettingsApp === 'function') {
+            window.renderSettingsApp();
             appModal.classList.add('opened');
             return;
         }
@@ -321,10 +379,11 @@
         if (appModal) appModal.classList.remove('opened');
     };
 
-    // 8. 启动手机外壳核心服务
+    // 9. 启动手机外壳核心服务
     function bootShell() {
         setInterval(updatePhoneClock, 1000);
         updatePhoneClock();
+        bindPhoneNetworkAndBluetooth();
         bindPhoneBattery();
         initPhoneThemeAndWallpapers();
         initLockGestures();
