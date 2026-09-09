@@ -1,15 +1,13 @@
 // js/system/assistant-agent.js
-// 智能向导中枢（轻量内存会话·硬件状态感知·思维链清洗·智能关怀·纯白话答疑带路）
+// 智能向导中枢（轻量内存会话·硬件状态感知·绝对思维链清洗·智能关怀·纯白话答疑带路）
 // ============================================================
 
 (function(window) {
     'use strict';
 
-    // 纯内存暂存当前对话（绝不持久化存入 localStorage，零垃圾残留）
     let currentDialogMemory = [];
-    const MAX_DIALOG_TURNS = 6; // 维持 3 轮滑动窗口，杜绝幻觉
+    const MAX_DIALOG_TURNS = 6;
 
-    // 开放解耦的智能向导通用人设基准（支持后续随时替换助手机制）
     const DEFAULT_AGENT_PROMPT = `你是当前手机内置的官方「AI 智能向导」。
 【你的职责与原则】：
 1. 语言自然亲切、简洁生动，解答通俗易懂，做事细致严谨。
@@ -17,7 +15,7 @@
 3. 绝不向用户提及任何底层代码、函数名、JavaScript 变量或底层源码文件路径！如果用户问功能，直接说明在哪个 App 里、怎么点击操作。
 4. 严格根据提供的《功能与按键指南》解答，若手机中确实不存在对应功能，直接诚恳说明“目前小手机暂未提供该功能哦，已为你记录反馈！”。
 5. 若用户表达了带路前往某 App 的意图（如“带我去换壁纸”、“打开设置”），请在回答完毕后末尾单独附上指令：[[GO_APP:应用代号]]。
-6. 严禁在最终回答中输出任何思考过程或思维链标签，直接输出面对用户的亲切回答。
+6. 绝对禁止输出任何思考内容、推理过程或相关标记，直接给出最终面对用户的亲切回答。
 
 【设备硬件真实环境感知与智能关怀】：
 你可以感知用户的实时时间与电池情况。在优先准确回答问题的前提下，可以在回复中自然、暖心地穿插一两句环境提醒：
@@ -25,30 +23,35 @@
 - 饥饿低电提醒（电量 ≤ 20% 且未充电）：提醒手机电量告急，快给手机接上充电器防止关机。
 - 满电关怀（电量 ≥ 95% 且充电中）：提醒电量已经很充足了，可以拔下充电插头啦。`;
 
-    // 强力深度思维链剥离清洗引擎（彻底杜绝爆思维链）
+    // 绝对思维链剥离清洗引擎（彻底清除成对与单边孤立残余标签）
     function cleanThoughtDeep(text) {
         if (!text) return '';
         let processed = String(text);
 
-        // 处理底层 stripThought 若存在
         if (typeof window.stripThought === 'function') {
             processed = window.stripThought(processed);
         }
 
-        // 强力正则表达式清洗各种思考标签及其内容
+        // 1. 消除所有成对标签及其包裹的所有推理过程
         processed = processed.replace(/<(think|thought|reasoning|thinking)>[\s\S]*?<\/\1>/gi, '');
         processed = processed.replace(/\[(THINK|THOUGHT|REASONING)\][\s\S]*?\[\/\1\]/gi, '');
 
-        // 针对未闭合的截断思考块（如 <think> 开头但流式未输出 </think>）
-        const unclosedIndex = processed.search(/<(think|thought|reasoning|thinking)>/i);
-        if (unclosedIndex !== -1) {
-            processed = processed.slice(0, unclosedIndex);
+        // 2. 消除开头有开放标签但未正常闭合的截断块
+        const openIdx = processed.search(/<(think|thought|reasoning|thinking)>/i);
+        if (openIdx !== -1) {
+            processed = processed.slice(0, openIdx);
         }
+
+        // 3. 彻底清除任何孤立漂浮在正文或末尾的单个闭合标签
+        processed = processed.replace(/<\/(think|thought|reasoning|thinking)>/gi, '');
+        processed = processed.replace(/\[\/(THINK|THOUGHT|REASONING)\]/gi, '');
+
+        // 4. 清除 markdown 格式的孤立引用块思维链残留（如 > thinking ...）
+        processed = processed.replace(/^>+\s*(thought|thinking|reasoning)[\s\S]*?\n\n/gim, '');
 
         return processed.trim();
     }
 
-    // 实时读取设备软硬件环境
     function getDeviceContextInfo() {
         let state = null;
         if (typeof window.getPhoneDeviceState === 'function') {
@@ -78,7 +81,6 @@
         return `【当前设备真实硬件环境】：\n- 系统时间：${state.timeStr}（${state.timeSlotName}）\n- 电池电量：${batteryDesc}\n- 当前网络：${netDesc}${net.bluetooth ? '（蓝牙已就绪）' : ''}`;
     }
 
-    // 动态生成有温度的初次唤起问候语
     function getDynamicGreeting() {
         let state = null;
         if (typeof window.getPhoneDeviceState === 'function') {
@@ -129,7 +131,6 @@
             ...currentDialogMemory
         ];
 
-        // 探测向导专属模型绑定配置
         let targetModelOverride = undefined;
         try {
             const aiCfg = JSON.parse(localStorage.getItem('mc_yt_ai_config') || localStorage.getItem('mcyt_ai_config') || '{}');
@@ -150,16 +151,18 @@
 
             const raw = await window.callAI(messages, callOptions);
 
-            // 彻底清洗剥离思维链
+            // 深度清扫思维链
             let clean = cleanThoughtDeep(raw);
 
-            // 解析带路动作
             let targetApp = null;
             const match = clean.match(/\[\[GO_APP:([a-zA-Z0-9_-]+)\]\]/i);
             if (match) {
                 targetApp = match[1];
                 clean = clean.replace(match[0], '').trim();
             }
+
+            // 再次二次校验孤立残余
+            clean = cleanThoughtDeep(clean);
 
             currentDialogMemory.push({ role: 'assistant', content: clean });
 
