@@ -1,7 +1,7 @@
 /**
  * js/apps/theme/theme-app.js
  * 🎀 个性化与主题中心 App
- * 职责：壁纸自适应裁剪、正等边三角形专业 HSV 色相盘（响应式居中约束防破屏）、
+ * 职责：壁纸自适应裁剪、正等边三角形专业 HSV 色相盘（优雅粉白边框与紧凑居中适配）、
  *       水滴吸色器、多配置方案管理器、扩展字体多格式导入（CSS/HTML自由切换+全局强制生效）
  */
 
@@ -19,7 +19,7 @@
     let pendingDesktopBg = null;
     let currentThemeMode = 'auto';
     let isCurrentPlateDark = true;
-    let currentFontFormat = 'html'; // 'html' | 'css' | 'local'
+    let currentFontFormat = 'html';
 
     function hsvToRgb(h, s, v) {
         s = s / 100;
@@ -150,26 +150,27 @@
                     </div>
                 </div>
 
-                <!-- 响应式正等边三角形 HSV 拾色面盘（防破屏、弹性居中） -->
+                <!-- 🌟 优雅粉白边框容器（恢复精致边框与紧凑居中） -->
                 <div id="themeHsvPickerWrap" style="display:${currentThemeMode === 'custom' ? 'block' : 'none'};margin-top:10px;">
-                    <div class="hsv-picker-container ${isCurrentPlateDark ? 'theme-dark-plate' : 'theme-light-plate'}" id="hsvPickerContainer" style="width:100%;max-width:320px;margin:0 auto;box-sizing:border-box;">
+                    <div class="hsv-picker-container" id="hsvPickerContainer" style="width:100%;max-width:290px;margin:0 auto;box-sizing:border-box;background:#fff8fa;border:2px solid #ffccd9;border-radius:18px;padding:12px 10px;box-shadow:inset 0 1px 3px #ffffff, 0 4px 14px rgba(216, 27, 96, 0.06);">
                         
-                        <div class="hsv-wheel-box" id="hsvWheelBox" style="width:210px;height:210px;margin:0 auto 12px auto;position:relative;">
-                            <canvas id="hsvWheelCanvas" class="hsv-wheel-canvas" width="420" height="420" style="width:100%;height:100%;"></canvas>
-                            <div class="hsv-ring-handle" id="hsvRingHandle"></div>
-                            <div class="hsv-triangle-handle" id="hsvTriangleHandle"></div>
-                        </div>
-
-                        <!-- 水滴吸色器 -->
-                        <div class="hsv-tools-row" style="position:relative;top:0;right:0;display:flex;justify-content:flex-end;margin-bottom:8px;">
+                        <!-- 水滴吸色器安放在右上角 -->
+                        <div class="hsv-tools-row" style="position:relative;display:flex;justify-content:flex-end;margin-bottom:4px;">
                             <input type="file" id="pipetteImageInput" accept="image/*" style="display:none;" onchange="window.handlePipetteImageSelected(event)">
-                            <button class="hsv-pipette-btn" title="导入图片吸色" onclick="document.getElementById('pipetteImageInput').click()">
-                                <svg viewBox="0 0 24 24">
+                            <button class="hsv-pipette-btn" title="导入图片吸色" style="width:28px;height:28px;border-radius:50%;background:#ffffff;border:1px solid #ffccd9;display:flex;align-items:center;justify-content:center;cursor:pointer;" onclick="document.getElementById('pipetteImageInput').click()">
+                                <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:var(--primary,#ff5c8a);stroke-width:2;">
                                     <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
                                     <path d="M12 11v4" stroke-linecap="round"></path>
                                     <path d="M10 13h4" stroke-linecap="round"></path>
                                 </svg>
                             </button>
+                        </div>
+
+                        <!-- 紧凑精致色相环 -->
+                        <div class="hsv-wheel-box" id="hsvWheelBox" style="width:180px;height:180px;margin:0 auto 10px auto;position:relative;">
+                            <canvas id="hsvWheelCanvas" class="hsv-wheel-canvas" width="360" height="360" style="width:100%;height:100%;display:block;"></canvas>
+                            <div class="hsv-ring-handle" id="hsvRingHandle"></div>
+                            <div class="hsv-triangle-handle" id="hsvTriangleHandle"></div>
                         </div>
 
                         <!-- 滑块与输入框 -->
@@ -222,7 +223,7 @@
                 <div class="profile-chip-list" id="themeProfileList"></div>
             </div>
 
-            <!-- 卡片 4：字体库与多格式扩展（支持选择 HTML / CSS / 本地） -->
+            <!-- 卡片 4：字体库与多格式扩展 -->
             <div class="theme-setting-card">
                 <div class="theme-collapsible-header" onclick="window.toggleFontLibraryCollapse()" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
                     <div class="theme-setting-title" style="margin-bottom:0;">
@@ -236,28 +237,24 @@
                         选择对应的导入格式。导入成功后，整部手机界面字体将即刻全面生效！
                     </div>
 
-                    <!-- 格式选择分段器 -->
                     <div style="display:flex;gap:6px;margin-bottom:10px;">
                         <button class="btn-secondary font-fmt-btn ${currentFontFormat === 'html' ? 'btn-primary' : ''}" id="btnFmtHtml" style="flex:1;padding:6px;font-size:11px;" onclick="window.switchFontFormat('html')">HTML 标签外链</button>
                         <button class="btn-secondary font-fmt-btn ${currentFontFormat === 'css' ? 'btn-primary' : ''}" id="btnFmtCss" style="flex:1;padding:6px;font-size:11px;" onclick="window.switchFontFormat('css')">CSS 代码片段</button>
                         <button class="btn-secondary font-fmt-btn ${currentFontFormat === 'local' ? 'btn-primary' : ''}" id="btnFmtLocal" style="flex:1;padding:6px;font-size:11px;" onclick="window.switchFontFormat('local')">本地字体文件</button>
                     </div>
 
-                    <!-- 选项 1：HTML 格式 -->
                     <div id="fontInputSection_html" style="display:${currentFontFormat === 'html' ? 'block' : 'none'};">
                         <input type="text" id="fontRemarkInput_html" placeholder="字体名称备注（如：长坂点宋体）" style="width:100%;margin-bottom:6px;padding:8px 10px;border-radius:8px;border:1px solid #ffd1dc;font-size:12px;outline:none;">
                         <textarea id="fontCodeInput_html" placeholder="粘贴完整的 HTML 代码，如：&#10;<link href='...' rel='stylesheet'>&#10;<style>body { font-family: '...'; }</style>" style="width:100%;min-height:75px;padding:8px 10px;border-radius:8px;border:1px solid #ffd1dc;font-size:11px;outline:none;resize:none;font-family:monospace;"></textarea>
                         <button class="btn-primary" style="width:100%;margin-top:8px;" onclick="window.handleUnifiedFontImport('html')">导入并强制全局应用</button>
                     </div>
 
-                    <!-- 选项 2：CSS 格式 -->
                     <div id="fontInputSection_css" style="display:${currentFontFormat === 'css' ? 'block' : 'none'};">
                         <input type="text" id="fontRemarkInput_css" placeholder="字体名称备注（如：像素甜心）" style="width:100%;margin-bottom:6px;padding:8px 10px;border-radius:8px;border:1px solid #ffd1dc;font-size:12px;outline:none;">
                         <textarea id="fontCodeInput_css" placeholder="粘贴 CSS 代码，如：&#10;@import url('...');&#10;body { font-family: 'MyFont'; }" style="width:100%;min-height:75px;padding:8px 10px;border-radius:8px;border:1px solid #ffd1dc;font-size:11px;outline:none;resize:none;font-family:monospace;"></textarea>
                         <button class="btn-primary" style="width:100%;margin-top:8px;" onclick="window.handleUnifiedFontImport('css')">导入并强制全局应用</button>
                     </div>
 
-                    <!-- 选项 3：本地文件 -->
                     <div id="fontInputSection_local" style="display:${currentFontFormat === 'local' ? 'block' : 'none'};">
                         <input type="file" id="themeFontFileInput" accept=".ttf,.otf,.woff,.woff2" style="display:none;" onchange="window.handleThemeFontUpload(event)">
                         <button class="btn-secondary" style="width:100%;padding:10px;" onclick="document.getElementById('themeFontFileInput').click()">
@@ -265,7 +262,6 @@
                         </button>
                     </div>
 
-                    <!-- 已安装字体列表 -->
                     <div id="installedFontsList" style="margin-top:14px;display:flex;flex-direction:column;gap:6px;"></div>
                 </div>
             </div>
@@ -276,7 +272,6 @@
         renderInstalledFontsList();
     };
 
-    // 格式切换
     window.switchFontFormat = function(fmt) {
         currentFontFormat = fmt;
         ['html', 'css', 'local'].forEach(k => {
@@ -304,21 +299,11 @@
         if (typeof window.analyzeImageLuminance === 'function') {
             window.analyzeImageLuminance(desktopBg, function (isLightBg) {
                 isCurrentPlateDark = !isLightBg;
-                const plate = document.getElementById('hsvPickerContainer');
-                if (plate) {
-                    if (isCurrentPlateDark) {
-                        plate.classList.add('theme-dark-plate');
-                        plate.classList.remove('theme-light-plate');
-                    } else {
-                        plate.classList.add('theme-light-plate');
-                        plate.classList.remove('theme-dark-plate');
-                    }
-                }
             });
         }
     }
 
-    // 2. 正等边三角形 HSV 拾色器绘制（精准对齐与屏幕约束）
+    // 2. 正等边三角形 HSV 拾色器绘制
     function initHsvCanvasPicker() {
         const box = document.getElementById('hsvWheelBox');
         const canvas = document.getElementById('hsvWheelCanvas');
@@ -327,11 +312,11 @@
         if (!box || !canvas || !rHandle || !tHandle) return;
 
         const ctx = canvas.getContext('2d');
-        const size = 420;
+        const size = 360;
         const center = size / 2;
-        const outerR = size / 2 - 8;
-        const innerR = outerR - 26;
-        const triR = innerR - 8;
+        const outerR = size / 2 - 6;
+        const innerR = outerR - 22;
+        const triR = innerR - 6;
 
         function getEquilateralTriangleVertices() {
             const cos30 = Math.cos(Math.PI / 6);
@@ -389,7 +374,7 @@
 
         function updateHandlesAndSliders() {
             const boxRect = box.getBoundingClientRect();
-            const scale = (boxRect.width || 210) / size;
+            const scale = (boxRect.width || 180) / size;
 
             const rad = (hsvState.h - 90) * Math.PI / 180;
             const ringMidR = (outerR + innerR) / 2;
@@ -645,7 +630,7 @@
         };
     }
 
-    // 4. 壁纸导入与真机比例裁剪
+    // 4. 壁纸导入与裁剪
     window.handleWallpaperUpload = function (event, targetType) {
         const file = event.target.files && event.target.files[0];
         if (!file) return;
@@ -863,7 +848,7 @@
         if (typeof showToast === 'function') showToast('主题色彩已成功保存');
     };
 
-    // 5. 扩展字体：HTML / CSS / 本地多格式深度解析与全局强制应用
+    // 5. 扩展字体
     window.toggleFontLibraryCollapse = function () {
         const body = document.getElementById('fontLibraryBody');
         const arrow = document.getElementById('fontCollapseArrow');
@@ -888,7 +873,6 @@
 
         let familyName = '';
 
-        // 1. 若为 HTML 格式：解析其中的 link 与 style
         if (formatType === 'html') {
             const parser = new DOMParser();
             const doc = parser.parseFromString(rawCode, 'text/html');
@@ -902,7 +886,6 @@
                 document.head.appendChild(linkEl);
             });
 
-            // 提取 font-family
             const styleTags = doc.querySelectorAll('style');
             let styleContent = '';
             styleTags.forEach(s => { styleContent += s.textContent + '\n'; });
@@ -912,7 +895,6 @@
                 familyName = match[1].trim();
             }
         } else {
-            // 2. CSS 格式：提取 @import 或 @font-face
             const match = rawCode.match(/font-family:\s*["']?([^'";\n]+)["']?/i);
             if (match && match[1]) {
                 familyName = match[1].trim();
@@ -977,7 +959,6 @@
             document.head.appendChild(dynamicStyle);
         }
 
-        // 强制穿透所有元素，彻底保证全局生效
         dynamicStyle.innerHTML = `
             ${rawCode.includes('<style>') ? '' : (rawCode.startsWith('@') ? rawCode : '')}
             * {
@@ -1008,7 +989,7 @@
         }
 
         container.innerHTML = list.map(item => `
-            <div style="display:flex;justify-content:space-between;align-items:center;background:#fff8f9;padding:6px 10px;border-radius:8px;border:1px solid #ffeef2;">
+            <div style="display:flex;justify-content:space-between;align-items:center;background:#fff8fa;padding:6px 10px;border-radius:8px;border:1px solid #ffeef2;">
                 <div style="display:flex;flex-direction:column;">
                     <span style="font-size:12px;font-weight:700;color:#2e1a22;">${item.name}</span>
                     <span style="font-size:10px;color:var(--text2);">类型: ${item.type.toUpperCase()} · 系列: ${item.family}</span>
@@ -1037,7 +1018,7 @@
         renderInstalledFontsList();
     };
 
-    // 6. 配置方案管理器（Profiles）
+    // 6. 配置方案管理器
     function getStoredProfiles() {
         try { return JSON.parse(localStorage.getItem('mcyt_theme_profiles') || '[]'); } catch (e) { return []; }
     }
@@ -1139,12 +1120,9 @@
         if (typeof showToast === 'function') showToast('已删除方案: ' + profileName);
     };
 
-    // 页面冷启动时自动恢复已激活的全局字体
     try {
         const actFam = localStorage.getItem('mcyt_active_font_family');
         const actCode = localStorage.getItem('mcyt_active_font_code') || '';
-        if (actFam) {
-            applyGlobalFontForce(actFam, actCode);
-        }
+        if (actFam) applyGlobalFontForce(actFam, actCode);
     } catch (_) {}
 })();
