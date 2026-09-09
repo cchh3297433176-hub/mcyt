@@ -1,5 +1,5 @@
 // js/apps/settings/settings-app.js
-// 📱 系统设置中心 App（AI大模型顶置/操作栏归位/方案默认折叠带粉边/向导精简模型/联网条数自定义/报错悬浮球定制/存储维护）
+// 📱 系统设置中心 App（大模型顶置/向导方案备注名选择/粉白单选弹窗/操作栏归位/存档粉边折叠/联网自定义条数）
 // ============================================================
 
 (function(window) {
@@ -21,7 +21,7 @@
         'qwen-max'
     ];
 
-    let isProfileArchiveCollapsed = true; // 存档方案默认折叠状态
+    let isProfileArchiveCollapsed = true; // 方案存档默认折叠
 
     // 获取当前 AI 配置
     function getSafeAIConfig() {
@@ -29,7 +29,7 @@
             baseUrl: 'https://api.openai.com/v1',
             apiKey: '',
             model: 'gpt-4o-mini',
-            agentModel: 'follow_global',
+            agentProfileName: 'follow_global', // 'follow_global' | 或指定具体的配置方案备注名称
             modelsList: [...DEFAULT_MODEL_PRESETS]
         };
         try {
@@ -156,6 +156,70 @@
         }
     }
 
+    // 🌟 专属粉白 Windows 单选弹窗：向导模型配置方案选择（彻底消灭原生白底黑字 select）
+    function openAgentModelPickerModal(currentChoice, onSelected) {
+        const modal = document.getElementById('modal');
+        const modalBody = document.getElementById('modalBody');
+        const retroModalTitle = document.getElementById('retroModalTitle');
+        if (!modal || !modalBody) return;
+
+        if (retroModalTitle) retroModalTitle.textContent = '选择向导使用的配置方案';
+
+        const profiles = getAIProfiles();
+        const globalCfg = getSafeAIConfig();
+
+        // 拼接列表：第一项为“跟随全局主模型”，后面全是用户保存方案的备注名
+        const options = [
+            { name: 'follow_global', label: '跟随全局主模型', desc: `当前主模型: ${globalCfg.model || '未设定'}` }
+        ];
+
+        profiles.forEach(p => {
+            options.push({
+                name: p.name,
+                label: p.name,
+                desc: `方案模型: ${p.config?.model || '未设定'}`
+            });
+        });
+
+        modalBody.innerHTML = `
+            <div style="font-size:12px;color:#7a505f;margin-bottom:10px;">
+                请选择向导使用的 API 方案（将直接使用该方案的接口与备注模型）：
+            </div>
+            <div style="max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding-right:2px;">
+                ${options.map(opt => {
+                    const isSelected = (opt.name === currentChoice);
+                    return `
+                        <div class="agent-profile-select-card" data-val="${escapeHtml(opt.name)}" style="background:${isSelected ? '#fff0f3' : '#ffffff'};border:1.5px solid ${isSelected ? 'var(--primary,#ff5c8a)' : '#ffd4e0'};padding:10px 12px;border-radius:10px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;transition:all 0.2s ease;">
+                            <div style="display:flex;flex-direction:column;gap:2px;">
+                                <span style="font-size:12.5px;font-weight:750;color:${isSelected ? '#ad1457' : '#2e1a22'};">${escapeHtml(opt.label)}</span>
+                                <span style="font-size:10.5px;color:#7a505f;">${escapeHtml(opt.desc)}</span>
+                            </div>
+                            <div style="width:18px;height:18px;border-radius:50%;border:1.8px solid ${isSelected ? 'var(--primary,#ff5c8a)' : '#ffccd9'};display:flex;align-items:center;justify-content:center;background:#fff;">
+                                ${isSelected ? `<div style="width:10px;height:10px;border-radius:50%;background:var(--primary,#ff5c8a);"></div>` : ''}
+                            </div>
+                        </div>
+                    `;
+                }).join('')}
+            </div>
+            <div style="margin-top:14px;text-align:right;">
+                <button class="retro-pink-btn" onclick="closeModal()" style="padding:0 14px;height:26px;font-size:11.5px;">关闭</button>
+            </div>
+        `;
+
+        modal.classList.add('open');
+
+        // 绑定点击事件
+        modalBody.querySelectorAll('.agent-profile-select-card').forEach(card => {
+            card.onclick = () => {
+                const val = card.dataset.val;
+                if (typeof onSelected === 'function') {
+                    onSelected(val);
+                }
+                closeModal();
+            };
+        });
+    }
+
     // 渲染系统设置主视窗
     function renderSettingsApp() {
         const body = document.getElementById('appModalBody');
@@ -171,10 +235,26 @@
         const profiles = getAIProfiles();
         const activeProfileName = localStorage.getItem('mcyt_active_ai_profile_name') || '默认配置';
 
+        // 取得向导当前方案在界面上的友好展示标签
+        let agentDisplayLabel = '跟随全局主模型';
+        let agentDisplaySub = `主模型: ${aiCfg.model || '未设定'}`;
+        const curAgentSetting = aiCfg.agentProfileName || aiCfg.agentModel || 'follow_global';
+
+        if (curAgentSetting !== 'follow_global') {
+            const foundP = profiles.find(p => p.name === curAgentSetting);
+            if (foundP) {
+                agentDisplayLabel = foundP.name;
+                agentDisplaySub = `使用方案模型: ${foundP.config?.model || '未设定'}`;
+            } else {
+                agentDisplayLabel = curAgentSetting;
+                agentDisplaySub = '专属独立设置';
+            }
+        }
+
         body.innerHTML = `
             <div class="settings-app-container" style="padding-bottom:28px;">
                 
-                <!-- 导航分段药丸（全矢量 SVG） -->
+                <!-- 导航分段药丸 -->
                 <div class="settings-nav-tabs" style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:4px;">
                     <button class="settings-tab-btn active" data-tab="ai" style="flex:1;padding:8px 8px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;background:var(--primary);color:#fff;border:none;display:inline-flex;align-items:center;justify-content:center;gap:4px;">
                         <svg style="width:14px;height:14px;fill:currentColor;" viewBox="0 0 24 24"><path d="M21 11.5v-1c0-.8-.7-1.5-1.5-1.5H18V7c0-2.2-1.8-4-4-4h-4c-2.2 0-4 1.8-4 4v2H4.5C3.7 9 3 9.7 3 10.5v1c0 .8.7 1.5 1.5 1.5H6v4c0 2.2 1.8 4 4 4h4c2.2 0 4-1.8 4-4v-4h1.5c.8 0 1.5-.7 1.5-1.5zM8 7c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2v2H8V7zm8 9c0 1.1-.9 2-2 2h-4c-1.1 0-2-.9-2-2v-5h8v5zm-5.5-2.5c0 .6-.4 1-1 1s-1-.4-1-1 .4-1 1-1 1 .4 1 1zm5 0c0 .6-.4 1-1 1s-1-.4-1-1 .4-1 1-1 1 .4 1 1z"/></svg>
@@ -194,7 +274,7 @@
                     </button>
                 </div>
 
-                <!-- 🌟 分区 1：AI 模型配置面板（大模型置顶，操作栏紧随其后，存档折叠在下方） -->
+                <!-- 🌟 分区 1：AI 模型配置面板 -->
                 <div id="settingsTabContent_ai" class="settings-tab-content">
                     
                     <!-- 1. 最顶层：接口参数中枢与模型配置 -->
@@ -222,13 +302,11 @@
                             <div>
                                 <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px;">游戏主剧情模型</div>
                                 
-                                <!-- 上行：宽敞搜索/过滤框 + 右侧拉取按钮 -->
                                 <div style="display:flex;gap:6px;margin-bottom:8px;">
                                     <input type="text" id="modelFilterKeywordInput" placeholder="🔍 搜索/过滤模型 (如 deepseek/gemini)..." style="flex:1;padding:7px 10px;border:1px solid #ffccd9;border-radius:8px;font-size:11.5px;outline:none;background:#fff8fa;">
                                     <button class="btn-secondary" id="fetchModelsBtn" style="padding:0 12px;font-size:11px;height:32px;white-space:nowrap;font-weight:700;">拉取可用模型</button>
                                 </div>
 
-                                <!-- 下行：100% 全宽模型选择下拉框，超长名称完整展现 -->
                                 <div>
                                     <select id="aiModelSelect" style="width:100%;padding:8px 10px;border:1px solid #ffccd9;border-radius:8px;font-size:12px;background:#fff;outline:none;color:#2e1a22;">
                                         ${(aiCfg.modelsList || []).map(m => `<option value="${m}" ${m === aiCfg.model ? 'selected' : ''}>${m}</option>`).join('')}
@@ -236,19 +314,22 @@
                                 </div>
                             </div>
 
-                            <!-- 智能向导专属模型（直接复用当前标注模型列表，不重复拉取） -->
+                            <!-- 🌟 向导小助手独立模型配置：改用方案备注名称，点击弹出粉白单选卡片 -->
                             <div style="border-top:1px dashed #ffd4e0;padding-top:10px;margin-top:2px;">
                                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                                    <label style="font-size:12px;font-weight:700;color:var(--text);">智能向导独立模型</label>
-                                    <span style="font-size:10.5px;color:var(--text2);">可选专用快速小模型</span>
+                                    <label style="font-size:12px;font-weight:700;color:var(--text);">智能向导独立方案绑定</label>
+                                    <span style="font-size:10.5px;color:var(--text2);">复用已存方案与备注</span>
                                 </div>
-                                <select id="agentModelSelect" style="width:100%;padding:8px 10px;border:1px solid #ffccd9;border-radius:8px;font-size:12px;background:#fff;outline:none;color:#2e1a22;">
-                                    <option value="follow_global" ${aiCfg.agentModel === 'follow_global' ? 'selected' : ''}>跟随全局主模型</option>
-                                    ${(aiCfg.modelsList || []).map(m => `<option value="${m}" ${m === aiCfg.agentModel ? 'selected' : ''}>${m}</option>`).join('')}
-                                </select>
+                                <div id="triggerAgentModelPickerBtn" style="width:100%;padding:8px 12px;border:1px solid #ffccd9;border-radius:8px;background:#fff;cursor:pointer;display:flex;justify-content:space-between;align-items:center;box-sizing:border-box;">
+                                    <div style="display:flex;flex-direction:column;">
+                                        <span id="agentPickerDisplayTitle" style="font-size:12.5px;font-weight:750;color:#2e1a22;">${escapeHtml(agentDisplayLabel)}</span>
+                                        <span id="agentPickerDisplayDesc" style="font-size:10.5px;color:#7a505f;">${escapeHtml(agentDisplaySub)}</span>
+                                    </div>
+                                    <svg style="width:14px;height:14px;fill:#ad1457;" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5z"/></svg>
+                                </div>
                             </div>
 
-                            <!-- 🌟 核心操作按钮栏（位于拉取模型下方） -->
+                            <!-- 核心操作按钮栏 -->
                             <div style="display:grid;grid-template-columns:repeat(2, 1fr);gap:8px;margin-top:8px;">
                                 <button class="btn-primary" id="updateCurrentProfileBtn" style="padding:9px;font-size:12px;">更新该保存</button>
                                 <button class="btn-secondary" id="saveAsNewProfileBtn" style="padding:9px;font-size:12px;">另存为新方案</button>
@@ -289,7 +370,7 @@
 
                 </div>
 
-                <!-- 分区 2：联网搜索中枢（含条数自定义与实时测试） -->
+                <!-- 分区 2：联网搜索中枢 -->
                 <div id="settingsTabContent_search" class="settings-tab-content" style="display:none;">
                     <div class="theme-setting-card">
                         <div class="theme-setting-title">
@@ -304,7 +385,6 @@
                         </div>
 
                         <div id="searchConfigBody" style="${searchCfg.enabled ? '' : 'opacity:0.45;pointer-events:none;'}">
-                            <!-- 🌟 自定义搜索结果条数设置 -->
                             <div style="background:#fff8fa;border:1px solid #ffd4e0;border-radius:10px;padding:10px;margin-bottom:12px;">
                                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
                                     <span style="font-size:12px;font-weight:700;color:var(--text);">搜索结果引用条数</span>
@@ -351,11 +431,11 @@
 
                             <button class="btn-primary" id="saveSearchConfigBtn" style="width:100%;padding:9px;font-size:12px;">保存联网设置</button>
 
-                            <!-- 联网搜索实时测试台 -->
+                            <!-- 联网搜索实时测试台：彻底清空死板预置文字 -->
                             <div style="margin-top:14px;border-top:1px dashed #ffd4e0;padding-top:12px;">
                                 <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px;">搜索功能实时测试</div>
                                 <div style="display:flex;gap:6px;">
-                                    <input type="text" id="webSearchTestQueryInput" value="Minecraft 1.21 新特性" placeholder="输入测试搜索关键词..." style="flex:1;padding:7px 8px;border:1px solid #ffccd9;border-radius:6px;font-size:11px;outline:none;">
+                                    <input type="text" id="webSearchTestQueryInput" value="" placeholder="输入你要测试搜索的关键词..." style="flex:1;padding:7px 8px;border:1px solid #ffccd9;border-radius:6px;font-size:11px;outline:none;background:#ffffff;">
                                     <button class="btn-secondary" id="executeWebSearchTestBtn" style="padding:0 12px;font-size:11px;font-weight:700;">测试搜索</button>
                                 </div>
                                 <div id="webSearchTestResultBox" style="margin-top:8px;display:none;background:#fff8fa;border:1px solid #ffd4e0;border-radius:8px;padding:8px;font-size:11.5px;line-height:1.4;max-height:160px;overflow-y:auto;"></div>
@@ -484,9 +564,32 @@
         const apiKeyInput = document.getElementById('aiApiKeyInput');
         const modelSelect = document.getElementById('aiModelSelect');
         const filterInput = document.getElementById('modelFilterKeywordInput');
-        const agentSelect = document.getElementById('agentModelSelect');
 
         let fullModelList = getSafeAIConfig().modelsList || [...DEFAULT_MODEL_PRESETS];
+        let currentAgentProfileChoice = getSafeAIConfig().agentProfileName || 'follow_global';
+
+        // 🌟 绑定向导方案专属粉白弹窗
+        const triggerPickerBtn = document.getElementById('triggerAgentModelPickerBtn');
+        if (triggerPickerBtn) {
+            triggerPickerBtn.onclick = () => {
+                openAgentModelPickerModal(currentAgentProfileChoice, (selectedName) => {
+                    currentAgentProfileChoice = selectedName;
+                    const profiles = getAIProfiles();
+                    const titleEl = document.getElementById('agentPickerDisplayTitle');
+                    const descEl = document.getElementById('agentPickerDisplayDesc');
+
+                    if (selectedName === 'follow_global') {
+                        if (titleEl) titleEl.textContent = '跟随全局主模型';
+                        if (descEl) descEl.textContent = `当前主模型: ${modelSelect?.value || '未设定'}`;
+                    } else {
+                        const targetP = profiles.find(p => p.name === selectedName);
+                        if (titleEl) titleEl.textContent = selectedName;
+                        if (descEl) descEl.textContent = `使用方案模型: ${targetP?.config?.model || '未设定'}`;
+                    }
+                    if (typeof showToast === 'function') showToast('已选定向导方案，点击“更新该保存”生效');
+                });
+            };
+        }
 
         function renderFilteredModelOptions(keyword = '') {
             if (!modelSelect) return;
@@ -514,12 +617,12 @@
                 baseUrl: (baseUrlInput?.value || '').trim(),
                 apiKey: (apiKeyInput?.value || '').trim(),
                 model: (modelSelect?.value || '').trim() || 'gpt-4o-mini',
-                agentModel: (agentSelect?.value || 'follow_global'),
+                agentProfileName: currentAgentProfileChoice,
                 modelsList: [...fullModelList]
             };
         };
 
-        // 🌟 1. 更新该保存（直接覆盖当前激活方案）
+        // 更新该保存
         const updateSaveBtn = document.getElementById('updateCurrentProfileBtn');
         if (updateSaveBtn) {
             updateSaveBtn.onclick = () => {
@@ -534,7 +637,6 @@
                     localStorage.setItem('mc_yt_ai_config', JSON.stringify(curData));
                     if (typeof persistAIConfig === 'function') persistAIConfig();
 
-                    // 如果不是默认配置，同步更新进方案存档列表中
                     if (activeName !== '默认配置') {
                         const list = getAIProfiles();
                         const idx = list.findIndex(p => p.name === activeName);
@@ -553,11 +655,11 @@
             };
         }
 
-        // 🌟 2. 另存为新方案
+        // 另存为新方案
         const saveAsBtn = document.getElementById('saveAsNewProfileBtn');
         if (saveAsBtn) {
             saveAsBtn.onclick = () => {
-                openRetroInputModal('另存为新方案', '新 API 专线', '输入方案名称...', (name) => {
+                openRetroInputModal('另存为新方案', '', '输入方案备注名称...', (name) => {
                     if (!name) {
                         if (typeof showToast === 'function') showToast('方案名称不能为空', 'error');
                         return;
@@ -584,7 +686,7 @@
             };
         }
 
-        // 3. 连通性测试
+        // 连通性测试
         const testAiBtn = document.getElementById('testAiConnectBtn');
         if (testAiBtn) {
             testAiBtn.onclick = async () => {
@@ -626,7 +728,7 @@
             };
         }
 
-        // 4. 拉取模型列表
+        // 拉取模型列表
         const fetchModelsBtn = document.getElementById('fetchModelsBtn');
         if (fetchModelsBtn) {
             fetchModelsBtn.onclick = async () => {
@@ -658,16 +760,6 @@
                         list.sort();
                         fullModelList = Array.from(new Set([...list, ...DEFAULT_MODEL_PRESETS]));
                         renderFilteredModelOptions(filterInput ? filterInput.value : '');
-                        
-                        // 同步刷新向导模型列表
-                        if (agentSelect) {
-                            const curVal = agentSelect.value;
-                            agentSelect.innerHTML = `
-                                <option value="follow_global">跟随全局主模型</option>
-                                ${fullModelList.map(m => `<option value="${m}" ${m === curVal ? 'selected' : ''}>${m}</option>`).join('')}
-                            `;
-                        }
-
                         if (typeof showToast === 'function') showToast(`成功发现 ${list.length} 个模型`, 'success');
                     } else {
                         if (typeof showToast === 'function') showToast('未在接口返回中解析到模型列表', 'info');
@@ -681,7 +773,7 @@
             };
         }
 
-        // 5. 备份与恢复
+        // 备份与恢复
         const backupBtn = document.getElementById('backupConfigModalBtn');
         if (backupBtn) {
             backupBtn.onclick = () => {
@@ -689,7 +781,7 @@
             };
         }
 
-        // 6. 联网搜索配置
+        // 联网搜索配置
         const searchToggle = document.getElementById('searchEnableToggle');
         const searchToggleText = document.getElementById('searchEnableText');
         const searchConfigBody = document.getElementById('searchConfigBody');
@@ -743,7 +835,7 @@
             };
         }
 
-        // 7. 联网搜索实时测试
+        // 联网搜索测试
         const testSearchBtn = document.getElementById('executeWebSearchTestBtn');
         const testSearchQuery = document.getElementById('webSearchTestQueryInput');
         const testSearchResultBox = document.getElementById('webSearchTestResultBox');
@@ -790,7 +882,7 @@
             };
         }
 
-        // 8. 悬浮球设置
+        // 悬浮球设置
         const orbToggle = document.getElementById('orbMasterToggle');
         const orbToggleText = document.getElementById('orbToggleText');
         const detailBox = document.getElementById('orbConfigDetailBox');
@@ -947,7 +1039,7 @@
                 <div style="font-weight:700;margin:10px 0 6px 0;">从备份文本导入恢复：</div>
                 <textarea id="configImportArea" placeholder="在此粘贴备份的 JSON 配置文本..." style="width:100%;height:75px;font-family:monospace;font-size:10px;padding:6px;border:1px solid #ffd4e0;border-radius:6px;outline:none;"></textarea>
                 
-                <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end;">
+                <div style="margin-top:12px;display:gap:8px;justify-content:flex-end;">
                     <button class="retro-pink-btn" onclick="closeModal()" style="padding:0 12px;height:26px;font-size:11.5px;">取消</button>
                     <button class="retro-pink-btn" id="applyConfigImportBtn" style="padding:0 16px;height:26px;font-size:11.5px;background:var(--primary);color:#fff;border:none;">确认导入恢复</button>
                 </div>
