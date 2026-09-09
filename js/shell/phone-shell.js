@@ -7,6 +7,49 @@
 (function () {
     'use strict';
 
+    // 全局硬件感知状态缓存
+    window._phoneBatteryState = {
+        level: 100,
+        charging: false,
+        supported: false
+    };
+
+    // 获取当前设备的时段分类名称与真实状态
+    window.getPhoneDeviceState = function () {
+        const now = new Date();
+        const hour = now.getHours();
+        const minute = now.getMinutes();
+        const pad = (n) => String(n).padStart(2, '0');
+        const timeStr = `${pad(hour)}:${pad(minute)}`;
+
+        let timeSlotName = '白天';
+        let isLateNight = false;
+
+        if (hour >= 23 || hour < 5) {
+            timeSlotName = '深夜/睡眠时段';
+            isLateNight = true;
+        } else if (hour >= 5 && hour < 8) {
+            timeSlotName = '清晨';
+        } else if (hour >= 8 && hour < 11) {
+            timeSlotName = '上午';
+        } else if (hour >= 11 && hour < 13) {
+            timeSlotName = '中午';
+        } else if (hour >= 13 && hour < 18) {
+            timeSlotName = '下午';
+        } else if (hour >= 18 && hour < 23) {
+            timeSlotName = '傍晚/夜间';
+        }
+
+        return {
+            timeStr,
+            hour,
+            minute,
+            timeSlotName,
+            isLateNight,
+            battery: Object.assign({}, window._phoneBatteryState)
+        };
+    };
+
     // 1. 系统时钟引擎
     function updatePhoneClock() {
         try {
@@ -45,6 +88,12 @@
                     const level = Math.round(battery.level * 100);
                     text.textContent = `${level}%`;
                     core.style.width = `${level}%`;
+                    
+                    // 记录全局硬件状态供智能向导与系统读取
+                    window._phoneBatteryState.level = level;
+                    window._phoneBatteryState.charging = !!battery.charging;
+                    window._phoneBatteryState.supported = true;
+
                     if (battery.charging) {
                         star.classList.add('active');
                     } else {
