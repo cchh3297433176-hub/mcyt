@@ -6,7 +6,7 @@
     -webkit-tap-highlight-color: transparent;
 }
 :root {
-    /* 🎀 全局核心粉白配色系统 */
+    /* 全局核心粉白配色系统 */
     --bg: #fff5f7;
     --bg2: #ffeef2;
     --card: #ffffff;
@@ -21,7 +21,7 @@
     --shadow: 0 4px 16px rgba(216, 27, 96, 0.08);
     --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 
-    /* 📱 默认壁纸全部精准指向内部相对路径 */
+    /* 默认壁纸全部精准指向内部相对路径 */
     --app-font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
     --lock-bg-url: url('assets/system/default_lock.jpg');
     --desktop-bg-url: url('assets/system/default_desktop.jpg');
@@ -32,7 +32,7 @@
     --status-svg-fill: #ffffff;
     --star-glow-color: rgba(255, 255, 255, 0.9);
 
-    /* 👈 真实粉色指针图片源 */
+    /* 真实粉色指针图片源 */
     --pixel-pointer-url: url('assets/system/pointer.png');
 }
 
@@ -61,7 +61,7 @@ body {
 }
 
 /* ============================================================ */
-/* 📱 手机外壳容器与层级架构 */
+/* 手机外壳容器与层级架构 */
 /* ============================================================ */
 .phone-wrapper {
     position: relative;
@@ -205,7 +205,7 @@ body {
     transition: color 0.3s ease;
 }
 
-/* 锁屏界面（层级 800，覆盖桌面） */
+/* 锁屏界面 */
 .screen-lock {
     position: absolute;
     inset: 0;
@@ -279,7 +279,7 @@ body {
     transition: color 0.3s ease;
 }
 
-/* 桌面主界面（层级 500） */
+/* 桌面主界面 */
 .screen-desktop {
     position: absolute;
     inset: 0;
@@ -427,7 +427,7 @@ body {
     cursor: pointer;
 }
 
-/* App 独立全屏窗口（层级 750） */
+/* App 独立全屏窗口 */
 .app-modal-layer {
     position: absolute;
     inset: 0;
@@ -494,7 +494,7 @@ body {
 }
 
 /* ============================================================ */
-/* 🚫 彻底隐藏与隔离旧 UI 核心 */
+/* 彻底隐藏与隔离旧 UI 核心 */
 /* ============================================================ */
 #app,
 #app.game-inner-viewport,
@@ -515,7 +515,7 @@ body {
 }
 
 /* ============================================================ */
-/* 🎀 甜心复古 Windows（Win98 Pink Sweetheart）弹窗设计 */
+/* 甜心复古 Windows 弹窗设计 */
 /* ============================================================ */
 .retro-pink-window {
     background: #fff3f6 !important;
@@ -579,14 +579,13 @@ body {
 }
 
 /* ============================================================ */
-/* 👈 核心创新：粉色像素指针交互（图二标准：彻底消灭原生圆圈） */
+/* 粉色像素指针交互规范 */
 /* ============================================================ */
 @keyframes pixelPointerHop {
     0%, 100% { transform: translateX(0); }
     50% { transform: translateX(-3px); }
 }
 
-/* 彻底隐藏原生单选钮，无论在何种容器中 */
 .radio-group input[type="radio"],
 .theme-pointer-item input[type="radio"] {
     position: absolute !important;
@@ -597,7 +596,6 @@ body {
     margin: 0 !important;
 }
 
-/* 图二标准指针项容器与 Label */
 .theme-pointer-group {
     display: flex;
     flex-direction: column;
@@ -622,10 +620,9 @@ body {
     color: #4a2f38;
     transition: var(--transition);
     position: relative;
-    padding-left: 28px; /* 预留给粉针的像素展示位 */
+    padding-left: 28px;
 }
 
-/* 未选中时指针透明留空对齐 */
 .theme-pointer-item label::before {
     content: "";
     position: absolute;
@@ -639,7 +636,6 @@ body {
     transition: opacity 0.15s ease;
 }
 
-/* 选中时：浮现真实粉针，并启动微跳动效 */
 .theme-pointer-item input[type="radio"]:checked + label {
     color: var(--primary) !important;
     font-weight: 750;
@@ -649,7 +645,6 @@ body {
     animation: pixelPointerHop 0.8s infinite ease-in-out;
 }
 
-/* 兼容通用 radio-group 基础布局 */
 .radio-group {
     display: flex;
     gap: 6px;
@@ -682,24 +677,60 @@ body {
 }
 
 /* ============================================================ */
-/* 🎨 图三同款：专业 HSV 色相环 + 三角形拾色器样式 */
+/* 专业 HSV 色相环 + 正等边三角形拾色器 + 智能自适应环境色盘 */
 /* ============================================================ */
 .hsv-picker-container {
     display: flex;
     flex-direction: column;
     align-items: center;
-    background: #252427;
     border-radius: 16px;
-    padding: 16px 14px;
+    padding: 16px 14px 12px 14px;
     margin-top: 10px;
-    box-shadow: inset 0 2px 6px rgba(0,0,0,0.5), 0 4px 14px rgba(0,0,0,0.15);
+    position: relative;
+    transition: background 0.3s ease, border-color 0.3s ease;
+}
+
+/* 深色模式底座（默认） */
+.hsv-picker-container.theme-dark-plate {
+    background: #2b2b2b;
+    border: 1px solid #3d3d3d;
+    box-shadow: inset 0 2px 8px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.2);
+}
+.hsv-picker-container.theme-dark-plate .hsv-slider-label {
+    color: #cfcfcf;
+}
+.hsv-picker-container.theme-dark-plate .hsv-slider-input {
+    background: #444;
+}
+.hsv-picker-container.theme-dark-plate .hsv-num-input {
+    background: #383838;
+    color: #ffffff;
+    border: 1px solid #555;
+}
+
+/* 浅色模式自适应底座（黑框白底，不突兀） */
+.hsv-picker-container.theme-light-plate {
+    background: #ffffff;
+    border: 1.5px solid #2e1a22;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
+}
+.hsv-picker-container.theme-light-plate .hsv-slider-label {
+    color: #2e1a22;
+}
+.hsv-picker-container.theme-light-plate .hsv-slider-input {
+    background: #e2e2e2;
+}
+.hsv-picker-container.theme-light-plate .hsv-num-input {
+    background: #f7f7f7;
+    color: #2e1a22;
+    border: 1px solid #2e1a22;
 }
 
 .hsv-wheel-box {
     position: relative;
-    width: 210px;
-    height: 210px;
-    margin: 4px auto 14px auto;
+    width: 220px;
+    height: 220px;
+    margin: 4px auto 16px auto;
     touch-action: none;
     user-select: none;
 }
@@ -711,31 +742,70 @@ body {
     border-radius: 50%;
 }
 
-/* 色相环与三角形触摸空心手柄 */
 .hsv-ring-handle {
     position: absolute;
-    width: 18px;
-    height: 18px;
+    width: 20px;
+    height: 20px;
     border: 2.5px solid #ffffff;
     border-radius: 50%;
-    box-shadow: 0 0 5px rgba(0,0,0,0.8), inset 0 0 3px rgba(0,0,0,0.4);
+    box-shadow: 0 0 6px rgba(0,0,0,0.7), inset 0 0 3px rgba(0,0,0,0.4);
     pointer-events: none;
     transform: translate(-50%, -50%);
     box-sizing: border-box;
 }
 .hsv-triangle-handle {
     position: absolute;
-    width: 16px;
-    height: 16px;
-    border: 2px solid #ffffff;
+    width: 18px;
+    height: 18px;
+    border: 2.5px solid #ffffff;
     border-radius: 50%;
-    box-shadow: 0 0 5px rgba(0,0,0,0.8), inset 0 0 3px rgba(0,0,0,0.4);
+    box-shadow: 0 0 6px rgba(0,0,0,0.7), inset 0 0 3px rgba(0,0,0,0.4);
     pointer-events: none;
     transform: translate(-50%, -50%);
     box-sizing: border-box;
 }
 
-/* 底部滑块行 */
+/* 截图同款：吸色器水滴按键与操作栏 */
+.hsv-tools-row {
+    position: absolute;
+    top: 184px;
+    right: 18px;
+    display: flex;
+    align-items: center;
+    z-index: 10;
+}
+.hsv-pipette-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    transition: transform 0.15s ease, opacity 0.2s ease;
+    opacity: 0.9;
+}
+.hsv-pipette-btn:active {
+    transform: scale(0.88);
+}
+.hsv-pipette-btn svg {
+    width: 24px;
+    height: 24px;
+    fill: none;
+    stroke: #888;
+    stroke-width: 1.8;
+}
+.theme-dark-plate .hsv-pipette-btn svg {
+    stroke: #e0e0e0;
+}
+.theme-light-plate .hsv-pipette-btn svg {
+    stroke: #2e1a22;
+}
+
+/* 滑块与数值输入 */
 .hsv-slider-group {
     width: 100%;
     display: flex;
@@ -751,7 +821,6 @@ body {
 .hsv-slider-label {
     font-size: 13.5px;
     font-weight: 700;
-    color: #cccccc;
     width: 16px;
     font-family: monospace;
 }
@@ -767,7 +836,6 @@ body {
     width: 100%;
     height: 6px;
     border-radius: 3px;
-    background: #444;
     outline: none;
     margin: 0;
 }
@@ -782,35 +850,95 @@ body {
     box-shadow: 0 1px 4px rgba(0,0,0,0.6);
     cursor: pointer;
 }
-.hsv-slider-val {
+
+/* 支持点击直接输入的数字框 */
+.hsv-num-input {
+    width: 46px;
+    padding: 3px 4px;
     font-size: 12.5px;
     font-family: monospace;
-    color: #e0e0e0;
-    min-width: 28px;
-    text-align: right;
+    text-align: center;
+    border-radius: 6px;
+    outline: none;
+    transition: var(--transition);
 }
 
-/* 预览与操作动作条 */
+/* 吸色画布模态 */
+.pipette-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.85);
+    z-index: 3000;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px 16px;
+    touch-action: none;
+}
+.pipette-view-wrap {
+    flex: 1;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+}
+.pipette-canvas {
+    max-width: 100%;
+    max-height: 100%;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+    cursor: crosshair;
+}
+.pipette-loupe {
+    position: absolute;
+    width: 76px;
+    height: 76px;
+    border: 3px solid #ffffff;
+    border-radius: 50%;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.6);
+    pointer-events: none;
+    transform: translate(-50%, -50%);
+    display: none;
+    background: no-repeat;
+    z-index: 3010;
+}
+.pipette-loupe::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 6px;
+    height: 6px;
+    transform: translate(-50%, -50%);
+    border: 1px solid rgba(255,255,255,0.9);
+    background: rgba(0,0,0,0.3);
+}
+
+/* 统一按钮与卡片样式 */
 .theme-action-bar {
     display: flex;
     gap: 8px;
     margin-top: 14px;
 }
 
-/* 通用按钮与卡片样式 */
 .btn-primary {
     width: 100%;
-    padding: 12px;
+    padding: 11px;
     border: none;
-    border-radius: 14px;
+    border-radius: 12px;
     background: linear-gradient(135deg, #ff5c8a, #ff758f);
     color: #fff;
-    font-size: 15px;
+    font-size: 14px;
     font-weight: 700;
     cursor: pointer;
-    box-shadow: 0 4px 16px rgba(255, 92, 138, 0.3);
+    box-shadow: 0 4px 14px rgba(255, 92, 138, 0.25);
     letter-spacing: 0.5px;
     touch-action: manipulation;
+}
+.btn-primary:active {
+    transform: scale(0.98);
 }
 .btn-secondary {
     padding: 8px 14px;
@@ -823,6 +951,9 @@ body {
     cursor: pointer;
     border: 1px solid rgba(255, 92, 138, 0.15);
     touch-action: manipulation;
+}
+.btn-secondary:active {
+    background: #ffe2e8;
 }
 
 .theme-setting-card {
@@ -849,8 +980,54 @@ body {
     line-height: 1.4;
 }
 
+/* 字体与多配置管理面板 */
+.theme-collapsible-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    cursor: pointer;
+    user-select: none;
+}
+.theme-collapsible-arrow {
+    font-size: 12px;
+    color: var(--text2);
+    transition: transform 0.2s ease;
+}
+.theme-collapsible-arrow.open {
+    transform: rotate(90deg);
+}
+
+.profile-chip-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 10px;
+}
+.profile-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 10px;
+    border-radius: 20px;
+    background: #fff0f3;
+    border: 1px solid rgba(255, 92, 138, 0.2);
+    font-size: 12px;
+    font-weight: 600;
+    color: #4a2f38;
+}
+.profile-chip.active {
+    background: var(--primary);
+    color: #fff;
+    border-color: var(--primary);
+}
+.profile-chip-del {
+    cursor: pointer;
+    opacity: 0.7;
+    font-size: 11px;
+}
+
 /* ============================================================ */
-/* 🛡️ 弹窗与封禁全屏最高层级保证 */
+/* 弹窗与封禁最高层级保证 */
 /* ============================================================ */
 .modal-overlay {
     position: fixed;

@@ -4,14 +4,14 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>🎀 MC YouTube模拟器💕 6.0</title>
+    <title>MC YouTube模拟器 6.0</title>
     <link rel="stylesheet" href="style.css" />
 </head>
 <body>
     <div id="toast" class="toast"></div>
     <div id="achievementToast" class="achievement-unlock-toast"></div>
 
-    <!-- 📱 纯净定制小手机系统外壳 -->
+    <!-- 纯净定制小手机系统外壳 -->
     <div class="phone-wrapper" id="phoneWrapper">
         <!-- 灵动岛 -->
         <div class="phone-notch">
@@ -131,7 +131,7 @@
                     <div class="app-title-label">主线频道</div>
                 </div>
 
-                <!-- 个性主题 APP（已替换为内部资产图片图标） -->
+                <!-- 个性主题 APP -->
                 <div class="app-slot" id="appSlotTheme" onclick="openPhoneApp('theme')">
                     <div class="app-icon-box">
                         <img src="assets/icons/theme.png" alt="个性主题" />
@@ -178,7 +178,7 @@
             </div>
         </div>
 
-        <!-- 3. App 独立全屏窗口容器（各独立 App 渲染挂载根节点） -->
+        <!-- 3. App 独立全屏窗口容器 -->
         <div class="app-modal-layer" id="appModal">
             <div class="app-modal-head">
                 <button class="app-back-nav" onclick="closePhoneApp()">
@@ -190,205 +190,23 @@
                 <div class="app-head-title" id="appModalTitle">应用窗口</div>
                 <div style="width: 44px;"></div>
             </div>
-            <div class="app-modal-body" id="appModalBody">
-                <!-- 由各 App 动态挂载注入 -->
-            </div>
+            <div class="app-modal-body" id="appModalBody"></div>
             <div class="app-modal-foot">
                 <div class="app-foot-home" onclick="closePhoneApp()"></div>
             </div>
         </div>
 
-        <!-- 🎮 游戏核心功能底层宿主（保留原有节点以供各 App 平滑拆移） -->
+        <!-- 游戏核心功能底层宿主 -->
         <div id="app" class="game-inner-viewport">
-            <!-- ===== SETUP PAGE ===== -->
-            <div id="setupPage" class="page active">
-                <div class="setup-title">🎀 MC YouTube模拟器💕 6.0</div>
-                <div class="setup-sub">成为我的世界主播，书写你的传奇</div>
-                <div id="resumeBanner" style="display:none;background:#eaf5ea;border:2px solid var(--primary);border-radius:12px;padding:12px;margin:0 0 14px;text-align:center;"></div>
-                <div class="setup-card">
-                    <div class="api-key-section">
-                        <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-                            <span>🌐 联网与AI模型设置</span>
-                            <span style="background:var(--primary);color:#fff;padding:0 8px;border-radius:12px;font-size:11px;font-weight:700;">OpenAI 兼容接口</span>
-                        </div>
-                        <div id="apiSettingsContainer"></div>
-                    </div>
-                    <div class="form-group">
-                        <label>📷 头像 <span class="required">*</span></label>
-                        <div class="avatar-upload-wrap">
-                            <div class="avatar-preview" id="avatarPreview">👤</div>
-                            <button class="upload-btn" id="uploadAvatarBtn">选择图片</button>
-                            <input type="file" id="avatarFileInput" accept="image/png,image/jpeg" class="file-input">
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>🎭 你的身份 <span class="required">*</span></label>
-                        <div class="radio-group" id="identityGroup">
-                            <input type="radio" name="identity" id="idNew" value="new" checked>
-                            <label for="idNew">🆕 新主播</label>
-                            <input type="radio" name="identity" id="idFans" value="fans">
-                            <label for="idFans">⭐ 已有粉丝</label>
-                            <input type="radio" name="identity" id="idVeteran" value="veteran">
-                            <label for="idVeteran">🏆 老牌主播</label>
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <label>📅 年龄 <span class="required">*</span></label>
-                        <input type="number" id="ageInput" placeholder="例如 18" min="1" max="150" value="18">
-                    </div>
-                    <div class="form-group">
-                        <label>📺 YouTube 账号名 <span class="required">*</span></label>
-                        <input type="text" id="ytNameInput" placeholder="例如：MC_CraftMaster" value="MC_CraftMaster">
-                    </div>
-
-                    <div class="form-group">
-                        <label>📖 全局剧情叙事人称 (POV) <span class="required">*</span></label>
-                        <select id="povSelect" style="width:100%;padding:8px 12px;border-radius:8px;border:2px solid rgba(30, 60, 30, 0.10);background:#f5faf5;color:var(--text);font-size:14px;outline:none;">
-                            <option value="second" selected>第二人称【你】（经典沉浸代入式）</option>
-                            <option value="first">第一人称【我】（身临其境主播自述视点）</option>
-                            <option value="third">第三人称【她 / 频道名】（小说客观记录视点）</option>
-                        </select>
-                    </div>
-
-                    <div class="form-group" style="background:#f9fbf9;border:1.5px solid #dceedc;border-radius:12px;padding:12px;margin:10px 0;">
-                        <div style="font-weight:700;font-size:13.5px;color:#1e4620;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
-                            <span>🎭 形象三大维度细分设定（纯净空白，自由定制）</span>
-                        </div>
-
-                        <div class="form-group" style="margin-bottom:8px;">
-                            <label style="font-size:12px;">1. 🖥️ 线上虚拟形象（Live2D / Vtuber皮套）</label>
-                            <textarea id="avatarLive2dInput" placeholder="可选：描述直播与视频出镜时观众看到的虚拟形象风格（如皮套立绘、特征等）..." style="min-height:45px;"></textarea>
-                        </div>
-
-                        <div class="form-group" style="margin-bottom:8px;">
-                            <label style="font-size:12px;">2. 🎮 游戏形象（Minecraft 像素皮肤）</label>
-                            <textarea id="skinInput" placeholder="可选：描述你在Minecraft方块世界操纵角色的像素皮肤、披风、外观..." style="min-height:45px;"></textarea>
-                        </div>
-
-                        <div class="form-group" style="margin-bottom:0;">
-                            <label style="font-size:12px;">3. 🏠 线下真实形象（现实皮下素颜）</label>
-                            <textarea id="appearanceRealInput" placeholder="可选：描述现实生活中的真实容貌、体态声音、穿搭特征..." style="min-height:45px;"></textarea>
-                        </div>
-                    </div>
-
-                    <div class="form-group">
-                        <label>🎭 性格人设简介</label>
-                        <textarea id="personaInput" placeholder="可选：描述你的性格人设、声音风格、语言习惯等..." style="min-height:40px;"></textarea>
-                    </div>
-
-                    <div class="form-group">
-                        <label>🎯 创作赛道 <span class="required">*</span></label>
-                        <select id="categorySelect">
-                            <option value="追杀">⚔️ 追杀</option>
-                            <option value="剧情" selected>📖 剧情</option>
-                            <option value="生存">🌿 生存</option>
-                            <option value="休闲">🎮 休闲</option>
-                            <option value="建筑教程">🏗️ 建筑教程</option>
-                            <option value="红石">🔴 红石</option>
-                            <option value="整活">🤡 整活</option>
-                            <option value="混合">🌈 混合</option>
-                        </select>
-                    </div>
-                    <div class="form-group" style="margin-bottom:6px;">
-                        <label style="font-size:12px;">🔧 技术属性 (0-100)</label>
-                        <div class="skill-input-group"><label>🏗️</label><input type="range" id="skillBuilding" min="0" max="100" value="20"><input type="number" id="skillBuildingNum" min="0" max="100" value="20"></div>
-                        <div class="skill-input-group"><label>🔧</label><input type="range" id="skillRedstone" min="0" max="100" value="20"><input type="number" id="skillRedstoneNum" min="0" max="100" value="20"></div>
-                        <div class="skill-input-group"><label>⚔️</label><input type="range" id="skillPvp" min="0" max="100" value="20"><input type="number" id="skillPvpNum" min="0" max="100" value="20"></div>
-                        <div class="skill-input-group"><label>🌲</label><input type="range" id="skillSurvival" min="0" max="100" value="20"><input type="number" id="skillSurvivalNum" min="0" max="100" value="20"></div>
-                        <div class="skill-input-group"><label>🏹</label><input type="range" id="skillHunting" min="0" max="100" value="20"><input type="number" id="skillHuntingNum" min="0" max="100" value="20"></div>
-                    </div>
-                    <button class="btn-primary" id="startGameBtn">🚀 填入Key，开始游戏</button>
-                    <button class="btn-secondary" id="setupLoadGameBtn" style="width:100%;margin-top:8px;">📂 读取已有存档</button>
-                    <div style="display:flex;gap:8px;margin-top:8px;">
-                        <button class="btn-secondary" id="setupBackupBtn" style="flex:1;">📤 图片备份</button>
-                        <button class="btn-secondary" id="setupImportSaveBtn" style="flex:1;">📥 相册恢复</button>
-                    </div>
-                    <div style="margin-top:8px;font-size:11px;color:#999;text-align:center;">💡 所有剧情由 AI 实时生成，每回合 800+ 字</div>
-                    <div style="margin-top:6px;font-size:11px;color:#e67e22;text-align:center;">⚠️ 更新App前请先点「📤 图片备份」，将存档图存入手机相册！</div>
-                </div>
-            </div>
-            
-            <!-- ===== GAME PAGE ===== -->
-            <div id="gamePage" style="display:none;">
-                <!-- 左侧竖排操作栏 -->
-                <div class="action-bar-vertical" id="actionBar">
-                    <button class="action-btn primary" data-action="stream"><span class="icon">📹</span><span class="label">直播</span></button>
-                    <button class="action-btn gold" data-action="video"><span class="icon">🎬</span><span class="label">视频</span></button>
-                    <button class="action-btn" data-action="chat"><span class="icon">💬</span><span class="label">聊天</span></button>
-                    <button class="action-btn" data-action="fanart"><span class="icon">🎨</span><span class="label">同人</span></button>
-                    <button class="action-btn" data-action="youtube"><span class="icon">▶️</span><span class="label">油管</span></button>
-                    <button class="action-btn" data-action="sub"><span class="icon">🧘</span><span class="label">皮下</span></button>
-                    <button class="action-btn" id="webSearchToggleBtn"><span class="icon">🌐</span><span class="label">联网</span></button>
-                    <button class="action-btn" id="rerollBtn"><span class="icon">🔄</span><span class="label">重说</span></button>
-                    <button class="action-btn" id="editContentBtn"><span class="icon">✏️</span><span class="label">编辑</span></button>
-                    <button class="action-btn" id="memorySummaryBtn"><span class="icon">🧠</span><span class="label">记忆</span></button>
-                    <button class="action-btn" data-action="next"><span class="icon">⏩</span><span class="label">下一天</span></button>
-                </div>
-                <!-- 右侧主区域 -->
-                <div class="game-main">
-                    <!-- 头部栏 -->
-                    <div class="game-header">
-                        <div class="game-header-top">
-                            <div class="left">
-                                <div class="avatar-circle" id="headerAvatar" style="cursor:pointer;position:relative;" title="点击修改头像与名字">
-                                    <img id="headerAvatarImg" src="" alt="avatar">
-                                </div>
-                                <span>📆 第 <span class="day" id="dayDisplay">1</span> 天</span>
-                                <span>🕐 <span class="time" id="timeDisplay">早晨</span></span>
-                            </div>
-                            <div class="right-ap">
-                                <span>⚡</span>
-                                <span class="ap" id="apDisplay">6</span>
-                                <div class="ap-dots" id="apDots">
-                                    <div class="ap-dot filled"></div>
-                                    <div class="ap-dot filled"></div>
-                                    <div class="ap-dot filled"></div>
-                                    <div class="ap-dot filled"></div>
-                                    <div class="ap-dot filled"></div>
-                                    <div class="ap-dot filled"></div>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="save-load-btns">
-                            <button class="sl-btn" id="modelSettingsBtn">⚙️ 模型</button>
-                            <button class="sl-btn" id="saveGameBtn">💾 存档</button>
-                            <button class="sl-btn" id="loadGameBtn">📂 读档</button>
-                            <button class="sl-btn" id="exportSaveBtn">📤 备份</button>
-                            <button class="sl-btn" id="importSaveBtn">📥 恢复</button>
-                            <button class="sl-btn" id="exitGameBtn" style="background:#ffe4e1;color:#c0392b;">🚪 退出</button>
-                        </div>
-                    </div>
-                    <!-- 顶部选项卡 -->
-                    <div class="tab-bar">
-                        <button class="tab-btn active" data-tab="story">📖 剧情</button>
-                        <button class="tab-btn" data-tab="stream">🔴 直播</button>
-                        <button class="tab-btn" data-tab="dashboard">📊 频道</button>
-                        <button class="tab-btn" data-tab="shop">🛒 商店</button>
-                        <button class="tab-btn" data-tab="data">📈 数据</button>
-                        <button class="tab-btn" data-tab="memoir">📜 回忆录</button>
-                        <button class="tab-btn" data-tab="achievements">🏆 成就</button>
-                    </div>
-                    <div class="content-container">
-                        <div class="tab-content story-area active" id="storyTab"><div id="storyArea"></div></div>
-                        <div class="tab-content" id="streamTab"><div id="streamContainer"></div></div>
-                        <div class="tab-content dashboard-area" id="dashboardTab"></div>
-                        <div class="tab-content dashboard-area" id="shopTab"></div>
-                        <div class="tab-content dashboard-area" id="socialTab" style="padding:0;background:var(--bg);"></div>
-                        <div class="tab-content dashboard-area" id="browserTab" style="padding:0;background:var(--bg);"></div>
-                        <div class="tab-content dashboard-area" id="youtubeTab" style="padding:0;background:var(--bg);"></div>
-                        <div class="tab-content dashboard-area" id="dataTab"></div>
-                        <div class="tab-content dashboard-area" id="memoirTab"></div>
-                        <div class="tab-content dashboard-area" id="achievementsTab"></div>
-                    </div>
-                </div>
-            </div>
+            <div id="setupPage" class="page active"></div>
+            <div id="gamePage" style="display:none;"></div>
         </div>
 
-        <!-- ===== 全站复古 Windows 风格弹窗基座 ===== -->
+        <!-- 全站复古 Windows 风格弹窗基座 -->
         <div class="modal-overlay" id="modal">
             <div class="modal-box retro-pink-window" id="modalContent">
                 <div class="retro-pink-titlebar">
-                    <span id="retroModalTitle">🎀 系统提示</span>
+                    <span id="retroModalTitle">系统提示</span>
                     <button class="retro-pink-btn close-btn" id="modalClose">✕</button>
                 </div>
                 <div class="retro-pink-content" id="modalBody"></div>
@@ -396,7 +214,7 @@
         </div>
     </div>
     
-    <!-- 🛡️ 安全 DOM 代理 -->
+    <!-- 安全 DOM 代理 -->
     <script>
         (function(){
             window.$ = function(id) {
@@ -408,11 +226,7 @@
         })();
     </script>
 
-    <!-- ============================================================ -->
-    <!-- 🚀 脚本加载插槽：逐步从 01~11 淘汰替换为 App 子目录架构 -->
-    <!-- ============================================================ -->
-
-    <!-- 1. 核心底层体系（保留 01~11 作为过渡，待拆迁完毕后淘汰） -->
+    <!-- 脚本加载插槽 -->
     <script src="js/01-state-config.js"></script>
     <script src="js/02-ai-network.js"></script>
     <script src="js/03-game-core-1.js"></script>
@@ -425,11 +239,10 @@
     <script src="js/08-save-load.js"></script>
     <script src="js/09-events-init.js"></script>
 
-    <!-- 2. 📱 手机外壳与独立 APP 挂载点（首个抽离的 App 架构） -->
     <script src="js/shell/phone-shell.js"></script>
     <script src="js/apps/theme/theme-app.js"></script>
 
-    <!-- 🚀 安全的视图启动器 -->
+    <!-- 视图启动器 -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             setTimeout(function() {
