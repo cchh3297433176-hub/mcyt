@@ -493,7 +493,7 @@ body {
     cursor: pointer;
 }
 
-/* 彻底隐藏与隔离旧 UI 核心 */
+/* 隔离底层 */
 #app,
 #app.game-inner-viewport,
 #setupPage,
@@ -577,11 +577,11 @@ body {
 }
 
 /* ============================================================ */
-/* 粉色像素指针交互规范 */
+/* 粉色像素指针交互规范（箭头高度上移微调，对齐字心） */
 /* ============================================================ */
 @keyframes pixelPointerHop {
-    0%, 100% { transform: translateX(0); }
-    50% { transform: translateX(-3px); }
+    0%, 100% { transform: translateY(-56%) translateX(0); }
+    50% { transform: translateY(-56%) translateX(-3px); }
 }
 
 .radio-group input[type="radio"],
@@ -619,14 +619,16 @@ body {
     transition: var(--transition);
     position: relative;
     padding-left: 28px;
+    line-height: 1.4;
 }
 
+/* 箭头垂直位置微调：此前为 -50%，现上提至 -56% 完美贴合大写字心 */
 .theme-pointer-item label::before {
     content: "";
     position: absolute;
     left: 4px;
     top: 50%;
-    transform: translateY(-50%);
+    transform: translateY(-56%);
     width: 16px;
     height: 20px;
     background: transparent;
@@ -644,7 +646,7 @@ body {
 }
 
 /* ============================================================ */
-/* 专业 HSV 色相环 + 绝对等边三角形 + 自适应底座 */
+/* 专业 HSV 色相环 + 绝对正等边三角形 + 自适应底座 */
 /* ============================================================ */
 .hsv-picker-container {
     display: flex;
@@ -657,7 +659,6 @@ body {
     transition: background 0.3s ease, border-color 0.3s ease;
 }
 
-/* 深色模式底座 */
 .hsv-picker-container.theme-dark-plate {
     background: #2b2b2b;
     border: 1px solid #3d3d3d;
@@ -675,7 +676,6 @@ body {
     border: 1px solid #555;
 }
 
-/* 浅色模式自适应底座（黑框白底） */
 .hsv-picker-container.theme-light-plate {
     background: #ffffff;
     border: 1.5px solid #2e1a22;
@@ -732,7 +732,6 @@ body {
     box-sizing: border-box;
 }
 
-/* 截图同款：水滴吸色按钮 */
 .hsv-tools-row {
     position: absolute;
     top: 186px;
@@ -772,7 +771,6 @@ body {
     stroke: #2e1a22;
 }
 
-/* 滑块与数字输入 */
 .hsv-slider-group {
     width: 100%;
     display: flex;
@@ -830,7 +828,7 @@ body {
 }
 
 /* ============================================================ */
-/* 自由缩放取色器画布与双黑边环准星（截图二标准） */
+/* 吸色器双黑边环准星 */
 /* ============================================================ */
 .pipette-overlay {
     position: fixed;
@@ -862,7 +860,6 @@ body {
     cursor: crosshair;
 }
 
-/* 截图二精准复刻：双黑边环 + 环内色彩显示 + 中心十字准星 */
 .pipette-reticle {
     position: absolute;
     width: 68px;
@@ -873,11 +870,9 @@ body {
     display: none;
     z-index: 3010;
     box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-    /* 外黑边环 */
     border: 2px solid #000000;
     background-color: transparent;
 }
-/* 内环：内黑边 */
 .pipette-reticle::before {
     content: '';
     position: absolute;
@@ -886,7 +881,6 @@ body {
     border: 2px solid #000000;
     background: transparent;
 }
-/* 十字准星 */
 .pipette-reticle::after {
     content: '';
     position: absolute;
@@ -898,6 +892,58 @@ body {
     background: 
         linear-gradient(#000000, #000000) no-repeat center/1.6px 100%,
         linear-gradient(#000000, #000000) no-repeat center/100% 1.6px;
+}
+
+/* ============================================================ */
+/* 📱 自由裁剪壁纸弹窗样式（智能适配设备比例） */
+/* ============================================================ */
+.crop-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(18, 12, 15, 0.92);
+    z-index: 3500;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px;
+    touch-action: none;
+}
+.crop-view-container {
+    flex: 1;
+    width: 100%;
+    position: relative;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: #000000;
+    border-radius: 16px;
+}
+.crop-image-viewport {
+    position: absolute;
+    touch-action: none;
+    transform-origin: center center;
+    user-select: none;
+}
+.crop-frame-box {
+    position: absolute;
+    pointer-events: none;
+    border: 2px solid var(--primary);
+    box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.65);
+    border-radius: 12px;
+    z-index: 3510;
+}
+.crop-frame-box::after {
+    content: "可拖动与缩放调整取景范围";
+    position: absolute;
+    bottom: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 11px;
+    white-space: nowrap;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
 }
 
 /* 通用按钮与卡片 */
@@ -964,7 +1010,6 @@ body {
     line-height: 1.4;
 }
 
-/* 方案 Chip */
 .profile-chip-list {
     display: flex;
     flex-wrap: wrap;
