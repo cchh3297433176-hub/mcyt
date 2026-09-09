@@ -1,5 +1,5 @@
 // js/system/assistant-agent.js
-// 智能向导中枢（轻量内存会话·硬件状态感知·智能关怀·纯白话答疑带路）
+// 智能向导中枢（轻量内存会话·硬件状态感知·思维链清洗·智能关怀·纯白话答疑带路）
 // ============================================================
 
 (function(window) {
@@ -17,12 +17,36 @@
 3. 绝不向用户提及任何底层代码、函数名、JavaScript 变量或底层源码文件路径！如果用户问功能，直接说明在哪个 App 里、怎么点击操作。
 4. 严格根据提供的《功能与按键指南》解答，若手机中确实不存在对应功能，直接诚恳说明“目前小手机暂未提供该功能哦，已为你记录反馈！”。
 5. 若用户表达了带路前往某 App 的意图（如“带我去换壁纸”、“打开设置”），请在回答完毕后末尾单独附上指令：[[GO_APP:应用代号]]。
+6. 严禁在最终回答中输出任何思考过程或思维链标签，直接输出面对用户的亲切回答。
 
 【设备硬件真实环境感知与智能关怀】：
 你可以感知用户的实时时间与电池情况。在优先准确回答问题的前提下，可以在回复中自然、暖心地穿插一两句环境提醒：
 - 深夜早睡关怀（23:00~05:00）：发现夜深了，贴心提醒用户夜深了别熬夜，注意休息早点睡。
 - 饥饿低电提醒（电量 ≤ 20% 且未充电）：提醒手机电量告急，快给手机接上充电器防止关机。
 - 满电关怀（电量 ≥ 95% 且充电中）：提醒电量已经很充足了，可以拔下充电插头啦。`;
+
+    // 强力深度思维链剥离清洗引擎（彻底杜绝爆思维链）
+    function cleanThoughtDeep(text) {
+        if (!text) return '';
+        let processed = String(text);
+
+        // 处理底层 stripThought 若存在
+        if (typeof window.stripThought === 'function') {
+            processed = window.stripThought(processed);
+        }
+
+        // 强力正则表达式清洗各种思考标签及其内容
+        processed = processed.replace(/<(think|thought|reasoning|thinking)>[\s\S]*?<\/\1>/gi, '');
+        processed = processed.replace(/\[(THINK|THOUGHT|REASONING)\][\s\S]*?\[\/\1\]/gi, '');
+
+        // 针对未闭合的截断思考块（如 <think> 开头但流式未输出 </think>）
+        const unclosedIndex = processed.search(/<(think|thought|reasoning|thinking)>/i);
+        if (unclosedIndex !== -1) {
+            processed = processed.slice(0, unclosedIndex);
+        }
+
+        return processed.trim();
+    }
 
     // 实时读取设备软硬件环境
     function getDeviceContextInfo() {
@@ -105,15 +129,36 @@
             ...currentDialogMemory
         ];
 
+        // 探测向导专属模型绑定配置
+        let targetModelOverride = undefined;
         try {
-            const raw = await window.callAI(messages, { temperature: 0.15, maxTokens: 450, silent: true });
-            
-            let clean = raw;
+            const aiCfg = JSON.parse(localStorage.getItem('mc_yt_ai_config') || localStorage.getItem('mcyt_ai_config') || '{}');
+            if (aiCfg && aiCfg.agentModel && aiCfg.agentModel !== 'follow_global') {
+                targetModelOverride = aiCfg.agentModel;
+            }
+        } catch (_) {}
+
+        try {
+            const callOptions = {
+                temperature: 0.15,
+                maxTokens: 450,
+                silent: true
+            };
+            if (targetModelOverride) {
+                callOptions.model = targetModelOverride;
+            }
+
+            const raw = await window.callAI(messages, callOptions);
+
+            // 彻底清洗剥离思维链
+            let clean = cleanThoughtDeep(raw);
+
+            // 解析带路动作
             let targetApp = null;
-            const match = raw.match(/\[\[GO_APP:([a-zA-Z0-9_-]+)\]\]/i);
+            const match = clean.match(/\[\[GO_APP:([a-zA-Z0-9_-]+)\]\]/i);
             if (match) {
                 targetApp = match[1];
-                clean = raw.replace(match[0], '').trim();
+                clean = clean.replace(match[0], '').trim();
             }
 
             currentDialogMemory.push({ role: 'assistant', content: clean });
