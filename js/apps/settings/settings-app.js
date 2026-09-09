@@ -1,5 +1,5 @@
 // js/apps/settings/settings-app.js
-// 📱 系统设置中心 App（AI大模型/模型检索/多配置方案/向导独立模型/联网实时测试/报错悬浮球定制/存储维护）
+// 📱 系统设置中心 App（AI大模型/模型检索上下分层/方案存档/向导独立模型/联网实时测试/报错悬浮球定制/存储维护）
 // ============================================================
 
 (function(window) {
@@ -26,7 +26,7 @@
             baseUrl: 'https://api.openai.com/v1',
             apiKey: '',
             model: 'gpt-4o-mini',
-            agentModel: 'follow_global', // 'follow_global' | 或指定具体的独立模型名
+            agentModel: 'follow_global',
             modelsList: [...DEFAULT_MODEL_PRESETS]
         };
         try {
@@ -48,7 +48,7 @@
     function getSafeSearchConfig() {
         const cfg = {
             enabled: false,
-            provider: 'bing_local', // 'bing_local' | 'bocha' | 'metaso' | 'tavily'
+            provider: 'bing_local',
             keys: { bocha: '', metaso: '', tavily: '' },
             maxResults: 3
         };
@@ -69,7 +69,6 @@
         return cfg;
     }
 
-    // 配置 Profiles 存取
     function getAIProfiles() {
         try {
             return JSON.parse(localStorage.getItem('mcyt_ai_profiles') || '[]');
@@ -82,6 +81,76 @@
         try {
             localStorage.setItem('mcyt_ai_profiles', JSON.stringify(list));
         } catch (_) {}
+    }
+
+    // 内置粉白系统输入弹窗（彻底废除浏览器原生 prompt）
+    function openRetroInputModal(title, defaultVal, placeholder, onConfirm) {
+        const modal = document.getElementById('modal');
+        const modalBody = document.getElementById('modalBody');
+        const retroModalTitle = document.getElementById('retroModalTitle');
+        if (!modal || !modalBody) return;
+
+        if (retroModalTitle) retroModalTitle.textContent = title || '输入内容';
+
+        modalBody.innerHTML = `
+            <div style="font-size:12.5px;color:#2e1a22;margin-bottom:8px;font-weight:700;">
+                请输入配置方案备注名称：
+            </div>
+            <input type="text" id="retroCustomInputVal" value="${escapeHtml(defaultVal || '')}" placeholder="${escapeHtml(placeholder || '')}" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #ffccd9;font-size:12px;outline:none;background:#fff;color:#2e1a22;">
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+                <button class="retro-pink-btn" onclick="closeModal()" style="padding:0 12px;height:26px;font-size:11.5px;">取消</button>
+                <button class="retro-pink-btn" id="retroCustomInputConfirmBtn" style="padding:0 16px;height:26px;font-size:11.5px;background:var(--primary);color:#fff;border:none;">确定</button>
+            </div>
+        `;
+
+        modal.classList.add('open');
+
+        const input = document.getElementById('retroCustomInputVal');
+        if (input) {
+            input.focus();
+            input.select();
+        }
+
+        const confirmBtn = document.getElementById('retroCustomInputConfirmBtn');
+        if (confirmBtn) {
+            confirmBtn.onclick = () => {
+                const val = input ? input.value.trim() : '';
+                if (typeof onConfirm === 'function') {
+                    onConfirm(val);
+                }
+                closeModal();
+            };
+        }
+    }
+
+    // 内置粉白确认弹窗（彻底废除原生 confirm）
+    function openRetroConfirmModal(title, msg, onConfirm) {
+        const modal = document.getElementById('modal');
+        const modalBody = document.getElementById('modalBody');
+        const retroModalTitle = document.getElementById('retroModalTitle');
+        if (!modal || !modalBody) return;
+
+        if (retroModalTitle) retroModalTitle.textContent = title || '确认操作';
+
+        modalBody.innerHTML = `
+            <div style="font-size:12.5px;line-height:1.6;color:#2e1a22;padding:4px 0;">
+                ${escapeHtml(msg)}
+            </div>
+            <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
+                <button class="retro-pink-btn" onclick="closeModal()" style="padding:0 12px;height:26px;font-size:11.5px;">取消</button>
+                <button class="retro-pink-btn" id="retroConfirmActionBtn" style="padding:0 16px;height:26px;font-size:11.5px;background:var(--primary);color:#fff;border:none;">确定</button>
+            </div>
+        `;
+
+        modal.classList.add('open');
+
+        const confirmBtn = document.getElementById('retroConfirmActionBtn');
+        if (confirmBtn) {
+            confirmBtn.onclick = () => {
+                if (typeof onConfirm === 'function') onConfirm();
+                closeModal();
+            };
+        }
     }
 
     // 渲染系统设置主视窗
@@ -102,7 +171,7 @@
         body.innerHTML = `
             <div class="settings-app-container" style="padding-bottom:28px;">
                 
-                <!-- 导航分段药丸（全粉白矢量 SVG，无廉价 Emoji） -->
+                <!-- 导航分段药丸 -->
                 <div class="settings-nav-tabs" style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:4px;">
                     <button class="settings-tab-btn active" data-tab="ai" style="flex:1;padding:8px 8px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;background:var(--primary);color:#fff;border:none;display:inline-flex;align-items:center;justify-content:center;gap:4px;">
                         <svg style="width:14px;height:14px;fill:currentColor;" viewBox="0 0 24 24"><path d="M21 11.5v-1c0-.8-.7-1.5-1.5-1.5H18V7c0-2.2-1.8-4-4-4h-4c-2.2 0-4 1.8-4 4v2H4.5C3.7 9 3 9.7 3 10.5v1c0 .8.7 1.5 1.5 1.5H6v4c0 2.2 1.8 4 4 4h4c2.2 0 4-1.8 4-4v-4h1.5c.8 0 1.5-.7 1.5-1.5zM8 7c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2v2H8V7zm8 9c0 1.1-.9 2-2 2h-4c-1.1 0-2-.9-2-2v-5h8v5zm-5.5-2.5c0 .6-.4 1-1 1s-1-.4-1-1 .4-1 1-1 1 .4 1 1zm5 0c0 .6-.4 1-1 1s-1-.4-1-1 .4-1 1-1 1 .4 1 1z"/></svg>
@@ -125,7 +194,7 @@
                 <!-- 分区 1：AI 模型配置面板 -->
                 <div id="settingsTabContent_ai" class="settings-tab-content">
                     
-                    <!-- 多套方案管理器（Profiles） -->
+                    <!-- 多套方案管理器（Profiles，优化标签精致度） -->
                     <div class="theme-setting-card">
                         <div class="theme-setting-title">
                             <span>配置方案存档 (Profiles)</span>
@@ -135,16 +204,16 @@
                             </div>
                         </div>
                         <div class="theme-setting-desc">
-                            支持保存多套大模型配置方案（如 DeepSeek 直连、自建中转、GPT 专线），点击即可快速无缝切换。
+                            保存多套大模型配置（直连/中转/备用），一键无缝切换。
                         </div>
-                        <div class="profile-chip-list" id="aiProfileChipContainer">
-                            <div class="profile-chip ${activeProfileName === '默认配置' ? 'active' : ''}" onclick="window.switchAIProfile('默认配置')">
+                        <div class="profile-chip-list" id="aiProfileChipContainer" style="display:flex;flex-wrap:wrap;gap:6px;">
+                            <div class="profile-chip ${activeProfileName === '默认配置' ? 'active' : ''}" onclick="window.switchAIProfile('默认配置')" style="padding:4px 9px;border-radius:14px;font-size:11.5px;max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
                                 <span>默认配置</span>
                             </div>
                             ${profiles.map(p => `
-                                <div class="profile-chip ${p.name === activeProfileName ? 'active' : ''}" onclick="window.switchAIProfile('${escapeHtml(p.name)}')">
-                                    <span>${escapeHtml(p.name)}</span>
-                                    <span class="profile-chip-del" onclick="event.stopPropagation(); window.deleteAIProfile('${escapeHtml(p.name)}')">✕</span>
+                                <div class="profile-chip ${p.name === activeProfileName ? 'active' : ''}" onclick="window.switchAIProfile('${escapeHtml(p.name)}')" style="padding:4px 9px;border-radius:14px;font-size:11.5px;max-width:140px;display:inline-flex;align-items:center;gap:4px;">
+                                    <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(p.name)}</span>
+                                    <span class="profile-chip-del" style="font-size:10px;opacity:0.7;" onclick="event.stopPropagation(); window.deleteAIProfile('${escapeHtml(p.name)}')">✕</span>
                                 </div>
                             `).join('')}
                         </div>
@@ -156,7 +225,7 @@
                             <span>接口参数中枢</span>
                         </div>
                         <div class="theme-setting-desc">
-                            标准 OpenAI 兼容协议，支持 DeepSeek、GPT-4o、Claude、Gemini、通义千问等。
+                            标准 OpenAI 兼容协议，支持 DeepSeek、GPT-4o、Claude、Gemini 等。
                         </div>
 
                         <div style="display:flex;flex-direction:column;gap:10px;">
@@ -170,38 +239,34 @@
                                 <input type="password" id="aiApiKeyInput" value="${escapeHtml(aiCfg.apiKey || '')}" placeholder="sk-..." style="width:100%;padding:8px 10px;border:1px solid #ffccd9;border-radius:8px;font-size:12px;outline:none;">
                             </div>
 
-                            <!-- 主模型选择与关键字检索过滤 -->
+                            <!-- 🌟 主模型选择上下分层排版（去冗余输入框，名称宽敞不破框） -->
                             <div>
-                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                                    <label style="font-size:12px;font-weight:700;color:var(--text);">游戏主剧情模型</label>
-                                    <button class="btn-secondary" id="fetchModelsBtn" style="padding:3px 8px;font-size:11px;height:24px;">拉取可用模型</button>
+                                <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px;">游戏主剧情模型</div>
+                                
+                                <!-- 上行：宽敞搜索框 + 右侧拉取按钮 -->
+                                <div style="display:flex;gap:6px;margin-bottom:8px;">
+                                    <input type="text" id="modelFilterKeywordInput" placeholder="🔍 搜索/过滤模型 (如 deepseek/gemini)..." style="flex:1;padding:7px 10px;border:1px solid #ffccd9;border-radius:8px;font-size:11.5px;outline:none;background:#fff8fa;">
+                                    <button class="btn-secondary" id="fetchModelsBtn" style="padding:0 12px;font-size:11px;height:32px;white-space:nowrap;font-weight:700;">拉取可用模型</button>
                                 </div>
 
-                                <div style="display:flex;gap:6px;margin-bottom:6px;">
-                                    <input type="text" id="aiModelInput" value="${escapeHtml(aiCfg.model || 'gpt-4o-mini')}" placeholder="输入或从下方选择模型" style="flex:1;padding:8px 10px;border:1px solid #ffccd9;border-radius:8px;font-size:12px;outline:none;">
-                                </div>
-
-                                <!-- 🔍 关键字搜索过滤栏与模型下拉列表 -->
-                                <div style="display:flex;gap:6px;align-items:center;">
-                                    <input type="text" id="modelFilterKeywordInput" placeholder="🔍 关键字过滤 (如 deepseek/gpt/claude)..." style="flex:1;padding:6px 8px;border:1px solid #ffccd9;border-radius:6px;font-size:11px;outline:none;background:#fff8fa;">
-                                    <select id="aiModelSelect" style="flex:1;padding:6px 8px;border:1px solid #ffccd9;border-radius:6px;font-size:11px;background:#fff;outline:none;max-width:170px;">
+                                <!-- 下行：整行 100% 宽度模型下拉选择项 -->
+                                <div>
+                                    <select id="aiModelSelect" style="width:100%;padding:8px 10px;border:1px solid #ffccd9;border-radius:8px;font-size:12px;background:#fff;outline:none;color:#2e1a22;">
                                         ${(aiCfg.modelsList || []).map(m => `<option value="${m}" ${m === aiCfg.model ? 'selected' : ''}>${m}</option>`).join('')}
                                     </select>
                                 </div>
                             </div>
 
-                            <!-- 🐙 向导小助手独立模型配置 -->
+                            <!-- 向导小助手独立模型配置 -->
                             <div style="border-top:1px dashed #ffd4e0;padding-top:10px;margin-top:2px;">
                                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
                                     <label style="font-size:12px;font-weight:700;color:var(--text);">智能向导独立模型</label>
-                                    <span style="font-size:10.5px;color:var(--text2);">可配置专用高速小模型</span>
+                                    <span style="font-size:10.5px;color:var(--text2);">可选专属快速小模型</span>
                                 </div>
-                                <div style="display:flex;gap:6px;">
-                                    <select id="agentModelSelect" style="width:100%;padding:7px 8px;border:1px solid #ffccd9;border-radius:8px;font-size:11.5px;background:#fff;outline:none;">
-                                        <option value="follow_global" ${aiCfg.agentModel === 'follow_global' ? 'selected' : ''}>跟随全局主模型</option>
-                                        ${(aiCfg.modelsList || []).map(m => `<option value="${m}" ${m === aiCfg.agentModel ? 'selected' : ''}>独立选用: ${m}</option>`).join('')}
-                                    </select>
-                                </div>
+                                <select id="agentModelSelect" style="width:100%;padding:8px 10px;border:1px solid #ffccd9;border-radius:8px;font-size:12px;background:#fff;outline:none;color:#2e1a22;">
+                                    <option value="follow_global" ${aiCfg.agentModel === 'follow_global' ? 'selected' : ''}>跟随全局主模型</option>
+                                    ${(aiCfg.modelsList || []).map(m => `<option value="${m}" ${m === aiCfg.agentModel ? 'selected' : ''}>独立选用: ${m}</option>`).join('')}
+                                </select>
                             </div>
 
                             <div style="display:flex;gap:8px;margin-top:6px;">
@@ -223,14 +288,13 @@
                             </label>
                         </div>
                         <div class="theme-setting-desc">
-                            开启后生成剧情或发布油管视频时将探查真实 Minecraft 资讯。
+                            开启后生成剧情或发布视频时将探查真实 Minecraft 资讯。
                         </div>
 
                         <div id="searchConfigBody" style="${searchCfg.enabled ? '' : 'opacity:0.45;pointer-events:none;'}">
                             <label style="font-size:12px;font-weight:700;color:var(--text);display:block;margin-bottom:6px;">搜索引擎渠道配置</label>
                             
                             <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
-                                <!-- Bing 免Key -->
                                 <label style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border:1px solid #ffccd9;border-radius:8px;background:${searchCfg.provider === 'bing_local' ? '#fff0f3' : '#fff'};cursor:pointer;">
                                     <input type="radio" name="searchProviderRadio" value="bing_local" ${searchCfg.provider === 'bing_local' ? 'checked' : ''} style="margin-top:2px;accent-color:var(--primary);">
                                     <div style="font-size:11.5px;">
@@ -239,7 +303,6 @@
                                     </div>
                                 </label>
 
-                                <!-- 博查 -->
                                 <label style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border:1px solid #ffccd9;border-radius:8px;background:${searchCfg.provider === 'bocha' ? '#fff0f3' : '#fff'};cursor:pointer;">
                                     <input type="radio" name="searchProviderRadio" value="bocha" ${searchCfg.provider === 'bocha' ? 'checked' : ''} style="margin-top:2px;accent-color:var(--primary);">
                                     <div style="font-size:11.5px;flex:1;">
@@ -248,7 +311,6 @@
                                     </div>
                                 </label>
 
-                                <!-- 秘塔 -->
                                 <label style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border:1px solid #ffccd9;border-radius:8px;background:${searchCfg.provider === 'metaso' ? '#fff0f3' : '#fff'};cursor:pointer;">
                                     <input type="radio" name="searchProviderRadio" value="metaso" ${searchCfg.provider === 'metaso' ? 'checked' : ''} style="margin-top:2px;accent-color:var(--primary);">
                                     <div style="font-size:11.5px;flex:1;">
@@ -257,7 +319,6 @@
                                     </div>
                                 </label>
 
-                                <!-- Tavily -->
                                 <label style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border:1px solid #ffccd9;border-radius:8px;background:${searchCfg.provider === 'tavily' ? '#fff0f3' : '#fff'};cursor:pointer;">
                                     <input type="radio" name="searchProviderRadio" value="tavily" ${searchCfg.provider === 'tavily' ? 'checked' : ''} style="margin-top:2px;accent-color:var(--primary);">
                                     <div style="font-size:11.5px;flex:1;">
@@ -269,7 +330,7 @@
 
                             <button class="btn-primary" id="saveSearchConfigBtn" style="width:100%;padding:9px;font-size:12px;">保存联网设置</button>
 
-                            <!-- 🧪 联网搜索实时测试台 -->
+                            <!-- 联网搜索实时测试台 -->
                             <div style="margin-top:14px;border-top:1px dashed #ffd4e0;padding-top:12px;">
                                 <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px;">搜索功能实时测试</div>
                                 <div style="display:flex;gap:6px;">
@@ -293,11 +354,10 @@
                             </label>
                         </div>
                         <div class="theme-setting-desc">
-                            常驻屏幕边缘的智能向导与异常排查气泡。点击即可向 AI 助手提问游戏按键用法，或查看代码报错日志。
+                            常驻屏幕边缘的智能向导与异常排查气泡。点击即可向 AI 助手提问游戏玩法，或查看代码报错日志。
                         </div>
 
                         <div id="orbConfigDetailBox" style="${orbCfg.enabled ? '' : 'opacity:0.45;pointer-events:none;'}">
-                            <!-- 尺寸滑动条 -->
                             <div style="margin-bottom:14px;border-top:1px dashed #ffd4e0;padding-top:12px;">
                                 <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;margin-bottom:6px;">
                                     <span>悬浮球尺寸</span>
@@ -306,7 +366,6 @@
                                 <input type="range" id="orbSizeSlider" min="32" max="76" value="${orbCfg.size}" style="width:100%;accent-color:var(--primary);">
                             </div>
 
-                            <!-- 外观形状（透明皮肤，绝不强制填充粉色死底） -->
                             <div style="margin-bottom:14px;">
                                 <div style="font-size:13px;font-weight:700;margin-bottom:8px;">形状与皮肤</div>
                                 <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:6px;">
@@ -356,7 +415,7 @@
                         </div>
                         <div style="font-size:12px;color:var(--text);line-height:1.6;">
                             <div>当前应用版本：<b>v${appVer}</b></div>
-                            <div>核心框架：<b>原生 ES6+ / 零外部打包依赖</b></div>
+                            <div>核心架构：<b>原生 ES6+ / 零外部打包依赖</b></div>
                             <div>硬件感知中枢：<b>电量、时钟与网络已深度集成</b></div>
                         </div>
                     </div>
@@ -368,9 +427,8 @@
         bindSettingsAppEvents();
     }
 
-    // 绑定设置事件与核心功能
     function bindSettingsAppEvents() {
-        // 1. Tab 切换
+        // Tab 切换
         document.querySelectorAll('.settings-tab-btn').forEach(btn => {
             btn.onclick = () => {
                 const target = btn.dataset.tab;
@@ -391,12 +449,10 @@
 
         const baseUrlInput = document.getElementById('aiBaseUrlInput');
         const apiKeyInput = document.getElementById('aiApiKeyInput');
-        const modelInput = document.getElementById('aiModelInput');
         const modelSelect = document.getElementById('aiModelSelect');
         const filterInput = document.getElementById('modelFilterKeywordInput');
         const agentSelect = document.getElementById('agentModelSelect');
 
-        // 2. 关键字实时过滤模型下拉列表
         let fullModelList = getSafeAIConfig().modelsList || [...DEFAULT_MODEL_PRESETS];
 
         function renderFilteredModelOptions(keyword = '') {
@@ -404,11 +460,12 @@
             const kw = keyword.toLowerCase().trim();
             const filtered = fullModelList.filter(m => !kw || m.toLowerCase().includes(kw));
 
+            const curVal = modelSelect.value;
             if (filtered.length === 0) {
                 modelSelect.innerHTML = `<option value="">无匹配模型</option>`;
             } else {
                 modelSelect.innerHTML = filtered.map(m => `
-                    <option value="${m}" ${m === modelInput.value ? 'selected' : ''}>${m}</option>
+                    <option value="${m}" ${m === curVal ? 'selected' : ''}>${m}</option>
                 `).join('');
             }
         }
@@ -419,24 +476,16 @@
             };
         }
 
-        if (modelSelect && modelInput) {
-            modelSelect.onchange = () => {
-                if (modelSelect.value) modelInput.value = modelSelect.value;
-            };
-        }
-
-        // 收集表单当前 AI 数据
         const gatherCurrentAiData = () => {
             return {
                 baseUrl: (baseUrlInput?.value || '').trim(),
                 apiKey: (apiKeyInput?.value || '').trim(),
-                model: (modelInput?.value || '').trim() || 'gpt-4o-mini',
+                model: (modelSelect?.value || '').trim() || 'gpt-4o-mini',
                 agentModel: (agentSelect?.value || 'follow_global'),
                 modelsList: [...fullModelList]
             };
         };
 
-        // 保存 AI 配置
         const saveAiBtn = document.getElementById('saveAiConfigBtn');
         if (saveAiBtn) {
             saveAiBtn.onclick = () => {
@@ -448,14 +497,13 @@
                     }
                     localStorage.setItem('mc_yt_ai_config', JSON.stringify(data));
                     if (typeof persistAIConfig === 'function') persistAIConfig();
-                    if (typeof showToast === 'function') showToast('已成功保存 AI 模型配置', 'success');
+                    if (typeof showToast === 'function') showToast('已保存 AI 模型配置', 'success');
                 } catch (e) {
                     if (typeof showToast === 'function') showToast('保存失败: ' + e.message, 'error');
                 }
             };
         }
 
-        // 连通性测试
         const testAiBtn = document.getElementById('testAiConnectBtn');
         if (testAiBtn) {
             testAiBtn.onclick = async () => {
@@ -497,7 +545,6 @@
             };
         }
 
-        // 拉取模型列表
         const fetchModelsBtn = document.getElementById('fetchModelsBtn');
         if (fetchModelsBtn) {
             fetchModelsBtn.onclick = async () => {
@@ -530,7 +577,6 @@
                         fullModelList = Array.from(new Set([...list, ...DEFAULT_MODEL_PRESETS]));
                         renderFilteredModelOptions(filterInput ? filterInput.value : '');
                         
-                        // 同步刷新向导模型下拉列表
                         if (agentSelect) {
                             const curVal = agentSelect.value;
                             agentSelect.innerHTML = `
@@ -539,7 +585,7 @@
                             `;
                         }
 
-                        if (typeof showToast === 'function') showToast(`拉取成功！共发现 ${list.length} 个模型`, 'success');
+                        if (typeof showToast === 'function') showToast(`成功发现 ${list.length} 个模型`, 'success');
                     } else {
                         if (typeof showToast === 'function') showToast('未在接口返回中解析到模型列表', 'info');
                     }
@@ -552,38 +598,37 @@
             };
         }
 
-        // 3. 配置方案（Profiles）新建
+        // 🌟 换用粉白系统输入弹窗新建方案
         const saveProfileBtn = document.getElementById('saveNewProfileBtn');
         if (saveProfileBtn) {
             saveProfileBtn.onclick = () => {
-                const name = prompt('请输入新配置方案名称：', '新 API 专线');
-                if (!name || !name.trim()) return;
+                openRetroInputModal('存为新方案', '新 API 专线', '输入方案名称...', (name) => {
+                    if (!name) {
+                        if (typeof showToast === 'function') showToast('方案名称不能为空', 'error');
+                        return;
+                    }
+                    const curData = gatherCurrentAiData();
+                    const list = getAIProfiles();
+                    const targetName = name.trim();
 
-                const curData = gatherCurrentAiData();
-                const list = getAIProfiles();
-                const targetName = name.trim();
+                    const existingIdx = list.findIndex(p => p.name === targetName);
+                    const profileObj = {
+                        name: targetName,
+                        config: curData,
+                        updatedAt: Date.now()
+                    };
 
-                const existingIdx = list.findIndex(p => p.name === targetName);
-                const profileObj = {
-                    name: targetName,
-                    config: curData,
-                    updatedAt: Date.now()
-                };
+                    if (existingIdx >= 0) list[existingIdx] = profileObj;
+                    else list.push(profileObj);
 
-                if (existingIdx >= 0) {
-                    list[existingIdx] = profileObj;
-                } else {
-                    list.push(profileObj);
-                }
-
-                saveAIProfiles(list);
-                localStorage.setItem('mcyt_active_ai_profile_name', targetName);
-                renderSettingsApp();
-                if (typeof showToast === 'function') showToast(`方案 [${targetName}] 已保存！`, 'success');
+                    saveAIProfiles(list);
+                    localStorage.setItem('mcyt_active_ai_profile_name', targetName);
+                    renderSettingsApp();
+                    if (typeof showToast === 'function') showToast(`方案 [${targetName}] 已成功保存！`, 'success');
+                });
             };
         }
 
-        // 备份与恢复弹窗
         const backupBtn = document.getElementById('backupConfigModalBtn');
         if (backupBtn) {
             backupBtn.onclick = () => {
@@ -591,7 +636,6 @@
             };
         }
 
-        // 4. 联网搜索配置保存
         const searchToggle = document.getElementById('searchEnableToggle');
         const searchToggleText = document.getElementById('searchEnableText');
         const searchConfigBody = document.getElementById('searchConfigBody');
@@ -637,7 +681,6 @@
             };
         }
 
-        // 5. 🧪 实时联网搜索测试
         const testSearchBtn = document.getElementById('executeWebSearchTestBtn');
         const testSearchQuery = document.getElementById('webSearchTestQueryInput');
         const testSearchResultBox = document.getElementById('webSearchTestResultBox');
@@ -682,7 +725,6 @@
             };
         }
 
-        // 6. 悬浮球控制
         const orbToggle = document.getElementById('orbMasterToggle');
         const orbToggleText = document.getElementById('orbToggleText');
         const detailBox = document.getElementById('orbConfigDetailBox');
@@ -722,7 +764,6 @@
             };
         });
 
-        // 随手画套索
         const lassoBtn = document.getElementById('openLassoDrawingBtn');
         if (lassoBtn && window.ErrorMonitor) {
             lassoBtn.onclick = () => {
@@ -732,7 +773,6 @@
             };
         }
 
-        // 相册自定义透明 PNG
         const importImgBtn = document.getElementById('importCustomOrbImgBtn');
         const fileInput = document.getElementById('orbImgFileInput');
         if (importImgBtn && fileInput && window.ErrorMonitor) {
@@ -758,13 +798,11 @@
             };
         }
 
-        // 打开悬浮球视窗
         const logBtn = document.getElementById('openLogViewDirectBtn');
         if (logBtn && window.ErrorMonitor) {
             logBtn.onclick = () => window.ErrorMonitor.openLogModal();
         }
 
-        // 清理缓存
         const cleanBtn = document.getElementById('cleanAppCacheBtn');
         if (cleanBtn) {
             cleanBtn.onclick = () => {
@@ -774,7 +812,6 @@
         }
     }
 
-    // 全局切换 Profile
     window.switchAIProfile = function(name) {
         if (name === '默认配置') {
             localStorage.setItem('mcyt_active_ai_profile_name', '默认配置');
@@ -798,22 +835,22 @@
         } catch (_) {}
 
         renderSettingsApp();
-        if (typeof showToast === 'function') showToast(`已切换至配置方案: ${target.name}`, 'success');
+        if (typeof showToast === 'function') showToast(`已切换至方案: ${target.name}`, 'success');
     };
 
-    // 全局删除 Profile
+    // 🌟 换用粉白系统确认弹窗删除方案
     window.deleteAIProfile = function(name) {
-        if (!confirm(`确定要删除方案 [${name}] 吗？`)) return;
-        let list = getAIProfiles().filter(p => p.name !== name);
-        saveAIProfiles(list);
-        if (localStorage.getItem('mcyt_active_ai_profile_name') === name) {
-            localStorage.setItem('mcyt_active_ai_profile_name', '默认配置');
-        }
-        renderSettingsApp();
-        if (typeof showToast === 'function') showToast(`方案 [${name}] 已删除`);
+        openRetroConfirmModal('删除方案', `确定要删除配置方案 [${name}] 吗？`, () => {
+            let list = getAIProfiles().filter(p => p.name !== name);
+            saveAIProfiles(list);
+            if (localStorage.getItem('mcyt_active_ai_profile_name') === name) {
+                localStorage.setItem('mcyt_active_ai_profile_name', '默认配置');
+            }
+            renderSettingsApp();
+            if (typeof showToast === 'function') showToast(`方案 [${name}] 已删除`);
+        });
     };
 
-    // 备份与恢复专属弹窗
     function openConfigBackupModal() {
         const modal = document.getElementById('modal');
         const modalBody = document.getElementById('modalBody');
@@ -832,19 +869,19 @@
 
         modalBody.innerHTML = `
             <div style="font-size:12px;line-height:1.5;color:#2e1a22;">
-                <div style="font-weight:700;margin-bottom:6px;">📤 导出配置文本（复制备用）：</div>
+                <div style="font-weight:700;margin-bottom:6px;">导出配置文本（复制备用）：</div>
                 <textarea id="configExportArea" readonly style="width:100%;height:90px;font-family:monospace;font-size:10px;padding:6px;border:1px solid #ffd4e0;border-radius:6px;background:#fff8fa;outline:none;">${escapeHtml(exportJsonStr)}</textarea>
                 
                 <div style="margin-top:6px;display:flex;justify-content:flex-end;">
-                    <button class="btn-secondary" id="copyConfigExportBtn" style="padding:4px 10px;font-size:11px;">复制到剪贴板</button>
+                    <button class="retro-pink-btn" id="copyConfigExportBtn" style="padding:0 10px;height:24px;font-size:11px;">复制到剪贴板</button>
                 </div>
 
-                <div style="font-weight:700;margin:10px 0 6px 0;">📥 从备份文本导入恢复：</div>
+                <div style="font-weight:700;margin:10px 0 6px 0;">从备份文本导入恢复：</div>
                 <textarea id="configImportArea" placeholder="在此粘贴备份的 JSON 配置文本..." style="width:100%;height:75px;font-family:monospace;font-size:10px;padding:6px;border:1px solid #ffd4e0;border-radius:6px;outline:none;"></textarea>
                 
                 <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end;">
-                    <button class="btn-secondary" onclick="closeModal()" style="padding:6px 14px;font-size:11.5px;">取消</button>
-                    <button class="btn-primary" id="applyConfigImportBtn" style="width:auto;padding:6px 16px;font-size:11.5px;">确认导入恢复</button>
+                    <button class="retro-pink-btn" onclick="closeModal()" style="padding:0 12px;height:26px;font-size:11.5px;">取消</button>
+                    <button class="retro-pink-btn" id="applyConfigImportBtn" style="padding:0 16px;height:26px;font-size:11.5px;background:var(--primary);color:#fff;border:none;">确认导入恢复</button>
                 </div>
             </div>
         `;
@@ -898,7 +935,6 @@
         };
     }
 
-    // 拦截调度
     const originOpenPhoneApp = window.openPhoneApp;
     window.openPhoneApp = function(appName) {
         if (appName === 'settings') {
