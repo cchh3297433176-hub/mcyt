@@ -1,7 +1,6 @@
 /**
  * js/shell/phone-shell.js
- * 📱 虚拟手机硬件外壳与操作系统驱动层
- * 职责：系统时钟、真实硬件电量与四芒星充电监听、Canvas壁纸亮度感知反色、锁屏手势、App全屏窗口生命周期
+ * 📱 虚拟手机硬件外壳与操作系统驱动层 (修复锁屏点击、手势穿透与壁纸防崩)
  */
 
 (function () {
@@ -9,33 +8,37 @@
 
     // 1. 系统时钟引擎
     function updatePhoneClock() {
-        const now = new Date();
-        const h = String(now.getHours()).padStart(2, '0');
-        const m = String(now.getMinutes()).padStart(2, '0');
-        const timeStr = `${h}:${m}`;
+        try {
+            const now = new Date();
+            const h = String(now.getHours()).padStart(2, '0');
+            const m = String(now.getMinutes()).padStart(2, '0');
+            const timeStr = `${h}:${m}`;
 
-        const months = now.getMonth() + 1;
-        const dates = now.getDate();
-        const weeks = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
-        const dateStr = `${months}月${dates}日 ${weeks[now.getDay()]}`;
+            const months = now.getMonth() + 1;
+            const dates = now.getDate();
+            const weeks = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+            const dateStr = `${months}月${dates}日 ${weeks[now.getDay()]}`;
 
-        const sTime = document.getElementById('statusTimeText');
-        const lClock = document.getElementById('lockClockText');
-        const lDate = document.getElementById('lockDateText');
-        if (sTime) sTime.textContent = timeStr;
-        if (lClock) lClock.textContent = timeStr;
-        if (lDate) lDate.textContent = dateStr;
+            const sTime = document.getElementById('statusTimeText');
+            const lClock = document.getElementById('lockClockText');
+            const lDate = document.getElementById('lockDateText');
+            if (sTime) sTime.textContent = timeStr;
+            if (lClock) lClock.textContent = timeStr;
+            if (lDate) lDate.textContent = dateStr;
+        } catch (e) {
+            console.warn('[Phone Clock Error]:', e);
+        }
     }
 
-    // 2. 真实硬件电量与四芒星充电呼吸指示灯
+    // 2. 硬件电量与呼吸灯监听
     async function bindPhoneBattery() {
-        const core = document.getElementById('batteryCoreBar');
-        const text = document.getElementById('batteryPercentText');
-        const star = document.getElementById('chargingStarIcon');
-        if (!core || !text || !star) return;
+        try {
+            const core = document.getElementById('batteryCoreBar');
+            const text = document.getElementById('batteryPercentText');
+            const star = document.getElementById('chargingStarIcon');
+            if (!core || !text || !star) return;
 
-        if ('getBattery' in navigator) {
-            try {
+            if ('getBattery' in navigator) {
                 const battery = await navigator.getBattery();
                 const applyBatteryState = () => {
                     const level = Math.round(battery.level * 100);
@@ -50,17 +53,13 @@
                 applyBatteryState();
                 battery.addEventListener('levelchange', applyBatteryState);
                 battery.addEventListener('chargingchange', applyBatteryState);
-            } catch (e) {
-                text.textContent = '100%';
-                star.classList.remove('active');
             }
-        } else {
-            text.textContent = '100%';
-            star.classList.remove('active');
+        } catch (e) {
+            // 忽略电量读取失败
         }
     }
 
-    // 3. Canvas 内存取色与反色分析
+    // 3. Canvas 内存取色（强力防报错包裹）
     window.currentThemeMode = localStorage.getItem('mcyt_phone_theme_mode') || 'auto';
 
     window.analyzeImageLuminance = function (imageUrl, callback) {
@@ -68,123 +67,126 @@
             if (typeof callback === 'function') callback(false);
             return;
         }
-        const img = new Image();
-        img.crossOrigin = "Anonymous";
-        img.onload = function () {
-            try {
-                const canvas = document.createElement('canvas');
-                const ctx = canvas.getContext('2d');
-                canvas.width = 100;
-                canvas.height = 100;
-                ctx.drawImage(img, 0, 0, 100, 35, 0, 0, 100, 35);
-                const imgData = ctx.getImageData(0, 0, 100, 35).data;
-                let totalLuminance = 0;
-                let count = 0;
-                for (let i = 0; i < imgData.length; i += 4) {
-                    const r = imgData[i];
-                    const g = imgData[i + 1];
-                    const b = imgData[i + 2];
-                    const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-                    totalLuminance += luma;
-                    count++;
+        try {
+            const img = new Image();
+            img.crossOrigin = "Anonymous";
+            img.onload = function () {
+                try {
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = 100;
+                    canvas.height = 100;
+                    ctx.drawImage(img, 0, 0, 100, 35, 0, 0, 100, 35);
+                    const imgData = ctx.getImageData(0, 0, 100, 35).data;
+                    let totalLuminance = 0;
+                    let count = 0;
+                    for (let i = 0; i < imgData.length; i += 4) {
+                        const r = imgData[i];
+                        const g = imgData[i + 1];
+                        const b = imgData[i + 2];
+                        const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                        totalLuminance += luma;
+                        count++;
+                    }
+                    const avgLuma = totalLuminance / (count || 1);
+                    if (typeof callback === 'function') callback(avgLuma > 145);
+                } catch (err) {
+                    if (typeof callback === 'function') callback(false);
                 }
-                const avgLuma = totalLuminance / (count || 1);
-                if (typeof callback === 'function') callback(avgLuma > 145);
-            } catch (err) {
+            };
+            img.onerror = function () {
                 if (typeof callback === 'function') callback(false);
-            }
-        };
-        img.onerror = function () {
+            };
+            img.src = imageUrl;
+        } catch (e) {
             if (typeof callback === 'function') callback(false);
-        };
-        img.src = imageUrl;
+        }
     };
 
     window.applyColorTheme = function (isLightBg) {
-        if (window.currentThemeMode === 'custom') {
-            const savedColor = localStorage.getItem('mcyt_phone_custom_color');
-            if (savedColor) {
-                const root = document.documentElement;
-                root.style.setProperty('--status-color', savedColor);
-                root.style.setProperty('--lock-text-color', savedColor);
-                root.style.setProperty('--status-svg-fill', savedColor);
-                root.style.setProperty('--star-glow-color', savedColor);
+        try {
+            const root = document.documentElement;
+            if (window.currentThemeMode === 'dark' || (!isLightBg && window.currentThemeMode === 'auto')) {
+                root.style.setProperty('--status-color', '#ffffff');
+                root.style.setProperty('--lock-text-color', '#ffffff');
+                root.style.setProperty('--status-svg-fill', '#ffffff');
+                root.style.setProperty('--star-glow-color', 'rgba(255, 255, 255, 0.9)');
+            } else {
+                root.style.setProperty('--status-color', '#2e1a22');
+                root.style.setProperty('--lock-text-color', '#2e1a22');
+                root.style.setProperty('--status-svg-fill', '#2e1a22');
+                root.style.setProperty('--star-glow-color', 'rgba(46, 26, 34, 0.65)');
             }
-            return;
-        }
-
-        const root = document.documentElement;
-        if (window.currentThemeMode === 'dark' || (!isLightBg && window.currentThemeMode === 'auto')) {
-            root.style.setProperty('--status-color', '#ffffff');
-            root.style.setProperty('--lock-text-color', '#ffffff');
-            root.style.setProperty('--status-svg-fill', '#ffffff');
-            root.style.setProperty('--star-glow-color', 'rgba(255, 255, 255, 0.9)');
-        } else {
-            root.style.setProperty('--status-color', '#2e1a22');
-            root.style.setProperty('--lock-text-color', '#2e1a22');
-            root.style.setProperty('--status-svg-fill', '#2e1a22');
-            root.style.setProperty('--star-glow-color', 'rgba(46, 26, 34, 0.65)');
-        }
+        } catch (e) {}
     };
 
-    // 4. 初始化壁纸（强化版：优先包内 assets/system/，确保图片秒出）
+    // 4. 初始化壁纸
     function initPhoneWallpapers() {
-        const savedLock = localStorage.getItem('mcyt_custom_lock_bg');
-        const savedDesktop = localStorage.getItem('mcyt_custom_desktop_bg');
-        const root = document.documentElement;
+        try {
+            const savedLock = localStorage.getItem('mcyt_custom_lock_bg');
+            const savedDesktop = localStorage.getItem('mcyt_custom_desktop_bg');
+            const root = document.documentElement;
 
-        const defaultLock = 'assets/system/default_lock.jpg';
-        const defaultDesktop = 'assets/system/default_desktop.jpg';
-
-        if (savedLock && savedLock.startsWith('data:image')) {
-            root.style.setProperty('--lock-bg-url', `url('${savedLock}')`);
-            window.analyzeImageLuminance(savedLock, window.applyColorTheme);
-        } else {
-            root.style.setProperty('--lock-bg-url', `url('${defaultLock}')`);
-            window.analyzeImageLuminance(defaultLock, window.applyColorTheme);
-        }
-
-        if (savedDesktop && savedDesktop.startsWith('data:image')) {
-            root.style.setProperty('--desktop-bg-url', `url('${savedDesktop}')`);
-        } else {
-            root.style.setProperty('--desktop-bg-url', `url('${defaultDesktop}')`);
-        }
+            if (savedLock && savedLock.startsWith('data:image')) {
+                root.style.setProperty('--lock-bg-url', `url('${savedLock}')`);
+                window.analyzeImageLuminance(savedLock, window.applyColorTheme);
+            }
+            if (savedDesktop && savedDesktop.startsWith('data:image')) {
+                root.style.setProperty('--desktop-bg-url', `url('${savedDesktop}')`);
+            }
+        } catch (e) {}
     }
 
-    // 5. 锁屏手势监听
+    // 5. 锁屏全屏手势与暴力解锁机制（杜绝任何挡道）
     function initLockGestures() {
         const screenLock = document.getElementById('screenLock');
-        const unlockTapArea = document.getElementById('unlockTapArea');
         const lockBtn = document.getElementById('lockBtn');
+        if (!screenLock) return;
 
-        if (unlockTapArea && screenLock) {
-            unlockTapArea.addEventListener('click', function () {
-                screenLock.classList.add('unlocked');
-            });
+        // 解锁核心执行函数
+        window.unlockPhoneScreen = function () {
+            screenLock.classList.add('unlocked');
+            // 确保动画结束后 pointer-events 彻底关闭，绝不挡住桌面
+            screenLock.style.pointerEvents = 'none';
+        };
 
-            let touchStartY = 0;
-            screenLock.addEventListener('touchstart', function (e) {
-                if (e.touches && e.touches.length) {
-                    touchStartY = e.touches[0].clientY;
+        // 重新锁屏函数
+        window.lockPhoneScreen = function () {
+            if (typeof window.closePhoneApp === 'function') {
+                window.closePhoneApp();
+            }
+            screenLock.classList.remove('unlocked');
+            screenLock.style.pointerEvents = 'auto';
+        };
+
+        // 全屏任意位置只要点击，立刻解锁！
+        screenLock.addEventListener('click', function (e) {
+            window.unlockPhoneScreen();
+        });
+
+        // 触屏滑动手势监听
+        let touchStartY = 0;
+        screenLock.addEventListener('touchstart', function (e) {
+            if (e.touches && e.touches.length) {
+                touchStartY = e.touches[0].clientY;
+            }
+        }, { passive: true });
+
+        screenLock.addEventListener('touchend', function (e) {
+            if (e.changedTouches && e.changedTouches.length) {
+                const touchEndY = e.changedTouches[0].clientY;
+                // 上滑超过 30px 或者轻点一下，立刻解锁！
+                if (touchStartY - touchEndY > 30 || Math.abs(touchStartY - touchEndY) < 10) {
+                    window.unlockPhoneScreen();
                 }
-            }, { passive: true });
+            }
+        }, { passive: true });
 
-            screenLock.addEventListener('touchend', function (e) {
-                if (e.changedTouches && e.changedTouches.length) {
-                    const touchEndY = e.changedTouches[0].clientY;
-                    if (touchStartY - touchEndY > 50) {
-                        screenLock.classList.add('unlocked');
-                    }
-                }
-            }, { passive: true });
-        }
-
-        if (lockBtn && screenLock) {
-            lockBtn.addEventListener('click', function () {
-                if (typeof window.closePhoneApp === 'function') {
-                    window.closePhoneApp();
-                }
-                screenLock.classList.remove('unlocked');
+        // 桌面顶部“锁定屏幕”按钮
+        if (lockBtn) {
+            lockBtn.addEventListener('click', function (e) {
+                e.stopPropagation();
+                window.lockPhoneScreen();
             });
         }
     }
@@ -235,12 +237,18 @@
         if (appModal) appModal.classList.remove('opened');
     };
 
-    // 7. 启动手机外壳
-    document.addEventListener('DOMContentLoaded', function () {
+    // 7. 启动手机外壳服务
+    function bootShell() {
         setInterval(updatePhoneClock, 1000);
         updatePhoneClock();
         bindPhoneBattery();
         initPhoneWallpapers();
         initLockGestures();
-    });
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bootShell);
+    } else {
+        bootShell();
+    }
 })();
