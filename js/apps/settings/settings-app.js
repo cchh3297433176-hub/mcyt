@@ -1,49 +1,87 @@
 // js/apps/settings/settings-app.js
-// 📱 系统设置中心 App（AI大模型/多平台联网搜索/报错悬浮球定制/存储维护）
+// 📱 系统设置中心 App（AI大模型/模型检索/多配置方案/向导独立模型/联网实时测试/报错悬浮球定制/存储维护）
 // ============================================================
 
 (function(window) {
     'use strict';
 
-    // 默认大模型配置（若底层未初始化则安全兜底）
+    // 默认模型库列表
+    const DEFAULT_MODEL_PRESETS = [
+        'gpt-4o-mini',
+        'gpt-4o',
+        'chatgpt-4o-latest',
+        'deepseek-chat',
+        'deepseek-reasoner',
+        'claude-3-5-sonnet-20241022',
+        'claude-3-5-haiku-20241022',
+        'gemini-1.5-pro-latest',
+        'gemini-1.5-flash-latest',
+        'qwen-plus',
+        'qwen-max'
+    ];
+
+    // 获取当前 AI 配置
     function getSafeAIConfig() {
         const cfg = {
             baseUrl: 'https://api.openai.com/v1',
             apiKey: '',
             model: 'gpt-4o-mini',
-            modelsList: ['gpt-4o-mini', 'gpt-4o', 'deepseek-chat', 'deepseek-reasoner', 'claude-3-5-sonnet-20241022']
+            agentModel: 'follow_global', // 'follow_global' | 或指定具体的独立模型名
+            modelsList: [...DEFAULT_MODEL_PRESETS]
         };
         try {
-            if (typeof loadAIConfig === 'function') {
-                const loaded = loadAIConfig();
-                if (loaded) Object.assign(cfg, loaded);
+            if (typeof loadAIConfig === 'function') loadAIConfig();
+            if (window.G && window.G.ai) {
+                Object.assign(cfg, window.G.ai);
             } else {
-                const s = localStorage.getItem('mcyt_ai_config');
+                const s = localStorage.getItem('mc_yt_ai_config') || localStorage.getItem('mcyt_ai_config');
                 if (s) Object.assign(cfg, JSON.parse(s));
+            }
+        } catch (_) {}
+        if (!Array.isArray(cfg.modelsList) || cfg.modelsList.length === 0) {
+            cfg.modelsList = [...DEFAULT_MODEL_PRESETS];
+        }
+        return cfg;
+    }
+
+    // 获取当前联网搜索配置
+    function getSafeSearchConfig() {
+        const cfg = {
+            enabled: false,
+            provider: 'bing_local', // 'bing_local' | 'bocha' | 'metaso' | 'tavily'
+            keys: { bocha: '', metaso: '', tavily: '' },
+            maxResults: 3
+        };
+        try {
+            if (typeof loadSearchConfig === 'function') loadSearchConfig();
+            if (window.G && window.G.search) {
+                Object.assign(cfg, window.G.search);
+                if (window.G.search.keys) Object.assign(cfg.keys, window.G.search.keys);
+            } else {
+                const s = localStorage.getItem('mc_yt_search_config');
+                if (s) {
+                    const parsed = JSON.parse(s);
+                    Object.assign(cfg, parsed);
+                    if (parsed.keys) Object.assign(cfg.keys, parsed.keys);
+                }
             }
         } catch (_) {}
         return cfg;
     }
 
-    function getSafeSearchConfig() {
-        const cfg = {
-            enabled: false,
-            provider: 'bing_free', // 'bing_free' | 'bocha' | 'metaso' | 'tavily'
-            bochaKey: '',
-            metasoKey: '',
-            tavilyKey: '',
-            maxResults: 3
-        };
+    // 配置 Profiles 存取
+    function getAIProfiles() {
         try {
-            if (typeof loadSearchConfig === 'function') {
-                const loaded = loadSearchConfig();
-                if (loaded) Object.assign(cfg, loaded);
-            } else {
-                const s = localStorage.getItem('mcyt_search_config');
-                if (s) Object.assign(cfg, JSON.parse(s));
-            }
+            return JSON.parse(localStorage.getItem('mcyt_ai_profiles') || '[]');
+        } catch (_) {
+            return [];
+        }
+    }
+
+    function saveAIProfiles(list) {
+        try {
+            localStorage.setItem('mcyt_ai_profiles', JSON.stringify(list));
         } catch (_) {}
-        return cfg;
     }
 
     // 渲染系统设置主视窗
@@ -58,11 +96,13 @@
         const appVer = (typeof CURRENT_APP_VERSION !== 'undefined') ? CURRENT_APP_VERSION : '1.611';
         const aiCfg = getSafeAIConfig();
         const searchCfg = getSafeSearchConfig();
+        const profiles = getAIProfiles();
+        const activeProfileName = localStorage.getItem('mcyt_active_ai_profile_name') || '默认配置';
 
         body.innerHTML = `
             <div class="settings-app-container" style="padding-bottom:28px;">
                 
-                <!-- 导航分段药丸（全矢量 SVG，无廉价 Emoji） -->
+                <!-- 导航分段药丸（全粉白矢量 SVG，无廉价 Emoji） -->
                 <div class="settings-nav-tabs" style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:4px;">
                     <button class="settings-tab-btn active" data-tab="ai" style="flex:1;padding:8px 8px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;background:var(--primary);color:#fff;border:none;display:inline-flex;align-items:center;justify-content:center;gap:4px;">
                         <svg style="width:14px;height:14px;fill:currentColor;" viewBox="0 0 24 24"><path d="M21 11.5v-1c0-.8-.7-1.5-1.5-1.5H18V7c0-2.2-1.8-4-4-4h-4c-2.2 0-4 1.8-4 4v2H4.5C3.7 9 3 9.7 3 10.5v1c0 .8.7 1.5 1.5 1.5H6v4c0 2.2 1.8 4 4 4h4c2.2 0 4-1.8 4-4v-4h1.5c.8 0 1.5-.7 1.5-1.5zM8 7c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2v2H8V7zm8 9c0 1.1-.9 2-2 2h-4c-1.1 0-2-.9-2-2v-5h8v5zm-5.5-2.5c0 .6-.4 1-1 1s-1-.4-1-1 .4-1 1-1 1 .4 1 1zm5 0c0 .6-.4 1-1 1s-1-.4-1-1 .4-1 1-1 1 .4 1 1z"/></svg>
@@ -82,14 +122,41 @@
                     </button>
                 </div>
 
-                <!-- 分区分块 1：AI 模型（完整内置渲染，杜绝丢失） -->
+                <!-- 分区 1：AI 模型配置面板 -->
                 <div id="settingsTabContent_ai" class="settings-tab-content">
+                    
+                    <!-- 多套方案管理器（Profiles） -->
                     <div class="theme-setting-card">
                         <div class="theme-setting-title">
-                            <span>大语言模型接口配置</span>
+                            <span>配置方案存档 (Profiles)</span>
+                            <div style="display:flex;gap:6px;">
+                                <button class="btn-secondary" id="saveNewProfileBtn" style="padding:3px 8px;font-size:11px;">存为新方案</button>
+                                <button class="btn-secondary" id="backupConfigModalBtn" style="padding:3px 8px;font-size:11px;">备份/恢复</button>
+                            </div>
                         </div>
                         <div class="theme-setting-desc">
-                            支持 OpenAI 标准兼容协议（如 DeepSeek、GPT-4o、Gemini、Claude 代理中转等），全站剧情与角色互动将由此驱动。
+                            支持保存多套大模型配置方案（如 DeepSeek 直连、自建中转、GPT 专线），点击即可快速无缝切换。
+                        </div>
+                        <div class="profile-chip-list" id="aiProfileChipContainer">
+                            <div class="profile-chip ${activeProfileName === '默认配置' ? 'active' : ''}" onclick="window.switchAIProfile('默认配置')">
+                                <span>默认配置</span>
+                            </div>
+                            ${profiles.map(p => `
+                                <div class="profile-chip ${p.name === activeProfileName ? 'active' : ''}" onclick="window.switchAIProfile('${escapeHtml(p.name)}')">
+                                    <span>${escapeHtml(p.name)}</span>
+                                    <span class="profile-chip-del" onclick="event.stopPropagation(); window.deleteAIProfile('${escapeHtml(p.name)}')">✕</span>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+
+                    <!-- 接口与模型编辑 -->
+                    <div class="theme-setting-card">
+                        <div class="theme-setting-title">
+                            <span>接口参数中枢</span>
+                        </div>
+                        <div class="theme-setting-desc">
+                            标准 OpenAI 兼容协议，支持 DeepSeek、GPT-4o、Claude、Gemini、通义千问等。
                         </div>
 
                         <div style="display:flex;flex-direction:column;gap:10px;">
@@ -103,28 +170,49 @@
                                 <input type="password" id="aiApiKeyInput" value="${escapeHtml(aiCfg.apiKey || '')}" placeholder="sk-..." style="width:100%;padding:8px 10px;border:1px solid #ffccd9;border-radius:8px;font-size:12px;outline:none;">
                             </div>
 
+                            <!-- 主模型选择与关键字检索过滤 -->
                             <div>
                                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                                    <label style="font-size:12px;font-weight:700;color:var(--text);">当前选用模型</label>
+                                    <label style="font-size:12px;font-weight:700;color:var(--text);">游戏主剧情模型</label>
                                     <button class="btn-secondary" id="fetchModelsBtn" style="padding:3px 8px;font-size:11px;height:24px;">拉取可用模型</button>
                                 </div>
-                                <div style="display:flex;gap:6px;">
-                                    <input type="text" id="aiModelInput" value="${escapeHtml(aiCfg.model || 'gpt-4o-mini')}" placeholder="输入或从右侧列表选择" style="flex:1;padding:8px 10px;border:1px solid #ffccd9;border-radius:8px;font-size:12px;outline:none;">
-                                    <select id="aiModelSelect" style="width:110px;padding:6px;border:1px solid #ffccd9;border-radius:8px;font-size:11.5px;background:#fff;outline:none;">
+
+                                <div style="display:flex;gap:6px;margin-bottom:6px;">
+                                    <input type="text" id="aiModelInput" value="${escapeHtml(aiCfg.model || 'gpt-4o-mini')}" placeholder="输入或从下方选择模型" style="flex:1;padding:8px 10px;border:1px solid #ffccd9;border-radius:8px;font-size:12px;outline:none;">
+                                </div>
+
+                                <!-- 🔍 关键字搜索过滤栏与模型下拉列表 -->
+                                <div style="display:flex;gap:6px;align-items:center;">
+                                    <input type="text" id="modelFilterKeywordInput" placeholder="🔍 关键字过滤 (如 deepseek/gpt/claude)..." style="flex:1;padding:6px 8px;border:1px solid #ffccd9;border-radius:6px;font-size:11px;outline:none;background:#fff8fa;">
+                                    <select id="aiModelSelect" style="flex:1;padding:6px 8px;border:1px solid #ffccd9;border-radius:6px;font-size:11px;background:#fff;outline:none;max-width:170px;">
                                         ${(aiCfg.modelsList || []).map(m => `<option value="${m}" ${m === aiCfg.model ? 'selected' : ''}>${m}</option>`).join('')}
                                     </select>
                                 </div>
                             </div>
 
-                            <div style="display:flex;gap:8px;margin-top:4px;">
+                            <!-- 🐙 向导小助手独立模型配置 -->
+                            <div style="border-top:1px dashed #ffd4e0;padding-top:10px;margin-top:2px;">
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                                    <label style="font-size:12px;font-weight:700;color:var(--text);">智能向导独立模型</label>
+                                    <span style="font-size:10.5px;color:var(--text2);">可配置专用高速小模型</span>
+                                </div>
+                                <div style="display:flex;gap:6px;">
+                                    <select id="agentModelSelect" style="width:100%;padding:7px 8px;border:1px solid #ffccd9;border-radius:8px;font-size:11.5px;background:#fff;outline:none;">
+                                        <option value="follow_global" ${aiCfg.agentModel === 'follow_global' ? 'selected' : ''}>跟随全局主模型</option>
+                                        ${(aiCfg.modelsList || []).map(m => `<option value="${m}" ${m === aiCfg.agentModel ? 'selected' : ''}>独立选用: ${m}</option>`).join('')}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div style="display:flex;gap:8px;margin-top:6px;">
                                 <button class="btn-secondary" id="testAiConnectBtn" style="flex:1;padding:9px;font-size:12px;">连通性测试</button>
-                                <button class="btn-primary" id="saveAiConfigBtn" style="flex:1;padding:9px;font-size:12px;">保存配置</button>
+                                <button class="btn-primary" id="saveAiConfigBtn" style="flex:1;padding:9px;font-size:12px;">保存生效</button>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- 分区分块 2：联网搜索（四大引擎完整集成） -->
+                <!-- 分区 2：联网搜索中枢（含实时测试交互台） -->
                 <div id="settingsTabContent_search" class="settings-tab-content" style="display:none;">
                     <div class="theme-setting-card">
                         <div class="theme-setting-title">
@@ -135,53 +223,66 @@
                             </label>
                         </div>
                         <div class="theme-setting-desc">
-                            开启后，在生成剧情或发布视频时可探查最新 Minecraft 游戏资讯与实时话题。
+                            开启后生成剧情或发布油管视频时将探查真实 Minecraft 资讯。
                         </div>
 
                         <div id="searchConfigBody" style="${searchCfg.enabled ? '' : 'opacity:0.45;pointer-events:none;'}">
-                            <label style="font-size:12px;font-weight:700;color:var(--text);display:block;margin-bottom:6px;">选择搜索引擎渠道</label>
+                            <label style="font-size:12px;font-weight:700;color:var(--text);display:block;margin-bottom:6px;">搜索引擎渠道配置</label>
                             
-                            <!-- 渠道单选卡片 -->
                             <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
-                                <label style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border:1px solid #ffccd9;border-radius:8px;background:${searchCfg.provider === 'bing_free' ? '#fff0f3' : '#fff'};cursor:pointer;">
-                                    <input type="radio" name="searchProviderRadio" value="bing_free" ${searchCfg.provider === 'bing_free' ? 'checked' : ''} style="margin-top:2px;accent-color:var(--primary);">
+                                <!-- Bing 免Key -->
+                                <label style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border:1px solid #ffccd9;border-radius:8px;background:${searchCfg.provider === 'bing_local' ? '#fff0f3' : '#fff'};cursor:pointer;">
+                                    <input type="radio" name="searchProviderRadio" value="bing_local" ${searchCfg.provider === 'bing_local' ? 'checked' : ''} style="margin-top:2px;accent-color:var(--primary);">
                                     <div style="font-size:11.5px;">
                                         <div style="font-weight:700;color:#2e1a22;">Bing (Local 免Key直连)</div>
-                                        <div style="color:#7a505f;font-size:10.5px;">无需配置 API Key，通过本地协议直连检索，轻量便捷。</div>
+                                        <div style="color:#7a505f;font-size:10.5px;">无需配置 API Key，直连抓取，快速便捷。</div>
                                     </div>
                                 </label>
 
+                                <!-- 博查 -->
                                 <label style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border:1px solid #ffccd9;border-radius:8px;background:${searchCfg.provider === 'bocha' ? '#fff0f3' : '#fff'};cursor:pointer;">
                                     <input type="radio" name="searchProviderRadio" value="bocha" ${searchCfg.provider === 'bocha' ? 'checked' : ''} style="margin-top:2px;accent-color:var(--primary);">
                                     <div style="font-size:11.5px;flex:1;">
                                         <div style="font-weight:700;color:#2e1a22;">博查搜索 (Bocha AI)</div>
-                                        <input type="password" id="bochaKeyInput" value="${escapeHtml(searchCfg.bochaKey || '')}" placeholder="填写博查 API Key" style="width:100%;margin-top:4px;padding:5px 8px;border:1px solid #ffccd9;border-radius:6px;font-size:11px;outline:none;">
+                                        <input type="password" id="bochaKeyInput" value="${escapeHtml(searchCfg.keys?.bocha || '')}" placeholder="填入博查 API Key" style="width:100%;margin-top:4px;padding:5px 8px;border:1px solid #ffccd9;border-radius:6px;font-size:11px;outline:none;">
                                     </div>
                                 </label>
 
+                                <!-- 秘塔 -->
                                 <label style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border:1px solid #ffccd9;border-radius:8px;background:${searchCfg.provider === 'metaso' ? '#fff0f3' : '#fff'};cursor:pointer;">
                                     <input type="radio" name="searchProviderRadio" value="metaso" ${searchCfg.provider === 'metaso' ? 'checked' : ''} style="margin-top:2px;accent-color:var(--primary);">
                                     <div style="font-size:11.5px;flex:1;">
                                         <div style="font-weight:700;color:#2e1a22;">秘塔 AI 搜索 (Metaso)</div>
-                                        <input type="password" id="metasoKeyInput" value="${escapeHtml(searchCfg.metasoKey || '')}" placeholder="填写秘塔 API Key" style="width:100%;margin-top:4px;padding:5px 8px;border:1px solid #ffccd9;border-radius:6px;font-size:11px;outline:none;">
+                                        <input type="password" id="metasoKeyInput" value="${escapeHtml(searchCfg.keys?.metaso || '')}" placeholder="填入秘塔 API Key" style="width:100%;margin-top:4px;padding:5px 8px;border:1px solid #ffccd9;border-radius:6px;font-size:11px;outline:none;">
                                     </div>
                                 </label>
 
+                                <!-- Tavily -->
                                 <label style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border:1px solid #ffccd9;border-radius:8px;background:${searchCfg.provider === 'tavily' ? '#fff0f3' : '#fff'};cursor:pointer;">
                                     <input type="radio" name="searchProviderRadio" value="tavily" ${searchCfg.provider === 'tavily' ? 'checked' : ''} style="margin-top:2px;accent-color:var(--primary);">
                                     <div style="font-size:11.5px;flex:1;">
                                         <div style="font-weight:700;color:#2e1a22;">Tavily 搜索 (国际通用)</div>
-                                        <input type="password" id="tavilyKeyInput" value="${escapeHtml(searchCfg.tavilyKey || '')}" placeholder="填写 Tavily API Key" style="width:100%;margin-top:4px;padding:5px 8px;border:1px solid #ffccd9;border-radius:6px;font-size:11px;outline:none;">
+                                        <input type="password" id="tavilyKeyInput" value="${escapeHtml(searchCfg.keys?.tavily || '')}" placeholder="填入 Tavily API Key" style="width:100%;margin-top:4px;padding:5px 8px;border:1px solid #ffccd9;border-radius:6px;font-size:11px;outline:none;">
                                     </div>
                                 </label>
                             </div>
 
                             <button class="btn-primary" id="saveSearchConfigBtn" style="width:100%;padding:9px;font-size:12px;">保存联网设置</button>
+
+                            <!-- 🧪 联网搜索实时测试台 -->
+                            <div style="margin-top:14px;border-top:1px dashed #ffd4e0;padding-top:12px;">
+                                <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px;">搜索功能实时测试</div>
+                                <div style="display:flex;gap:6px;">
+                                    <input type="text" id="webSearchTestQueryInput" value="Minecraft 1.21 新特性" placeholder="输入测试搜索关键词..." style="flex:1;padding:7px 8px;border:1px solid #ffccd9;border-radius:6px;font-size:11px;outline:none;">
+                                    <button class="btn-secondary" id="executeWebSearchTestBtn" style="padding:0 12px;font-size:11px;font-weight:700;">测试搜索</button>
+                                </div>
+                                <div id="webSearchTestResultBox" style="margin-top:8px;display:none;background:#fff8fa;border:1px solid #ffd4e0;border-radius:8px;padding:8px;font-size:11.5px;line-height:1.4;max-height:160px;overflow-y:auto;"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- 分区分块 3：悬浮向导与报错球定制 -->
+                <!-- 分区 3：悬浮向导与报错球定制 -->
                 <div id="settingsTabContent_debug" class="settings-tab-content" style="display:none;">
                     <div class="theme-setting-card">
                         <div class="theme-setting-title">
@@ -192,11 +293,11 @@
                             </label>
                         </div>
                         <div class="theme-setting-desc">
-                            常驻在屏幕边缘的智能向导与异常监控球。点击即可随时向 AI 助手提问游戏按键用法，或查看代码报错堆栈。
+                            常驻屏幕边缘的智能向导与异常排查气泡。点击即可向 AI 助手提问游戏按键用法，或查看代码报错日志。
                         </div>
 
                         <div id="orbConfigDetailBox" style="${orbCfg.enabled ? '' : 'opacity:0.45;pointer-events:none;'}">
-                            <!-- 大小滑动条 -->
+                            <!-- 尺寸滑动条 -->
                             <div style="margin-bottom:14px;border-top:1px dashed #ffd4e0;padding-top:12px;">
                                 <div style="display:flex;justify-content:space-between;font-size:13px;font-weight:700;margin-bottom:6px;">
                                     <span>悬浮球尺寸</span>
@@ -205,7 +306,7 @@
                                 <input type="range" id="orbSizeSlider" min="32" max="76" value="${orbCfg.size}" style="width:100%;accent-color:var(--primary);">
                             </div>
 
-                            <!-- 预设外形 -->
+                            <!-- 外观形状（透明皮肤，绝不强制填充粉色死底） -->
                             <div style="margin-bottom:14px;">
                                 <div style="font-size:13px;font-weight:700;margin-bottom:8px;">形状与皮肤</div>
                                 <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:6px;">
@@ -216,7 +317,6 @@
                                 </div>
                             </div>
 
-                            <!-- 高级外观：套索手绘与相册专属皮肤导入 -->
                             <div style="border-top:1px dashed #ffd4e0;padding-top:12px;display:flex;flex-direction:column;gap:8px;">
                                 <button class="btn-secondary" id="openLassoDrawingBtn" style="width:100%;padding:9px;font-weight:700;">
                                     随手画形状（手绘套索画板）
@@ -228,7 +328,6 @@
                             </div>
                         </div>
 
-                        <!-- 立即呼出悬浮球弹窗 -->
                         <div style="margin-top:16px;border-top:1px dashed #ffd4e0;padding-top:12px;">
                             <button class="btn-primary" id="openLogViewDirectBtn" style="width:100%;padding:10px;font-size:13px;">
                                 打开向导与报错排查视窗
@@ -237,14 +336,14 @@
                     </div>
                 </div>
 
-                <!-- 分区分块 4：系统维护 -->
+                <!-- 分区 4：系统维护 -->
                 <div id="settingsTabContent_system" class="settings-tab-content" style="display:none;">
                     <div class="theme-setting-card">
                         <div class="theme-setting-title">
                             <span>缓存与内存维护</span>
                         </div>
                         <div class="theme-setting-desc">
-                            清理临时离屏 Canvas 绘图内存碎片与调试状态，恢复流畅运行。
+                            清理临时离屏 Canvas 绘图内存碎片与调试状态，恢复手机流畅运行。
                         </div>
                         <button class="btn-secondary" id="cleanAppCacheBtn" style="width:100%;padding:10px;font-weight:700;margin-bottom:8px;">
                             深度清理临时缓存
@@ -258,7 +357,7 @@
                         <div style="font-size:12px;color:var(--text);line-height:1.6;">
                             <div>当前应用版本：<b>v${appVer}</b></div>
                             <div>核心框架：<b>原生 ES6+ / 零外部打包依赖</b></div>
-                            <div>状态感知：<b>硬件电量、时钟与网络深度感知中枢已挂载</b></div>
+                            <div>硬件感知中枢：<b>电量、时钟与网络已深度集成</b></div>
                         </div>
                     </div>
                 </div>
@@ -269,6 +368,7 @@
         bindSettingsAppEvents();
     }
 
+    // 绑定设置事件与核心功能
     function bindSettingsAppEvents() {
         // 1. Tab 切换
         document.querySelectorAll('.settings-tab-btn').forEach(btn => {
@@ -289,31 +389,64 @@
             };
         });
 
-        // 2. AI 模型配置保存与拉取
-        const saveAiBtn = document.getElementById('saveAiConfigBtn');
-        const fetchModelsBtn = document.getElementById('fetchModelsBtn');
-        const testAiBtn = document.getElementById('testAiConnectBtn');
-        const modelSelect = document.getElementById('aiModelSelect');
+        const baseUrlInput = document.getElementById('aiBaseUrlInput');
+        const apiKeyInput = document.getElementById('aiApiKeyInput');
         const modelInput = document.getElementById('aiModelInput');
+        const modelSelect = document.getElementById('aiModelSelect');
+        const filterInput = document.getElementById('modelFilterKeywordInput');
+        const agentSelect = document.getElementById('agentModelSelect');
 
-        if (modelSelect && modelInput) {
-            modelSelect.onchange = () => {
-                modelInput.value = modelSelect.value;
+        // 2. 关键字实时过滤模型下拉列表
+        let fullModelList = getSafeAIConfig().modelsList || [...DEFAULT_MODEL_PRESETS];
+
+        function renderFilteredModelOptions(keyword = '') {
+            if (!modelSelect) return;
+            const kw = keyword.toLowerCase().trim();
+            const filtered = fullModelList.filter(m => !kw || m.toLowerCase().includes(kw));
+
+            if (filtered.length === 0) {
+                modelSelect.innerHTML = `<option value="">无匹配模型</option>`;
+            } else {
+                modelSelect.innerHTML = filtered.map(m => `
+                    <option value="${m}" ${m === modelInput.value ? 'selected' : ''}>${m}</option>
+                `).join('');
+            }
+        }
+
+        if (filterInput) {
+            filterInput.oninput = () => {
+                renderFilteredModelOptions(filterInput.value);
             };
         }
 
-        const getGatheredAiConfig = () => {
-            const baseUrl = (document.getElementById('aiBaseUrlInput')?.value || '').trim();
-            const apiKey = (document.getElementById('aiApiKeyInput')?.value || '').trim();
-            const model = (modelInput?.value || '').trim() || 'gpt-4o-mini';
-            return { baseUrl, apiKey, model };
+        if (modelSelect && modelInput) {
+            modelSelect.onchange = () => {
+                if (modelSelect.value) modelInput.value = modelSelect.value;
+            };
+        }
+
+        // 收集表单当前 AI 数据
+        const gatherCurrentAiData = () => {
+            return {
+                baseUrl: (baseUrlInput?.value || '').trim(),
+                apiKey: (apiKeyInput?.value || '').trim(),
+                model: (modelInput?.value || '').trim() || 'gpt-4o-mini',
+                agentModel: (agentSelect?.value || 'follow_global'),
+                modelsList: [...fullModelList]
+            };
         };
 
+        // 保存 AI 配置
+        const saveAiBtn = document.getElementById('saveAiConfigBtn');
         if (saveAiBtn) {
             saveAiBtn.onclick = () => {
-                const data = getGatheredAiConfig();
+                const data = gatherCurrentAiData();
                 try {
-                    localStorage.setItem('mcyt_ai_config', JSON.stringify(data));
+                    if (window.G) {
+                        if (!window.G.ai) window.G.ai = {};
+                        Object.assign(window.G.ai, data);
+                    }
+                    localStorage.setItem('mc_yt_ai_config', JSON.stringify(data));
                     if (typeof persistAIConfig === 'function') persistAIConfig();
                     if (typeof showToast === 'function') showToast('已成功保存 AI 模型配置', 'success');
                 } catch (e) {
@@ -322,11 +455,13 @@
             };
         }
 
+        // 连通性测试
+        const testAiBtn = document.getElementById('testAiConnectBtn');
         if (testAiBtn) {
             testAiBtn.onclick = async () => {
-                const data = getGatheredAiConfig();
+                const data = gatherCurrentAiData();
                 if (!data.apiKey) {
-                    if (typeof showToast === 'function') showToast('请先填写 API 密钥', 'error');
+                    if (typeof showToast === 'function') showToast('请先输入 API 密钥', 'error');
                     return;
                 }
                 testAiBtn.disabled = true;
@@ -348,10 +483,10 @@
                     });
 
                     if (res.ok) {
-                        if (typeof showToast === 'function') showToast('连接成功！接口与模型可用', 'success');
+                        if (typeof showToast === 'function') showToast('连接成功！大模型接口正常可用', 'success');
                     } else {
                         const errTxt = await res.text();
-                        if (typeof showToast === 'function') showToast(`连接异常(${res.status}): ${errTxt.slice(0, 40)}`, 'error');
+                        if (typeof showToast === 'function') showToast(`连接异常(${res.status}): ${errTxt.slice(0, 45)}`, 'error');
                     }
                 } catch (err) {
                     if (typeof showToast === 'function') showToast('网络连接失败: ' + err.message, 'error');
@@ -362,9 +497,11 @@
             };
         }
 
+        // 拉取模型列表
+        const fetchModelsBtn = document.getElementById('fetchModelsBtn');
         if (fetchModelsBtn) {
             fetchModelsBtn.onclick = async () => {
-                const data = getGatheredAiConfig();
+                const data = gatherCurrentAiData();
                 if (!data.apiKey) {
                     if (typeof showToast === 'function') showToast('请先输入 API 密钥再拉取模型', 'error');
                     return;
@@ -390,12 +527,21 @@
 
                     if (list.length > 0) {
                         list.sort();
-                        modelSelect.innerHTML = list.map(m => `<option value="${m}">${m}</option>`).join('');
-                        modelSelect.value = list[0];
-                        modelInput.value = list[0];
-                        if (typeof showToast === 'function') showToast(`成功拉取到 ${list.length} 个可用模型`, 'success');
+                        fullModelList = Array.from(new Set([...list, ...DEFAULT_MODEL_PRESETS]));
+                        renderFilteredModelOptions(filterInput ? filterInput.value : '');
+                        
+                        // 同步刷新向导模型下拉列表
+                        if (agentSelect) {
+                            const curVal = agentSelect.value;
+                            agentSelect.innerHTML = `
+                                <option value="follow_global">跟随全局主模型</option>
+                                ${fullModelList.map(m => `<option value="${m}" ${m === curVal ? 'selected' : ''}>独立选用: ${m}</option>`).join('')}
+                            `;
+                        }
+
+                        if (typeof showToast === 'function') showToast(`拉取成功！共发现 ${list.length} 个模型`, 'success');
                     } else {
-                        if (typeof showToast === 'function') showToast('未在接口返回中找到可用模型列表', 'info');
+                        if (typeof showToast === 'function') showToast('未在接口返回中解析到模型列表', 'info');
                     }
                 } catch (err) {
                     if (typeof showToast === 'function') showToast('拉取模型失败: ' + err.message, 'error');
@@ -406,7 +552,46 @@
             };
         }
 
-        // 3. 联网配置保存
+        // 3. 配置方案（Profiles）新建
+        const saveProfileBtn = document.getElementById('saveNewProfileBtn');
+        if (saveProfileBtn) {
+            saveProfileBtn.onclick = () => {
+                const name = prompt('请输入新配置方案名称：', '新 API 专线');
+                if (!name || !name.trim()) return;
+
+                const curData = gatherCurrentAiData();
+                const list = getAIProfiles();
+                const targetName = name.trim();
+
+                const existingIdx = list.findIndex(p => p.name === targetName);
+                const profileObj = {
+                    name: targetName,
+                    config: curData,
+                    updatedAt: Date.now()
+                };
+
+                if (existingIdx >= 0) {
+                    list[existingIdx] = profileObj;
+                } else {
+                    list.push(profileObj);
+                }
+
+                saveAIProfiles(list);
+                localStorage.setItem('mcyt_active_ai_profile_name', targetName);
+                renderSettingsApp();
+                if (typeof showToast === 'function') showToast(`方案 [${targetName}] 已保存！`, 'success');
+            };
+        }
+
+        // 备份与恢复弹窗
+        const backupBtn = document.getElementById('backupConfigModalBtn');
+        if (backupBtn) {
+            backupBtn.onclick = () => {
+                openConfigBackupModal();
+            };
+        }
+
+        // 4. 联网搜索配置保存
         const searchToggle = document.getElementById('searchEnableToggle');
         const searchToggleText = document.getElementById('searchEnableText');
         const searchConfigBody = document.getElementById('searchConfigBody');
@@ -426,18 +611,24 @@
         if (saveSearchBtn) {
             saveSearchBtn.onclick = () => {
                 const selectedRadio = document.querySelector('input[name="searchProviderRadio"]:checked');
-                const provider = selectedRadio ? selectedRadio.value : 'bing_free';
+                const provider = selectedRadio ? selectedRadio.value : 'bing_local';
                 const searchObj = {
                     enabled: !!(searchToggle && searchToggle.checked),
                     provider: provider,
-                    bochaKey: document.getElementById('bochaKeyInput')?.value.trim() || '',
-                    metasoKey: document.getElementById('metasoKeyInput')?.value.trim() || '',
-                    tavilyKey: document.getElementById('tavilyKeyInput')?.value.trim() || '',
+                    keys: {
+                        bocha: document.getElementById('bochaKeyInput')?.value.trim() || '',
+                        metaso: document.getElementById('metasoKeyInput')?.value.trim() || '',
+                        tavily: document.getElementById('tavilyKeyInput')?.value.trim() || ''
+                    },
                     maxResults: 3
                 };
 
                 try {
-                    localStorage.setItem('mcyt_search_config', JSON.stringify(searchObj));
+                    if (window.G) {
+                        if (!window.G.search) window.G.search = {};
+                        Object.assign(window.G.search, searchObj);
+                    }
+                    localStorage.setItem('mc_yt_search_config', JSON.stringify(searchObj));
                     if (typeof persistSearchConfig === 'function') persistSearchConfig();
                     if (typeof showToast === 'function') showToast('已保存联网检索设置', 'success');
                 } catch (e) {
@@ -446,7 +637,52 @@
             };
         }
 
-        // 4. 报错悬浮球交互控制
+        // 5. 🧪 实时联网搜索测试
+        const testSearchBtn = document.getElementById('executeWebSearchTestBtn');
+        const testSearchQuery = document.getElementById('webSearchTestQueryInput');
+        const testSearchResultBox = document.getElementById('webSearchTestResultBox');
+
+        if (testSearchBtn && testSearchQuery && testSearchResultBox) {
+            testSearchBtn.onclick = async () => {
+                const query = testSearchQuery.value.trim();
+                if (!query) {
+                    if (typeof showToast === 'function') showToast('请输入测试搜索关键词', 'error');
+                    return;
+                }
+
+                if (typeof window.webSearch !== 'function') {
+                    if (typeof showToast === 'function') showToast('底层搜索组件未就绪', 'error');
+                    return;
+                }
+
+                testSearchBtn.disabled = true;
+                testSearchBtn.textContent = '检索中...';
+                testSearchResultBox.style.display = 'block';
+                testSearchResultBox.innerHTML = '<span style="color:#7a505f;">正在向搜索引擎建立实时连接探查...</span>';
+
+                try {
+                    const res = await window.webSearch(query, 3);
+                    const list = res.results || [];
+                    if (list.length === 0) {
+                        testSearchResultBox.innerHTML = '<span style="color:#c62828;">未检索到相关内容，或当前网络通道受限。</span>';
+                    } else {
+                        testSearchResultBox.innerHTML = list.map((item, idx) => `
+                            <div style="border-bottom:1px dashed #ffd4e0;padding-bottom:4px;margin-bottom:4px;">
+                                <div style="font-weight:700;color:var(--primary);">${idx + 1}. ${escapeHtml(item.title)}</div>
+                                <div style="color:#2e1a22;font-size:11px;">${escapeHtml((item.content || '').slice(0, 100))}...</div>
+                            </div>
+                        `).join('') + (res.answer ? `<div style="margin-top:4px;color:#2e1a22;font-weight:600;">智能概述：${escapeHtml(res.answer)}</div>` : '');
+                    }
+                } catch (err) {
+                    testSearchResultBox.innerHTML = `<span style="color:#c62828;">搜索探查失败: ${escapeHtml(err.message)}</span>`;
+                } finally {
+                    testSearchBtn.disabled = false;
+                    testSearchBtn.textContent = '测试搜索';
+                }
+            };
+        }
+
+        // 6. 悬浮球控制
         const orbToggle = document.getElementById('orbMasterToggle');
         const orbToggleText = document.getElementById('orbToggleText');
         const detailBox = document.getElementById('orbConfigDetailBox');
@@ -486,19 +722,17 @@
             };
         });
 
-        // 手绘套索画板
+        // 随手画套索
         const lassoBtn = document.getElementById('openLassoDrawingBtn');
         if (lassoBtn && window.ErrorMonitor) {
             lassoBtn.onclick = () => {
                 if (typeof window.ErrorMonitor.openLassoDrawer === 'function') {
                     window.ErrorMonitor.openLassoDrawer();
-                } else {
-                    if (typeof showToast === 'function') showToast('正在装载套索工具...', 'info');
                 }
             };
         }
 
-        // 导入相册自定义 PNG/GIF
+        // 相册自定义透明 PNG
         const importImgBtn = document.getElementById('importCustomOrbImgBtn');
         const fileInput = document.getElementById('orbImgFileInput');
         if (importImgBtn && fileInput && window.ErrorMonitor) {
@@ -524,7 +758,7 @@
             };
         }
 
-        // 打开弹窗
+        // 打开悬浮球视窗
         const logBtn = document.getElementById('openLogViewDirectBtn');
         if (logBtn && window.ErrorMonitor) {
             logBtn.onclick = () => window.ErrorMonitor.openLogModal();
@@ -535,12 +769,136 @@
         if (cleanBtn) {
             cleanBtn.onclick = () => {
                 if (window.ErrorMonitor) window.ErrorMonitor.clearErrors();
-                if (typeof showToast === 'function') showToast('临时缓存与调试记录已深度清理', 'success');
+                if (typeof showToast === 'function') showToast('临时缓存与调试记录已清理', 'success');
             };
         }
     }
 
-    // 绑定手机桌面 App 打开入口
+    // 全局切换 Profile
+    window.switchAIProfile = function(name) {
+        if (name === '默认配置') {
+            localStorage.setItem('mcyt_active_ai_profile_name', '默认配置');
+            renderSettingsApp();
+            if (typeof showToast === 'function') showToast('已切换至默认配置');
+            return;
+        }
+
+        const profiles = getAIProfiles();
+        const target = profiles.find(p => p.name === name);
+        if (!target || !target.config) return;
+
+        localStorage.setItem('mcyt_active_ai_profile_name', target.name);
+        try {
+            if (window.G) {
+                if (!window.G.ai) window.G.ai = {};
+                Object.assign(window.G.ai, target.config);
+            }
+            localStorage.setItem('mc_yt_ai_config', JSON.stringify(target.config));
+            if (typeof persistAIConfig === 'function') persistAIConfig();
+        } catch (_) {}
+
+        renderSettingsApp();
+        if (typeof showToast === 'function') showToast(`已切换至配置方案: ${target.name}`, 'success');
+    };
+
+    // 全局删除 Profile
+    window.deleteAIProfile = function(name) {
+        if (!confirm(`确定要删除方案 [${name}] 吗？`)) return;
+        let list = getAIProfiles().filter(p => p.name !== name);
+        saveAIProfiles(list);
+        if (localStorage.getItem('mcyt_active_ai_profile_name') === name) {
+            localStorage.setItem('mcyt_active_ai_profile_name', '默认配置');
+        }
+        renderSettingsApp();
+        if (typeof showToast === 'function') showToast(`方案 [${name}] 已删除`);
+    };
+
+    // 备份与恢复专属弹窗
+    function openConfigBackupModal() {
+        const modal = document.getElementById('modal');
+        const modalBody = document.getElementById('modalBody');
+        const retroModalTitle = document.getElementById('retroModalTitle');
+        if (!modal || !modalBody) return;
+
+        if (retroModalTitle) retroModalTitle.textContent = '配置备份与恢复';
+
+        const payload = {
+            ai: getSafeAIConfig(),
+            search: getSafeSearchConfig(),
+            profiles: getAIProfiles(),
+            timestamp: Date.now()
+        };
+        const exportJsonStr = JSON.stringify(payload, null, 2);
+
+        modalBody.innerHTML = `
+            <div style="font-size:12px;line-height:1.5;color:#2e1a22;">
+                <div style="font-weight:700;margin-bottom:6px;">📤 导出配置文本（复制备用）：</div>
+                <textarea id="configExportArea" readonly style="width:100%;height:90px;font-family:monospace;font-size:10px;padding:6px;border:1px solid #ffd4e0;border-radius:6px;background:#fff8fa;outline:none;">${escapeHtml(exportJsonStr)}</textarea>
+                
+                <div style="margin-top:6px;display:flex;justify-content:flex-end;">
+                    <button class="btn-secondary" id="copyConfigExportBtn" style="padding:4px 10px;font-size:11px;">复制到剪贴板</button>
+                </div>
+
+                <div style="font-weight:700;margin:10px 0 6px 0;">📥 从备份文本导入恢复：</div>
+                <textarea id="configImportArea" placeholder="在此粘贴备份的 JSON 配置文本..." style="width:100%;height:75px;font-family:monospace;font-size:10px;padding:6px;border:1px solid #ffd4e0;border-radius:6px;outline:none;"></textarea>
+                
+                <div style="margin-top:12px;display:flex;gap:8px;justify-content:flex-end;">
+                    <button class="btn-secondary" onclick="closeModal()" style="padding:6px 14px;font-size:11.5px;">取消</button>
+                    <button class="btn-primary" id="applyConfigImportBtn" style="width:auto;padding:6px 16px;font-size:11.5px;">确认导入恢复</button>
+                </div>
+            </div>
+        `;
+
+        modal.classList.add('open');
+
+        document.getElementById('copyConfigExportBtn').onclick = () => {
+            const area = document.getElementById('configExportArea');
+            if (area) {
+                if (window.NativeBridge && window.NativeBridge.copyText) {
+                    window.NativeBridge.copyText(area.value);
+                } else if (navigator.clipboard) {
+                    navigator.clipboard.writeText(area.value);
+                }
+                if (typeof showToast === 'function') showToast('已复制配置备份');
+            }
+        };
+
+        document.getElementById('applyConfigImportBtn').onclick = () => {
+            const txt = (document.getElementById('configImportArea')?.value || '').trim();
+            if (!txt) {
+                if (typeof showToast === 'function') showToast('请先粘贴备份内容', 'error');
+                return;
+            }
+
+            try {
+                const parsed = JSON.parse(txt);
+                if (parsed.ai) {
+                    localStorage.setItem('mc_yt_ai_config', JSON.stringify(parsed.ai));
+                    if (window.G) {
+                        if (!window.G.ai) window.G.ai = {};
+                        Object.assign(window.G.ai, parsed.ai);
+                    }
+                }
+                if (parsed.search) {
+                    localStorage.setItem('mc_yt_search_config', JSON.stringify(parsed.search));
+                    if (window.G) {
+                        if (!window.G.search) window.G.search = {};
+                        Object.assign(window.G.search, parsed.search);
+                    }
+                }
+                if (Array.isArray(parsed.profiles)) {
+                    saveAIProfiles(parsed.profiles);
+                }
+                if (typeof closeModal === 'function') closeModal();
+                renderSettingsApp();
+                if (typeof showToast === 'function') showToast('配置已成功恢复！', 'success');
+            } catch (err) {
+                if (typeof showToast === 'function') showToast('解析失败，请确保格式正确', 'error');
+            }
+        };
+    }
+
+    // 拦截调度
     const originOpenPhoneApp = window.openPhoneApp;
     window.openPhoneApp = function(appName) {
         if (appName === 'settings') {
