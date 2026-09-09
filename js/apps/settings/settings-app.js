@@ -1,11 +1,11 @@
 // js/apps/settings/settings-app.js
-// 📱 系统设置中心 App（AI大模型/模型检索上下分层/方案存档/向导独立模型/联网实时测试/报错悬浮球定制/存储维护）
+// 📱 系统设置中心 App（AI大模型顶置/操作栏归位/方案默认折叠带粉边/向导精简模型/联网条数自定义/报错悬浮球定制/存储维护）
 // ============================================================
 
 (function(window) {
     'use strict';
 
-    // 默认模型库列表
+    // 默认内置核心模型库
     const DEFAULT_MODEL_PRESETS = [
         'gpt-4o-mini',
         'gpt-4o',
@@ -16,9 +16,12 @@
         'claude-3-5-haiku-20241022',
         'gemini-1.5-pro-latest',
         'gemini-1.5-flash-latest',
+        'gemini-2.5-flash',
         'qwen-plus',
         'qwen-max'
     ];
+
+    let isProfileArchiveCollapsed = true; // 存档方案默认折叠状态
 
     // 获取当前 AI 配置
     function getSafeAIConfig() {
@@ -94,9 +97,9 @@
 
         modalBody.innerHTML = `
             <div style="font-size:12.5px;color:#2e1a22;margin-bottom:8px;font-weight:700;">
-                请输入配置方案备注名称：
+                请输入新配置方案备注名称：
             </div>
-            <input type="text" id="retroCustomInputVal" value="${escapeHtml(defaultVal || '')}" placeholder="${escapeHtml(placeholder || '')}" style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #ffccd9;font-size:12px;outline:none;background:#fff;color:#2e1a22;">
+            <input type="text" id="retroCustomInputVal" value="${escapeHtml(defaultVal || '')}" placeholder="${escapeHtml(placeholder || '')}" style="width:100%;padding:8px 10px;border-radius:8px;border:1.5px solid #ffccd9;font-size:12px;outline:none;background:#fff;color:#2e1a22;">
             <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:14px;">
                 <button class="retro-pink-btn" onclick="closeModal()" style="padding:0 12px;height:26px;font-size:11.5px;">取消</button>
                 <button class="retro-pink-btn" id="retroCustomInputConfirmBtn" style="padding:0 16px;height:26px;font-size:11.5px;background:var(--primary);color:#fff;border:none;">确定</button>
@@ -171,7 +174,7 @@
         body.innerHTML = `
             <div class="settings-app-container" style="padding-bottom:28px;">
                 
-                <!-- 导航分段药丸 -->
+                <!-- 导航分段药丸（全矢量 SVG） -->
                 <div class="settings-nav-tabs" style="display:flex;gap:6px;margin-bottom:14px;overflow-x:auto;padding-bottom:4px;">
                     <button class="settings-tab-btn active" data-tab="ai" style="flex:1;padding:8px 8px;border-radius:10px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;background:var(--primary);color:#fff;border:none;display:inline-flex;align-items:center;justify-content:center;gap:4px;">
                         <svg style="width:14px;height:14px;fill:currentColor;" viewBox="0 0 24 24"><path d="M21 11.5v-1c0-.8-.7-1.5-1.5-1.5H18V7c0-2.2-1.8-4-4-4h-4c-2.2 0-4 1.8-4 4v2H4.5C3.7 9 3 9.7 3 10.5v1c0 .8.7 1.5 1.5 1.5H6v4c0 2.2 1.8 4 4 4h4c2.2 0 4-1.8 4-4v-4h1.5c.8 0 1.5-.7 1.5-1.5zM8 7c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2v2H8V7zm8 9c0 1.1-.9 2-2 2h-4c-1.1 0-2-.9-2-2v-5h8v5zm-5.5-2.5c0 .6-.4 1-1 1s-1-.4-1-1 .4-1 1-1 1 .4 1 1zm5 0c0 .6-.4 1-1 1s-1-.4-1-1 .4-1 1-1 1 .4 1 1z"/></svg>
@@ -191,41 +194,17 @@
                     </button>
                 </div>
 
-                <!-- 分区 1：AI 模型配置面板 -->
+                <!-- 🌟 分区 1：AI 模型配置面板（大模型置顶，操作栏紧随其后，存档折叠在下方） -->
                 <div id="settingsTabContent_ai" class="settings-tab-content">
                     
-                    <!-- 多套方案管理器（Profiles，优化标签精致度） -->
+                    <!-- 1. 最顶层：接口参数中枢与模型配置 -->
                     <div class="theme-setting-card">
                         <div class="theme-setting-title">
-                            <span>配置方案存档 (Profiles)</span>
-                            <div style="display:flex;gap:6px;">
-                                <button class="btn-secondary" id="saveNewProfileBtn" style="padding:3px 8px;font-size:11px;">存为新方案</button>
-                                <button class="btn-secondary" id="backupConfigModalBtn" style="padding:3px 8px;font-size:11px;">备份/恢复</button>
-                            </div>
+                            <span>大语言模型接口参数</span>
+                            <span style="font-size:11px;font-weight:normal;color:var(--primary);">当前方案: <b>${escapeHtml(activeProfileName)}</b></span>
                         </div>
                         <div class="theme-setting-desc">
-                            保存多套大模型配置（直连/中转/备用），一键无缝切换。
-                        </div>
-                        <div class="profile-chip-list" id="aiProfileChipContainer" style="display:flex;flex-wrap:wrap;gap:6px;">
-                            <div class="profile-chip ${activeProfileName === '默认配置' ? 'active' : ''}" onclick="window.switchAIProfile('默认配置')" style="padding:4px 9px;border-radius:14px;font-size:11.5px;max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                                <span>默认配置</span>
-                            </div>
-                            ${profiles.map(p => `
-                                <div class="profile-chip ${p.name === activeProfileName ? 'active' : ''}" onclick="window.switchAIProfile('${escapeHtml(p.name)}')" style="padding:4px 9px;border-radius:14px;font-size:11.5px;max-width:140px;display:inline-flex;align-items:center;gap:4px;">
-                                    <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(p.name)}</span>
-                                    <span class="profile-chip-del" style="font-size:10px;opacity:0.7;" onclick="event.stopPropagation(); window.deleteAIProfile('${escapeHtml(p.name)}')">✕</span>
-                                </div>
-                            `).join('')}
-                        </div>
-                    </div>
-
-                    <!-- 接口与模型编辑 -->
-                    <div class="theme-setting-card">
-                        <div class="theme-setting-title">
-                            <span>接口参数中枢</span>
-                        </div>
-                        <div class="theme-setting-desc">
-                            标准 OpenAI 兼容协议，支持 DeepSeek、GPT-4o、Claude、Gemini 等。
+                            标准 OpenAI 兼容协议（支持 DeepSeek、GPT-4o、Claude、Gemini 等）。
                         </div>
 
                         <div style="display:flex;flex-direction:column;gap:10px;">
@@ -239,17 +218,17 @@
                                 <input type="password" id="aiApiKeyInput" value="${escapeHtml(aiCfg.apiKey || '')}" placeholder="sk-..." style="width:100%;padding:8px 10px;border:1px solid #ffccd9;border-radius:8px;font-size:12px;outline:none;">
                             </div>
 
-                            <!-- 🌟 主模型选择上下分层排版（去冗余输入框，名称宽敞不破框） -->
+                            <!-- 游戏主模型上下分层排版 -->
                             <div>
                                 <div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:6px;">游戏主剧情模型</div>
                                 
-                                <!-- 上行：宽敞搜索框 + 右侧拉取按钮 -->
+                                <!-- 上行：宽敞搜索/过滤框 + 右侧拉取按钮 -->
                                 <div style="display:flex;gap:6px;margin-bottom:8px;">
                                     <input type="text" id="modelFilterKeywordInput" placeholder="🔍 搜索/过滤模型 (如 deepseek/gemini)..." style="flex:1;padding:7px 10px;border:1px solid #ffccd9;border-radius:8px;font-size:11.5px;outline:none;background:#fff8fa;">
                                     <button class="btn-secondary" id="fetchModelsBtn" style="padding:0 12px;font-size:11px;height:32px;white-space:nowrap;font-weight:700;">拉取可用模型</button>
                                 </div>
 
-                                <!-- 下行：整行 100% 宽度模型下拉选择项 -->
+                                <!-- 下行：100% 全宽模型选择下拉框，超长名称完整展现 -->
                                 <div>
                                     <select id="aiModelSelect" style="width:100%;padding:8px 10px;border:1px solid #ffccd9;border-radius:8px;font-size:12px;background:#fff;outline:none;color:#2e1a22;">
                                         ${(aiCfg.modelsList || []).map(m => `<option value="${m}" ${m === aiCfg.model ? 'selected' : ''}>${m}</option>`).join('')}
@@ -257,27 +236,60 @@
                                 </div>
                             </div>
 
-                            <!-- 向导小助手独立模型配置 -->
+                            <!-- 智能向导专属模型（直接复用当前标注模型列表，不重复拉取） -->
                             <div style="border-top:1px dashed #ffd4e0;padding-top:10px;margin-top:2px;">
                                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
                                     <label style="font-size:12px;font-weight:700;color:var(--text);">智能向导独立模型</label>
-                                    <span style="font-size:10.5px;color:var(--text2);">可选专属快速小模型</span>
+                                    <span style="font-size:10.5px;color:var(--text2);">可选专用快速小模型</span>
                                 </div>
                                 <select id="agentModelSelect" style="width:100%;padding:8px 10px;border:1px solid #ffccd9;border-radius:8px;font-size:12px;background:#fff;outline:none;color:#2e1a22;">
                                     <option value="follow_global" ${aiCfg.agentModel === 'follow_global' ? 'selected' : ''}>跟随全局主模型</option>
-                                    ${(aiCfg.modelsList || []).map(m => `<option value="${m}" ${m === aiCfg.agentModel ? 'selected' : ''}>独立选用: ${m}</option>`).join('')}
+                                    ${(aiCfg.modelsList || []).map(m => `<option value="${m}" ${m === aiCfg.agentModel ? 'selected' : ''}>${m}</option>`).join('')}
                                 </select>
                             </div>
 
-                            <div style="display:flex;gap:8px;margin-top:6px;">
-                                <button class="btn-secondary" id="testAiConnectBtn" style="flex:1;padding:9px;font-size:12px;">连通性测试</button>
-                                <button class="btn-primary" id="saveAiConfigBtn" style="flex:1;padding:9px;font-size:12px;">保存生效</button>
+                            <!-- 🌟 核心操作按钮栏（位于拉取模型下方） -->
+                            <div style="display:grid;grid-template-columns:repeat(2, 1fr);gap:8px;margin-top:8px;">
+                                <button class="btn-primary" id="updateCurrentProfileBtn" style="padding:9px;font-size:12px;">更新该保存</button>
+                                <button class="btn-secondary" id="saveAsNewProfileBtn" style="padding:9px;font-size:12px;">另存为新方案</button>
+                                <button class="btn-secondary" id="testAiConnectBtn" style="padding:9px;font-size:12px;">连通性测试</button>
+                                <button class="btn-secondary" id="backupConfigModalBtn" style="padding:9px;font-size:12px;">配置备份与恢复</button>
                             </div>
                         </div>
                     </div>
+
+                    <!-- 2. 下方：配置方案存档（默认折叠 + 精致粉色圆角边框） -->
+                    <div class="theme-setting-card" style="background:#fff8fa;border:1.5px solid #ffccd9;border-radius:14px;box-shadow:none;">
+                        <div class="theme-collapsible-header" id="profileArchiveHeader" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
+                            <div class="theme-setting-title" style="margin-bottom:0;font-size:13px;color:#ad1457;">
+                                <span>已存配置方案 (${profiles.length + 1})</span>
+                            </div>
+                            <span id="profileArchiveArrow" style="font-size:11.5px;color:var(--primary);font-weight:700;">
+                                ${isProfileArchiveCollapsed ? '▶ 点击展开' : '▼ 点击收起'}
+                            </span>
+                        </div>
+
+                        <div id="profileArchiveBody" style="display:${isProfileArchiveCollapsed ? 'none' : 'block'};margin-top:10px;border-top:1px dashed #ffd4e0;padding-top:10px;">
+                            <div class="theme-setting-desc" style="margin-bottom:8px;">
+                                点击标签切换已保存的配置，点击 ✕ 彻底删除对应方案。
+                            </div>
+                            <div class="profile-chip-list" id="aiProfileChipContainer" style="display:flex;flex-wrap:wrap;gap:6px;">
+                                <div class="profile-chip ${activeProfileName === '默认配置' ? 'active' : ''}" onclick="window.switchAIProfile('默认配置')" style="padding:4px 10px;border-radius:14px;font-size:11.5px;max-width:130px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:pointer;">
+                                    <span>默认配置</span>
+                                </div>
+                                ${profiles.map(p => `
+                                    <div class="profile-chip ${p.name === activeProfileName ? 'active' : ''}" onclick="window.switchAIProfile('${escapeHtml(p.name)}')" style="padding:4px 10px;border-radius:14px;font-size:11.5px;max-width:140px;display:inline-flex;align-items:center;gap:4px;cursor:pointer;">
+                                        <span style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(p.name)}</span>
+                                        <span class="profile-chip-del" style="font-size:10px;opacity:0.75;" onclick="event.stopPropagation(); window.deleteAIProfile('${escapeHtml(p.name)}')">✕</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
 
-                <!-- 分区 2：联网搜索中枢（含实时测试交互台） -->
+                <!-- 分区 2：联网搜索中枢（含条数自定义与实时测试） -->
                 <div id="settingsTabContent_search" class="settings-tab-content" style="display:none;">
                     <div class="theme-setting-card">
                         <div class="theme-setting-title">
@@ -288,10 +300,19 @@
                             </label>
                         </div>
                         <div class="theme-setting-desc">
-                            开启后生成剧情或发布视频时将探查真实 Minecraft 资讯。
+                            开启后生成剧情或发布油管视频时将探查真实 Minecraft 资讯。
                         </div>
 
                         <div id="searchConfigBody" style="${searchCfg.enabled ? '' : 'opacity:0.45;pointer-events:none;'}">
+                            <!-- 🌟 自定义搜索结果条数设置 -->
+                            <div style="background:#fff8fa;border:1px solid #ffd4e0;border-radius:10px;padding:10px;margin-bottom:12px;">
+                                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                                    <span style="font-size:12px;font-weight:700;color:var(--text);">搜索结果引用条数</span>
+                                    <span id="searchResultCountVal" style="color:var(--primary);font-family:monospace;font-weight:700;">${searchCfg.maxResults || 3} 条</span>
+                                </div>
+                                <input type="range" id="searchResultCountSlider" min="1" max="10" value="${searchCfg.maxResults || 3}" style="width:100%;accent-color:var(--primary);">
+                            </div>
+
                             <label style="font-size:12px;font-weight:700;color:var(--text);display:block;margin-bottom:6px;">搜索引擎渠道配置</label>
                             
                             <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
@@ -447,6 +468,18 @@
             };
         });
 
+        // 折叠/展开方案存档
+        const archiveHeader = document.getElementById('profileArchiveHeader');
+        const archiveBody = document.getElementById('profileArchiveBody');
+        const archiveArrow = document.getElementById('profileArchiveArrow');
+        if (archiveHeader && archiveBody && archiveArrow) {
+            archiveHeader.onclick = () => {
+                isProfileArchiveCollapsed = !isProfileArchiveCollapsed;
+                archiveBody.style.display = isProfileArchiveCollapsed ? 'none' : 'block';
+                archiveArrow.textContent = isProfileArchiveCollapsed ? '▶ 点击展开' : '▼ 点击收起';
+            };
+        }
+
         const baseUrlInput = document.getElementById('aiBaseUrlInput');
         const apiKeyInput = document.getElementById('aiApiKeyInput');
         const modelSelect = document.getElementById('aiModelSelect');
@@ -486,24 +519,72 @@
             };
         };
 
-        const saveAiBtn = document.getElementById('saveAiConfigBtn');
-        if (saveAiBtn) {
-            saveAiBtn.onclick = () => {
-                const data = gatherCurrentAiData();
+        // 🌟 1. 更新该保存（直接覆盖当前激活方案）
+        const updateSaveBtn = document.getElementById('updateCurrentProfileBtn');
+        if (updateSaveBtn) {
+            updateSaveBtn.onclick = () => {
+                const activeName = localStorage.getItem('mcyt_active_ai_profile_name') || '默认配置';
+                const curData = gatherCurrentAiData();
+
                 try {
                     if (window.G) {
                         if (!window.G.ai) window.G.ai = {};
-                        Object.assign(window.G.ai, data);
+                        Object.assign(window.G.ai, curData);
                     }
-                    localStorage.setItem('mc_yt_ai_config', JSON.stringify(data));
+                    localStorage.setItem('mc_yt_ai_config', JSON.stringify(curData));
                     if (typeof persistAIConfig === 'function') persistAIConfig();
-                    if (typeof showToast === 'function') showToast('已保存 AI 模型配置', 'success');
+
+                    // 如果不是默认配置，同步更新进方案存档列表中
+                    if (activeName !== '默认配置') {
+                        const list = getAIProfiles();
+                        const idx = list.findIndex(p => p.name === activeName);
+                        if (idx >= 0) {
+                            list[idx].config = curData;
+                            list[idx].updatedAt = Date.now();
+                            saveAIProfiles(list);
+                        }
+                    }
+
+                    renderSettingsApp();
+                    if (typeof showToast === 'function') showToast(`已更新保存方案 [${activeName}]`, 'success');
                 } catch (e) {
                     if (typeof showToast === 'function') showToast('保存失败: ' + e.message, 'error');
                 }
             };
         }
 
+        // 🌟 2. 另存为新方案
+        const saveAsBtn = document.getElementById('saveAsNewProfileBtn');
+        if (saveAsBtn) {
+            saveAsBtn.onclick = () => {
+                openRetroInputModal('另存为新方案', '新 API 专线', '输入方案名称...', (name) => {
+                    if (!name) {
+                        if (typeof showToast === 'function') showToast('方案名称不能为空', 'error');
+                        return;
+                    }
+                    const curData = gatherCurrentAiData();
+                    const list = getAIProfiles();
+                    const targetName = name.trim();
+
+                    const existingIdx = list.findIndex(p => p.name === targetName);
+                    const profileObj = {
+                        name: targetName,
+                        config: curData,
+                        updatedAt: Date.now()
+                    };
+
+                    if (existingIdx >= 0) list[existingIdx] = profileObj;
+                    else list.push(profileObj);
+
+                    saveAIProfiles(list);
+                    localStorage.setItem('mcyt_active_ai_profile_name', targetName);
+                    renderSettingsApp();
+                    if (typeof showToast === 'function') showToast(`新方案 [${targetName}] 已保存！`, 'success');
+                });
+            };
+        }
+
+        // 3. 连通性测试
         const testAiBtn = document.getElementById('testAiConnectBtn');
         if (testAiBtn) {
             testAiBtn.onclick = async () => {
@@ -545,6 +626,7 @@
             };
         }
 
+        // 4. 拉取模型列表
         const fetchModelsBtn = document.getElementById('fetchModelsBtn');
         if (fetchModelsBtn) {
             fetchModelsBtn.onclick = async () => {
@@ -577,11 +659,12 @@
                         fullModelList = Array.from(new Set([...list, ...DEFAULT_MODEL_PRESETS]));
                         renderFilteredModelOptions(filterInput ? filterInput.value : '');
                         
+                        // 同步刷新向导模型列表
                         if (agentSelect) {
                             const curVal = agentSelect.value;
                             agentSelect.innerHTML = `
                                 <option value="follow_global">跟随全局主模型</option>
-                                ${fullModelList.map(m => `<option value="${m}" ${m === curVal ? 'selected' : ''}>独立选用: ${m}</option>`).join('')}
+                                ${fullModelList.map(m => `<option value="${m}" ${m === curVal ? 'selected' : ''}>${m}</option>`).join('')}
                             `;
                         }
 
@@ -598,37 +681,7 @@
             };
         }
 
-        // 🌟 换用粉白系统输入弹窗新建方案
-        const saveProfileBtn = document.getElementById('saveNewProfileBtn');
-        if (saveProfileBtn) {
-            saveProfileBtn.onclick = () => {
-                openRetroInputModal('存为新方案', '新 API 专线', '输入方案名称...', (name) => {
-                    if (!name) {
-                        if (typeof showToast === 'function') showToast('方案名称不能为空', 'error');
-                        return;
-                    }
-                    const curData = gatherCurrentAiData();
-                    const list = getAIProfiles();
-                    const targetName = name.trim();
-
-                    const existingIdx = list.findIndex(p => p.name === targetName);
-                    const profileObj = {
-                        name: targetName,
-                        config: curData,
-                        updatedAt: Date.now()
-                    };
-
-                    if (existingIdx >= 0) list[existingIdx] = profileObj;
-                    else list.push(profileObj);
-
-                    saveAIProfiles(list);
-                    localStorage.setItem('mcyt_active_ai_profile_name', targetName);
-                    renderSettingsApp();
-                    if (typeof showToast === 'function') showToast(`方案 [${targetName}] 已成功保存！`, 'success');
-                });
-            };
-        }
-
+        // 5. 备份与恢复
         const backupBtn = document.getElementById('backupConfigModalBtn');
         if (backupBtn) {
             backupBtn.onclick = () => {
@@ -636,10 +689,19 @@
             };
         }
 
+        // 6. 联网搜索配置
         const searchToggle = document.getElementById('searchEnableToggle');
         const searchToggleText = document.getElementById('searchEnableText');
         const searchConfigBody = document.getElementById('searchConfigBody');
         const saveSearchBtn = document.getElementById('saveSearchConfigBtn');
+        const resultCountSlider = document.getElementById('searchResultCountSlider');
+        const resultCountVal = document.getElementById('searchResultCountVal');
+
+        if (resultCountSlider && resultCountVal) {
+            resultCountSlider.oninput = () => {
+                resultCountVal.textContent = resultCountSlider.value + ' 条';
+            };
+        }
 
         if (searchToggle) {
             searchToggle.onchange = () => {
@@ -659,12 +721,12 @@
                 const searchObj = {
                     enabled: !!(searchToggle && searchToggle.checked),
                     provider: provider,
+                    maxResults: parseInt(resultCountSlider?.value) || 3,
                     keys: {
                         bocha: document.getElementById('bochaKeyInput')?.value.trim() || '',
                         metaso: document.getElementById('metasoKeyInput')?.value.trim() || '',
                         tavily: document.getElementById('tavilyKeyInput')?.value.trim() || ''
-                    },
-                    maxResults: 3
+                    }
                 };
 
                 try {
@@ -681,6 +743,7 @@
             };
         }
 
+        // 7. 联网搜索实时测试
         const testSearchBtn = document.getElementById('executeWebSearchTestBtn');
         const testSearchQuery = document.getElementById('webSearchTestQueryInput');
         const testSearchResultBox = document.getElementById('webSearchTestResultBox');
@@ -703,8 +766,10 @@
                 testSearchResultBox.style.display = 'block';
                 testSearchResultBox.innerHTML = '<span style="color:#7a505f;">正在向搜索引擎建立实时连接探查...</span>';
 
+                const targetCount = parseInt(resultCountSlider?.value) || 3;
+
                 try {
-                    const res = await window.webSearch(query, 3);
+                    const res = await window.webSearch(query, targetCount);
                     const list = res.results || [];
                     if (list.length === 0) {
                         testSearchResultBox.innerHTML = '<span style="color:#c62828;">未检索到相关内容，或当前网络通道受限。</span>';
@@ -725,6 +790,7 @@
             };
         }
 
+        // 8. 悬浮球设置
         const orbToggle = document.getElementById('orbMasterToggle');
         const orbToggleText = document.getElementById('orbToggleText');
         const detailBox = document.getElementById('orbConfigDetailBox');
@@ -812,6 +878,7 @@
         }
     }
 
+    // 方案切换
     window.switchAIProfile = function(name) {
         if (name === '默认配置') {
             localStorage.setItem('mcyt_active_ai_profile_name', '默认配置');
@@ -838,9 +905,9 @@
         if (typeof showToast === 'function') showToast(`已切换至方案: ${target.name}`, 'success');
     };
 
-    // 🌟 换用粉白系统确认弹窗删除方案
+    // 方案删除
     window.deleteAIProfile = function(name) {
-        openRetroConfirmModal('删除方案', `确定要删除配置方案 [${name}] 吗？`, () => {
+        openRetroConfirmModal('删除方案', `确定要彻底删除配置方案 [${name}] 吗？`, () => {
             let list = getAIProfiles().filter(p => p.name !== name);
             saveAIProfiles(list);
             if (localStorage.getItem('mcyt_active_ai_profile_name') === name) {
@@ -851,6 +918,7 @@
         });
     };
 
+    // 备份恢复弹窗
     function openConfigBackupModal() {
         const modal = document.getElementById('modal');
         const modalBody = document.getElementById('modalBody');
