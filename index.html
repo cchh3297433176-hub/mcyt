@@ -160,10 +160,8 @@
                         </div>
                     </div>
                     <div class="app-slot" onclick="openPhoneApp('settings')">
-                        <div class="app-icon-box" style="background: #495057; width: 50px; height: 50px;">
-                            <svg class="app-icon-svg" style="width:25px;height:25px;" viewBox="0 0 24 24" fill="#ffffff">
-                                <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.488.488 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
-                            </svg>
+                        <div class="app-icon-box" style="width: 50px; height: 50px;">
+                            <img src="assets/icons/icon_settings.png" alt="系统设置" />
                         </div>
                     </div>
                     <div class="app-slot" onclick="openPhoneApp('backup')">
@@ -226,7 +224,7 @@
         })();
     </script>
 
-    <!-- 脚本加载插槽 -->
+    <!-- 1. 底层核心与游戏数据 -->
     <script src="js/01-state-config.js"></script>
     <script src="js/02-ai-network.js"></script>
     <script src="js/03-game-core-1.js"></script>
@@ -239,8 +237,17 @@
     <script src="js/08-save-load.js"></script>
     <script src="js/09-events-init.js"></script>
 
+    <!-- 2. 硬件外壳系统与原生功能驱动 -->
     <script src="js/shell/phone-shell.js"></script>
+
+    <!-- 3. 悬浮球诊断中枢与玩家功能向导系统 -->
+    <script src="js/system/assistant-registry.js"></script>
+    <script src="js/system/assistant-agent.js"></script>
+    <script src="js/system/error-monitor.js"></script>
+
+    <!-- 4. 独立 App 模块矩阵 -->
     <script src="js/apps/theme/theme-app.js"></script>
+    <script src="js/apps/settings/settings-app.js"></script>
 
     <!-- 视图启动器 -->
     <script>
