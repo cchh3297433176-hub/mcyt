@@ -13,7 +13,7 @@
 
     <!-- 纯净定制小手机系统外壳 -->
     <div class="phone-wrapper" id="phoneWrapper">
-        <!-- 灵动岛 -->
+        <!-- 灵动岛（已微调轻薄尺寸，防止挤压状态栏图标） -->
         <div class="phone-notch">
             <div class="phone-camera-lens"></div>
         </div>
@@ -22,15 +22,20 @@
         <div class="status-bar" id="statusBar">
             <div id="statusTimeText">12:00</div>
             <div class="status-bar-right">
-                <!-- 信号 -->
-                <svg class="status-bar-svg" viewBox="0 0 24 24">
-                    <rect x="2" y="16" width="3.5" height="5" rx="1"></rect>
-                    <rect x="7.5" y="12" width="3.5" height="9" rx="1"></rect>
-                    <rect x="13" y="7" width="3.5" height="14" rx="1"></rect>
-                    <rect x="18.5" y="2" width="3.5" height="19" rx="1"></rect>
+                <!-- 真实感知：蓝牙指示（默认按需显示） -->
+                <svg class="status-bar-svg" id="statusBluetoothSvg" viewBox="0 0 24 24" style="display:none; width:13px; height:13px;">
+                    <path d="M17.71 7.71L12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4.29zM13 5.83l1.88 1.88L13 9.59V5.83zm1.88 10.46L13 18.17v-3.76l1.88 1.88z"/>
                 </svg>
 
-                <!-- Wi-Fi -->
+                <!-- 真实感知：蜂窝移动网络信号 -->
+                <svg class="status-bar-svg" id="statusCellularSvg" viewBox="0 0 24 24">
+                    <rect x="2" y="16" width="3.2" height="5" rx="1"></rect>
+                    <rect x="7.5" y="12" width="3.2" height="9" rx="1"></rect>
+                    <rect x="13" y="7" width="3.2" height="14" rx="1"></rect>
+                    <rect x="18.5" y="2" width="3.2" height="19" rx="1"></rect>
+                </svg>
+
+                <!-- 真实感知：Wi-Fi 无线网络 -->
                 <svg class="status-bar-svg" viewBox="0 0 24 24" id="wifiSvg">
                     <path d="M12 18a1.5 1.5 0 100 3 1.5 1.5 0 000-3z"></path>
                     <path d="M4.93 12.93a10 10 0 0114.14 0l-1.41 1.41a8 8 0 00-11.32 0l-1.41-1.41z"></path>
@@ -160,8 +165,11 @@
                         </div>
                     </div>
                     <div class="app-slot" onclick="openPhoneApp('settings')">
-                        <div class="app-icon-box" style="width: 50px; height: 50px;">
-                            <img src="assets/icons/icon_settings.png" alt="系统设置" />
+                        <div class="app-icon-box" style="width: 50px; height: 50px; background: linear-gradient(135deg, #ff758f, #ff5c8a);">
+                            <!-- 高级粉白双色矢量齿轮图标，替代暗色图标 -->
+                            <svg class="app-icon-svg" style="width:26px;height:26px;" viewBox="0 0 24 24" fill="#ffffff">
+                                <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+                            </svg>
                         </div>
                     </div>
                     <div class="app-slot" onclick="openPhoneApp('backup')">

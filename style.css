@@ -87,16 +87,16 @@ body {
     }
 }
 
-/* 灵动岛 */
+/* 灵动岛（精细化缩小尺寸，彻底消除对两侧图标的遮挡） */
 .phone-notch {
     position: absolute;
-    top: 11px;
+    top: 9px;
     left: 50%;
     transform: translateX(-50%);
-    width: 86px;
-    height: 22px;
-    background: #000;
-    border-radius: 20px;
+    width: 72px;
+    height: 18px;
+    background: #000000;
+    border-radius: 14px;
     z-index: 1000;
     display: flex;
     align-items: center;
@@ -104,26 +104,26 @@ body {
     pointer-events: none;
 }
 .phone-camera-lens {
-    width: 8px;
-    height: 8px;
+    width: 7px;
+    height: 7px;
     background: #0a0f18;
     border-radius: 50%;
     box-shadow: inset 0 0 2px #39527f;
 }
 
-/* 智能感知色彩状态栏 */
+/* 智能感知色彩状态栏（加大左右留白，避开灵动岛） */
 .status-bar {
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
-    height: 42px;
+    height: 38px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 8px 24px 0 24px;
+    padding: 6px 18px 0 18px;
     color: var(--status-color);
-    font-size: 13.5px;
+    font-size: 13px;
     font-weight: 500;
     letter-spacing: -0.2px;
     z-index: 950;
@@ -132,26 +132,26 @@ body {
 .status-bar-right {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
 }
 .status-bar-svg {
     fill: var(--status-svg-fill);
-    width: 15px;
-    height: 15px;
-    transition: fill 0.3s ease;
+    width: 14px;
+    height: 14px;
+    transition: fill 0.3s ease, opacity 0.3s ease;
 }
 
 /* 电池指示组件 */
 .battery-pill {
     display: flex;
     align-items: center;
-    gap: 5px;
+    gap: 4px;
     position: relative;
 }
 .charging-star-icon {
     display: none;
-    width: 13px;
-    height: 13px;
+    width: 12px;
+    height: 12px;
     filter: drop-shadow(0 0 6px var(--star-glow-color));
     animation: starBreath 2s ease-in-out infinite alternate;
 }
@@ -170,10 +170,10 @@ body {
 }
 .battery-shell {
     position: relative;
-    width: 21px;
+    width: 20px;
     height: 11px;
-    border: 1.4px solid var(--status-color);
-    border-radius: 3.5px;
+    border: 1.3px solid var(--status-color);
+    border-radius: 3px;
     padding: 1px;
     display: flex;
     align-items: center;
@@ -182,9 +182,9 @@ body {
 .battery-shell::after {
     content: "";
     position: absolute;
-    right: -3.5px;
+    right: -3px;
     top: 2.2px;
-    width: 2px;
+    width: 1.8px;
     height: 4px;
     background: var(--status-color);
     border-radius: 0 1.5px 1.5px 0;
@@ -198,9 +198,9 @@ body {
     transition: width 0.3s ease, background-color 0.3s ease;
 }
 .battery-text {
-    font-size: 11px;
+    font-size: 10.5px;
     font-weight: 500;
-    min-width: 26px;
+    min-width: 24px;
     text-align: right;
     color: var(--status-color);
     transition: color 0.3s ease;
@@ -514,7 +514,7 @@ body {
 }
 
 /* ============================================================ */
-/* 复古 Windows（Win98 Pink Sweetheart）弹窗设计 */
+/* 复古弹窗设计 */
 /* ============================================================ */
 .retro-pink-window {
     background: #fff3f6 !important;
@@ -553,18 +553,23 @@ body {
     font-size: 11px;
     font-weight: bold;
     color: #9c2748;
-    width: 20px;
-    height: 20px;
-    display: flex;
+    height: 24px;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
-    line-height: 1;
-    padding: 0;
+    gap: 4px;
+    padding: 0 8px;
+    user-select: none;
 }
 .retro-pink-btn:active {
     border-color: #ad4e65 #ffffff #ffffff #ad4e65;
     box-shadow: none;
     transform: translate(1px, 1px);
+}
+.retro-pink-btn.close-btn {
+    width: 20px;
+    height: 20px;
+    padding: 0;
 }
 
 .retro-pink-content {
@@ -578,7 +583,7 @@ body {
 }
 
 /* ============================================================ */
-/* 粉色像素指针交互规范（箭头高度上移微调，对齐字心） */
+/* 粉色像素指针交互规范 */
 /* ============================================================ */
 @keyframes pixelPointerHop {
     0%, 100% { transform: translateY(-56%) translateX(0); }
@@ -646,256 +651,7 @@ body {
 }
 
 /* ============================================================ */
-/* 专业 HSV 色相环 + 绝对正等边三角形 + 自适应底座 */
-/* ============================================================ */
-.hsv-picker-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    border-radius: 16px;
-    padding: 16px 14px 12px 14px;
-    margin-top: 10px;
-    position: relative;
-    transition: background 0.3s ease, border-color 0.3s ease;
-}
-
-.hsv-picker-container.theme-dark-plate {
-    background: #2b2b2b;
-    border: 1px solid #3d3d3d;
-    box-shadow: inset 0 2px 8px rgba(0,0,0,0.4), 0 4px 12px rgba(0,0,0,0.2);
-}
-.hsv-picker-container.theme-dark-plate .hsv-slider-label {
-    color: #cfcfcf;
-}
-.hsv-picker-container.theme-dark-plate .hsv-slider-input {
-    background: #444;
-}
-.hsv-picker-container.theme-dark-plate .hsv-num-input {
-    background: #383838;
-    color: #ffffff;
-    border: 1px solid #555;
-}
-
-.hsv-picker-container.theme-light-plate {
-    background: #ffffff;
-    border: 1.5px solid #2e1a22;
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.08);
-}
-.hsv-picker-container.theme-light-plate .hsv-slider-label {
-    color: #2e1a22;
-}
-.hsv-picker-container.theme-light-plate .hsv-slider-input {
-    background: #e2e2e2;
-}
-.hsv-picker-container.theme-light-plate .hsv-num-input {
-    background: #ffffff;
-    color: #2e1a22;
-    border: 1px solid #2e1a22;
-}
-
-.hsv-wheel-box {
-    position: relative;
-    width: 226px;
-    height: 226px;
-    margin: 4px auto 14px auto;
-    touch-action: none;
-    user-select: none;
-}
-.hsv-wheel-canvas {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    border-radius: 50%;
-}
-
-.hsv-ring-handle {
-    position: absolute;
-    width: 22px;
-    height: 22px;
-    border: 2.5px solid #ffffff;
-    border-radius: 50%;
-    box-shadow: 0 0 6px rgba(0,0,0,0.7), inset 0 0 3px rgba(0,0,0,0.4);
-    pointer-events: none;
-    transform: translate(-50%, -50%);
-    box-sizing: border-box;
-}
-.hsv-triangle-handle {
-    position: absolute;
-    width: 18px;
-    height: 18px;
-    border: 2.5px solid #ffffff;
-    border-radius: 50%;
-    box-shadow: 0 0 6px rgba(0,0,0,0.7), inset 0 0 3px rgba(0,0,0,0.4);
-    pointer-events: none;
-    transform: translate(-50%, -50%);
-    box-sizing: border-box;
-}
-
-.hsv-tools-row {
-    position: absolute;
-    top: 186px;
-    right: 18px;
-    display: flex;
-    align-items: center;
-    z-index: 10;
-}
-.hsv-pipette-btn {
-    width: 32px;
-    height: 32px;
-    border-radius: 50%;
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    transition: transform 0.15s ease;
-    opacity: 0.9;
-}
-.hsv-pipette-btn:active {
-    transform: scale(0.88);
-}
-.hsv-pipette-btn svg {
-    width: 24px;
-    height: 24px;
-    fill: none;
-    stroke: #888;
-    stroke-width: 1.8;
-}
-.theme-dark-plate .hsv-pipette-btn svg {
-    stroke: #e0e0e0;
-}
-.theme-light-plate .hsv-pipette-btn svg {
-    stroke: #2e1a22;
-}
-
-.hsv-slider-group {
-    width: 100%;
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 0 4px;
-}
-.hsv-slider-row {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-}
-.hsv-slider-label {
-    font-size: 13.5px;
-    font-weight: 700;
-    width: 16px;
-    font-family: monospace;
-}
-.hsv-slider-track-wrap {
-    flex: 1;
-    position: relative;
-    display: flex;
-    align-items: center;
-}
-.hsv-slider-input {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 100%;
-    height: 6px;
-    border-radius: 3px;
-    outline: none;
-    margin: 0;
-}
-.hsv-slider-input::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: #ffffff;
-    border: 2px solid rgba(0,0,0,0.3);
-    box-shadow: 0 1px 4px rgba(0,0,0,0.6);
-    cursor: pointer;
-}
-
-.hsv-num-input {
-    width: 46px;
-    padding: 3px 4px;
-    font-size: 12.5px;
-    font-family: monospace;
-    text-align: center;
-    border-radius: 6px;
-    outline: none;
-    transition: var(--transition);
-}
-
-/* ============================================================ */
-/* 吸色器双黑边环准星 */
-/* ============================================================ */
-.pipette-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.88);
-    z-index: 3000;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px;
-    touch-action: none;
-}
-.pipette-view-wrap {
-    flex: 1;
-    width: 100%;
-    position: relative;
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border-radius: 12px;
-    background: #111;
-}
-.pipette-canvas-viewport {
-    position: absolute;
-    touch-action: none;
-    transform-origin: center center;
-    cursor: crosshair;
-}
-
-.pipette-reticle {
-    position: absolute;
-    width: 68px;
-    height: 68px;
-    border-radius: 50%;
-    pointer-events: none;
-    transform: translate(-50%, -50%);
-    display: none;
-    z-index: 3010;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
-    border: 2px solid #000000;
-    background-color: transparent;
-}
-.pipette-reticle::before {
-    content: '';
-    position: absolute;
-    inset: 9px;
-    border-radius: 50%;
-    border: 2px solid #000000;
-    background: transparent;
-}
-.pipette-reticle::after {
-    content: '';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 12px;
-    height: 12px;
-    transform: translate(-50%, -50%);
-    background: 
-        linear-gradient(#000000, #000000) no-repeat center/1.6px 100%,
-        linear-gradient(#000000, #000000) no-repeat center/100% 1.6px;
-}
-
-/* ============================================================ */
-/* 📱 自由裁剪壁纸弹窗样式（智能适配设备比例） */
+/* 📱 自由裁剪壁纸弹窗样式 */
 /* ============================================================ */
 .crop-overlay {
     position: fixed;
@@ -966,6 +722,10 @@ body {
     box-shadow: 0 4px 14px rgba(255, 92, 138, 0.25);
     letter-spacing: 0.5px;
     touch-action: manipulation;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
 }
 .btn-primary:active {
     transform: scale(0.98);
@@ -981,6 +741,10 @@ body {
     cursor: pointer;
     border: 1px solid rgba(255, 92, 138, 0.15);
     touch-action: manipulation;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
 }
 .btn-secondary:active {
     background: #ffe2e8;
@@ -1010,36 +774,7 @@ body {
     line-height: 1.4;
 }
 
-.profile-chip-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 10px;
-}
-.profile-chip {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 5px 10px;
-    border-radius: 20px;
-    background: #fff0f3;
-    border: 1px solid rgba(255, 92, 138, 0.2);
-    font-size: 12px;
-    font-weight: 600;
-    color: #4a2f38;
-}
-.profile-chip.active {
-    background: var(--primary);
-    color: #fff;
-    border-color: var(--primary);
-}
-.profile-chip-del {
-    cursor: pointer;
-    opacity: 0.7;
-    font-size: 11px;
-}
-
-/* 弹窗与封禁全屏最高层级 */
+/* 弹窗层级 */
 .modal-overlay {
     position: fixed;
     inset: 0;
@@ -1087,7 +822,7 @@ body {
 }
 
 /* ============================================================ */
-/* 🐞 报错悬浮球组件与设置面板专属样式（高灵敏、防误触、支持换肤） */
+/* 悬浮球组件与设置面板专属样式（透明皮肤绝对无外发光阴影） */
 /* ============================================================ */
 .debug-floating-orb {
     position: fixed;
@@ -1099,7 +834,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 6px 20px rgba(216, 27, 96, 0.35), 0 2px 6px rgba(0, 0, 0, 0.18);
+    box-shadow: 0 4px 14px rgba(216, 27, 96, 0.28);
     transition: transform 0.15s ease;
 }
 .debug-floating-orb:active {
@@ -1107,11 +842,30 @@ body {
     transform: scale(0.93);
 }
 
+/* 透明图片皮肤专属：彻底消除外层多余阴影与背景暗晕 */
+.debug-floating-orb.orb-transparent-skin {
+    box-shadow: none !important;
+    filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
+}
+
 .orb-inner-icon {
-    font-size: 20px;
-    line-height: 1;
+    width: 65%;
+    height: 65%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     pointer-events: none;
-    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.2));
+}
+.orb-inner-icon img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none;
+}
+.orb-inner-icon svg {
+    width: 100%;
+    height: 100%;
+    fill: #ffffff;
 }
 
 .orb-badge {
@@ -1134,7 +888,7 @@ body {
     pointer-events: none;
 }
 
-/* 报错时的粉红轻颤动效 */
+/* 报错轻颤动效 */
 @keyframes orbShakeAnim {
     0% { transform: translate(0, 0) rotate(0deg); }
     15% { transform: translate(-3px, 2px) rotate(-4deg); }
