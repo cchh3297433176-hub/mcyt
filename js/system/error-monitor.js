@@ -266,6 +266,9 @@
         }
 
         const history = window.MCYT_ASSISTANT_AGENT ? window.MCYT_ASSISTANT_AGENT.getHistory() : [];
+        const greetingText = (window.MCYT_ASSISTANT_AGENT && typeof window.MCYT_ASSISTANT_AGENT.getGreeting === 'function')
+            ? window.MCYT_ASSISTANT_AGENT.getGreeting()
+            : '咕噜噜！我是创作者咩咩救下的小章鱼分身丸子~ 这部手机里有什么按键搞不懂，或者想去哪个 App，尽管告诉我，我带你过去！';
 
         modalBody.innerHTML = `
             <div>
@@ -289,8 +292,8 @@
                     <div id="marukoDialogBox" style="height:230px;overflow-y:auto;background:#fff8fa;border:1px solid #ffd4e0;border-radius:6px;padding:8px;display:flex;flex-direction:column;gap:8px;">
                         <div style="display:flex;gap:6px;align-items:flex-start;">
                             <span style="font-size:18px;">🐙</span>
-                            <div style="background:#fff;border:1px solid #ffd4e0;padding:6px 10px;border-radius:8px;font-size:12px;line-height:1.4;color:#2e1a22;max-width:85%;">
-                                咕噜噜！我是创作者咩咩救下的小章鱼分身丸子~ 这部手机里有什么按键搞不懂，或者想去哪个 App，尽管告诉我，我带你过去！
+                            <div id="marukoGreetingBubble" style="background:#fff;border:1px solid #ffd4e0;padding:6px 10px;border-radius:8px;font-size:12px;line-height:1.4;color:#2e1a22;max-width:85%;">
+                                ${escapeHtml(greetingText)}
                             </div>
                         </div>
                         ${history.map(m => `
@@ -422,7 +425,7 @@
             };
         }
 
-        // 新对话清空内存
+        // 新对话清空内存并更新为最新的问候语
         const resetBtn = document.getElementById('marukoResetMemoryBtn');
         if (resetBtn) {
             resetBtn.onclick = () => {
