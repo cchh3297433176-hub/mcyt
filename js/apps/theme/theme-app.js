@@ -1,8 +1,8 @@
 /**
  * js/apps/theme/theme-app.js
  * 🎀 个性化与主题中心 App
- * 职责：壁纸选取与保存/恢复、正等边三角形专业 HSV 色相盘、支持放大缩放的水滴双环吸色器、
- *       仿 Windows 复古粉白方案命名弹窗、多套主题 Profile 管理、扩展字体导入与关键词匹配
+ * 职责：壁纸选取与自由设备比例裁剪、保存/恢复默认壁纸、正等边三角形专业 HSV 色相盘、
+ *       支持放大缩放的双黑边环水滴吸色器、仿 Win98 复古粉白甜心弹窗、多套配置方案管理与扩展字体
  */
 
 (function () {
@@ -90,13 +90,13 @@
         detectBackgroundLuminanceForPlate();
 
         container.innerHTML = `
-            <!-- 卡片 1：壁纸设置（本地相册导入） -->
+            <!-- 卡片 1：壁纸设置（本地相册导入 + 自定义裁剪） -->
             <div class="theme-setting-card">
                 <div class="theme-setting-title">
                     <span>壁纸设置（本地相册导入）</span>
                 </div>
                 <div class="theme-setting-desc">
-                    选取手机相册照片装扮你的手机，点击保存后将永久生效。
+                    选取手机相册照片，导入时可按当前屏幕比例自由平移缩放裁剪。
                 </div>
 
                 <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:6px;">
@@ -116,7 +116,6 @@
                         ${pendingLockBg || pendingDesktopBg ? '已载入自定义壁纸' : '当前使用默认壁纸'}
                     </div>
 
-                    <!-- 壁纸确认保存与恢复原样并排 -->
                     <div style="display:flex;gap:8px;">
                         <button class="btn-primary" style="flex:2;" onclick="window.confirmSaveWallpapersOnly()">
                             确认保存当前壁纸
@@ -161,14 +160,13 @@
                 <div id="themeHsvPickerWrap" style="display:${currentThemeMode === 'custom' ? 'block' : 'none'};">
                     <div class="hsv-picker-container ${isCurrentPlateDark ? 'theme-dark-plate' : 'theme-light-plate'}" id="hsvPickerContainer">
                         
-                        <!-- 色相环与正等边三角形绘制容器 -->
                         <div class="hsv-wheel-box" id="hsvWheelBox">
                             <canvas id="hsvWheelCanvas" class="hsv-wheel-canvas" width="460" height="460"></canvas>
                             <div class="hsv-ring-handle" id="hsvRingHandle"></div>
                             <div class="hsv-triangle-handle" id="hsvTriangleHandle"></div>
                         </div>
 
-                        <!-- 截图同款：水滴带加号吸色器图标按键 -->
+                        <!-- 截图同款：水滴带加号吸色器按键 -->
                         <div class="hsv-tools-row">
                             <input type="file" id="pipetteImageInput" accept="image/*" style="display:none;" onchange="window.handlePipetteImageSelected(event)">
                             <button class="hsv-pipette-btn" title="导入参考图片吸色" onclick="document.getElementById('pipetteImageInput').click()">
@@ -180,7 +178,7 @@
                             </button>
                         </div>
 
-                        <!-- 底部 H / S / V 微调滑动条与双向可输入数字框 -->
+                        <!-- 底部 H / S / V 滑块与双向数字输入框 -->
                         <div class="hsv-slider-group">
                             <div class="hsv-slider-row">
                                 <span class="hsv-slider-label">H</span>
@@ -209,7 +207,7 @@
                     </div>
                 </div>
 
-                <!-- 单一主键：保存并应用设置（彻底移除恢复原样按键） -->
+                <!-- 单一主键：保存并应用设置 -->
                 <div class="theme-action-bar">
                     <button class="btn-primary" style="width:100%;" onclick="window.saveAndApplyColorThemeOnly()">
                         保存并应用设置
@@ -305,7 +303,7 @@
         }
     }
 
-    // 3. 正等边三角形 HSV 拾色器绘制与触控交互核心（绝对等边几何公式）
+    // 3. 正等边三角形 HSV 拾色器绘制与触控交互核心
     function initHsvCanvasPicker() {
         const box = document.getElementById('hsvWheelBox');
         const canvas = document.getElementById('hsvWheelCanvas');
@@ -316,18 +314,10 @@
         const ctx = canvas.getContext('2d');
         const size = 460;
         const center = size / 2;
-        // 色相环加粗：外半径保持，内半径缩小，宽度由 26 增至 30px
         const outerR = size / 2 - 8;
-        const innerR = outerR - 30;
+        const innerR = outerR - 30; // 加粗约 4px
+        const triR = innerR - 10;   // 正等边三角形外接圆半径
 
-        // 正等边三角形：内切在 innerR 内，留出 10px 安全边距
-        // 等边三角形外接圆半径 R = innerR - 10
-        const triR = innerR - 10;
-
-        // 正等边三角形顶点绝对几何坐标：
-        // 顶点 1（纯白）：角位 150°
-        // 顶点 2（纯黑）：角位 210°
-        // 顶点 3（纯色 Hue）：角位 0°（正右方）
         function getEquilateralTriangleVertices() {
             const cos30 = Math.cos(Math.PI / 6); // √3 / 2 ≈ 0.866025
             const sin30 = Math.sin(Math.PI / 6); // 0.5
@@ -343,13 +333,10 @@
                 right: {
                     x: center + triR,
                     y: center
-                },
-                sideLength: 2 * triR * cos30,
-                height: 1.5 * triR
+                }
             };
         }
 
-        // 绘制完整 Canvas
         function renderColorWheel() {
             ctx.clearRect(0, 0, size, size);
 
@@ -378,7 +365,6 @@
             ctx.closePath();
             ctx.clip();
 
-            // 底层渐变：从左底边向右顶点过渡（纯白 -> 纯色 Hue）
             const pureRgb = hsvToRgb(hsvState.h, 100, 100);
             const horizGrad = ctx.createLinearGradient(v.top.x, center, v.right.x, center);
             horizGrad.addColorStop(0, '#ffffff');
@@ -386,7 +372,6 @@
             ctx.fillStyle = horizGrad;
             ctx.fillRect(0, 0, size, size);
 
-            // 叠加渐变：从左下底角向左上底角过渡纯黑（透明 -> 纯黑）
             const vertGrad = ctx.createLinearGradient(center, v.top.y, center, v.bottom.y);
             vertGrad.addColorStop(0, 'rgba(0,0,0,0)');
             vertGrad.addColorStop(1, '#000000');
@@ -398,12 +383,11 @@
             updateHandlesAndSliders();
         }
 
-        // 更新手柄位置与滑动条
         function updateHandlesAndSliders() {
             const boxRect = box.getBoundingClientRect();
             const scale = boxRect.width / size;
 
-            // 1. 色相环外手柄
+            // 1. 色相环手柄
             const rad = (hsvState.h - 90) * Math.PI / 180;
             const ringMidR = (outerR + innerR) / 2;
             const ringX = (center + ringMidR * Math.cos(rad)) * scale;
@@ -413,7 +397,7 @@
             const pureRgb = hsvToRgb(hsvState.h, 100, 100);
             rHandle.style.backgroundColor = `rgb(${pureRgb.r},${pureRgb.g},${pureRgb.b})`;
 
-            // 2. 正等边三角形内手柄
+            // 2. 正等边三角形手柄
             const v = getEquilateralTriangleVertices();
             const sat = hsvState.s / 100;
             const val = hsvState.v / 100;
@@ -431,7 +415,7 @@
             const curRgb = hsvToRgb(hsvState.h, hsvState.s, hsvState.v);
             tHandle.style.backgroundColor = `rgb(${curRgb.r},${curRgb.g},${curRgb.b})`;
 
-            // 3. 同步滑块与数字输入框
+            // 3. 滑块与数字框同步
             const sH = document.getElementById('sliderH');
             const sS = document.getElementById('sliderS');
             const sV = document.getElementById('sliderV');
@@ -447,12 +431,10 @@
             if (nS) nS.value = hsvState.s;
             if (nV) nV.value = hsvState.v;
 
-            // 实时预览色彩
             const hex = rgbToHex(curRgb.r, curRgb.g, curRgb.b);
             previewColorLive(hex);
         }
 
-        // 触控交互
         function onPointerDown(e) {
             const rect = box.getBoundingClientRect();
             const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -535,7 +517,6 @@
         renderColorWheel();
     }
 
-    // 双向数字输入框变更响应
     window.onHsvNumInputChange = function (channel, value) {
         let num = parseInt(value) || 0;
         if (channel === 'h') {
@@ -551,7 +532,6 @@
         if (window.refreshHsvWheelCanvas) window.refreshHsvWheelCanvas();
     };
 
-    // 实时预览色彩
     function previewColorLive(hex) {
         const root = document.documentElement;
         root.style.setProperty('--status-color', hex);
@@ -560,7 +540,7 @@
         root.style.setProperty('--star-glow-color', hex);
     }
 
-    // 4. 水滴吸色器：自由平移缩放画布 + 截图同款双黑边环准星（截图二标准）
+    // 4. 水滴吸色器：自由平移缩放 + 双黑边环准星（截图二标准）
     window.handlePipetteImageSelected = function (event) {
         const file = event.target.files && event.target.files[0];
         if (!file) return;
@@ -594,7 +574,6 @@
                 <div class="pipette-canvas-viewport" id="pipetteViewport">
                     <canvas id="pipetteCanvas"></canvas>
                 </div>
-                <!-- 截图二标准：双黑边环 + 环内色彩显示 + 中心十字准星 -->
                 <div id="pipetteReticle" class="pipette-reticle"></div>
             </div>
             <div style="display:flex;gap:12px;width:100%;max-width:320px;margin-top:12px;">
@@ -613,13 +592,11 @@
         canvas.height = loadedImg.height;
         ctx.drawImage(loadedImg, 0, 0);
 
-        // 缩放平移交互状态
         let currentScale = 1;
         let panX = 0;
         let panY = 0;
         let pickedRgb = { r: 255, g: 255, b: 255 };
 
-        // 居中初始自适应适配尺寸
         const wrapRect = viewWrap.getBoundingClientRect();
         const initScale = Math.min(wrapRect.width / loadedImg.width, wrapRect.height / loadedImg.height, 1) * 0.95;
         currentScale = initScale;
@@ -629,7 +606,6 @@
             viewport.style.transform = `translate(${panX}px, ${panY}px) scale(${currentScale})`;
         }
 
-        // 采样并更新截图同款准星
         function sampleColorAtClientPoint(clientX, clientY) {
             const canvasRect = canvas.getBoundingClientRect();
             const relX = (clientX - canvasRect.left) / currentScale;
@@ -643,14 +619,12 @@
             const p = ctx.getImageData(pixelX, pixelY, 1, 1).data;
             pickedRgb = { r: p[0], g: p[1], b: p[2] };
 
-            // 定位准星并给双黑边中间环填充色彩
             reticle.style.display = 'block';
             reticle.style.left = `${clientX}px`;
             reticle.style.top = `${clientY}px`;
             reticle.style.backgroundColor = `rgb(${p[0]},${p[1]},${p[2]})`;
         }
 
-        // 手势拖拽与双指缩放
         let isDragging = false;
         let startX = 0, startY = 0;
         let initialPinchDist = 0;
@@ -693,7 +667,6 @@
             isDragging = false;
         }, { passive: true });
 
-        // 鼠标滚轮缩放与鼠标拖拽
         viewWrap.addEventListener('wheel', function (e) {
             e.preventDefault();
             const delta = e.deltaY > 0 ? 0.9 : 1.1;
@@ -721,7 +694,6 @@
             isDragging = false;
         });
 
-        // 退出与清理参考图资源
         function cleanup() {
             overlay.remove();
             loadedImg.src = '';
@@ -738,33 +710,218 @@
         };
     }
 
-    // 5. 本地壁纸上传、单独保存与单独恢复出厂壁纸
+    // 5. 核心：导入本地壁纸并调起智能真机比例裁剪器
     window.handleWallpaperUpload = function (event, targetType) {
         const file = event.target.files && event.target.files[0];
         if (!file) return;
 
         const reader = new FileReader();
         reader.onload = function (e) {
-            const base64Data = e.target.result;
-            const root = document.documentElement;
+            const rawBase64 = e.target.result;
+            const img = new Image();
+            img.onload = function () {
+                openWallpaperCropModal(img, rawBase64, targetType);
+            };
+            img.src = rawBase64;
+        };
+        reader.readAsDataURL(file);
+        event.target.value = '';
+    };
 
+    function openWallpaperCropModal(loadedImg, originalBase64, targetType) {
+        let cropOverlay = document.getElementById('cropOverlay');
+        if (!cropOverlay) {
+            cropOverlay = document.createElement('div');
+            cropOverlay.id = 'cropOverlay';
+            cropOverlay.className = 'crop-overlay';
+            document.body.appendChild(cropOverlay);
+        }
+
+        const typeLabel = targetType === 'lock' ? '锁屏壁纸' : '桌面壁纸';
+
+        cropOverlay.innerHTML = `
+            <div style="color:#ffffff;font-size:13.5px;font-weight:700;margin-bottom:6px;text-align:center;">
+                裁剪 ${typeLabel}（按屏幕比例自由调整）
+            </div>
+            <div class="crop-view-container" id="cropViewContainer">
+                <div class="crop-image-viewport" id="cropViewport">
+                    <canvas id="cropSourceCanvas"></canvas>
+                </div>
+                <div class="crop-frame-box" id="cropFrameBox"></div>
+            </div>
+            <div style="display:flex;gap:8px;width:100%;max-width:380px;margin-top:12px;">
+                <button class="btn-secondary" style="flex:1;" id="cropCancelBtn">取消</button>
+                <button class="btn-secondary" style="flex:1;" id="cropUseOriginalBtn">原图直接使用</button>
+                <button class="btn-primary" style="flex:1.4;" id="cropConfirmBtn">完成裁剪</button>
+            </div>
+        `;
+
+        const viewContainer = document.getElementById('cropViewContainer');
+        const viewport = document.getElementById('cropViewport');
+        const canvas = document.getElementById('cropSourceCanvas');
+        const frameBox = document.getElementById('cropFrameBox');
+        const ctx = canvas.getContext('2d');
+
+        canvas.width = loadedImg.width;
+        canvas.height = loadedImg.height;
+        ctx.drawImage(loadedImg, 0, 0);
+
+        // 动态计算当前真机的实际比例
+        const screenW = window.innerWidth || 360;
+        const screenH = window.innerHeight || 640;
+        const targetRatio = screenW / screenH;
+
+        // 计算裁剪取景框在容器里的尺寸
+        const contRect = viewContainer.getBoundingClientRect();
+        const maxBoxW = contRect.width * 0.86;
+        const maxBoxH = contRect.height * 0.88;
+
+        let frameW = maxBoxW;
+        let frameH = frameW / targetRatio;
+        if (frameH > maxBoxH) {
+            frameH = maxBoxH;
+            frameW = frameH * targetRatio;
+        }
+
+        frameBox.style.width = `${Math.round(frameW)}px`;
+        frameBox.style.height = `${Math.round(frameH)}px`;
+
+        // 缩放平移交互变量
+        let currentScale = 1;
+        let panX = 0;
+        let panY = 0;
+
+        // 居中自适应底图
+        const initScale = Math.max(frameW / loadedImg.width, frameH / loadedImg.height);
+        currentScale = initScale;
+        updateTransform();
+
+        function updateTransform() {
+            viewport.style.transform = `translate(${panX}px, ${panY}px) scale(${currentScale})`;
+        }
+
+        let isDragging = false;
+        let startX = 0, startY = 0;
+        let initialPinchDist = 0;
+        let pinchBaseScale = 1;
+
+        function getDistance(t1, t2) {
+            const dx = t1.clientX - t2.clientX;
+            const dy = t1.clientY - t2.clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        viewContainer.addEventListener('touchstart', function (e) {
+            if (e.touches.length === 1) {
+                isDragging = true;
+                startX = e.touches[0].clientX - panX;
+                startY = e.touches[0].clientY - panY;
+            } else if (e.touches.length === 2) {
+                isDragging = false;
+                initialPinchDist = getDistance(e.touches[0], e.touches[1]);
+                pinchBaseScale = currentScale;
+            }
+        }, { passive: true });
+
+        viewContainer.addEventListener('touchmove', function (e) {
+            if (e.touches.length === 1 && isDragging) {
+                panX = e.touches[0].clientX - startX;
+                panY = e.touches[0].clientY - startY;
+                updateTransform();
+            } else if (e.touches.length === 2) {
+                const dist = getDistance(e.touches[0], e.touches[1]);
+                const factor = dist / initialPinchDist;
+                currentScale = Math.max(initScale * 0.4, Math.min(initScale * 6.0, pinchBaseScale * factor));
+                updateTransform();
+            }
+        }, { passive: true });
+
+        viewContainer.addEventListener('touchend', function () {
+            isDragging = false;
+        }, { passive: true });
+
+        viewContainer.addEventListener('wheel', function (e) {
+            e.preventDefault();
+            const delta = e.deltaY > 0 ? 0.92 : 1.08;
+            currentScale = Math.max(initScale * 0.4, Math.min(initScale * 6.0, currentScale * delta));
+            updateTransform();
+        }, { passive: false });
+
+        viewContainer.addEventListener('mousedown', function (e) {
+            isDragging = true;
+            startX = e.clientX - panX;
+            startY = e.clientY - panY;
+        });
+
+        window.addEventListener('mousemove', function (e) {
+            if (!isDragging) return;
+            panX = e.clientX - startX;
+            panY = e.clientY - startY;
+            updateTransform();
+        });
+
+        window.addEventListener('mouseup', function () {
+            isDragging = false;
+        });
+
+        function cleanup() {
+            cropOverlay.remove();
+            loadedImg.src = '';
+        }
+
+        function applyWallpaperData(base64) {
+            const root = document.documentElement;
             if (targetType === 'lock') {
-                pendingLockBg = base64Data;
-                root.style.setProperty('--lock-bg-url', `url('${base64Data}')`);
+                pendingLockBg = base64;
+                root.style.setProperty('--lock-bg-url', `url('${base64}')`);
                 if (typeof showToast === 'function') showToast('锁屏壁纸已选定，请点击确认保存');
             } else if (targetType === 'desktop') {
-                pendingDesktopBg = base64Data;
-                root.style.setProperty('--desktop-bg-url', `url('${base64Data}')`);
+                pendingDesktopBg = base64;
+                root.style.setProperty('--desktop-bg-url', `url('${base64}')`);
                 if (typeof showToast === 'function') showToast('桌面壁纸已选定，请点击确认保存');
             }
-
             const tip = document.getElementById('wallpaperStatusTip');
             if (tip) tip.textContent = '壁纸已就绪（待保存）';
             detectBackgroundLuminanceForPlate();
-        };
-        reader.readAsDataURL(file);
-    };
+        }
 
+        document.getElementById('cropCancelBtn').onclick = cleanup;
+
+        document.getElementById('cropUseOriginalBtn').onclick = function () {
+            applyWallpaperData(originalBase64);
+            cleanup();
+        };
+
+        document.getElementById('cropConfirmBtn').onclick = function () {
+            // 通过离屏 Canvas 根据取景框相对位置进行精确裁剪
+            const fRect = frameBox.getBoundingClientRect();
+            const cRect = canvas.getBoundingClientRect();
+
+            // 反推原图坐标
+            const srcX = (fRect.left - cRect.left) / currentScale;
+            const srcY = (fRect.top - cRect.top) / currentScale;
+            const srcW = fRect.width / currentScale;
+            const srcH = fRect.height / currentScale;
+
+            const outCanvas = document.createElement('canvas');
+            outCanvas.width = 1080;
+            outCanvas.height = Math.round(1080 / targetRatio);
+            const outCtx = outCanvas.getContext('2d');
+
+            outCtx.drawImage(
+                canvas,
+                srcX, srcY, srcW, srcH,
+                0, 0, outCanvas.width, outCanvas.height
+            );
+
+            const croppedBase64 = outCanvas.toDataURL('image/jpeg', 0.92);
+            applyWallpaperData(croppedBase64);
+            cleanup();
+            if (typeof showToast === 'function') showToast('壁纸已按屏幕比例裁剪并就绪！');
+        };
+    }
+
+    // 确认保存壁纸
     window.confirmSaveWallpapersOnly = function () {
         if (pendingLockBg) localStorage.setItem('mcyt_custom_lock_bg', pendingLockBg);
         if (pendingDesktopBg) localStorage.setItem('mcyt_custom_desktop_bg', pendingDesktopBg);
@@ -784,6 +941,7 @@
         }
     };
 
+    // 恢复默认壁纸
     window.restoreDefaultWallpapersOnly = function () {
         localStorage.removeItem('mcyt_custom_lock_bg');
         localStorage.removeItem('mcyt_custom_desktop_bg');
@@ -833,7 +991,7 @@
         }
     };
 
-    // 7. 单独保存字体与状态栏颜色设置（彻底移除恢复原样按键）
+    // 7. 保存并应用颜色模式（单一主键）
     window.saveAndApplyColorThemeOnly = function () {
         localStorage.setItem('mcyt_phone_theme_mode', currentThemeMode);
 
@@ -855,7 +1013,7 @@
         }
     };
 
-    // 8. 仿 Windows 复古粉白甜心弹窗（Win98 Pink Sweetheart）驱动
+    // 8. 仿 Windows 复古粉白甜心弹窗（Win98 Pink Sweetheart）
     function openRetroPinkModal(title, bodyHTML, onConfirm, showCancel) {
         let overlay = document.getElementById('modal');
         let titleEl = document.getElementById('retroModalTitle');
@@ -889,7 +1047,7 @@
             confirmBtn.onclick = function () {
                 if (typeof onConfirm === 'function') {
                     const result = onConfirm();
-                    if (result === false) return; // 校验不通过不关闭
+                    if (result === false) return;
                 }
                 closeModal();
             };
@@ -1083,7 +1241,6 @@
         `).join('');
     }
 
-    // 使用复古 Win98 甜心弹窗新建方案（彻底消灭原生丑陋 prompt）
     window.promptSaveNewProfile = function () {
         const html = `
             <div style="font-size:13px;color:var(--text);margin-bottom:8px;font-weight:600;">
@@ -1174,7 +1331,6 @@
         }
     };
 
-    // 使用复古 Win98 甜心弹窗确认删除（彻底消灭原生 confirm）
     window.deleteThemeProfile = function (profileName) {
         const html = `
             <div style="font-size:13px;color:var(--text);line-height:1.5;">
