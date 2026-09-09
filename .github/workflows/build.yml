@@ -26,7 +26,10 @@ jobs:
       - name: Create Android Project
         run: |
           mkdir -p proj/app/src/main/assets proj/app/src/main/res/values proj/app/src/main/res/xml proj/app/src/main/res/mipmap proj/app/src/main/java/com/mcyt/simulator
-          cp -r index.html style.css js proj/app/src/main/assets/ 2>/dev/null || cp -r * proj/app/src/main/assets/
+          # ⚠️ 这里必须列出所有需要打进 WebView 资源目录的顶层文件/文件夹。
+          # 以后仓库根目录新增任何文件夹（图片、字体、音频等），务必同步加到下面这一行，
+          # 否则该资源在 APK 里会 404（历史教训：assets/ 曾被漏掉过一次）。
+          cp -r index.html style.css js assets icon.png proj/app/src/main/assets/ 2>/dev/null || cp -r * proj/app/src/main/assets/
 
           if [ -f "icon.png" ]; then
             cp icon.png proj/app/src/main/res/mipmap/ic_launcher.png
