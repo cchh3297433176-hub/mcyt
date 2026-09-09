@@ -140,7 +140,7 @@ body {
     transition: fill 0.3s ease;
 }
 
-/* 电池与四芒星充电指示组件 */
+/* 电池指示组件 */
 .battery-pill {
     display: flex;
     align-items: center;
@@ -493,9 +493,7 @@ body {
     cursor: pointer;
 }
 
-/* ============================================================ */
 /* 彻底隐藏与隔离旧 UI 核心 */
-/* ============================================================ */
 #app,
 #app.game-inner-viewport,
 #setupPage,
@@ -515,7 +513,7 @@ body {
 }
 
 /* ============================================================ */
-/* 甜心复古 Windows 弹窗设计 */
+/* 复古 Windows（Win98 Pink Sweetheart）弹窗设计 */
 /* ============================================================ */
 .retro-pink-window {
     background: #fff3f6 !important;
@@ -538,7 +536,7 @@ body {
     align-items: center;
     color: #ffffff;
     font-weight: 800;
-    font-size: 13.5px;
+    font-size: 13px;
     letter-spacing: 0.5px;
     text-shadow: 1px 1px 0px #b82350;
     border-radius: 3px 3px 0 0;
@@ -645,39 +643,8 @@ body {
     animation: pixelPointerHop 0.8s infinite ease-in-out;
 }
 
-.radio-group {
-    display: flex;
-    gap: 6px;
-    flex-wrap: wrap;
-    background: transparent;
-    padding: 4px 0;
-}
-.radio-group label {
-    flex: 1;
-    min-width: 60px;
-    text-align: center;
-    padding: 6px 10px;
-    border: none !important;
-    background: transparent !important;
-    cursor: pointer;
-    transition: var(--transition);
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text2);
-    margin: 0;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
-    user-select: none;
-}
-.radio-group input:checked + label {
-    color: var(--primary) !important;
-    font-weight: 800;
-}
-
 /* ============================================================ */
-/* 专业 HSV 色相环 + 正等边三角形拾色器 + 智能自适应环境色盘 */
+/* 专业 HSV 色相环 + 绝对等边三角形 + 自适应底座 */
 /* ============================================================ */
 .hsv-picker-container {
     display: flex;
@@ -690,7 +657,7 @@ body {
     transition: background 0.3s ease, border-color 0.3s ease;
 }
 
-/* 深色模式底座（默认） */
+/* 深色模式底座 */
 .hsv-picker-container.theme-dark-plate {
     background: #2b2b2b;
     border: 1px solid #3d3d3d;
@@ -708,7 +675,7 @@ body {
     border: 1px solid #555;
 }
 
-/* 浅色模式自适应底座（黑框白底，不突兀） */
+/* 浅色模式自适应底座（黑框白底） */
 .hsv-picker-container.theme-light-plate {
     background: #ffffff;
     border: 1.5px solid #2e1a22;
@@ -721,16 +688,16 @@ body {
     background: #e2e2e2;
 }
 .hsv-picker-container.theme-light-plate .hsv-num-input {
-    background: #f7f7f7;
+    background: #ffffff;
     color: #2e1a22;
     border: 1px solid #2e1a22;
 }
 
 .hsv-wheel-box {
     position: relative;
-    width: 220px;
-    height: 220px;
-    margin: 4px auto 16px auto;
+    width: 226px;
+    height: 226px;
+    margin: 4px auto 14px auto;
     touch-action: none;
     user-select: none;
 }
@@ -744,8 +711,8 @@ body {
 
 .hsv-ring-handle {
     position: absolute;
-    width: 20px;
-    height: 20px;
+    width: 22px;
+    height: 22px;
     border: 2.5px solid #ffffff;
     border-radius: 50%;
     box-shadow: 0 0 6px rgba(0,0,0,0.7), inset 0 0 3px rgba(0,0,0,0.4);
@@ -765,10 +732,10 @@ body {
     box-sizing: border-box;
 }
 
-/* 截图同款：吸色器水滴按键与操作栏 */
+/* 截图同款：水滴吸色按钮 */
 .hsv-tools-row {
     position: absolute;
-    top: 184px;
+    top: 186px;
     right: 18px;
     display: flex;
     align-items: center;
@@ -785,7 +752,7 @@ body {
     align-items: center;
     justify-content: center;
     padding: 0;
-    transition: transform 0.15s ease, opacity 0.2s ease;
+    transition: transform 0.15s ease;
     opacity: 0.9;
 }
 .hsv-pipette-btn:active {
@@ -805,7 +772,7 @@ body {
     stroke: #2e1a22;
 }
 
-/* 滑块与数值输入 */
+/* 滑块与数字输入 */
 .hsv-slider-group {
     width: 100%;
     display: flex;
@@ -851,7 +818,6 @@ body {
     cursor: pointer;
 }
 
-/* 支持点击直接输入的数字框 */
 .hsv-num-input {
     width: 46px;
     padding: 3px 4px;
@@ -863,60 +829,78 @@ body {
     transition: var(--transition);
 }
 
-/* 吸色画布模态 */
+/* ============================================================ */
+/* 自由缩放取色器画布与双黑边环准星（截图二标准） */
+/* ============================================================ */
 .pipette-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0,0,0,0.85);
+    background: rgba(0, 0, 0, 0.88);
     z-index: 3000;
     display: flex;
     flex-direction: column;
     justify-content: space-between;
     align-items: center;
-    padding: 24px 16px;
+    padding: 16px;
     touch-action: none;
 }
 .pipette-view-wrap {
     flex: 1;
     width: 100%;
+    position: relative;
+    overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
-    position: relative;
-    overflow: hidden;
+    border-radius: 12px;
+    background: #111;
 }
-.pipette-canvas {
-    max-width: 100%;
-    max-height: 100%;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.5);
+.pipette-canvas-viewport {
+    position: absolute;
+    touch-action: none;
+    transform-origin: center center;
     cursor: crosshair;
 }
-.pipette-loupe {
+
+/* 截图二精准复刻：双黑边环 + 环内色彩显示 + 中心十字准星 */
+.pipette-reticle {
     position: absolute;
-    width: 76px;
-    height: 76px;
-    border: 3px solid #ffffff;
+    width: 68px;
+    height: 68px;
     border-radius: 50%;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.6);
     pointer-events: none;
     transform: translate(-50%, -50%);
     display: none;
-    background: no-repeat;
     z-index: 3010;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    /* 外黑边环 */
+    border: 2px solid #000000;
+    background-color: transparent;
 }
-.pipette-loupe::after {
+/* 内环：内黑边 */
+.pipette-reticle::before {
+    content: '';
+    position: absolute;
+    inset: 9px;
+    border-radius: 50%;
+    border: 2px solid #000000;
+    background: transparent;
+}
+/* 十字准星 */
+.pipette-reticle::after {
     content: '';
     position: absolute;
     top: 50%;
     left: 50%;
-    width: 6px;
-    height: 6px;
+    width: 12px;
+    height: 12px;
     transform: translate(-50%, -50%);
-    border: 1px solid rgba(255,255,255,0.9);
-    background: rgba(0,0,0,0.3);
+    background: 
+        linear-gradient(#000000, #000000) no-repeat center/1.6px 100%,
+        linear-gradient(#000000, #000000) no-repeat center/100% 1.6px;
 }
 
-/* 统一按钮与卡片样式 */
+/* 通用按钮与卡片 */
 .theme-action-bar {
     display: flex;
     gap: 8px;
@@ -980,23 +964,7 @@ body {
     line-height: 1.4;
 }
 
-/* 字体与多配置管理面板 */
-.theme-collapsible-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    cursor: pointer;
-    user-select: none;
-}
-.theme-collapsible-arrow {
-    font-size: 12px;
-    color: var(--text2);
-    transition: transform 0.2s ease;
-}
-.theme-collapsible-arrow.open {
-    transform: rotate(90deg);
-}
-
+/* 方案 Chip */
 .profile-chip-list {
     display: flex;
     flex-wrap: wrap;
@@ -1026,9 +994,7 @@ body {
     font-size: 11px;
 }
 
-/* ============================================================ */
-/* 弹窗与封禁最高层级保证 */
-/* ============================================================ */
+/* 弹窗与封禁全屏最高层级 */
 .modal-overlay {
     position: fixed;
     inset: 0;
