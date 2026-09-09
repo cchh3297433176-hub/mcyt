@@ -10,189 +10,382 @@
 <body>
     <div id="toast" class="toast"></div>
     <div id="achievementToast" class="achievement-unlock-toast"></div>
-    <div id="app">
-        <!-- ===== SETUP PAGE ===== -->
-        <div id="setupPage" class="page active">
-            <div class="setup-title">🎀 MC YouTube模拟器💕 6.0</div>
-            <div class="setup-sub">成为我的世界主播，书写你的传奇</div>
-            <div id="resumeBanner" style="display:none;background:#eaf5ea;border:2px solid var(--primary);border-radius:12px;padding:12px;margin:0 0 14px;text-align:center;"></div>
-            <div class="setup-card">
-                <div class="api-key-section">
-                    <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-                        <span>🌐 联网与AI模型设置</span>
-                        <span style="background:var(--primary);color:#fff;padding:0 8px;border-radius:12px;font-size:11px;font-weight:700;">OpenAI 兼容接口</span>
-                    </div>
-                    <div id="apiSettingsContainer"></div>
-                </div>
-                <div class="form-group">
-                    <label>📷 头像 <span class="required">*</span></label>
-                    <div class="avatar-upload-wrap">
-                        <div class="avatar-preview" id="avatarPreview">👤</div>
-                        <button class="upload-btn" id="uploadAvatarBtn">选择图片</button>
-                        <input type="file" id="avatarFileInput" accept="image/png,image/jpeg" class="file-input">
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>🎭 你的身份 <span class="required">*</span></label>
-                    <div class="radio-group" id="identityGroup">
-                        <input type="radio" name="identity" id="idNew" value="new" checked>
-                        <label for="idNew">🆕 新主播</label>
-                        <input type="radio" name="identity" id="idFans" value="fans">
-                        <label for="idFans">⭐ 已有粉丝</label>
-                        <input type="radio" name="identity" id="idVeteran" value="veteran">
-                        <label for="idVeteran">🏆 老牌主播</label>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>📅 年龄 <span class="required">*</span></label>
-                    <input type="number" id="ageInput" placeholder="例如 18" min="1" max="150" value="18">
-                </div>
-                <div class="form-group">
-                    <label>📺 YouTube 账号名 <span class="required">*</span></label>
-                    <input type="text" id="ytNameInput" placeholder="例如：MC_CraftMaster" value="MC_CraftMaster">
-                </div>
 
-                <div class="form-group">
-                    <label>📖 全局剧情叙事人称 (POV) <span class="required">*</span></label>
-                    <select id="povSelect" style="width:100%;padding:8px 12px;border-radius:8px;border:2px solid rgba(30, 60, 30, 0.10);background:#f5faf5;color:var(--text);font-size:14px;outline:none;">
-                        <option value="second" selected>第二人称【你】（经典沉浸代入式）</option>
-                        <option value="first">第一人称【我】（身临其境主播自述视点）</option>
-                        <option value="third">第三人称【她 / 频道名】（小说客观记录视点）</option>
-                    </select>
-                </div>
-
-                <div class="form-group" style="background:#f9fbf9;border:1.5px solid #dceedc;border-radius:12px;padding:12px;margin:10px 0;">
-                    <div style="font-weight:700;font-size:13.5px;color:#1e4620;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
-                        <span>🎭 形象三大维度细分设定（纯净空白，自由定制）</span>
-                    </div>
-
-                    <div class="form-group" style="margin-bottom:8px;">
-                        <label style="font-size:12px;">1. 🖥️ 线上虚拟形象（Live2D / Vtuber皮套）</label>
-                        <textarea id="avatarLive2dInput" placeholder="可选：描述直播与视频出镜时观众看到的虚拟形象风格（如皮套立绘、特征等）..." style="min-height:45px;"></textarea>
-                    </div>
-
-                    <div class="form-group" style="margin-bottom:8px;">
-                        <label style="font-size:12px;">2. 🎮 游戏形象（Minecraft 像素皮肤）</label>
-                        <textarea id="skinInput" placeholder="可选：描述你在Minecraft方块世界操纵角色的像素皮肤、披风、外观..." style="min-height:45px;"></textarea>
-                    </div>
-
-                    <div class="form-group" style="margin-bottom:0;">
-                        <label style="font-size:12px;">3. 🏠 线下真实形象（现实皮下素颜）</label>
-                        <textarea id="appearanceRealInput" placeholder="可选：描述现实生活中的真实容貌、体态声音、穿搭特征..." style="min-height:45px;"></textarea>
-                    </div>
-                </div>
-
-                <div class="form-group">
-                    <label>🎭 性格人设简介</label>
-                    <textarea id="personaInput" placeholder="可选：描述你的性格人设、声音风格、语言习惯等..." style="min-height:40px;"></textarea>
-                </div>
-
-                <div class="form-group">
-                    <label>🎯 创作赛道 <span class="required">*</span></label>
-                    <select id="categorySelect">
-                        <option value="追杀">⚔️ 追杀</option>
-                        <option value="剧情" selected>📖 剧情</option>
-                        <option value="生存">🌿 生存</option>
-                        <option value="休闲">🎮 休闲</option>
-                        <option value="建筑教程">🏗️ 建筑教程</option>
-                        <option value="红石">🔴 红石</option>
-                        <option value="整活">🤡 整活</option>
-                        <option value="混合">🌈 混合</option>
-                    </select>
-                </div>
-                <div class="form-group" style="margin-bottom:6px;">
-                    <label style="font-size:12px;">🔧 技术属性 (0-100)</label>
-                    <div class="skill-input-group"><label>🏗️</label><input type="range" id="skillBuilding" min="0" max="100" value="20"><input type="number" id="skillBuildingNum" min="0" max="100" value="20"></div>
-                    <div class="skill-input-group"><label>🔧</label><input type="range" id="skillRedstone" min="0" max="100" value="20"><input type="number" id="skillRedstoneNum" min="0" max="100" value="20"></div>
-                    <div class="skill-input-group"><label>⚔️</label><input type="range" id="skillPvp" min="0" max="100" value="20"><input type="number" id="skillPvpNum" min="0" max="100" value="20"></div>
-                    <div class="skill-input-group"><label>🌲</label><input type="range" id="skillSurvival" min="0" max="100" value="20"><input type="number" id="skillSurvivalNum" min="0" max="100" value="20"></div>
-                    <div class="skill-input-group"><label>🏹</label><input type="range" id="skillHunting" min="0" max="100" value="20"><input type="number" id="skillHuntingNum" min="0" max="100" value="20"></div>
-                </div>
-                <button class="btn-primary" id="startGameBtn">🚀 填入Key，开始游戏</button>
-                <button class="btn-secondary" id="setupLoadGameBtn" style="width:100%;margin-top:8px;">📂 读取已有存档</button>
-                <div style="display:flex;gap:8px;margin-top:8px;">
-                    <button class="btn-secondary" id="setupBackupBtn" style="flex:1;">📤 图片备份</button>
-                    <button class="btn-secondary" id="setupImportSaveBtn" style="flex:1;">📥 相册恢复</button>
-                </div>
-                <div style="margin-top:8px;font-size:11px;color:#999;text-align:center;">💡 所有剧情由 AI 实时生成，每回合 800+ 字</div>
-                <div style="margin-top:6px;font-size:11px;color:#e67e22;text-align:center;">⚠️ 更新App前请先点「📤 图片备份」，将存档图存入手机相册！</div>
-            </div>
+    <!-- 📱 纯净定制小手机系统外壳 -->
+    <div class="phone-wrapper" id="phoneWrapper">
+        <!-- 灵动岛 -->
+        <div class="phone-notch">
+            <div class="phone-camera-lens"></div>
         </div>
-        
-        <!-- ===== GAME PAGE ===== -->
-        <div id="gamePage" style="display:none;">
-            <!-- 左侧竖排操作栏 -->
-            <div class="action-bar-vertical" id="actionBar">
-                <button class="action-btn primary" data-action="stream"><span class="icon">📹</span><span class="label">直播</span></button>
-                <button class="action-btn gold" data-action="video"><span class="icon">🎬</span><span class="label">视频</span></button>
-                <button class="action-btn" data-action="chat"><span class="icon">💬</span><span class="label">聊天</span></button>
-                <button class="action-btn" data-action="fanart"><span class="icon">🎨</span><span class="label">同人</span></button>
-                <button class="action-btn" data-action="youtube"><span class="icon">▶️</span><span class="label">油管</span></button>
-                <button class="action-btn" data-action="sub"><span class="icon">🧘</span><span class="label">皮下</span></button>
-                <button class="action-btn" id="webSearchToggleBtn"><span class="icon">🌐</span><span class="label">联网</span></button>
-                <button class="action-btn" id="rerollBtn"><span class="icon">🔄</span><span class="label">重说</span></button>
-                <button class="action-btn" id="editContentBtn"><span class="icon">✏️</span><span class="label">编辑</span></button>
-                <button class="action-btn" id="memorySummaryBtn"><span class="icon">🧠</span><span class="label">记忆</span></button>
-                <button class="action-btn" data-action="next"><span class="icon">⏩</span><span class="label">下一天</span></button>
-            </div>
-            <!-- 右侧主区域 -->
-            <div class="game-main">
-                <!-- 头部栏 -->
-                <div class="game-header">
-                    <div class="game-header-top">
-                        <div class="left">
-                            <div class="avatar-circle" id="headerAvatar" style="cursor:pointer;position:relative;" title="点击修改头像与名字">
-                                <img id="headerAvatarImg" src="" alt="avatar">
-                            </div>
-                            <span>📆 第 <span class="day" id="dayDisplay">1</span> 天</span>
-                            <span>🕐 <span class="time" id="timeDisplay">早晨</span></span>
-                        </div>
-                        <div class="right-ap">
-                            <span>⚡</span>
-                            <span class="ap" id="apDisplay">6</span>
-                            <div class="ap-dots" id="apDots">
-                                <div class="ap-dot filled"></div>
-                                <div class="ap-dot filled"></div>
-                                <div class="ap-dot filled"></div>
-                                <div class="ap-dot filled"></div>
-                                <div class="ap-dot filled"></div>
-                                <div class="ap-dot filled"></div>
-                            </div>
-                        </div>
+
+        <!-- 智能感知色彩状态栏 -->
+        <div class="status-bar" id="statusBar">
+            <div id="statusTimeText">12:00</div>
+            <div class="status-bar-right">
+                <!-- 信号 -->
+                <svg class="status-bar-svg" viewBox="0 0 24 24">
+                    <rect x="2" y="16" width="3.5" height="5" rx="1"></rect>
+                    <rect x="7.5" y="12" width="3.5" height="9" rx="1"></rect>
+                    <rect x="13" y="7" width="3.5" height="14" rx="1"></rect>
+                    <rect x="18.5" y="2" width="3.5" height="19" rx="1"></rect>
+                </svg>
+
+                <!-- Wi-Fi -->
+                <svg class="status-bar-svg" viewBox="0 0 24 24" id="wifiSvg">
+                    <path d="M12 18a1.5 1.5 0 100 3 1.5 1.5 0 000-3z"></path>
+                    <path d="M4.93 12.93a10 10 0 0114.14 0l-1.41 1.41a8 8 0 00-11.32 0l-1.41-1.41z"></path>
+                    <path d="M2.1 10.1a14 14 0 0119.8 0l-1.41 1.41a12 12 0 00-16.98 0L2.1 10.1z"></path>
+                </svg>
+
+                <!-- 电池与四芒星充电指示 -->
+                <div class="battery-pill">
+                    <div class="charging-star-icon" id="chargingStarIcon">
+                        <svg viewBox="0 0 100 100">
+                            <path d="M50 0 Q50 50 0 50 Q50 50 50 100 Q50 50 100 50 Q50 50 50 0 Z"/>
+                        </svg>
                     </div>
-                    <div class="save-load-btns">
-                        <button class="sl-btn" id="modelSettingsBtn">⚙️ 模型</button>
-                        <button class="sl-btn" id="saveGameBtn">💾 存档</button>
-                        <button class="sl-btn" id="loadGameBtn">📂 读档</button>
-                        <button class="sl-btn" id="exportSaveBtn">📤 备份</button>
-                        <button class="sl-btn" id="importSaveBtn">📥 恢复</button>
-                        <button class="sl-btn" id="exitGameBtn" style="background:#ffe4e1;color:#c0392b;">🚪 退出</button>
+                    <div class="battery-shell">
+                        <div class="battery-core" id="batteryCoreBar"></div>
                     </div>
-                </div>
-                <!-- 顶部选项卡 -->
-                <div class="tab-bar">
-                    <button class="tab-btn active" data-tab="story">📖 剧情</button>
-                    <button class="tab-btn" data-tab="stream">🔴 直播</button>
-                    <button class="tab-btn" data-tab="dashboard">📊 频道</button>
-                    <button class="tab-btn" data-tab="shop">🛒 商店</button>
-                    <button class="tab-btn" data-tab="data">📈 数据</button>
-                    <button class="tab-btn" data-tab="memoir">📜 回忆录</button>
-                    <button class="tab-btn" data-tab="achievements">🏆 成就</button>
-                </div>
-                <div class="content-container">
-                    <div class="tab-content story-area active" id="storyTab"><div id="storyArea"></div></div>
-                    <div class="tab-content" id="streamTab"><div id="streamContainer"></div></div>
-                    <div class="tab-content dashboard-area" id="dashboardTab"></div>
-                    <div class="tab-content dashboard-area" id="shopTab"></div>
-                    <div class="tab-content dashboard-area" id="socialTab" style="padding:0;background:var(--bg);"></div>
-                    <div class="tab-content dashboard-area" id="browserTab" style="padding:0;background:var(--bg);"></div>
-                    <div class="tab-content dashboard-area" id="youtubeTab" style="padding:0;background:var(--bg);"></div>
-                    <div class="tab-content dashboard-area" id="dataTab"></div>
-                    <div class="tab-content dashboard-area" id="memoirTab"></div>
-                    <div class="tab-content dashboard-area" id="achievementsTab"></div>
+                    <div class="battery-text" id="batteryPercentText">100%</div>
                 </div>
             </div>
         </div>
+
+        <!-- 1. 锁屏界面 -->
+        <div class="screen-lock" id="screenLock">
+            <div class="lock-time-box">
+                <div class="lock-date" id="lockDateText">10月24日 星期四</div>
+                <div class="lock-clock" id="lockClockText">12:00</div>
+            </div>
+
+            <div class="lock-swipe-panel" id="unlockTapArea">
+                <svg class="lock-arrow-svg" viewBox="0 0 24 24">
+                    <polyline points="18 15 12 9 6 15"></polyline>
+                </svg>
+                <div class="lock-swipe-tip">向上滑动或轻触解锁</div>
+            </div>
+        </div>
+
+        <!-- 2. 桌面主界面 -->
+        <div class="screen-desktop" id="screenDesktop">
+            <div class="desktop-top-widget">
+                <div class="widget-day-info" id="desktopWidgetInfo">第 <span>1</span> 天 · 早晨 (行动点 6/6)</div>
+                <button class="widget-lock-action" id="lockBtn">锁定屏幕</button>
+            </div>
+
+            <!-- 应用网格 -->
+            <div class="app-grid">
+                <div class="app-slot" onclick="openPhoneAppModal('聊天中心', '私聊与群聊系统，内置猪猪表情包与多层记忆', 'chat')">
+                    <div class="app-icon-box" style="background: linear-gradient(135deg, #51cf66, #2b8a3e);">
+                        <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
+                            <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+                        </svg>
+                        <div class="app-unread-badge" id="chatUnreadBadge" style="display:none;">0</div>
+                    </div>
+                    <div class="app-title-label">聊天中心</div>
+                </div>
+
+                <div class="app-slot" onclick="openPhoneAppModal('朋友圈', '主播与NPC朋友圈动态流、点赞、评论与互动', 'moments')">
+                    <div class="app-icon-box" style="background: linear-gradient(135deg, #ff8787, #e03131);">
+                        <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
+                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                        </svg>
+                    </div>
+                    <div class="app-title-label">朋友圈</div>
+                </div>
+
+                <div class="app-slot" onclick="openPhoneAppModal('油管视频', '浏览视频推荐流、发布共创视频、评论区交互', 'youtube')">
+                    <div class="app-icon-box" style="background: linear-gradient(135deg, #ff6b6b, #c92a2a);">
+                        <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
+                            <path d="M21.58 7.19c-.23-.86-.91-1.54-1.77-1.77C18.25 5 12 5 12 5s-6.25 0-7.81.42c-.86.23-1.54.91-1.77 1.77C2 8.75 2 12 2 12s0 3.25.42 4.81c.23.86.91 1.54 1.77 1.77C5.75 19 12 19 12 19s6.25 0 7.81-.42c.86-.23 1.54-.91 1.77-1.77C22 15.25 22 12 22 12s0-3.25-.42-4.81zM10 15V9l5.2 3-5.2 3z"/>
+                        </svg>
+                    </div>
+                    <div class="app-title-label">油管视频</div>
+                </div>
+
+                <div class="app-slot" onclick="openPhoneAppModal('AO3同人', '自建开坑、小号催更、阅读粉丝创作的同人文', 'ao3')">
+                    <div class="app-icon-box" style="background: linear-gradient(135deg, #cc5de8, #862e9c);">
+                        <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
+                            <path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/>
+                        </svg>
+                    </div>
+                    <div class="app-title-label">AO3同人</div>
+                </div>
+
+                <div class="app-slot" onclick="openPhoneAppModal('开播中心', '开启直播、AI实时弹幕互动、控场与分成结算', 'stream')">
+                    <div class="app-icon-box" style="background: linear-gradient(135deg, #748ffc, #364fc7);">
+                        <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
+                            <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+                        </svg>
+                    </div>
+                    <div class="app-title-label">开播中心</div>
+                </div>
+
+                <div class="app-slot" onclick="openPhoneAppModal('主线主界面', '体验主线剧情、查看当前频道与原版控制台', 'main_game')">
+                    <div class="app-icon-box" style="background: linear-gradient(135deg, #20c997, #099268);">
+                        <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
+                            <path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/>
+                        </svg>
+                    </div>
+                    <div class="app-title-label">游戏主页</div>
+                </div>
+
+                <!-- 个性主题 APP -->
+                <div class="app-slot" onclick="openCustomThemeApp()">
+                    <div class="app-icon-box" style="background: linear-gradient(135deg, #f06595, #c2255c);">
+                        <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
+                            <path d="M12 3c-4.97 0-9 4.03-9 9 0 2.12.74 4.07 1.97 5.61L4.35 19.4c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l1.9-1.9C9.23 19.57 10.57 20 12 20c4.97 0 9-4.03 9-9s-4.03-9-9-9zm0 15c-3.31 0-6-2.69-6-6s2.69-6 6-6 6 2.69 6 6-2.69 6-6 6z"/>
+                        </svg>
+                    </div>
+                    <div class="app-title-label">个性主题</div>
+                </div>
+
+                <div class="app-slot" onclick="openPhoneAppModal('商务赞助', '接取品牌赞助、购买主播道具与商店兑换', 'shop')">
+                    <div class="app-icon-box" style="background: linear-gradient(135deg, #38d9a9, #087f5b);">
+                        <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
+                            <path d="M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-6 0h-4V4h4v2z"/>
+                        </svg>
+                    </div>
+                    <div class="app-title-label">商务赞助</div>
+                </div>
+            </div>
+
+            <!-- 底部 Dock 栏 -->
+            <div>
+                <div class="dock-container">
+                    <div class="app-slot" onclick="openPhoneAppModal('通讯录', 'NPC 与群组联系人名单', 'contacts')">
+                        <div class="app-icon-box" style="background: #2b8a3e; width: 50px; height: 50px;">
+                            <svg class="app-icon-svg" style="width:25px;height:25px;" viewBox="0 0 24 24" fill="#ffffff">
+                                <path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 00-1.01.24l-1.57 1.97c-2.83-1.44-5.15-3.75-6.59-6.59l1.97-1.57c.28-.28.36-.67.25-1.02A11.36 11.36 0 018.57 4c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1 0 9.39 7.61 17 17 17 .55 0 1-.45 1-1v-3.5c0-.55-.45-1-1-1.12z"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="app-slot" onclick="openSettingsApp()">
+                        <div class="app-icon-box" style="background: #495057; width: 50px; height: 50px;">
+                            <svg class="app-icon-svg" style="width:25px;height:25px;" viewBox="0 0 24 24" fill="#ffffff">
+                                <path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58a.49.49 0 00.12-.61l-1.92-3.32a.488.488 0 00-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54a.484.484 0 00-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58a.49.49 0 00-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="app-slot" onclick="openPhoneAppModal('相册备份', '双轨PNG隐写卡片导出与相册读档', 'backup')">
+                        <div class="app-icon-box" style="background: #845ef7; width: 50px; height: 50px;">
+                            <svg class="app-icon-svg" style="width:25px;height:25px;" viewBox="0 0 24 24" fill="#ffffff">
+                                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <div class="home-bar-pill"></div>
+            </div>
+        </div>
+
+        <!-- 3. App 独立弹出窗口（第一阶段占位与承接容器） -->
+        <div class="app-modal-layer" id="appModal">
+            <div class="app-modal-head">
+                <button class="app-back-nav" onclick="closePhoneAppModal()">
+                    <svg style="width:18px;height:18px;fill:currentColor;" viewBox="0 0 24 24">
+                        <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+                    </svg>
+                    桌面
+                </button>
+                <div class="app-head-title" id="appModalTitle">应用窗口</div>
+                <div style="width: 44px;"></div>
+            </div>
+            <div class="app-modal-body" id="appModalBody">
+                <!-- 动态内容填充区 -->
+            </div>
+            <div class="app-modal-foot">
+                <div class="app-foot-home" onclick="closePhoneAppModal()"></div>
+            </div>
+        </div>
+
+        <!-- 🎮 游戏核心功能区（包裹在手机视口内，完整保留原DOM树） -->
+        <div id="app" class="game-inner-viewport">
+            <!-- ===== SETUP PAGE ===== -->
+            <div id="setupPage" class="page active">
+                <div class="setup-title">🎀 MC YouTube模拟器💕 6.0</div>
+                <div class="setup-sub">成为我的世界主播，书写你的传奇</div>
+                <div id="resumeBanner" style="display:none;background:#eaf5ea;border:2px solid var(--primary);border-radius:12px;padding:12px;margin:0 0 14px;text-align:center;"></div>
+                <div class="setup-card">
+                    <div class="api-key-section">
+                        <div style="font-size:14px;font-weight:700;color:var(--text);margin-bottom:8px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+                            <span>🌐 联网与AI模型设置</span>
+                            <span style="background:var(--primary);color:#fff;padding:0 8px;border-radius:12px;font-size:11px;font-weight:700;">OpenAI 兼容接口</span>
+                        </div>
+                        <div id="apiSettingsContainer"></div>
+                    </div>
+                    <div class="form-group">
+                        <label>📷 头像 <span class="required">*</span></label>
+                        <div class="avatar-upload-wrap">
+                            <div class="avatar-preview" id="avatarPreview">👤</div>
+                            <button class="upload-btn" id="uploadAvatarBtn">选择图片</button>
+                            <input type="file" id="avatarFileInput" accept="image/png,image/jpeg" class="file-input">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>🎭 你的身份 <span class="required">*</span></label>
+                        <div class="radio-group" id="identityGroup">
+                            <input type="radio" name="identity" id="idNew" value="new" checked>
+                            <label for="idNew">🆕 新主播</label>
+                            <input type="radio" name="identity" id="idFans" value="fans">
+                            <label for="idFans">⭐ 已有粉丝</label>
+                            <input type="radio" name="identity" id="idVeteran" value="veteran">
+                            <label for="idVeteran">🏆 老牌主播</label>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>📅 年龄 <span class="required">*</span></label>
+                        <input type="number" id="ageInput" placeholder="例如 18" min="1" max="150" value="18">
+                    </div>
+                    <div class="form-group">
+                        <label>📺 YouTube 账号名 <span class="required">*</span></label>
+                        <input type="text" id="ytNameInput" placeholder="例如：MC_CraftMaster" value="MC_CraftMaster">
+                    </div>
+
+                    <div class="form-group">
+                        <label>📖 全局剧情叙事人称 (POV) <span class="required">*</span></label>
+                        <select id="povSelect" style="width:100%;padding:8px 12px;border-radius:8px;border:2px solid rgba(30, 60, 30, 0.10);background:#f5faf5;color:var(--text);font-size:14px;outline:none;">
+                            <option value="second" selected>第二人称【你】（经典沉浸代入式）</option>
+                            <option value="first">第一人称【我】（身临其境主播自述视点）</option>
+                            <option value="third">第三人称【她 / 频道名】（小说客观记录视点）</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group" style="background:#f9fbf9;border:1.5px solid #dceedc;border-radius:12px;padding:12px;margin:10px 0;">
+                        <div style="font-weight:700;font-size:13.5px;color:#1e4620;margin-bottom:8px;display:flex;align-items:center;gap:6px;">
+                            <span>🎭 形象三大维度细分设定（纯净空白，自由定制）</span>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom:8px;">
+                            <label style="font-size:12px;">1. 🖥️ 线上虚拟形象（Live2D / Vtuber皮套）</label>
+                            <textarea id="avatarLive2dInput" placeholder="可选：描述直播与视频出镜时观众看到的虚拟形象风格（如皮套立绘、特征等）..." style="min-height:45px;"></textarea>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom:8px;">
+                            <label style="font-size:12px;">2. 🎮 游戏形象（Minecraft 像素皮肤）</label>
+                            <textarea id="skinInput" placeholder="可选：描述你在Minecraft方块世界操纵角色的像素皮肤、披风、外观..." style="min-height:45px;"></textarea>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label style="font-size:12px;">3. 🏠 线下真实形象（现实皮下素颜）</label>
+                            <textarea id="appearanceRealInput" placeholder="可选：描述现实生活中的真实容貌、体态声音、穿搭特征..." style="min-height:45px;"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label>🎭 性格人设简介</label>
+                        <textarea id="personaInput" placeholder="可选：描述你的性格人设、声音风格、语言习惯等..." style="min-height:40px;"></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label>🎯 创作赛道 <span class="required">*</span></label>
+                        <select id="categorySelect">
+                            <option value="追杀">⚔️ 追杀</option>
+                            <option value="剧情" selected>📖 剧情</option>
+                            <option value="生存">🌿 生存</option>
+                            <option value="休闲">🎮 休闲</option>
+                            <option value="建筑教程">🏗️ 建筑教程</option>
+                            <option value="红石">🔴 红石</option>
+                            <option value="整活">🤡 整活</option>
+                            <option value="混合">🌈 混合</option>
+                        </select>
+                    </div>
+                    <div class="form-group" style="margin-bottom:6px;">
+                        <label style="font-size:12px;">🔧 技术属性 (0-100)</label>
+                        <div class="skill-input-group"><label>🏗️</label><input type="range" id="skillBuilding" min="0" max="100" value="20"><input type="number" id="skillBuildingNum" min="0" max="100" value="20"></div>
+                        <div class="skill-input-group"><label>🔧</label><input type="range" id="skillRedstone" min="0" max="100" value="20"><input type="number" id="skillRedstoneNum" min="0" max="100" value="20"></div>
+                        <div class="skill-input-group"><label>⚔️</label><input type="range" id="skillPvp" min="0" max="100" value="20"><input type="number" id="skillPvpNum" min="0" max="100" value="20"></div>
+                        <div class="skill-input-group"><label>🌲</label><input type="range" id="skillSurvival" min="0" max="100" value="20"><input type="number" id="skillSurvivalNum" min="0" max="100" value="20"></div>
+                        <div class="skill-input-group"><label>🏹</label><input type="range" id="skillHunting" min="0" max="100" value="20"><input type="number" id="skillHuntingNum" min="0" max="100" value="20"></div>
+                    </div>
+                    <button class="btn-primary" id="startGameBtn">🚀 填入Key，开始游戏</button>
+                    <button class="btn-secondary" id="setupLoadGameBtn" style="width:100%;margin-top:8px;">📂 读取已有存档</button>
+                    <div style="display:flex;gap:8px;margin-top:8px;">
+                        <button class="btn-secondary" id="setupBackupBtn" style="flex:1;">📤 图片备份</button>
+                        <button class="btn-secondary" id="setupImportSaveBtn" style="flex:1;">📥 相册恢复</button>
+                    </div>
+                    <div style="margin-top:8px;font-size:11px;color:#999;text-align:center;">💡 所有剧情由 AI 实时生成，每回合 800+ 字</div>
+                    <div style="margin-top:6px;font-size:11px;color:#e67e22;text-align:center;">⚠️ 更新App前请先点「📤 图片备份」，将存档图存入手机相册！</div>
+                </div>
+            </div>
+            
+            <!-- ===== GAME PAGE ===== -->
+            <div id="gamePage" style="display:none;">
+                <!-- 左侧竖排操作栏 -->
+                <div class="action-bar-vertical" id="actionBar">
+                    <button class="action-btn primary" data-action="stream"><span class="icon">📹</span><span class="label">直播</span></button>
+                    <button class="action-btn gold" data-action="video"><span class="icon">🎬</span><span class="label">视频</span></button>
+                    <button class="action-btn" data-action="chat"><span class="icon">💬</span><span class="label">聊天</span></button>
+                    <button class="action-btn" data-action="fanart"><span class="icon">🎨</span><span class="label">同人</span></button>
+                    <button class="action-btn" data-action="youtube"><span class="icon">▶️</span><span class="label">油管</span></button>
+                    <button class="action-btn" data-action="sub"><span class="icon">🧘</span><span class="label">皮下</span></button>
+                    <button class="action-btn" id="webSearchToggleBtn"><span class="icon">🌐</span><span class="label">联网</span></button>
+                    <button class="action-btn" id="rerollBtn"><span class="icon">🔄</span><span class="label">重说</span></button>
+                    <button class="action-btn" id="editContentBtn"><span class="icon">✏️</span><span class="label">编辑</span></button>
+                    <button class="action-btn" id="memorySummaryBtn"><span class="icon">🧠</span><span class="label">记忆</span></button>
+                    <button class="action-btn" data-action="next"><span class="icon">⏩</span><span class="label">下一天</span></button>
+                </div>
+                <!-- 右侧主区域 -->
+                <div class="game-main">
+                    <!-- 头部栏 -->
+                    <div class="game-header">
+                        <div class="game-header-top">
+                            <div class="left">
+                                <div class="avatar-circle" id="headerAvatar" style="cursor:pointer;position:relative;" title="点击修改头像与名字">
+                                    <img id="headerAvatarImg" src="" alt="avatar">
+                                </div>
+                                <span>📆 第 <span class="day" id="dayDisplay">1</span> 天</span>
+                                <span>🕐 <span class="time" id="timeDisplay">早晨</span></span>
+                            </div>
+                            <div class="right-ap">
+                                <span>⚡</span>
+                                <span class="ap" id="apDisplay">6</span>
+                                <div class="ap-dots" id="apDots">
+                                    <div class="ap-dot filled"></div>
+                                    <div class="ap-dot filled"></div>
+                                    <div class="ap-dot filled"></div>
+                                    <div class="ap-dot filled"></div>
+                                    <div class="ap-dot filled"></div>
+                                    <div class="ap-dot filled"></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="save-load-btns">
+                            <button class="sl-btn" id="modelSettingsBtn">⚙️ 模型</button>
+                            <button class="sl-btn" id="saveGameBtn">💾 存档</button>
+                            <button class="sl-btn" id="loadGameBtn">📂 读档</button>
+                            <button class="sl-btn" id="exportSaveBtn">📤 备份</button>
+                            <button class="sl-btn" id="importSaveBtn">📥 恢复</button>
+                            <button class="sl-btn" id="exitGameBtn" style="background:#ffe4e1;color:#c0392b;">🚪 退出</button>
+                        </div>
+                    </div>
+                    <!-- 顶部选项卡 -->
+                    <div class="tab-bar">
+                        <button class="tab-btn active" data-tab="story">📖 剧情</button>
+                        <button class="tab-btn" data-tab="stream">🔴 直播</button>
+                        <button class="tab-btn" data-tab="dashboard">📊 频道</button>
+                        <button class="tab-btn" data-tab="shop">🛒 商店</button>
+                        <button class="tab-btn" data-tab="data">📈 数据</button>
+                        <button class="tab-btn" data-tab="memoir">📜 回忆录</button>
+                        <button class="tab-btn" data-tab="achievements">🏆 成就</button>
+                    </div>
+                    <div class="content-container">
+                        <div class="tab-content story-area active" id="storyTab"><div id="storyArea"></div></div>
+                        <div class="tab-content" id="streamTab"><div id="streamContainer"></div></div>
+                        <div class="tab-content dashboard-area" id="dashboardTab"></div>
+                        <div class="tab-content dashboard-area" id="shopTab"></div>
+                        <div class="tab-content dashboard-area" id="socialTab" style="padding:0;background:var(--bg);"></div>
+                        <div class="tab-content dashboard-area" id="browserTab" style="padding:0;background:var(--bg);"></div>
+                        <div class="tab-content dashboard-area" id="youtubeTab" style="padding:0;background:var(--bg);"></div>
+                        <div class="tab-content dashboard-area" id="dataTab"></div>
+                        <div class="tab-content dashboard-area" id="memoirTab"></div>
+                        <div class="tab-content dashboard-area" id="achievementsTab"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- ===== MODAL ===== -->
         <div class="modal-overlay" id="modal">
             <div class="modal-box" id="modalContent">
@@ -214,6 +407,330 @@
         })();
     </script>
 
+    <!-- 📱 手机外壳核心控制器：时钟、硬件电量、智能色彩感知反色、锁屏手势 -->
+    <script>
+        (function(){
+            // 1. 时钟系统
+            function updatePhoneClock() {
+                const now = new Date();
+                const h = String(now.getHours()).padStart(2, '0');
+                const m = String(now.getMinutes()).padStart(2, '0');
+                const timeStr = `${h}:${m}`;
+
+                const months = now.getMonth() + 1;
+                const dates = now.getDate();
+                const weeks = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
+                const dateStr = `${months}月${dates}日 ${weeks[now.getDay()]}`;
+
+                const sTime = document.getElementById('statusTimeText');
+                const lClock = document.getElementById('lockClockText');
+                const lDate = document.getElementById('lockDateText');
+                if (sTime) sTime.textContent = timeStr;
+                if (lClock) lClock.textContent = timeStr;
+                if (lDate) lDate.textContent = dateStr;
+            }
+            setInterval(updatePhoneClock, 1000);
+            updatePhoneClock();
+
+            // 2. 硬件电量与四芒星充电指示
+            async function bindPhoneBattery() {
+                const core = document.getElementById('batteryCoreBar');
+                const text = document.getElementById('batteryPercentText');
+                const star = document.getElementById('chargingStarIcon');
+                if (!core || !text || !star) return;
+
+                if ('getBattery' in navigator) {
+                    try {
+                        const battery = await navigator.getBattery();
+                        const apply = () => {
+                            const level = Math.round(battery.level * 100);
+                            text.textContent = `${level}%`;
+                            core.style.width = `${level}%`;
+                            if (battery.charging) {
+                                star.classList.add('active');
+                            } else {
+                                star.classList.remove('active');
+                            }
+                        };
+                        apply();
+                        battery.addEventListener('levelchange', apply);
+                        battery.addEventListener('chargingchange', apply);
+                    } catch (e) {
+                        text.textContent = '100%';
+                        star.classList.remove('active');
+                    }
+                } else {
+                    text.textContent = '100%';
+                    star.classList.remove('active');
+                }
+            }
+            bindPhoneBattery();
+
+            // 3. Canvas 内存取色与人眼感知亮度分析
+            window.currentThemeMode = 'auto'; // 'auto' | 'light' | 'dark' | 'custom'
+
+            window.analyzeImageLuminance = function(imageUrl, callback) {
+                const img = new Image();
+                img.crossOrigin = "Anonymous";
+                img.onload = function() {
+                    try {
+                        const canvas = document.createElement('canvas');
+                        const ctx = canvas.getContext('2d');
+                        canvas.width = 100;
+                        canvas.height = 100;
+                        ctx.drawImage(img, 0, 0, 100, 35, 0, 0, 100, 35);
+                        const imgData = ctx.getImageData(0, 0, 100, 35).data;
+                        let totalLuminance = 0;
+                        let count = 0;
+                        for (let i = 0; i < imgData.length; i += 4) {
+                            const r = imgData[i];
+                            const g = imgData[i + 1];
+                            const b = imgData[i + 2];
+                            const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+                            totalLuminance += luma;
+                            count++;
+                        }
+                        const avgLuma = totalLuminance / (count || 1);
+                        callback(avgLuma > 145);
+                    } catch(err) {
+                        callback(false);
+                    }
+                };
+                img.onerror = function() {
+                    callback(false);
+                };
+                img.src = imageUrl;
+            };
+
+            window.applyColorTheme = function(isLightBg) {
+                if (window.currentThemeMode === 'custom') return;
+                const root = document.documentElement;
+                if (window.currentThemeMode === 'dark' || (!isLightBg && window.currentThemeMode === 'auto')) {
+                    root.style.setProperty('--status-color', '#ffffff');
+                    root.style.setProperty('--lock-text-color', '#ffffff');
+                    root.style.setProperty('--status-svg-fill', '#ffffff');
+                    root.style.setProperty('--star-glow-color', 'rgba(255, 255, 255, 0.9)');
+                } else {
+                    root.style.setProperty('--status-color', '#1c1d21');
+                    root.style.setProperty('--lock-text-color', '#1c1d21');
+                    root.style.setProperty('--status-svg-fill', '#1c1d21');
+                    root.style.setProperty('--star-glow-color', 'rgba(28, 29, 33, 0.65)');
+                }
+            };
+
+            // 默认壁纸色彩感知
+            window.analyzeImageLuminance('https://img.baibai.cv/f/gYRguG/%E7%8C%AA%E7%8C%AA%E9%94%81%E5%B1%8F.jpeg', window.applyColorTheme);
+
+            // 4. 锁屏与解锁交互
+            document.addEventListener('DOMContentLoaded', function() {
+                const screenLock = document.getElementById('screenLock');
+                const unlockTapArea = document.getElementById('unlockTapArea');
+                const lockBtn = document.getElementById('lockBtn');
+
+                if (unlockTapArea && screenLock) {
+                    unlockTapArea.addEventListener('click', function() {
+                        screenLock.classList.add('unlocked');
+                    });
+
+                    let touchStartY = 0;
+                    screenLock.addEventListener('touchstart', function(e) {
+                        if (e.touches && e.touches.length) {
+                            touchStartY = e.touches[0].clientY;
+                        }
+                    }, { passive: true });
+
+                    screenLock.addEventListener('touchend', function(e) {
+                        if (e.changedTouches && e.changedTouches.length) {
+                            const touchEndY = e.changedTouches[0].clientY;
+                            if (touchStartY - touchEndY > 50) {
+                                screenLock.classList.add('unlocked');
+                            }
+                        }
+                    }, { passive: true });
+                }
+
+                if (lockBtn && screenLock) {
+                    lockBtn.addEventListener('click', function() {
+                        if (typeof window.closePhoneAppModal === 'function') {
+                            window.closePhoneAppModal();
+                        }
+                        screenLock.classList.remove('unlocked');
+                    });
+                }
+            });
+
+            // 5. 手机 App 全屏弹窗控制
+            window.openPhoneAppModal = function(title, desc, appKey) {
+                const appModal = document.getElementById('appModal');
+                const appModalTitle = document.getElementById('appModalTitle');
+                const appModalBody = document.getElementById('appModalBody');
+                if (!appModal || !appModalTitle || !appModalBody) return;
+
+                appModalTitle.textContent = title;
+
+                // 特殊分发：如果点击主线主界面
+                if (appKey === 'main_game') {
+                    appModalBody.innerHTML = `
+                        <div class="theme-setting-card">
+                            <div class="theme-setting-title">🎮 游戏主控面板</div>
+                            <div class="theme-setting-desc">主线剧情与原版多面板已在底层正常就绪。在下一阶段对接中，我们将把主线与各面板平滑嵌入到各个独立 App 容器内。</div>
+                            <button class="theme-btn" onclick="closePhoneAppModal()">返回桌面继续浏览</button>
+                        </div>
+                    `;
+                } else {
+                    appModalBody.innerHTML = `
+                        <div style="background: #ffffff; border-radius: 14px; padding: 18px; box-shadow: 0 2px 8px rgba(0,0,0,0.02); border: 1px solid #eef2ee;">
+                            <h3 style="color: #1e3a1e; font-size: 15px; margin-bottom: 8px;">${title} 模块已就绪</h3>
+                            <p style="color: #607260; font-size: 13px; line-height: 1.6;">${desc}</p>
+                            <div style="margin-top: 14px; font-size: 11px; color: #2e7d32; background: #eaf5ea; padding: 8px 12px; border-radius: 8px;">
+                                💡 骨架状态：第一步外壳架设成功。后续步骤将串行接入真实业务面板。
+                            </div>
+                        </div>
+                    `;
+                }
+                appModal.classList.add('opened');
+            };
+
+            window.closePhoneAppModal = function() {
+                const appModal = document.getElementById('appModal');
+                if (appModal) appModal.classList.remove('opened');
+            };
+
+            // 6. 个性化中心弹窗
+            window.openCustomThemeApp = function() {
+                const appModal = document.getElementById('appModal');
+                const appModalTitle = document.getElementById('appModalTitle');
+                const appModalBody = document.getElementById('appModalBody');
+                if (!appModal || !appModalTitle || !appModalBody) return;
+
+                appModalTitle.textContent = "个性化与主题";
+                appModalBody.innerHTML = `
+                    <div class="theme-setting-card">
+                        <div class="theme-setting-title">🌓 字体与状态栏颜色模式</div>
+                        <div class="theme-setting-desc">当背景太白时自动变黑，或者随心指定你最爱的颜色。</div>
+                        <select class="theme-select" id="themeModeSelect" onchange="onThemeModeChange(this.value)">
+                            <option value="auto" ${window.currentThemeMode === 'auto' ? 'selected' : ''}>🤖 自动识别壁纸明暗反色</option>
+                            <option value="dark" ${window.currentThemeMode === 'dark' ? 'selected' : ''}>⚪ 强制纯白质感</option>
+                            <option value="light" ${window.currentThemeMode === 'light' ? 'selected' : ''}>⚫ 强制高级深灰</option>
+                            <option value="custom" ${window.currentThemeMode === 'custom' ? 'selected' : ''}>🎨 自定义全局颜色</option>
+                        </select>
+
+                        <div class="color-picker-row" id="customColorWrap" style="display:${window.currentThemeMode === 'custom' ? 'flex' : 'none'};">
+                            <input type="color" id="customColorInput" value="#ffffff" onchange="onCustomColorPick(this.value)">
+                            <span style="font-size:12px;color:#555;">选择心仪的文字与图标颜色</span>
+                        </div>
+                    </div>
+
+                    <div class="theme-setting-card">
+                        <div class="theme-setting-title">
+                            <span>🔤 本地自定义字体</span>
+                            <span style="font-size:11px;color:#2e7d32;">.ttf / .otf</span>
+                        </div>
+                        <div class="theme-setting-desc">一键把手机内的字体包装载进模拟器系统。</div>
+                        <input type="file" id="fontFileInput" accept=".ttf,.otf,.woff,.woff2" style="display:none;" onchange="handleFontUpload(event)">
+                        <button class="theme-btn" onclick="document.getElementById('fontFileInput').click()">选择本地字体文件</button>
+                    </div>
+
+                    <div class="theme-setting-card">
+                        <div class="theme-setting-title">🖼️ 自定义壁纸链接</div>
+                        <div class="theme-setting-desc">更换壁纸后，系统将重新分析整张图的光影明暗。</div>
+                        <input class="theme-input" id="customLockInput" placeholder="输入锁屏壁纸链接..." value="">
+                        <input class="theme-input" id="customDesktopInput" placeholder="输入桌面壁纸链接..." value="">
+                        <button class="theme-btn" onclick="applyCustomWallpapers()">应用壁纸并自动校色</button>
+                    </div>
+                `;
+                appModal.classList.add('opened');
+            };
+
+            window.onThemeModeChange = function(mode) {
+                window.currentThemeMode = mode;
+                const wrap = document.getElementById('customColorWrap');
+                if (wrap) {
+                    wrap.style.display = (mode === 'custom') ? 'flex' : 'none';
+                }
+                if (mode === 'auto') {
+                    window.analyzeImageLuminance('https://img.baibai.cv/f/gYRguG/%E7%8C%AA%E7%8C%AA%E9%94%81%E5%B1%8F.jpeg', window.applyColorTheme);
+                } else if (mode !== 'custom') {
+                    window.applyColorTheme(mode === 'light');
+                }
+            };
+
+            window.onCustomColorPick = function(hex) {
+                const root = document.documentElement;
+                root.style.setProperty('--status-color', hex);
+                root.style.setProperty('--lock-text-color', hex);
+                root.style.setProperty('--status-svg-fill', hex);
+                root.style.setProperty('--star-glow-color', hex);
+            };
+
+            window.handleFontUpload = function(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+                const reader = new FileReader();
+                reader.onload = function(evt) {
+                    const fontName = 'UserFont_' + Date.now();
+                    const fontFace = new FontFace(fontName, evt.target.result);
+                    fontFace.load().then(function(loaded) {
+                        document.fonts.add(loaded);
+                        document.documentElement.style.setProperty('--app-font', `"${fontName}", -apple-system, sans-serif`);
+                        if (typeof showToast === 'function') {
+                            showToast('🎉 字体已成功替换！');
+                        } else {
+                            alert('🎉 字体已成功替换！');
+                        }
+                    }).catch(function() {
+                        alert('字体加载失败，请检查文件有效性');
+                    });
+                };
+                reader.readAsArrayBuffer(file);
+            };
+
+            window.applyCustomWallpapers = function() {
+                const lockVal = document.getElementById('customLockInput') ? document.getElementById('customLockInput').value.trim() : '';
+                const deskVal = document.getElementById('customDesktopInput') ? document.getElementById('customDesktopInput').value.trim() : '';
+                if (lockVal) {
+                    document.documentElement.style.setProperty('--lock-bg-url', `url('${lockVal}')`);
+                    if (window.currentThemeMode === 'auto') {
+                        window.analyzeImageLuminance(lockVal, window.applyColorTheme);
+                    }
+                }
+                if (deskVal) {
+                    document.documentElement.style.setProperty('--desktop-bg-url', `url('${deskVal}')`);
+                }
+                if (typeof showToast === 'function') {
+                    showToast('壁纸已更新！');
+                } else {
+                    alert('壁纸已更新！');
+                }
+            };
+
+            // 7. 系统设置 APP
+            window.openSettingsApp = function() {
+                const appModal = document.getElementById('appModal');
+                const appModalTitle = document.getElementById('appModalTitle');
+                const appModalBody = document.getElementById('appModalBody');
+                if (!appModal || !appModalTitle || !appModalBody) return;
+
+                appModalTitle.textContent = "系统与时区设置";
+                appModalBody.innerHTML = `
+                    <div class="theme-setting-card">
+                        <div class="theme-setting-title">🌐 AI 快捷配置</div>
+                        <div class="theme-setting-desc">此快捷通道与游戏主界面的模型设置完全互通。</div>
+                        <button class="theme-btn" onclick="closePhoneAppModal(); if (typeof openModelSettingsModal === 'function') openModelSettingsModal();">打开全局模型设置面板</button>
+                    </div>
+                    <div class="theme-setting-card">
+                        <div class="theme-setting-title">🕒 真实时区同步</div>
+                        <div style="font-size:12px;color:#2e7d32;font-weight:600;">
+                            检测到当前设备时区：${Intl.DateTimeFormat().resolvedOptions().timeZone}
+                        </div>
+                    </div>
+                `;
+                appModal.classList.add('opened');
+            };
+        })();
+    </script>
+
+    <!-- 原项目的 11 个 JS 脚本文件按严格顺序引入 -->
     <script src="js/01-state-config.js"></script>
     <script src="js/02-ai-network.js"></script>
     <script src="js/03-game-core-1.js"></script>
