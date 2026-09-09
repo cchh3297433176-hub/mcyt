@@ -1,6 +1,7 @@
 /**
  * js/shell/phone-shell.js
- * 📱 虚拟手机硬件外壳与操作系统驱动层 (修复锁屏点击、手势穿透与壁纸防崩)
+ * 📱 虚拟手机硬件外壳与操作系统驱动层
+ * 职责：时钟、硬件电量、壁纸加载、冷启动主题持久化恢复、自动明暗反色引擎、手势解锁与 App 调度
  */
 
 (function () {
@@ -59,9 +60,7 @@
         }
     }
 
-    // 3. Canvas 内存取色（强力防报错包裹）
-    window.currentThemeMode = localStorage.getItem('mcyt_phone_theme_mode') || 'auto';
-
+    // 3. Canvas 内存壁纸取色引擎（强化容错，解决本地路径跨域报错导致的反色失败）
     window.analyzeImageLuminance = function (imageUrl, callback) {
         if (!imageUrl) {
             if (typeof callback === 'function') callback(false);
@@ -69,13 +68,17 @@
         }
         try {
             const img = new Image();
-            img.crossOrigin = "Anonymous";
+            // 仅对非 Base64 的网络图片开启 crossOrigin，防止本地路径触发 CORS 污染
+            if (!imageUrl.startsWith('data:')) {
+                img.crossOrigin = "Anonymous";
+            }
             img.onload = function () {
                 try {
                     const canvas = document.createElement('canvas');
                     const ctx = canvas.getContext('2d');
                     canvas.width = 100;
                     canvas.height = 100;
+                    // 取顶部 35% 区域计算状态栏与时钟下方的明度
                     ctx.drawImage(img, 0, 0, 100, 35, 0, 0, 100, 35);
                     const imgData = ctx.getImageData(0, 0, 100, 35).data;
                     let totalLuminance = 0;
@@ -84,13 +87,16 @@
                         const r = imgData[i];
                         const g = imgData[i + 1];
                         const b = imgData[i + 2];
+                        // ITU-R BT.709 亮度加权感知公式
                         const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
                         totalLuminance += luma;
                         count++;
                     }
                     const avgLuma = totalLuminance / (count || 1);
-                    if (typeof callback === 'function') callback(avgLuma > 145);
+                    // 亮度 > 140 视为浅色明亮背景，需要变黑；否则变纯白
+                    if (typeof callback === 'function') callback(avgLuma > 140);
                 } catch (err) {
+                    // 如果被本地 CORS 拦截，给予安全白字兜底
                     if (typeof callback === 'function') callback(false);
                 }
             };
@@ -103,15 +109,29 @@
         }
     };
 
+    // 4. 全局主题颜色生效核心（支持 auto, dark, light, custom 4种模式）
     window.applyColorTheme = function (isLightBg) {
         try {
             const root = document.documentElement;
-            if (window.currentThemeMode === 'dark' || (!isLightBg && window.currentThemeMode === 'auto')) {
+            const mode = window.currentThemeMode || 'auto';
+
+            if (mode === 'custom') {
+                const customColor = localStorage.getItem('mcyt_phone_custom_color') || '#ff5c8a';
+                root.style.setProperty('--status-color', customColor);
+                root.style.setProperty('--lock-text-color', customColor);
+                root.style.setProperty('--status-svg-fill', customColor);
+                root.style.setProperty('--star-glow-color', customColor);
+                return;
+            }
+
+            if (mode === 'dark' || (!isLightBg && mode === 'auto')) {
+                // 背景暗 -> 字体/图标纯白质感
                 root.style.setProperty('--status-color', '#ffffff');
                 root.style.setProperty('--lock-text-color', '#ffffff');
                 root.style.setProperty('--status-svg-fill', '#ffffff');
                 root.style.setProperty('--star-glow-color', 'rgba(255, 255, 255, 0.9)');
             } else {
+                // 背景亮 -> 字体/图标黑巧深色
                 root.style.setProperty('--status-color', '#2e1a22');
                 root.style.setProperty('--lock-text-color', '#2e1a22');
                 root.style.setProperty('--status-svg-fill', '#2e1a22');
@@ -120,37 +140,56 @@
         } catch (e) {}
     };
 
-    // 4. 初始化壁纸
-    function initPhoneWallpapers() {
+    // 5. 手机冷启动：完整读取并恢复用户壁纸与主题配置（解决删后台失效问题）
+    function initPhoneThemeAndWallpapers() {
         try {
+            const root = document.documentElement;
             const savedLock = localStorage.getItem('mcyt_custom_lock_bg');
             const savedDesktop = localStorage.getItem('mcyt_custom_desktop_bg');
-            const root = document.documentElement;
+            const savedMode = localStorage.getItem('mcyt_phone_theme_mode') || 'auto';
+            window.currentThemeMode = savedMode;
 
+            // 恢复壁纸
             if (savedLock && savedLock.startsWith('data:image')) {
                 root.style.setProperty('--lock-bg-url', `url('${savedLock}')`);
-                window.analyzeImageLuminance(savedLock, window.applyColorTheme);
+            } else {
+                root.style.setProperty('--lock-bg-url', `url('assets/system/default_lock.jpg')`);
             }
+
             if (savedDesktop && savedDesktop.startsWith('data:image')) {
                 root.style.setProperty('--desktop-bg-url', `url('${savedDesktop}')`);
+            } else {
+                root.style.setProperty('--desktop-bg-url', `url('assets/system/default_desktop.jpg')`);
             }
-        } catch (e) {}
+
+            // 恢复色彩模式
+            if (savedMode === 'custom') {
+                window.applyColorTheme(false);
+            } else if (savedMode === 'dark') {
+                window.applyColorTheme(false); // 强制纯白
+            } else if (savedMode === 'light') {
+                window.applyColorTheme(true);  // 强制深黑
+            } else {
+                // 自动模式：即时分析壁纸
+                const targetWallpaper = (savedLock && savedLock.startsWith('data:image')) ? savedLock : 'assets/system/default_lock.jpg';
+                window.analyzeImageLuminance(targetWallpaper, window.applyColorTheme);
+            }
+        } catch (e) {
+            console.warn('[Theme Init Error]:', e);
+        }
     }
 
-    // 5. 锁屏全屏手势与暴力解锁机制（杜绝任何挡道）
+    // 6. 锁屏全屏手势与解锁机制
     function initLockGestures() {
         const screenLock = document.getElementById('screenLock');
         const lockBtn = document.getElementById('lockBtn');
         if (!screenLock) return;
 
-        // 解锁核心执行函数
         window.unlockPhoneScreen = function () {
             screenLock.classList.add('unlocked');
-            // 确保动画结束后 pointer-events 彻底关闭，绝不挡住桌面
             screenLock.style.pointerEvents = 'none';
         };
 
-        // 重新锁屏函数
         window.lockPhoneScreen = function () {
             if (typeof window.closePhoneApp === 'function') {
                 window.closePhoneApp();
@@ -159,12 +198,10 @@
             screenLock.style.pointerEvents = 'auto';
         };
 
-        // 全屏任意位置只要点击，立刻解锁！
-        screenLock.addEventListener('click', function (e) {
+        screenLock.addEventListener('click', function () {
             window.unlockPhoneScreen();
         });
 
-        // 触屏滑动手势监听
         let touchStartY = 0;
         screenLock.addEventListener('touchstart', function (e) {
             if (e.touches && e.touches.length) {
@@ -175,14 +212,12 @@
         screenLock.addEventListener('touchend', function (e) {
             if (e.changedTouches && e.changedTouches.length) {
                 const touchEndY = e.changedTouches[0].clientY;
-                // 上滑超过 30px 或者轻点一下，立刻解锁！
                 if (touchStartY - touchEndY > 30 || Math.abs(touchStartY - touchEndY) < 10) {
                     window.unlockPhoneScreen();
                 }
             }
         }, { passive: true });
 
-        // 桌面顶部“锁定屏幕”按钮
         if (lockBtn) {
             lockBtn.addEventListener('click', function (e) {
                 e.stopPropagation();
@@ -191,7 +226,7 @@
         }
     }
 
-    // 6. 全屏 App 窗口生命周期调度
+    // 7. 全屏 App 窗口生命周期调度
     window.openPhoneApp = function (appKey) {
         const appModal = document.getElementById('appModal');
         const appModalTitle = document.getElementById('appModalTitle');
@@ -237,12 +272,12 @@
         if (appModal) appModal.classList.remove('opened');
     };
 
-    // 7. 启动手机外壳服务
+    // 8. 启动手机外壳核心服务
     function bootShell() {
         setInterval(updatePhoneClock, 1000);
         updatePhoneClock();
         bindPhoneBattery();
-        initPhoneWallpapers();
+        initPhoneThemeAndWallpapers();
         initLockGestures();
     }
 
