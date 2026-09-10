@@ -1,5 +1,5 @@
 /* style.css */
-/* ===== 全局重置 & 草莓粉白复古甜心配色 ===== */
+/* ===== 全局重置 & 可自调节主题配色系统 ===== */
 * {
     box-sizing: border-box;
     margin: 0;
@@ -7,23 +7,36 @@
     -webkit-tap-highlight-color: transparent;
 }
 :root {
-    /* 全局核心粉白配色系统 */
-    --bg: #fff5f7;
+    /* 主体粉色与白色可调节核心变量（支持在主题中自定义覆盖） */
+    --theme-main-pink: #ff5c8a;
+    --theme-main-white: #ffffff;
+    --theme-sub-white: #fff5f7;
+
+    /* 全局核心色彩映射 */
+    --bg: var(--theme-sub-white);
     --bg2: #ffeef2;
-    --card: #ffffff;
+    --card: var(--theme-main-white);
     --card2: #fff8f9;
-    --primary: #ff5c8a;       /* 鲜活甜美草莓粉 */
-    --primary2: #ff8fab;      /* 樱花柔粉 */
-    --accent: #d81b60;        /* 浓郁玫瑰红 */
+    --primary: var(--theme-main-pink);
+    --primary2: #ff8fab;
+    --accent: #d81b60;
     --gold: #ff758f;
-    --text: #2e1a22;          /* 温暖柔和的黑巧深棕 */
-    --text2: #7a505f;         /* 柔粉灰调辅助文字 */
+    --text: #2e1a22;
+    --text2: #7a505f;
     --radius: 16px;
     --shadow: 0 4px 16px rgba(216, 27, 96, 0.08);
     --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 
-    /* 默认壁纸全部精准指向内部相对路径 */
+    /* 字体与系统图标颜色 */
     --app-font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
+    --app-icon-label-color: #ffffff;
+
+    /* 状态栏三维定制变量：描边勾线、填充底色、底图 */
+    --status-bar-stroke: none;
+    --status-bar-fill: transparent;
+    --status-bar-bg-img: none;
+
+    /* 默认壁纸全部精准指向内部相对路径 */
     --lock-bg-url: url('assets/system/default_lock.jpg');
     --desktop-bg-url: url('assets/system/default_desktop.jpg');
     
@@ -87,7 +100,7 @@ body {
     }
 }
 
-/* 灵动岛（精细化缩小尺寸，彻底消除对两侧图标的遮挡） */
+/* 灵动岛 */
 .phone-notch {
     position: absolute;
     top: 9px;
@@ -111,7 +124,7 @@ body {
     box-shadow: inset 0 0 2px #39527f;
 }
 
-/* 智能感知色彩状态栏（加大左右留白，避开灵动岛） */
+/* 智能感知色彩状态栏（支持勾线边框、填充底色、背景底图） */
 .status-bar {
     position: absolute;
     top: 0;
@@ -127,7 +140,12 @@ body {
     font-weight: 500;
     letter-spacing: -0.2px;
     z-index: 950;
-    transition: color 0.3s ease;
+    transition: color 0.3s ease, background-color 0.3s ease, border 0.3s ease;
+    border-bottom: var(--status-bar-stroke);
+    background-color: var(--status-bar-fill);
+    background-image: var(--status-bar-bg-img);
+    background-size: cover;
+    background-position: center;
 }
 .status-bar-right {
     display: flex;
@@ -280,7 +298,9 @@ body {
     transition: color 0.3s ease;
 }
 
-/* 桌面主界面 */
+/* ============================================================ */
+/* 桌面主界面：双页滑屏与向下沉淀布局 */
+/* ============================================================ */
 .screen-desktop {
     position: absolute;
     inset: 0;
@@ -292,20 +312,24 @@ body {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    padding: 54px 18px 18px 18px;
+    padding: 44px 14px 14px 14px;
     z-index: 500;
+    overflow: hidden;
 }
+
 .desktop-top-widget {
-    background: rgba(255, 255, 255, 0.82);
+    background: rgba(255, 255, 255, 0.85);
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-radius: 18px;
-    padding: 9px 14px;
+    padding: 8px 14px;
     display: flex;
     justify-content: space-between;
     align-items: center;
-    border: 1px solid rgba(255, 255, 255, 0.6);
-    box-shadow: 0 4px 18px rgba(216, 27, 96, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
+    margin-bottom: 6px;
+    flex-shrink: 0;
 }
 .widget-day-info {
     font-size: 12px;
@@ -326,12 +350,272 @@ body {
     cursor: pointer;
 }
 
+/* 滑页视口与轨道 */
+.desktop-pages-viewport {
+    flex: 1;
+    width: 100%;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    touch-action: pan-y;
+}
+.desktop-pages-track {
+    display: flex;
+    width: 200%;
+    height: 100%;
+    transition: transform 0.32s cubic-bezier(0.2, 0.9, 0.25, 1);
+    will-change: transform;
+}
+.desktop-page {
+    width: 50%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end; /* 图标与主要内容沉底，留出上方空间 */
+    box-sizing: border-box;
+    padding: 2px 2px 6px 2px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+.desktop-page::-webkit-scrollbar {
+    display: none;
+}
+.desktop-page-2 {
+    justify-content: flex-start;
+    padding-top: 10px;
+}
+
+/* 桌面小圆点指示器 */
+.desktop-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    height: 14px;
+    margin: 2px 0 4px 0;
+    flex-shrink: 0;
+}
+.pagination-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.45);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    transition: all 0.25s ease;
+    cursor: pointer;
+}
+.pagination-dot.active {
+    width: 16px;
+    background: #ffffff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+}
+
+/* ============================================================ */
+/* 📝 桌面小组件 1：待办事项便签（1:1 复刻参考图一，温柔纸质白底） */
+/* ============================================================ */
+.todo-widget-card {
+    background: #fdfcf7; /* 温暖纯净的便签纸白 */
+    border-radius: 22px;
+    padding: 14px 16px;
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(240, 237, 228, 0.9);
+    margin-bottom: 12px;
+    color: #2b2725;
+    user-select: none;
+    flex-shrink: 0;
+}
+.todo-widget-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    padding-bottom: 4px;
+}
+.todo-widget-count {
+    font-size: 13.5px;
+    font-weight: 600;
+    color: #433d3c;
+    letter-spacing: 0.2px;
+}
+.todo-widget-actions {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.todo-icon-btn {
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #2b2725;
+    padding: 2px;
+    border-radius: 6px;
+    transition: transform 0.12s ease;
+}
+.todo-icon-btn:active {
+    transform: scale(0.88);
+}
+.todo-icon-btn svg {
+    width: 17px;
+    height: 17px;
+    stroke: #2b2725;
+    stroke-width: 2;
+    fill: none;
+}
+
+.todo-list-wrap {
+    display: flex;
+    flex-direction: column;
+}
+.todo-item-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 0;
+    border-bottom: 1px solid #f2eee6;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.todo-item-row:last-child {
+    border-bottom: none;
+    padding-bottom: 2px;
+}
+.todo-check-circle {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 1.6px solid #d4cdc5;
+    background: transparent;
+    flex-shrink: 0;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.todo-check-circle:hover {
+    border-color: #8c857e;
+}
+.todo-item-row.completed .todo-check-circle {
+    background: #63b97b;
+    border-color: #63b97b;
+}
+.todo-item-row.completed .todo-check-circle::after {
+    content: "";
+    width: 5px;
+    height: 9px;
+    border: solid #ffffff;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg) translate(-0.5px, -1px);
+}
+.todo-item-text {
+    font-size: 13.5px;
+    color: #2b2725;
+    font-weight: 500;
+    flex: 1;
+    line-height: 1.35;
+    word-break: break-word;
+    transition: color 0.2s ease, text-decoration 0.2s ease;
+}
+.todo-item-row.completed .todo-item-text {
+    color: #a49c95;
+    text-decoration: line-through;
+}
+
+/* ============================================================ */
+/* 📅 桌面小组件 2：极简日历（1:1 复刻参考图二，纯黑白简约高级感） */
+/* ============================================================ */
+.calendar-widget-card {
+    background: #ffffff;
+    border-radius: 22px;
+    padding: 16px 18px 14px 18px;
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.08);
+    border: 1px solid rgba(240, 237, 228, 0.9);
+    margin-bottom: 12px;
+    color: #111111;
+    user-select: none;
+    flex-shrink: 0;
+}
+.calendar-widget-top {
+    text-align: center;
+    margin-bottom: 14px;
+}
+.calendar-month-title {
+    font-size: 18px;
+    font-weight: 300;
+    letter-spacing: 5px;
+    color: #000000;
+    text-transform: uppercase;
+}
+.calendar-year-title {
+    font-size: 13px;
+    font-weight: 400;
+    letter-spacing: 3px;
+    color: #222222;
+    margin-top: 3px;
+    display: inline-block;
+    border-bottom: 1.2px solid #000000;
+    padding-bottom: 2px;
+}
+
+.calendar-week-row {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    text-align: center;
+    font-size: 11px;
+    font-weight: 800;
+    color: #000000;
+    margin-bottom: 10px;
+}
+.calendar-days-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 7px 0;
+    text-align: center;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: #222222;
+}
+.calendar-day-cell {
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
+    position: relative;
+}
+.calendar-day-cell.today-cell::after {
+    content: "";
+    position: absolute;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #111111;
+    z-index: 1;
+}
+.calendar-day-cell.today-cell span {
+    color: #ffffff !important;
+    position: relative;
+    z-index: 2;
+    font-weight: 700;
+}
+.calendar-widget-notes {
+    margin-top: 14px;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: #111111;
+    text-transform: uppercase;
+}
+
 /* 应用网格 */
 .app-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 20px 14px;
-    padding: 12px 2px;
+    gap: 16px 12px;
+    padding: 6px 2px;
+    width: 100%;
 }
 .app-slot {
     display: flex;
@@ -346,10 +630,10 @@ body {
 }
 
 .app-icon-box {
-    width: 58px !important;
-    height: 58px !important;
-    max-width: 58px !important;
-    max-height: 58px !important;
+    width: 56px !important;
+    height: 56px !important;
+    max-width: 56px !important;
+    max-height: 56px !important;
     border-radius: 15px;
     display: flex;
     align-items: center;
@@ -367,18 +651,19 @@ body {
     object-fit: cover;
 }
 .app-icon-svg {
-    width: 30px !important;
-    height: 30px !important;
-    max-width: 30px !important;
-    max-height: 30px !important;
+    width: 29px !important;
+    height: 29px !important;
+    max-width: 29px !important;
+    max-height: 29px !important;
 }
 .app-title-label {
     font-size: 11px;
-    color: #ffffff;
+    color: var(--app-icon-label-color, #ffffff);
     font-weight: 600;
     letter-spacing: 0.1px;
     white-space: nowrap;
     text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    transition: color 0.3s ease;
 }
 .app-unread-badge {
     position: absolute;
@@ -404,28 +689,30 @@ body {
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
     border-radius: 28px;
-    padding: 10px 14px;
+    padding: 8px 14px;
     display: flex;
     justify-content: space-around;
     align-items: center;
     border: 1px solid rgba(255, 255, 255, 0.45);
-    box-shadow: 0 8px 24px rgba(216, 27, 96, 0.10);
-    margin-bottom: 6px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+    margin-bottom: 4px;
+    flex-shrink: 0;
 }
 .dock-container .app-icon-box {
-    width: 50px !important;
-    height: 50px !important;
-    max-width: 50px !important;
-    max-height: 50px !important;
+    width: 48px !important;
+    height: 48px !important;
+    max-width: 48px !important;
+    max-height: 48px !important;
 }
 .home-bar-pill {
-    width: 130px;
-    height: 5px;
+    width: 120px;
+    height: 4.5px;
     background: #ffffff;
     border-radius: 10px;
     margin: 2px auto 0 auto;
-    opacity: 0.9;
+    opacity: 0.85;
     cursor: pointer;
+    flex-shrink: 0;
 }
 
 /* App 独立全屏窗口 */
@@ -488,7 +775,7 @@ body {
 .app-foot-home {
     width: 110px;
     height: 4.5px;
-    background: #ff5c8a;
+    background: var(--primary);
     border-radius: 10px;
     opacity: 0.3;
     cursor: pointer;
@@ -714,7 +1001,7 @@ body {
     padding: 11px;
     border: none;
     border-radius: 12px;
-    background: linear-gradient(135deg, #ff5c8a, #ff758f);
+    background: linear-gradient(135deg, var(--primary), var(--primary2));
     color: #fff;
     font-size: 14px;
     font-weight: 700;
@@ -774,6 +1061,42 @@ body {
     line-height: 1.4;
 }
 
+/* 方案管理器样式 */
+.profile-chip-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 8px;
+}
+.profile-chip {
+    background: #fff0f3;
+    border: 1px solid #ffd1dc;
+    border-radius: 10px;
+    padding: 6px 10px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #4a2f38;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.profile-chip.active {
+    background: var(--primary);
+    color: #ffffff;
+    border-color: var(--primary);
+    box-shadow: 0 2px 8px rgba(255, 92, 138, 0.3);
+}
+.profile-chip-del {
+    font-size: 11px;
+    opacity: 0.7;
+    margin-left: 2px;
+}
+.profile-chip-del:hover {
+    opacity: 1;
+}
+
 /* 弹窗层级 */
 .modal-overlay {
     position: fixed;
@@ -821,9 +1144,7 @@ body {
     50% { transform: translateY(-6px); opacity: 1; }
 }
 
-/* ============================================================ */
-/* 悬浮球组件与设置面板专属样式（透明皮肤绝对无外发光阴影） */
-/* ============================================================ */
+/* 悬浮球组件专属样式 */
 .debug-floating-orb {
     position: fixed;
     z-index: 1800;
@@ -842,7 +1163,6 @@ body {
     transform: scale(0.93);
 }
 
-/* 透明图片皮肤专属：彻底消除外层多余阴影与背景暗晕 */
 .debug-floating-orb.orb-transparent-skin {
     box-shadow: none !important;
     filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
@@ -888,7 +1208,6 @@ body {
     pointer-events: none;
 }
 
-/* 报错轻颤动效 */
 @keyframes orbShakeAnim {
     0% { transform: translate(0, 0) rotate(0deg); }
     15% { transform: translate(-3px, 2px) rotate(-4deg); }
@@ -902,7 +1221,6 @@ body {
     animation: orbShakeAnim 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
 }
 
-/* 设置 App 形状选中高亮态 */
 .orb-shape-btn.active-shape {
     background: var(--primary) !important;
     color: #ffffff !important;
@@ -910,7 +1228,6 @@ body {
     box-shadow: 0 3px 10px rgba(255, 92, 138, 0.35);
 }
 
-/* 隐藏横向 Tab 滚动条 */
 .settings-nav-tabs::-webkit-scrollbar {
     display: none;
 }

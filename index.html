@@ -18,7 +18,7 @@
             <div class="phone-camera-lens"></div>
         </div>
 
-        <!-- 智能感知色彩状态栏 -->
+        <!-- 智能感知色彩状态栏（支持勾线/填充/底图定制） -->
         <div class="status-bar" id="statusBar">
             <div id="statusTimeText">12:00</div>
             <div class="status-bar-right">
@@ -72,107 +72,188 @@
             </div>
         </div>
 
-        <!-- 2. 桌面主界面 -->
+        <!-- 2. 桌面主界面（支持双页左右滑屏 & 下沉图标布局） -->
         <div class="screen-desktop" id="screenDesktop">
             <div class="desktop-top-widget">
                 <div class="widget-day-info" id="desktopWidgetInfo">第 <span>1</span> 天 · 早晨 (行动点 6/6)</div>
                 <button class="widget-lock-action" id="lockBtn">锁定屏幕</button>
             </div>
 
-            <!-- 应用网格 -->
-            <div class="app-grid">
-                <div class="app-slot" id="appSlotChat" onclick="openPhoneApp('chat')">
-                    <div class="app-icon-box" style="background: linear-gradient(135deg, #51cf66, #2b8a3e);">
-                        <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
-                            <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
-                        </svg>
-                        <div class="app-unread-badge" id="chatUnreadBadge" style="display:none;">0</div>
-                    </div>
-                    <div class="app-title-label">聊天中心</div>
-                </div>
+            <!-- 滑屏视口 -->
+            <div class="desktop-pages-viewport" id="desktopPagesViewport">
+                <div class="desktop-pages-track" id="desktopPagesTrack">
+                    
+                    <!-- 第 1 页：桌面组件 + 常用 App -->
+                    <div class="desktop-page desktop-page-1" id="desktopPage1">
+                        
+                        <!-- 桌面组件挂载区（按需显示待办或日历） -->
+                        <div id="desktopWidgetsMountArea">
+                            <!-- 小组件 1：待办事项便签（1:1 复刻参考图一） -->
+                            <div class="todo-widget-card" id="desktopTodoWidget">
+                                <div class="todo-widget-header">
+                                    <div class="todo-widget-count" id="todoWidgetCountText">4 条待办</div>
+                                    <div class="todo-widget-actions">
+                                        <!-- 一键根据人设/日期生成一日待办 -->
+                                        <button class="todo-icon-btn" onclick="window.generateSmartDayTodos()" title="根据人设智能生成今日待办">
+                                            <svg viewBox="0 0 24 24">
+                                                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                                            </svg>
+                                        </button>
+                                        <!-- 手动添加一条待办 -->
+                                        <button class="todo-icon-btn" onclick="window.promptAddTodoItem()" title="添加待办">
+                                            <svg viewBox="0 0 24 24">
+                                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                                            </svg>
+                                        </button>
+                                        <!-- 切换日历/便签视图快捷键 -->
+                                        <button class="todo-icon-btn" onclick="window.toggleDesktopWidgetType()" title="切换组件视图">
+                                            <svg viewBox="0 0 24 24">
+                                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+                                                <line x1="16" y1="2" x2="16" y2="6"></line>
+                                                <line x1="8" y1="2" x2="8" y2="6"></line>
+                                                <line x1="3" y1="10" x2="21" y2="10"></line>
+                                            </svg>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="todo-list-wrap" id="todoWidgetList">
+                                    <!-- 待办项动态注入 -->
+                                </div>
+                            </div>
 
-                <div class="app-slot" id="appSlotMoments" onclick="openPhoneApp('moments')">
-                    <div class="app-icon-box" style="background: linear-gradient(135deg, #ff8787, #e03131);">
-                        <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
-                            <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-                        </svg>
-                    </div>
-                    <div class="app-title-label">朋友圈</div>
-                </div>
+                            <!-- 小组件 2：极简日历（1:1 复刻参考图二） -->
+                            <div class="calendar-widget-card" id="desktopCalendarWidget" style="display:none;">
+                                <div class="calendar-widget-top">
+                                    <div class="calendar-month-title" id="calMonthTitle">JULY</div>
+                                    <div class="calendar-year-title" id="calYearTitle">2026</div>
+                                </div>
+                                <div class="calendar-week-row">
+                                    <div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div><div>S</div>
+                                </div>
+                                <div class="calendar-days-grid" id="calDaysGrid">
+                                    <!-- 日期单元格动态注入 -->
+                                </div>
+                                <div class="calendar-widget-notes" onclick="window.toggleDesktopWidgetType()" style="cursor:pointer;" title="点击切换回待办事项">
+                                    NOTES ◂
+                                </div>
+                            </div>
+                        </div>
 
-                <div class="app-slot" id="appSlotYoutube" onclick="openPhoneApp('youtube')">
-                    <div class="app-icon-box" style="background: linear-gradient(135deg, #ff6b6b, #c92a2a);">
-                        <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
-                            <path d="M21.58 7.19c-.23-.86-.91-1.54-1.77-1.77C18.25 5 12 5 12 5s-6.25 0-7.81.42c-.86.23-1.54.91-1.77 1.77C2 8.75 2 12 2 12s0 3.25.42 4.81c.23.86.91 1.54 1.77 1.77C5.75 19 12 19 12 19s6.25 0 7.81-.42c.86-.23 1.54-.91 1.77-1.77C22 15.25 22 12 22 12s0-3.25-.42-4.81zM10 15V9l5.2 3-5.2 3z"/>
-                        </svg>
-                    </div>
-                    <div class="app-title-label">油管视频</div>
-                </div>
+                        <!-- 沉底的应用网格（第 1 页） -->
+                        <div class="app-grid">
+                            <div class="app-slot" id="appSlotChat" onclick="openPhoneApp('chat')">
+                                <div class="app-icon-box" style="background: linear-gradient(135deg, #51cf66, #2b8a3e);">
+                                    <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
+                                        <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+                                    </svg>
+                                    <div class="app-unread-badge" id="chatUnreadBadge" style="display:none;">0</div>
+                                </div>
+                                <div class="app-title-label">聊天中心</div>
+                            </div>
 
-                <div class="app-slot" id="appSlotAo3" onclick="openPhoneApp('ao3')">
-                    <div class="app-icon-box" style="background: linear-gradient(135deg, #cc5de8, #862e9c);">
-                        <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
-                            <path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/>
-                        </svg>
-                    </div>
-                    <div class="app-title-label">AO3同人</div>
-                </div>
+                            <div class="app-slot" id="appSlotMoments" onclick="openPhoneApp('moments')">
+                                <div class="app-icon-box" style="background: linear-gradient(135deg, #ff8787, #e03131);">
+                                    <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
+                                        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                                    </svg>
+                                </div>
+                                <div class="app-title-label">朋友圈</div>
+                            </div>
 
-                <div class="app-slot" id="appSlotStream" onclick="openPhoneApp('streaming')">
-                    <div class="app-icon-box" style="background: linear-gradient(135deg, #748ffc, #364fc7);">
-                        <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
-                            <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
-                        </svg>
-                    </div>
-                    <div class="app-title-label">开播中心</div>
-                </div>
+                            <div class="app-slot" id="appSlotYoutube" onclick="openPhoneApp('youtube')">
+                                <div class="app-icon-box" style="background: linear-gradient(135deg, #ff6b6b, #c92a2a);">
+                                    <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
+                                        <path d="M21.58 7.19c-.23-.86-.91-1.54-1.77-1.77C18.25 5 12 5 12 5s-6.25 0-7.81.42c-.86.23-1.54.91-1.77 1.77C2 8.75 2 12 2 12s0 3.25.42 4.81c.23.86.91 1.54 1.77 1.77C5.75 19 12 19 12 19s6.25 0 7.81-.42c.86-.23 1.54-.91 1.77-1.77C22 15.25 22 12 22 12s0-3.25-.42-4.81zM10 15V9l5.2 3-5.2 3z"/>
+                                    </svg>
+                                </div>
+                                <div class="app-title-label">油管视频</div>
+                            </div>
 
-                <div class="app-slot" id="appSlotStory" onclick="openPhoneApp('story')">
-                    <div class="app-icon-box" style="background: linear-gradient(135deg, #20c997, #099268);">
-                        <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
-                            <path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/>
-                        </svg>
-                    </div>
-                    <div class="app-title-label">主线频道</div>
-                </div>
+                            <div class="app-slot" id="appSlotAo3" onclick="openPhoneApp('ao3')">
+                                <div class="app-icon-box" style="background: linear-gradient(135deg, #cc5de8, #862e9c);">
+                                    <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
+                                        <path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/>
+                                    </svg>
+                                </div>
+                                <div class="app-title-label">AO3同人</div>
+                            </div>
 
-                <!-- 个性主题 APP -->
-                <div class="app-slot" id="appSlotTheme" onclick="openPhoneApp('theme')">
-                    <div class="app-icon-box">
-                        <img src="assets/icons/theme.png" alt="个性主题" />
-                    </div>
-                    <div class="app-title-label">个性主题</div>
-                </div>
+                            <div class="app-slot" id="appSlotStream" onclick="openPhoneApp('streaming')">
+                                <div class="app-icon-box" style="background: linear-gradient(135deg, #748ffc, #364fc7);">
+                                    <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
+                                        <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+                                    </svg>
+                                </div>
+                                <div class="app-title-label">开播中心</div>
+                            </div>
 
-                <div class="app-slot" id="appSlotShop" onclick="openPhoneApp('shop')">
-                    <div class="app-icon-box" style="background: linear-gradient(135deg, #38d9a9, #087f5b);">
-                        <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
-                            <path d="M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-6 0h-4V4h4v2z"/>
-                        </svg>
+                            <div class="app-slot" id="appSlotStory" onclick="openPhoneApp('story')">
+                                <div class="app-icon-box" style="background: linear-gradient(135deg, #20c997, #099268);">
+                                    <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
+                                        <path d="M4 6h16v2H4zm0 5h16v2H4zm0 5h16v2H4z"/>
+                                    </svg>
+                                </div>
+                                <div class="app-title-label">主线频道</div>
+                            </div>
+
+                            <!-- 个性主题 APP -->
+                            <div class="app-slot" id="appSlotTheme" onclick="openPhoneApp('theme')">
+                                <div class="app-icon-box">
+                                    <img src="assets/icons/theme.png" alt="个性主题" />
+                                </div>
+                                <div class="app-title-label">个性主题</div>
+                            </div>
+
+                            <div class="app-slot" id="appSlotShop" onclick="openPhoneApp('shop')">
+                                <div class="app-icon-box" style="background: linear-gradient(135deg, #38d9a9, #087f5b);">
+                                    <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
+                                        <path d="M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-6 0h-4V4h4v2z"/>
+                                    </svg>
+                                </div>
+                                <div class="app-title-label">商务赞助</div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="app-title-label">商务赞助</div>
+
+                    <!-- 第 2 页：扩展备用桌面（留白便于后续添加更多 App / 小组件） -->
+                    <div class="desktop-page desktop-page-2" id="desktopPage2">
+                        <div class="theme-setting-card" style="margin-top:20px;background:rgba(255,255,255,0.75);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.6);">
+                            <div class="theme-setting-title">✨ 第二桌面已开启</div>
+                            <div class="theme-setting-desc" style="color:#555;">
+                                左右轻滑即可在第 1 页与第 2 页之间随心穿梭，后续装载的扩展工具与新应用将陈列在此处。
+                            </div>
+                        </div>
+                    </div>
+
                 </div>
             </div>
 
-            <!-- 底部 Dock 栏（恢复使用仓库内部原生 icon_settings.png 图标） -->
+            <!-- 分页指示器（小圆点） -->
+            <div class="desktop-pagination" id="desktopPagination">
+                <div class="pagination-dot active" data-page="0" onclick="window.switchDesktopPage(0)"></div>
+                <div class="pagination-dot" data-page="1" onclick="window.switchDesktopPage(1)"></div>
+            </div>
+
+            <!-- 底部毛玻璃 Dock 栏 -->
             <div>
                 <div class="dock-container">
                     <div class="app-slot" onclick="openPhoneApp('contacts')">
-                        <div class="app-icon-box" style="background: #2b8a3e; width: 50px; height: 50px;">
+                        <div class="app-icon-box" style="background: #2b8a3e; width: 48px; height: 48px;">
                             <svg class="app-icon-svg" style="width:25px;height:25px;" viewBox="0 0 24 24" fill="#ffffff">
                                 <path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 00-1.01.24l-1.57 1.97c-2.83-1.44-5.15-3.75-6.59-6.59l1.97-1.57c.28-.28.36-.67.25-1.02A11.36 11.36 0 018.57 4c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1 0 9.39 7.61 17 17 17 .55 0 1-.45 1-1v-3.5c0-.55-.45-1-1-1.12z"/>
                             </svg>
                         </div>
                     </div>
                     <div class="app-slot" onclick="openPhoneApp('settings')">
-                        <div class="app-icon-box" style="width: 50px; height: 50px;">
+                        <div class="app-icon-box" style="width: 48px; height: 48px;">
                             <img src="assets/icons/icon_settings.png" alt="系统设置" />
                         </div>
                     </div>
                     <div class="app-slot" onclick="openPhoneApp('backup')">
-                        <div class="app-icon-box" style="background: #845ef7; width: 50px; height: 50px;">
+                        <div class="app-icon-box" style="background: #845ef7; width: 48px; height: 48px;">
                             <svg class="app-icon-svg" style="width:25px;height:25px;" viewBox="0 0 24 24" fill="#ffffff">
-                                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/>
+                                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/>
                             </svg>
                         </div>
                     </div>
