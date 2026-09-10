@@ -2,8 +2,8 @@
  * js/shell/phone-shell.js
  * 📱 虚拟手机硬件外壳与操作系统驱动层
  * 职责：时钟、硬件电量、网络/蓝牙感知、壁纸加载、冷启动主题恢复、自动明暗反色引擎、
- *       手势解锁与 App 调度、桌面双页平滑滑屏手势、左日历右待办双组件并排渲染、
- *       纯净游戏向一日待办智能排布算法
+ *       手势解锁与 App 调度、桌面双页平滑滑屏手势、组件流动态宿主系统（日历/待办自由多页穿梭与单双并排自适应）、
+ *       粉白仿Windows甜心弹窗新增待办、纯净游戏向一日待办智能排布算法
  */
 
 (function () {
@@ -355,7 +355,7 @@
         }
     }
 
-    // 8. 桌面双页滑屏手势驱动器（按 100% 精确平移，消除拉伸腰斩）
+    // 8. 桌面双页滑屏手势驱动器（绝对按 100% 页面平移）
     let currentDesktopPage = 0;
     window.switchDesktopPage = function (pageIndex) {
         currentDesktopPage = pageIndex === 1 ? 1 : 0;
@@ -410,7 +410,148 @@
         }, { passive: true });
     }
 
-    // 9. 桌面组件管理：彻底清除任何隐私！纯净安全待办事项
+    // 9. 粉白仿 Windows 98 甜心弹窗（完全替代丑陋原生 prompt）
+    window.openRetroTodoInputModal = function (title, defaultVal, placeholder, onConfirm) {
+        const modal = document.getElementById('modal');
+        const modalTitle = document.getElementById('retroModalTitle');
+        const modalBody = document.getElementById('modalBody');
+        const modalClose = document.getElementById('modalClose');
+        if (!modal || !modalTitle || !modalBody) return;
+
+        modalTitle.textContent = title || "新建待办事项";
+        modalBody.innerHTML = `
+            <div style="font-size:12.5px;color:#2e1a22;font-weight:600;margin-bottom:6px;">
+                请输入待办内容：
+            </div>
+            <input type="text" id="retroTodoInputBox" class="retro-input-field" value="${defaultVal || ''}" placeholder="${placeholder || '例如：构思新一期视频脚本'}" />
+            <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;">
+                <button class="retro-pink-btn" id="retroTodoCancelBtn">取消</button>
+                <button class="retro-pink-btn" id="retroTodoOkBtn" style="font-weight:bold;color:#b82350;">确认添加</button>
+            </div>
+        `;
+
+        modal.classList.add('open');
+
+        const inputEl = document.getElementById('retroTodoInputBox');
+        if (inputEl) {
+            setTimeout(() => inputEl.focus(), 80);
+            inputEl.addEventListener('keydown', function (e) {
+                if (e.key === 'Enter') {
+                    confirmAction();
+                }
+            });
+        }
+
+        function closeModalInternal() {
+            modal.classList.remove('open');
+            modalBody.innerHTML = '';
+            if (modalClose) modalClose.onclick = null;
+        }
+
+        function confirmAction() {
+            const val = inputEl ? inputEl.value.trim() : '';
+            closeModalInternal();
+            if (val && typeof onConfirm === 'function') {
+                onConfirm(val);
+            }
+        }
+
+        document.getElementById('retroTodoCancelBtn').onclick = closeModalInternal;
+        document.getElementById('retroTodoOkBtn').onclick = confirmAction;
+        if (modalClose) modalClose.onclick = closeModalInternal;
+    };
+
+    // 10. 桌面组件流动态宿主系统（支持日历与待办自由多页穿梭与单双自适应）
+    window.renderDesktopWidgetsLayout = function () {
+        const slot1 = document.getElementById('page1WidgetSlot');
+        const slot2 = document.getElementById('page2WidgetSlot');
+        if (!slot1 || !slot2) return;
+
+        // 读取日历和待办的独立配置：是否开启（默认开启）与所在页码（1或2）
+        const calEnabled = localStorage.getItem('mcyt_widget_calendar_enabled') !== 'false';
+        const calPage = parseInt(localStorage.getItem('mcyt_widget_calendar_page') || '1', 10);
+
+        const todoEnabled = localStorage.getItem('mcyt_widget_todo_enabled') !== 'false';
+        const todoPage = parseInt(localStorage.getItem('mcyt_widget_todo_page') || '1', 10);
+
+        // 组件原生 HTML 模板
+        const calendarHTML = `
+            <div class="calendar-widget-card" id="desktopCalendarWidget">
+                <div class="calendar-widget-top">
+                    <div class="calendar-month-title" id="calMonthTitle">SEPTEMBER</div>
+                    <div class="calendar-year-title" id="calYearTitle">2026</div>
+                </div>
+                <div class="calendar-week-row">
+                    <div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div><div>S</div>
+                </div>
+                <div class="calendar-days-grid" id="calDaysGrid"></div>
+                <div class="calendar-widget-notes">NOTES</div>
+            </div>
+        `;
+
+        const todoHTML = `
+            <div class="todo-widget-card" id="desktopTodoWidget">
+                <div class="todo-widget-header">
+                    <div class="todo-widget-count" id="todoWidgetCountText">0 条待办</div>
+                    <div class="todo-widget-actions">
+                        <button class="todo-icon-btn" onclick="window.generateSmartDayTodos()" title="智能排布今日待办">
+                            <svg viewBox="0 0 24 24">
+                                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+                            </svg>
+                        </button>
+                        <button class="todo-icon-btn" onclick="window.promptAddTodoItem()" title="添加待办">
+                            <svg viewBox="0 0 24 24">
+                                <line x1="12" y1="5" x2="12" y2="19"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+                <div class="todo-list-wrap" id="todoWidgetList"></div>
+            </div>
+        `;
+
+        slot1.innerHTML = '';
+        slot2.innerHTML = '';
+
+        let page1Count = 0;
+        let page2Count = 0;
+
+        // 日历挂载分配
+        if (calEnabled) {
+            if (calPage === 2) {
+                slot2.insertAdjacentHTML('beforeend', calendarHTML);
+                page2Count++;
+            } else {
+                slot1.insertAdjacentHTML('beforeend', calendarHTML);
+                page1Count++;
+            }
+        }
+
+        // 待办挂载分配
+        if (todoEnabled) {
+            if (todoPage === 2) {
+                slot2.insertAdjacentHTML('beforeend', todoHTML);
+                page2Count++;
+            } else {
+                slot1.insertAdjacentHTML('beforeend', todoHTML);
+                page1Count++;
+            }
+        }
+
+        // 自适应类名处理：若某页只有 1 个组件，则添加 single-widget 撑开居中
+        if (page1Count === 1) slot1.classList.add('single-widget');
+        else slot1.classList.remove('single-widget');
+
+        if (page2Count === 1) slot2.classList.add('single-widget');
+        else slot2.classList.remove('single-widget');
+
+        // 数据重新渲染
+        if (calEnabled) window.renderDesktopCalendar();
+        if (todoEnabled) window.renderDesktopTodos();
+    };
+
+    // 11. 纯净待办数据管理
     function getCleanInitialTodos() {
         return [
             { id: 't_demo_1', text: '构思 MC 视频大纲', done: false },
@@ -423,7 +564,6 @@
             const raw = localStorage.getItem('mcyt_desktop_todos');
             if (!raw) return getCleanInitialTodos();
             const list = JSON.parse(raw);
-            // 安全扫描拦截：彻底过滤清理之前可能遗留的私人信息缓存
             const sanitized = list.filter(item => {
                 const txt = item.text || '';
                 return !txt.includes('美团') && !txt.includes('抖音') && !txt.includes('13040') && !txt.includes('生日');
@@ -476,7 +616,6 @@
         saveStoredTodos(todos);
         window.renderDesktopTodos();
 
-        // 优雅打勾动效：1.2秒后自动清除完成项
         if (target.done) {
             setTimeout(() => {
                 let freshList = getStoredTodos();
@@ -488,20 +627,19 @@
     };
 
     window.promptAddTodoItem = function () {
-        const text = prompt('添加新的待办事项：');
-        if (!text || !text.trim()) return;
-
-        const todos = getStoredTodos();
-        todos.push({
-            id: 't_' + Date.now(),
-            text: text.trim(),
-            done: false
+        window.openRetroTodoInputModal('📝 新建待办事项', '', '输入待办任务内容...', function (textVal) {
+            const todos = getStoredTodos();
+            todos.push({
+                id: 't_' + Date.now(),
+                text: textVal,
+                done: false
+            });
+            saveStoredTodos(todos);
+            window.renderDesktopTodos();
+            if (typeof showToast === 'function') showToast('已成功添加待办');
         });
-        saveStoredTodos(todos);
-        window.renderDesktopTodos();
     };
 
-    // 智能根据游戏人设与真实星期排布一日待办
     window.generateSmartDayTodos = function () {
         const now = new Date();
         const dayOfWeek = now.getDay();
@@ -567,7 +705,7 @@
         }
     };
 
-    // 1:1 极简黑白月历实时渲染（精准读取真实年月并高亮今天）
+    // 12. 极简黑白月历实时渲染
     window.renderDesktopCalendar = function () {
         const monthTitle = document.getElementById('calMonthTitle');
         const yearTitle = document.getElementById('calYearTitle');
@@ -589,7 +727,7 @@
 
         const firstDay = new Date(currentYear, currentMonth, 1);
         let firstDayIndex = firstDay.getDay();
-        firstDayIndex = (firstDayIndex + 6) % 7; // 周一排首列
+        firstDayIndex = (firstDayIndex + 6) % 7;
 
         const totalDays = new Date(currentYear, currentMonth + 1, 0).getDate();
 
@@ -610,7 +748,7 @@
         daysGrid.innerHTML = cellsHtml;
     };
 
-    // 10. 全屏 App 窗口生命周期调度
+    // 13. 全屏 App 窗口生命周期调度
     window.openPhoneApp = function (appKey) {
         const appModal = document.getElementById('appModal');
         const appModalTitle = document.getElementById('appModalTitle');
@@ -662,7 +800,7 @@
         if (appModal) appModal.classList.remove('opened');
     };
 
-    // 11. 启动手机外壳核心服务
+    // 14. 启动手机外壳核心服务
     function bootShell() {
         setInterval(updatePhoneClock, 1000);
         updatePhoneClock();
@@ -672,9 +810,8 @@
         initLockGestures();
         initDesktopSwipeGestures();
 
-        // 🌟 核心升级：进入桌面同时渲染并排的左日历与右待办
-        window.renderDesktopCalendar();
-        window.renderDesktopTodos();
+        // 🌟 动态组件挂载排布引擎就绪
+        window.renderDesktopWidgetsLayout();
     }
 
     if (document.readyState === 'loading') {
