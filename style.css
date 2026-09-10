@@ -397,6 +397,7 @@ body {
     margin-bottom: 12px;
     flex-shrink: 0;
     align-items: stretch;
+    position: relative;
 }
 .desktop-widgets-slot:empty {
     display: none;
@@ -408,6 +409,26 @@ body {
     flex: 1 !important;
     max-width: 320px;
     margin: 0 auto;
+}
+
+/* 组件编辑模式：晃动与虚线边框动效 */
+@keyframes widgetJiggle {
+    0% { transform: rotate(0deg); }
+    25% { transform: rotate(-1.2deg) scale(0.98); }
+    75% { transform: rotate(1.2deg) scale(0.98); }
+    100% { transform: rotate(0deg); }
+}
+.widget-jiggle {
+    animation: widgetJiggle 0.28s infinite ease-in-out !important;
+    outline: 2px dashed var(--primary) !important;
+    outline-offset: 3px;
+    cursor: grab !important;
+    user-select: none;
+    -webkit-user-select: none;
+}
+.widget-jiggle:active {
+    cursor: grabbing !important;
+    opacity: 0.85;
 }
 
 /* 左侧：极简黑白日历 */
@@ -423,6 +444,7 @@ body {
     justify-content: space-between;
     user-select: none;
     overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 .calendar-widget-top {
     text-align: center;
@@ -507,6 +529,7 @@ body {
     flex-direction: column;
     user-select: none;
     overflow: hidden;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 .todo-widget-header {
     display: flex;
@@ -1082,6 +1105,38 @@ body {
 }
 .btn-secondary:active {
     background: #ffe2e8;
+}
+
+/* 🌟 专门针对小组件选页的矮版胶囊切换按钮（彻底杜绝变长、变形与折行） */
+.widget-page-btn {
+    width: auto !important;
+    min-width: 54px !important;
+    height: 25px !important;
+    min-height: 25px !important;
+    max-height: 25px !important;
+    padding: 0 10px !important;
+    font-size: 11px !important;
+    font-weight: 600 !important;
+    line-height: 1 !important;
+    border-radius: 8px !important;
+    border: 1px solid rgba(255, 92, 138, 0.2) !important;
+    background: #fff0f3 !important;
+    color: var(--primary) !important;
+    white-space: nowrap !important;
+    flex-shrink: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-shadow: none !important;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.widget-page-btn.active {
+    background: linear-gradient(135deg, var(--primary), var(--primary2)) !important;
+    color: #ffffff !important;
+    border-color: var(--primary) !important;
+    box-shadow: 0 2px 6px rgba(255, 92, 138, 0.3) !important;
+    font-weight: 700 !important;
 }
 
 .theme-setting-card {
