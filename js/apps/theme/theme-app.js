@@ -1,9 +1,10 @@
 /**
  * js/apps/theme/theme-app.js
  * 🎀 个性化与主题中心 App
- * 职责：主体粉色与白色可调节自定制、状态栏三维解耦（描边勾线/填充底色/底图）、
- *       桌面组件配置面板、壁纸自适应裁剪、正等边三角形专业 HSV 色相盘、
- *       水滴吸色器、多配置方案管理器、免费字体网超链接引导与扩展字体多格式导入
+ * 职责：主体粉白可调节自定制、状态栏三维解耦（描边勾线/填充底色/底图）、
+ *       全层级统一切换至正等边三角形专业 HSV 色盘与水滴准星吸色放大镜（彻底杜绝原生丑陋选色）、
+ *       桌面组件自由多页穿梭与独立开关控制、壁纸自适应裁剪、一键全站色彩重置、
+ *       多配置方案管理器、免费字体网引导与扩展字体导入
  */
 
 (function () {
@@ -21,8 +22,13 @@
     let currentThemeMode = 'auto';
     let currentFontFormat = 'html';
 
-    // 当前自定义调节目标：'font_icon' (字体与图标) | 'status_bar' (状态栏) | 'theme_palette' (主体粉白)
-    let currentAdjustTarget = 'font_icon';
+    // 当前通过 HSV 色相盘调节的目标对象：
+    // 'status_text' (状态栏字体/系统状态图标)
+    // 'icon_label'  (桌面App标题文字)
+    // 'status_fill' (状态栏填充底色)
+    // 'main_pink'   (主体核心草莓粉)
+    // 'main_white'  (主体纯白底色/背景)
+    let currentHsvTarget = 'status_text';
 
     function hsvToRgb(h, s, v) {
         s = s / 100;
@@ -76,22 +82,40 @@
         return { h, s, v };
     }
 
+    function getCurrentTargetHex(targetKey) {
+        if (targetKey === 'status_text') {
+            return localStorage.getItem('mcyt_phone_custom_color') || '#ff5c8a';
+        } else if (targetKey === 'icon_label') {
+            return localStorage.getItem('mcyt_icon_label_color') || '#ffffff';
+        } else if (targetKey === 'status_fill') {
+            const fill = localStorage.getItem('mcyt_statusbar_fill');
+            return (fill && fill.startsWith('#')) ? fill : '#ff5c8a';
+        } else if (targetKey === 'main_pink') {
+            return localStorage.getItem('mcyt_custom_main_pink') || '#ff5c8a';
+        } else if (targetKey === 'main_white') {
+            return localStorage.getItem('mcyt_custom_main_white') || '#ffffff';
+        }
+        return '#ff5c8a';
+    }
+
     window.renderThemeApp = function (container) {
         if (!container) return;
 
         currentThemeMode = localStorage.getItem('mcyt_phone_theme_mode') || 'auto';
-        const savedCustomColor = localStorage.getItem('mcyt_phone_custom_color') || '#ff5c8a';
-        hsvState = hexToHsv(savedCustomColor);
+        const curHex = getCurrentTargetHex(currentHsvTarget);
+        hsvState = hexToHsv(curHex);
 
         pendingLockBg = localStorage.getItem('mcyt_custom_lock_bg');
         pendingDesktopBg = localStorage.getItem('mcyt_custom_desktop_bg');
 
-        const activeWidget = localStorage.getItem('mcyt_active_widget_type') || 'todo';
-        const customMainPink = localStorage.getItem('mcyt_custom_main_pink') || '#ff5c8a';
-        const customMainWhite = localStorage.getItem('mcyt_custom_main_white') || '#ffffff';
-        const customIconColor = localStorage.getItem('mcyt_icon_label_color') || '#ffffff';
         const sStrokeVal = localStorage.getItem('mcyt_statusbar_stroke') || 'none';
-        const sFillVal = localStorage.getItem('mcyt_statusbar_fill') || 'transparent';
+
+        // 读取组件独立开关与页码
+        const calEnabled = localStorage.getItem('mcyt_widget_calendar_enabled') !== 'false';
+        const calPage = parseInt(localStorage.getItem('mcyt_widget_calendar_page') || '1', 10);
+
+        const todoEnabled = localStorage.getItem('mcyt_widget_todo_enabled') !== 'false';
+        const todoPage = parseInt(localStorage.getItem('mcyt_widget_todo_page') || '1', 10);
 
         container.innerHTML = `
             <!-- 卡片 1：壁纸设置 -->
@@ -131,113 +155,71 @@
                 </div>
             </div>
 
-            <!-- 卡片 2：色彩与状态栏深度定制（含下拉框目标选择） -->
+            <!-- 卡片 2：色彩与状态栏全局专业定制（全线统一切换至 HSV 色盘） -->
             <div class="theme-setting-card">
                 <div class="theme-setting-title">
-                    <span>主体色彩与状态栏深度定制</span>
+                    <span>主题全层级色彩与状态栏定制</span>
                 </div>
                 <div class="theme-setting-desc">
-                    下拉选择想要个性化的层级，随心调配专属粉白与状态栏质感。
+                    下拉选择想要调节的目标，全线接入正等边专业 HSV 色相盘与水滴吸色准星。
                 </div>
 
-                <!-- 下拉选择器 -->
                 <div style="margin-bottom:12px;">
-                    <label style="font-size:11.5px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px;">自定义目标层级：</label>
-                    <select id="themeAdjustTargetSelect" style="width:100%;padding:8px 10px;border-radius:10px;border:1px solid #ffd1dc;background:#fff8fa;font-size:12.5px;font-weight:600;color:var(--text);outline:none;" onchange="window.onAdjustTargetSelectChange(this.value)">
-                        <option value="font_icon" ${currentAdjustTarget === 'font_icon' ? 'selected' : ''}>字体与系统图标颜色</option>
-                        <option value="status_bar" ${currentAdjustTarget === 'status_bar' ? 'selected' : ''}>状态栏（描边勾线 / 填充底色 / 底图）</option>
-                        <option value="theme_palette" ${currentAdjustTarget === 'theme_palette' ? 'selected' : ''}>主体粉色与纯白底色自调节</option>
+                    <label style="font-size:11.5px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px;">色盘当前调控目标：</label>
+                    <select id="themeHsvTargetSelect" style="width:100%;padding:8px 10px;border-radius:10px;border:1px solid #ffd1dc;background:#fff8fa;font-size:12.5px;font-weight:600;color:var(--text);outline:none;" onchange="window.onHsvTargetChange(this.value)">
+                        <option value="status_text" ${currentHsvTarget === 'status_text' ? 'selected' : ''}>字体与状态栏指示颜色</option>
+                        <option value="icon_label" ${currentHsvTarget === 'icon_label' ? 'selected' : ''}>桌面 App 标题文字颜色</option>
+                        <option value="status_fill" ${currentHsvTarget === 'status_fill' ? 'selected' : ''}>状态栏填充底色</option>
+                        <option value="main_pink" ${currentHsvTarget === 'main_pink' ? 'selected' : ''}>主体核心色彩（草莓粉区）</option>
+                        <option value="main_white" ${currentHsvTarget === 'main_white' ? 'selected' : ''}>主体纯白背景（纯白区）</option>
                     </select>
                 </div>
 
-                <!-- 子区域 A：字体与系统图标 -->
-                <div id="targetArea_font_icon" style="display:${currentAdjustTarget === 'font_icon' ? 'block' : 'none'};">
+                <div id="statusBarExtraControls" style="display:${currentHsvTarget === 'status_fill' ? 'block' : 'none'};margin-bottom:12px;background:#fff8fa;padding:10px;border-radius:12px;border:1px solid #ffeef2;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+                        <span style="font-size:11.5px;font-weight:600;color:var(--text);">状态栏底部分割描边：</span>
+                        <select id="statusBarStrokeSelect" style="padding:3px 6px;border-radius:6px;border:1px solid #ffd1dc;font-size:11px;" onchange="window.updateStatusBarStroke(this.value)">
+                            <option value="none" ${sStrokeVal === 'none' ? 'selected' : ''}>无描边</option>
+                            <option value="1px solid rgba(255, 92, 138, 0.35)" ${sStrokeVal.includes('255, 92, 138') ? 'selected' : ''}>柔粉描边</option>
+                            <option value="1px solid rgba(255, 255, 255, 0.45)" ${sStrokeVal.includes('255, 255, 255') ? 'selected' : ''}>纯白描边</option>
+                            <option value="1px solid rgba(0, 0, 0, 0.18)" ${sStrokeVal.includes('0, 0, 0') ? 'selected' : ''}>黑巧深色描边</option>
+                        </select>
+                    </div>
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <span style="font-size:11.5px;font-weight:600;color:var(--text);">专属底图或快捷透明：</span>
+                        <input type="file" id="statusBarBgFileInput" accept="image/*" style="display:none;" onchange="window.handleStatusBarBgUpload(event)">
+                        <div style="display:flex;gap:4px;">
+                            <button class="btn-secondary" style="padding:2px 6px;font-size:10.5px;" onclick="window.updateStatusBarFill('transparent')">完全透明</button>
+                            <button class="btn-secondary" style="padding:2px 6px;font-size:10.5px;" onclick="document.getElementById('statusBarBgFileInput').click()">导入底图</button>
+                            <button class="btn-secondary" style="padding:2px 6px;font-size:10.5px;color:#c92a2a;" onclick="window.clearStatusBarBg()">清图</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="statusModeRadioWrap" style="display:${currentHsvTarget === 'status_text' ? 'block' : 'none'};margin-bottom:12px;">
                     <div class="theme-pointer-group">
                         <div class="theme-pointer-item" onclick="window.onThemeModeRadioChange('auto')">
                             <input type="radio" name="themeModeRadio" id="modeAuto" value="auto" ${currentThemeMode === 'auto' ? 'checked' : ''}>
-                            <label for="modeAuto">自动识别壁纸明暗反色（精准识别白底/黑底）</label>
+                            <label for="modeAuto">自动识别壁纸明暗反色</label>
                         </div>
                         <div class="theme-pointer-item" onclick="window.onThemeModeRadioChange('dark')">
                             <input type="radio" name="themeModeRadio" id="modeDark" value="dark" ${currentThemeMode === 'dark' ? 'checked' : ''}>
-                            <label for="modeDark">默认白色质感（常显纯白）</label>
+                            <label for="modeDark">默认纯白质感（强制纯白）</label>
                         </div>
                         <div class="theme-pointer-item" onclick="window.onThemeModeRadioChange('light')">
                             <input type="radio" name="themeModeRadio" id="modeLight" value="light" ${currentThemeMode === 'light' ? 'checked' : ''}>
-                            <label for="modeLight">默认黑色质感（常显黑巧深色）</label>
+                            <label for="modeLight">默认黑巧质感（强制深黑）</label>
                         </div>
                         <div class="theme-pointer-item" onclick="window.onThemeModeRadioChange('custom')">
                             <input type="radio" name="themeModeRadio" id="modeCustom" value="custom" ${currentThemeMode === 'custom' ? 'checked' : ''}>
-                            <label for="modeCustom">自定义固定颜色（拾色器调配）</label>
-                        </div>
-                    </div>
-
-                    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding:8px 10px;background:#fff8fa;border-radius:10px;border:1px solid #ffeef2;">
-                        <span style="font-size:12px;font-weight:600;color:var(--text);">桌面 App 标题文字颜色：</span>
-                        <input type="color" id="iconLabelColorPicker" value="${customIconColor}" style="width:36px;height:24px;border:none;border-radius:4px;cursor:pointer;" onchange="window.onIconLabelColorChange(this.value)">
-                    </div>
-                </div>
-
-                <!-- 子区域 B：状态栏三维解耦 -->
-                <div id="targetArea_status_bar" style="display:${currentAdjustTarget === 'status_bar' ? 'block' : 'none'};">
-                    <div style="display:flex;flex-direction:column;gap:10px;">
-                        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#fff8fa;border-radius:10px;border:1px solid #ffeef2;">
-                            <span style="font-size:12px;font-weight:600;color:var(--text);">状态栏底部分割描边：</span>
-                            <select id="statusBarStrokeSelect" style="padding:4px 8px;border-radius:6px;border:1px solid #ffd1dc;font-size:11.5px;" onchange="window.updateStatusBarStroke(this.value)">
-                                <option value="none" ${sStrokeVal === 'none' ? 'selected' : ''}>无描边</option>
-                                <option value="1px solid rgba(255, 92, 138, 0.35)" ${sStrokeVal.includes('255, 92, 138') ? 'selected' : ''}>柔粉描边 (1px)</option>
-                                <option value="1px solid rgba(255, 255, 255, 0.45)" ${sStrokeVal.includes('255, 255, 255') ? 'selected' : ''}>纯白轻描边 (1px)</option>
-                                <option value="1px solid rgba(0, 0, 0, 0.18)" ${sStrokeVal.includes('0, 0, 0') ? 'selected' : ''}>黑巧深色描边 (1px)</option>
-                            </select>
-                        </div>
-
-                        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#fff8fa;border-radius:10px;border:1px solid #ffeef2;">
-                            <span style="font-size:12px;font-weight:600;color:var(--text);">状态栏填充底色：</span>
-                            <div style="display:flex;align-items:center;gap:6px;">
-                                <button class="btn-secondary" style="padding:2px 8px;font-size:10.5px;" onclick="window.updateStatusBarFill('transparent')">完全透明</button>
-                                <button class="btn-secondary" style="padding:2px 8px;font-size:10.5px;" onclick="window.updateStatusBarFill('rgba(255, 92, 138, 0.85)')">经典粉</button>
-                                <input type="color" id="statusBarFillColorPicker" value="#ff5c8a" style="width:34px;height:24px;border:none;border-radius:4px;cursor:pointer;" onchange="window.updateStatusBarFill(this.value)">
-                            </div>
-                        </div>
-
-                        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#fff8fa;border-radius:10px;border:1px solid #ffeef2;">
-                            <span style="font-size:12px;font-weight:600;color:var(--text);">状态栏专属背景底图：</span>
-                            <input type="file" id="statusBarBgFileInput" accept="image/*" style="display:none;" onchange="window.handleStatusBarBgUpload(event)">
-                            <div style="display:flex;gap:6px;">
-                                <button class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="document.getElementById('statusBarBgFileInput').click()">导入图片</button>
-                                <button class="btn-secondary" style="padding:3px 8px;font-size:11px;color:#c92a2a;" onclick="window.clearStatusBarBg()">清除</button>
-                            </div>
+                            <label for="modeCustom">自定义固定颜色（色盘调配）</label>
                         </div>
                     </div>
                 </div>
 
-                <!-- 子区域 C：主体粉色与主体白色自调节 -->
-                <div id="targetArea_theme_palette" style="display:${currentAdjustTarget === 'theme_palette' ? 'block' : 'none'};">
-                    <div style="display:flex;flex-direction:column;gap:10px;">
-                        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#fff8fa;border-radius:10px;border:1px solid #ffeef2;">
-                            <div>
-                                <div style="font-size:12px;font-weight:600;color:var(--text);">主体核心主色（粉色区）：</div>
-                                <div style="font-size:10.5px;color:var(--text2);">影响主按钮、高亮标题、重点标识</div>
-                            </div>
-                            <input type="color" id="themeMainPinkPicker" value="${customMainPink}" style="width:36px;height:26px;border:none;border-radius:4px;cursor:pointer;" onchange="window.onThemeMainPinkChange(this.value)">
-                        </div>
-
-                        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#fff8fa;border-radius:10px;border:1px solid #ffeef2;">
-                            <div>
-                                <div style="font-size:12px;font-weight:600;color:var(--text);">主体背景底色（纯白区）：</div>
-                                <div style="font-size:10.5px;color:var(--text2);">影响窗口背景、卡片底色</div>
-                            </div>
-                            <input type="color" id="themeMainWhitePicker" value="${customMainWhite}" style="width:36px;height:26px;border:none;border-radius:4px;cursor:pointer;" onchange="window.onThemeMainWhiteChange(this.value)">
-                        </div>
-
-                        <button class="btn-secondary" style="width:100%;font-size:11.5px;" onclick="window.restoreDefaultMainPalette()">
-                            恢复默认草莓粉白配色
-                        </button>
-                    </div>
-                </div>
-
-                <!-- 🌟 专业深灰底板 HSV 拾色器（当处于 custom 模式或调色时展示） -->
-                <div id="themeHsvPickerWrap" style="display:${currentThemeMode === 'custom' ? 'block' : 'none'};margin-top:12px;">
-                    <div class="hsv-pixel-perfect-plate" style="background:#2b2b2b;border-radius:20px;padding:20px 16px;box-shadow:inset 0 2px 8px rgba(0,0,0,0.5), 0 6px 18px rgba(0,0,0,0.25);width:100%;max-width:320px;margin:0 auto;box-sizing:border-box;">
+                <!-- 专业深灰底板正等边 HSV 色盘与水滴放大镜 -->
+                <div id="themeHsvPickerWrap" style="margin-top:6px;">
+                    <div class="hsv-pixel-perfect-plate" style="background:#2b2b2b;border-radius:20px;padding:18px 16px;box-shadow:inset 0 2px 8px rgba(0,0,0,0.5), 0 6px 18px rgba(0,0,0,0.25);width:100%;max-width:320px;margin:0 auto;box-sizing:border-box;">
                         
                         <div class="hsv-wheel-box" id="hsvWheelBox" style="width:230px;height:230px;margin:0 auto 12px auto;position:relative;user-select:none;touch-action:none;">
                             <canvas id="hsvWheelCanvas" class="hsv-wheel-canvas" width="460" height="460" style="width:100%;height:100%;border-radius:50%;display:block;"></canvas>
@@ -245,12 +227,12 @@
                             <div class="hsv-triangle-handle" id="hsvTriangleHandle" style="position:absolute;width:20px;height:20px;border:3px solid #ffffff;border-radius:50%;box-shadow:0 0 5px rgba(0,0,0,0.6);transform:translate(-50%,-50%);pointer-events:none;box-sizing:border-box;"></div>
                         </div>
 
-                        <div style="display:flex;justify-content:space-between;align-items:center;padding:0 8px 14px 8px;">
-                            <div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:#888;cursor:pointer;" onclick="if(typeof showToast==='function')showToast('HSV色彩空间取色中');">
-                                <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:#888;stroke-width:2;"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding:0 8px 12px 8px;">
+                            <div id="currentHexBadge" style="font-size:12px;font-family:monospace;color:#fff;background:rgba(255,255,255,0.15);padding:3px 8px;border-radius:6px;">
+                                ${curHex.toUpperCase()}
                             </div>
                             <input type="file" id="pipetteImageInput" accept="image/*" style="display:none;" onchange="window.handlePipetteImageSelected(event)">
-                            <div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;" onclick="document.getElementById('pipetteImageInput').click()" title="从图片吸色">
+                            <div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;" onclick="document.getElementById('pipetteImageInput').click()" title="从相册图片精准吸色">
                                 <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:none;stroke:#d0d0d0;stroke-width:1.8;">
                                     <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
                                     <path d="M12 11v4" stroke-linecap="round"></path>
@@ -259,7 +241,7 @@
                             </div>
                         </div>
 
-                        <div style="display:flex;flex-direction:column;gap:14px;padding:0 6px;">
+                        <div style="display:flex;flex-direction:column;gap:12px;padding:0 6px;">
                             <div style="display:flex;align-items:center;gap:12px;">
                                 <span style="font-size:13px;font-family:serif;color:#a0a0a0;width:12px;font-weight:bold;">H</span>
                                 <div style="flex:1;position:relative;display:flex;align-items:center;">
@@ -288,33 +270,62 @@
                     </div>
                 </div>
 
-                <div class="theme-action-bar" style="margin-top:16px;">
+                <div class="theme-action-bar" style="margin-top:14px;flex-direction:column;gap:8px;">
                     <button class="btn-primary" style="width:100%;" onclick="window.saveAndApplyColorThemeOnly()">
                         保存并应用当前色彩配置
+                    </button>
+                    <button class="btn-secondary" style="width:100%;font-size:12px;" onclick="window.restoreAllDefaultColors()">
+                        ✨ 一键恢复全站默认主题色彩
                     </button>
                 </div>
             </div>
 
-            <!-- 卡片 3：桌面组件管理（位于字体功能上方） -->
+            <!-- 🌟 卡片 3：桌面组件多页自由系统（支持独立开关与位置分配） -->
             <div class="theme-setting-card">
                 <div class="theme-setting-title">
-                    <span>桌面组件管理</span>
+                    <span>桌面小组件与位置分配</span>
                 </div>
                 <div class="theme-setting-desc">
-                    定制桌面首屏常驻小组件：温暖米白待办便签，或极简高级黑白日历。
+                    自由决定每个小组件是否显示、以及挂载在桌面第 1 页还是第 2 页。
                 </div>
 
-                <div style="display:flex;flex-direction:column;gap:8px;">
-                    <div style="display:flex;gap:8px;">
-                        <button class="btn-secondary ${activeWidget === 'todo' ? 'btn-primary' : ''}" style="flex:1;font-size:12px;" onclick="window.setDesktopWidgetFromTheme('todo')">
-                            📝 待办事项便签
-                        </button>
-                        <button class="btn-secondary ${activeWidget === 'calendar' ? 'btn-primary' : ''}" style="flex:1;font-size:12px;" onclick="window.setDesktopWidgetFromTheme('calendar')">
-                            📅 极简黑白日历
-                        </button>
+                <div style="display:flex;flex-direction:column;gap:10px;">
+                    <!-- 组件 A：极简黑白日历 -->
+                    <div style="background:#fff8fa;padding:10px;border-radius:12px;border:1px solid #ffeef2;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                            <span style="font-size:12.5px;font-weight:700;color:var(--text);">📅 极简黑白月历</span>
+                            <button class="btn-secondary" style="padding:2px 8px;font-size:11px;${calEnabled ? 'color:var(--primary);font-weight:bold;' : 'color:#999;'}" onclick="window.toggleWidgetEnabled('calendar')">
+                                ${calEnabled ? '● 已开启' : '○ 已关闭'}
+                            </button>
+                        </div>
+                        <div style="display:flex;align-items:center;justify-content:space-between;">
+                            <span style="font-size:11px;color:var(--text2);">显示页面：</span>
+                            <div style="display:flex;gap:6px;">
+                                <button class="btn-secondary ${calPage === 1 ? 'btn-primary' : ''}" style="padding:3px 10px;font-size:11px;" onclick="window.setWidgetPage('calendar', 1)">第 1 页</button>
+                                <button class="btn-secondary ${calPage === 2 ? 'btn-primary' : ''}" style="padding:3px 10px;font-size:11px;" onclick="window.setWidgetPage('calendar', 2)">第 2 页</button>
+                            </div>
+                        </div>
                     </div>
 
-                    <div style="display:flex;gap:8px;margin-top:4px;">
+                    <!-- 组件 B：温暖米白待办便签 -->
+                    <div style="background:#fff8fa;padding:10px;border-radius:12px;border:1px solid #ffeef2;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                            <span style="font-size:12.5px;font-weight:700;color:var(--text);">📝 米白待办便签</span>
+                            <button class="btn-secondary" style="padding:2px 8px;font-size:11px;${todoEnabled ? 'color:var(--primary);font-weight:bold;' : 'color:#999;'}" onclick="window.toggleWidgetEnabled('todo')">
+                                ${todoEnabled ? '● 已开启' : '○ 已关闭'}
+                            </button>
+                        </div>
+                        <div style="display:flex;align-items:center;justify-content:space-between;">
+                            <span style="font-size:11px;color:var(--text2);">显示页面：</span>
+                            <div style="display:flex;gap:6px;">
+                                <button class="btn-secondary ${todoPage === 1 ? 'btn-primary' : ''}" style="padding:3px 10px;font-size:11px;" onclick="window.setWidgetPage('todo', 1)">第 1 页</button>
+                                <button class="btn-secondary ${todoPage === 2 ? 'btn-primary' : ''}" style="padding:3px 10px;font-size:11px;" onclick="window.setWidgetPage('todo', 2)">第 2 页</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 待办快捷动作 -->
+                    <div style="display:flex;gap:8px;margin-top:2px;">
                         <button class="btn-secondary" style="flex:1;font-size:11.5px;" onclick="if(typeof window.generateSmartDayTodos==='function')window.generateSmartDayTodos();">
                             ✨ 智能生成一日待办
                         </button>
@@ -325,7 +336,7 @@
                 </div>
             </div>
 
-            <!-- 卡片 4：字体库与多格式扩展（内含免费字体网引导链接） -->
+            <!-- 卡片 4：字体库与多格式扩展 -->
             <div class="theme-setting-card">
                 <div class="theme-collapsible-header" onclick="window.toggleFontLibraryCollapse()" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
                     <div class="theme-setting-title" style="margin-bottom:0;">
@@ -336,11 +347,10 @@
 
                 <div id="fontLibraryBody" style="display:none;margin-top:12px;">
                     
-                    <!-- 免费字体网站友情外链推荐位 -->
                     <div style="background:#f4f9fd;border:1px solid #d0e7fa;border-radius:10px;padding:8px 12px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
                         <div style="display:flex;flex-direction:column;">
                             <span style="font-size:12px;font-weight:700;color:#1864ab;">🔤 免费商业字体大全</span>
-                            <span style="font-size:10.5px;color:#495057;">收录数千款开源无版权字体，即点即用</span>
+                            <span style="font-size:10.5px;color:#495057;">开源可商用无版权字体网站（fonts.zeoseven.com）</span>
                         </div>
                         <a href="https://fonts.zeoseven.com/" target="_blank" rel="noopener noreferrer" style="text-decoration:none;">
                             <button class="btn-secondary" style="padding:4px 10px;font-size:11px;background:#e7f5ff;border-color:#a5d8ff;color:#1971c2;">
@@ -402,16 +412,64 @@
         renderInstalledFontsList();
     };
 
-    // 切换下拉调节目标
-    window.onAdjustTargetSelectChange = function (val) {
-        currentAdjustTarget = val;
-        ['font_icon', 'status_bar', 'theme_palette'].forEach(k => {
-            const sec = document.getElementById('targetArea_' + k);
-            if (sec) sec.style.display = (k === val) ? 'block' : 'none';
-        });
+    // 组件开关与位置切换核心
+    window.toggleWidgetEnabled = function (widgetKey) {
+        const storageKey = `mcyt_widget_${widgetKey}_enabled`;
+        const current = localStorage.getItem(storageKey) !== 'false';
+        localStorage.setItem(storageKey, (!current).toString());
+
+        if (typeof window.renderDesktopWidgetsLayout === 'function') {
+            window.renderDesktopWidgetsLayout();
+        }
+
+        const appModalBody = document.getElementById('appModalBody');
+        if (appModalBody) window.renderThemeApp(appModalBody);
+
+        if (typeof showToast === 'function') {
+            showToast(`${widgetKey === 'calendar' ? '日历组件' : '待办便签'}已${!current ? '开启' : '关闭'}`);
+        }
     };
 
-    // 状态栏属性调整
+    window.setWidgetPage = function (widgetKey, targetPage) {
+        const storageKey = `mcyt_widget_${widgetKey}_page`;
+        localStorage.setItem(storageKey, targetPage.toString());
+
+        if (typeof window.renderDesktopWidgetsLayout === 'function') {
+            window.renderDesktopWidgetsLayout();
+        }
+
+        const appModalBody = document.getElementById('appModalBody');
+        if (appModalBody) window.renderThemeApp(appModalBody);
+
+        if (typeof showToast === 'function') {
+            showToast(`已将${widgetKey === 'calendar' ? '日历组件' : '待办便签'}移至第 ${targetPage} 页`);
+        }
+    };
+
+    // 切换当前色盘调谐目标
+    window.onHsvTargetChange = function (newTarget) {
+        currentHsvTarget = newTarget;
+
+        const extraControls = document.getElementById('statusBarExtraControls');
+        if (extraControls) {
+            extraControls.style.display = (newTarget === 'status_fill') ? 'block' : 'none';
+        }
+
+        const modeRadioWrap = document.getElementById('statusModeRadioWrap');
+        if (modeRadioWrap) {
+            modeRadioWrap.style.display = (newTarget === 'status_text') ? 'block' : 'none';
+        }
+
+        const targetHex = getCurrentTargetHex(newTarget);
+        hsvState = hexToHsv(targetHex);
+
+        const badge = document.getElementById('currentHexBadge');
+        if (badge) badge.textContent = targetHex.toUpperCase();
+
+        if (window.refreshHsvWheelCanvas) window.refreshHsvWheelCanvas();
+    };
+
+    // 状态栏边框与填充
     window.updateStatusBarStroke = function (val) {
         localStorage.setItem('mcyt_statusbar_stroke', val);
         document.documentElement.style.setProperty('--status-bar-stroke', val);
@@ -420,8 +478,7 @@
     window.updateStatusBarFill = function (val) {
         localStorage.setItem('mcyt_statusbar_fill', val);
         document.documentElement.style.setProperty('--status-bar-fill', val);
-        const picker = document.getElementById('statusBarFillColorPicker');
-        if (picker && val.startsWith('#')) picker.value = val;
+        if (typeof showToast === 'function') showToast('状态栏已设为完全透明');
     };
 
     window.handleStatusBarBgUpload = function (event) {
@@ -444,70 +501,109 @@
         if (typeof showToast === 'function') showToast('已清除状态栏底图');
     };
 
-    // 主体粉白调节
-    window.onThemeMainPinkChange = function (hex) {
-        localStorage.setItem('mcyt_custom_main_pink', hex);
-        document.documentElement.style.setProperty('--theme-main-pink', hex);
-    };
-
-    window.onThemeMainWhiteChange = function (hex) {
-        localStorage.setItem('mcyt_custom_main_white', hex);
-        document.documentElement.style.setProperty('--theme-main-white', hex);
-        document.documentElement.style.setProperty('--theme-sub-white', hex);
-    };
-
-    window.restoreDefaultMainPalette = function () {
+    // 一键恢复全站默认主题色彩
+    window.restoreAllDefaultColors = function () {
+        localStorage.removeItem('mcyt_phone_theme_mode');
+        localStorage.removeItem('mcyt_phone_custom_color');
+        localStorage.removeItem('mcyt_icon_label_color');
+        localStorage.removeItem('mcyt_statusbar_stroke');
+        localStorage.removeItem('mcyt_statusbar_fill');
+        localStorage.removeItem('mcyt_statusbar_bg_img');
         localStorage.removeItem('mcyt_custom_main_pink');
         localStorage.removeItem('mcyt_custom_main_white');
-        document.documentElement.style.setProperty('--theme-main-pink', '#ff5c8a');
-        document.documentElement.style.setProperty('--theme-main-white', '#ffffff');
-        document.documentElement.style.setProperty('--theme-sub-white', '#fff5f7');
-        const pinkP = document.getElementById('themeMainPinkPicker');
-        const whiteP = document.getElementById('themeMainWhitePicker');
-        if (pinkP) pinkP.value = '#ff5c8a';
-        if (whiteP) whiteP.value = '#ffffff';
-        if (typeof showToast === 'function') showToast('已重置为主体经典粉白');
-    };
 
-    window.onIconLabelColorChange = function (hex) {
-        localStorage.setItem('mcyt_icon_label_color', hex);
-        document.documentElement.style.setProperty('--app-icon-label-color', hex);
-    };
+        const root = document.documentElement;
+        root.style.setProperty('--theme-main-pink', '#ff5c8a');
+        root.style.setProperty('--theme-main-white', '#ffffff');
+        root.style.setProperty('--theme-sub-white', '#fff5f7');
+        root.style.setProperty('--app-icon-label-color', '#ffffff');
+        root.style.setProperty('--status-bar-stroke', 'none');
+        root.style.setProperty('--status-bar-fill', 'transparent');
+        root.style.setProperty('--status-bar-bg-img', 'none');
 
-    // 桌面组件从主题设置一键切换
-    window.setDesktopWidgetFromTheme = function (type) {
-        localStorage.setItem('mcyt_active_widget_type', type);
-        const todoWidget = document.getElementById('desktopTodoWidget');
-        const calWidget = document.getElementById('desktopCalendarWidget');
-        if (type === 'calendar') {
-            if (todoWidget) todoWidget.style.display = 'none';
-            if (calWidget) calWidget.style.display = 'block';
-            if (typeof window.renderDesktopCalendar === 'function') window.renderDesktopCalendar();
-        } else {
-            if (todoWidget) todoWidget.style.display = 'block';
-            if (calWidget) calWidget.style.display = 'none';
-            if (typeof window.renderDesktopTodos === 'function') window.renderDesktopTodos();
+        currentThemeMode = 'auto';
+        if (typeof window.applyColorTheme === 'function') {
+            const lock = pendingLockBg || localStorage.getItem('mcyt_custom_lock_bg') || 'assets/system/default_lock.jpg';
+            if (typeof window.analyzeImageLuminance === 'function') {
+                window.analyzeImageLuminance(lock, window.applyColorTheme);
+            }
         }
+
         const appModalBody = document.getElementById('appModalBody');
         if (appModalBody) window.renderThemeApp(appModalBody);
-        if (typeof showToast === 'function') showToast(`桌面组件已设为: ${type === 'calendar' ? '极简日历' : '待办便签'}`);
+
+        if (typeof showToast === 'function') showToast('已一键恢复全站默认配色！');
     };
 
-    window.switchFontFormat = function(fmt) {
-        currentFontFormat = fmt;
-        ['html', 'css', 'local'].forEach(k => {
-            const sec = document.getElementById('fontInputSection_' + k);
-            if (sec) sec.style.display = (k === fmt) ? 'block' : 'none';
-        });
-        document.querySelectorAll('.font-fmt-btn').forEach(b => {
-            b.classList.remove('btn-primary');
-            b.classList.add('btn-secondary');
-        });
-        const activeBtn = document.getElementById('btnFmt' + fmt.charAt(0).toUpperCase() + fmt.slice(1));
-        if (activeBtn) {
-            activeBtn.classList.remove('btn-secondary');
-            activeBtn.classList.add('btn-primary');
+    window.onThemeModeRadioChange = function (mode) {
+        currentThemeMode = mode;
+        const radios = document.querySelectorAll('input[name="themeModeRadio"]');
+        radios.forEach(r => { r.checked = (r.value === mode); });
+
+        if (mode === 'auto') {
+            const currentLock = pendingLockBg || localStorage.getItem('mcyt_custom_lock_bg') || 'assets/system/default_lock.jpg';
+            if (typeof window.analyzeImageLuminance === 'function') {
+                window.analyzeImageLuminance(currentLock, window.applyColorTheme);
+            }
+        } else if (mode === 'custom') {
+            const curRgb = hsvToRgb(hsvState.h, hsvState.s, hsvState.v);
+            previewColorLive(rgbToHex(curRgb.r, curRgb.g, curRgb.b));
+        } else {
+            if (typeof window.applyColorTheme === 'function') {
+                window.applyColorTheme(mode === 'light');
+            }
         }
+    };
+
+    function previewColorLive(hex) {
+        const root = document.documentElement;
+        const badge = document.getElementById('currentHexBadge');
+        if (badge) badge.textContent = hex.toUpperCase();
+
+        if (currentHsvTarget === 'status_text') {
+            root.style.setProperty('--status-color', hex);
+            root.style.setProperty('--lock-text-color', hex);
+            root.style.setProperty('--status-svg-fill', hex);
+            root.style.setProperty('--star-glow-color', hex);
+        } else if (currentHsvTarget === 'icon_label') {
+            root.style.setProperty('--app-icon-label-color', hex);
+        } else if (currentHsvTarget === 'status_fill') {
+            root.style.setProperty('--status-bar-fill', hex);
+        } else if (currentHsvTarget === 'main_pink') {
+            root.style.setProperty('--theme-main-pink', hex);
+        } else if (currentHsvTarget === 'main_white') {
+            root.style.setProperty('--theme-main-white', hex);
+            root.style.setProperty('--theme-sub-white', hex);
+        }
+    }
+
+    window.saveAndApplyColorThemeOnly = function () {
+        const curRgb = hsvToRgb(hsvState.h, hsvState.s, hsvState.v);
+        const hex = rgbToHex(curRgb.r, curRgb.g, curRgb.b);
+
+        if (currentHsvTarget === 'status_text') {
+            localStorage.setItem('mcyt_phone_theme_mode', currentThemeMode);
+            localStorage.setItem('mcyt_phone_custom_color', hex);
+        } else if (currentHsvTarget === 'icon_label') {
+            localStorage.setItem('mcyt_icon_label_color', hex);
+        } else if (currentHsvTarget === 'status_fill') {
+            localStorage.setItem('mcyt_statusbar_fill', hex);
+        } else if (currentHsvTarget === 'main_pink') {
+            localStorage.setItem('mcyt_custom_main_pink', hex);
+        } else if (currentHsvTarget === 'main_white') {
+            localStorage.setItem('mcyt_custom_main_white', hex);
+        }
+
+        if (typeof window.applyColorTheme === 'function') {
+            if (currentThemeMode === 'auto') {
+                const targetLock = pendingLockBg || localStorage.getItem('mcyt_custom_lock_bg') || 'assets/system/default_lock.jpg';
+                window.analyzeImageLuminance(targetLock, window.applyColorTheme);
+            } else {
+                window.applyColorTheme(currentThemeMode === 'light');
+            }
+        }
+
+        if (typeof showToast === 'function') showToast(`[${document.getElementById('themeHsvTargetSelect').selectedOptions[0].text}] 色彩已永久保存！`);
     };
 
     // 正等边三角形 HSV 拾色器绘制
@@ -716,15 +812,7 @@
         renderColorWheel();
     }
 
-    function previewColorLive(hex) {
-        const root = document.documentElement;
-        root.style.setProperty('--status-color', hex);
-        root.style.setProperty('--lock-text-color', hex);
-        root.style.setProperty('--status-svg-fill', hex);
-        root.style.setProperty('--star-glow-color', hex);
-    }
-
-    // 水滴吸色器
+    // 水滴吸色放大镜
     window.handlePipetteImageSelected = function (event) {
         const file = event.target.files && event.target.files[0];
         if (!file) return;
@@ -1010,48 +1098,7 @@
         if (typeof showToast === 'function') showToast('已恢复为默认壁纸');
     };
 
-    window.onThemeModeRadioChange = function (mode) {
-        currentThemeMode = mode;
-        const wrap = document.getElementById('themeHsvPickerWrap');
-        if (wrap) wrap.style.display = (mode === 'custom') ? 'block' : 'none';
-
-        const radios = document.querySelectorAll('input[name="themeModeRadio"]');
-        radios.forEach(r => { r.checked = (r.value === mode); });
-
-        if (mode === 'auto') {
-            const currentLock = pendingLockBg || localStorage.getItem('mcyt_custom_lock_bg') || 'assets/system/default_lock.jpg';
-            if (typeof window.analyzeImageLuminance === 'function') {
-                window.analyzeImageLuminance(currentLock, window.applyColorTheme);
-            }
-        } else if (mode === 'custom') {
-            const curRgb = hsvToRgb(hsvState.h, hsvState.s, hsvState.v);
-            previewColorLive(rgbToHex(curRgb.r, curRgb.g, curRgb.b));
-        } else {
-            if (typeof window.applyColorTheme === 'function') {
-                window.applyColorTheme(mode === 'light');
-            }
-        }
-    };
-
-    window.saveAndApplyColorThemeOnly = function () {
-        localStorage.setItem('mcyt_phone_theme_mode', currentThemeMode);
-        const curRgb = hsvToRgb(hsvState.h, hsvState.s, hsvState.v);
-        const hex = rgbToHex(curRgb.r, curRgb.g, curRgb.b);
-        localStorage.setItem('mcyt_phone_custom_color', hex);
-
-        if (typeof window.applyColorTheme === 'function') {
-            if (currentThemeMode === 'auto') {
-                const targetLock = pendingLockBg || 'assets/system/default_lock.jpg';
-                window.analyzeImageLuminance(targetLock, window.applyColorTheme);
-            } else {
-                window.applyColorTheme(currentThemeMode === 'light');
-            }
-        }
-
-        if (typeof showToast === 'function') showToast('主题色彩已成功保存');
-    };
-
-    // 扩展字体
+    // 字体库
     window.toggleFontLibraryCollapse = function () {
         const body = document.getElementById('fontLibraryBody');
         const arrow = document.getElementById('fontCollapseArrow');
@@ -1059,6 +1106,23 @@
         const isHidden = body.style.display === 'none';
         body.style.display = isHidden ? 'block' : 'none';
         arrow.textContent = isHidden ? '▼ 收起' : '▶ 展开';
+    };
+
+    window.switchFontFormat = function(fmt) {
+        currentFontFormat = fmt;
+        ['html', 'css', 'local'].forEach(k => {
+            const sec = document.getElementById('fontInputSection_' + k);
+            if (sec) sec.style.display = (k === fmt) ? 'block' : 'none';
+        });
+        document.querySelectorAll('.font-fmt-btn').forEach(b => {
+            b.classList.remove('btn-primary');
+            b.classList.add('btn-secondary');
+        });
+        const activeBtn = document.getElementById('btnFmt' + fmt.charAt(0).toUpperCase() + fmt.slice(1));
+        if (activeBtn) {
+            activeBtn.classList.remove('btn-secondary');
+            activeBtn.classList.add('btn-primary');
+        }
     };
 
     window.handleUnifiedFontImport = function (formatType) {
