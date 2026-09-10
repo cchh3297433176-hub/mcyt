@@ -3,6 +3,7 @@
  * 📱 虚拟手机硬件外壳与操作系统驱动层
  * 职责：时钟、硬件电量、网络/蓝牙感知、壁纸加载、冷启动主题恢复、自动明暗反色引擎、
  *       手势解锁与 App 调度、桌面双页平滑滑屏手势、组件流动态宿主系统（日历/待办自由多页穿梭与单双并排自适应）、
+ *       桌面组件长按晃动编辑态（虚线抖动、拖拽位移、跨页穿梭拖放吸附）、
  *       粉白仿Windows甜心弹窗新增待办、纯净游戏向一日待办智能排布算法
  */
 
@@ -380,6 +381,8 @@
         let isMoving = false;
 
         viewport.addEventListener('touchstart', function (e) {
+            // 如果处于组件长按晃动编辑态，暂时不响应桌面整屏滑动
+            if (window._isWidgetEditMode) return;
             if (e.touches && e.touches.length === 1) {
                 startX = e.touches[0].clientX;
                 startY = e.touches[0].clientY;
@@ -388,7 +391,7 @@
         }, { passive: true });
 
         viewport.addEventListener('touchmove', function (e) {
-            if (!isMoving || !e.touches || !e.touches.length) return;
+            if (window._isWidgetEditMode || !isMoving || !e.touches || !e.touches.length) return;
             const diffX = e.touches[0].clientX - startX;
             const diffY = e.touches[0].clientY - startY;
             if (Math.abs(diffY) > Math.abs(diffX)) {
@@ -397,7 +400,7 @@
         }, { passive: true });
 
         viewport.addEventListener('touchend', function (e) {
-            if (!isMoving || !e.changedTouches || !e.changedTouches.length) return;
+            if (window._isWidgetEditMode || !isMoving || !e.changedTouches || !e.changedTouches.length) return;
             isMoving = false;
             const endX = e.changedTouches[0].clientX;
             const diffX = endX - startX;
@@ -416,9 +419,9 @@
         const modalTitle = document.getElementById('retroModalTitle');
         const modalBody = document.getElementById('modalBody');
         const modalClose = document.getElementById('modalClose');
-        if (!modal || !modalTitle || !modalBody) return;
+        if (!modal || !modalBody) return;
 
-        modalTitle.textContent = title || "新建待办事项";
+        if (modalTitle) modalTitle.textContent = title || "新建待办事项";
         modalBody.innerHTML = `
             <div style="font-size:12.5px;color:#2e1a22;font-weight:600;margin-bottom:6px;">
                 请输入待办内容：
@@ -476,7 +479,7 @@
 
         // 组件原生 HTML 模板
         const calendarHTML = `
-            <div class="calendar-widget-card" id="desktopCalendarWidget">
+            <div class="calendar-widget-card" id="desktopCalendarWidget" data-widget-type="calendar">
                 <div class="calendar-widget-top">
                     <div class="calendar-month-title" id="calMonthTitle">SEPTEMBER</div>
                     <div class="calendar-year-title" id="calYearTitle">2026</div>
@@ -490,7 +493,7 @@
         `;
 
         const todoHTML = `
-            <div class="todo-widget-card" id="desktopTodoWidget">
+            <div class="todo-widget-card" id="desktopTodoWidget" data-widget-type="todo">
                 <div class="todo-widget-header">
                     <div class="todo-widget-count" id="todoWidgetCountText">0 条待办</div>
                     <div class="todo-widget-actions">
@@ -549,7 +552,157 @@
         // 数据重新渲染
         if (calEnabled) window.renderDesktopCalendar();
         if (todoEnabled) window.renderDesktopTodos();
+
+        // 绑定长按抖动与拖拽排布系统
+        bindDesktopWidgetDragGestures();
     };
+
+    // 🌟 核心：桌面小组件长按虚线晃动与拖拽放置系统
+    window._isWidgetEditMode = false;
+
+    function enterWidgetEditMode() {
+        if (window._isWidgetEditMode) return;
+        window._isWidgetEditMode = true;
+        document.querySelectorAll('.calendar-widget-card, .todo-widget-card').forEach(el => {
+            el.classList.add('widget-jiggle');
+        });
+        if (typeof showToast === 'function') showToast('已进入小组件编辑模式，可自由拖动或跨页移动');
+    }
+
+    function exitWidgetEditMode() {
+        if (!window._isWidgetEditMode) return;
+        window._isWidgetEditMode = false;
+        document.querySelectorAll('.calendar-widget-card, .todo-widget-card').forEach(el => {
+            el.classList.remove('widget-jiggle');
+            el.style.transform = '';
+            el.style.opacity = '';
+            el.style.zIndex = '';
+        });
+    }
+
+    // 点击桌面空白处退出编辑模式
+    document.addEventListener('click', function (e) {
+        if (!window._isWidgetEditMode) return;
+        if (!e.target.closest('.calendar-widget-card') && !e.target.closest('.todo-widget-card')) {
+            exitWidgetEditMode();
+        }
+    });
+
+    function bindDesktopWidgetDragGestures() {
+        const widgets = document.querySelectorAll('.calendar-widget-card, .todo-widget-card');
+        widgets.forEach(w => {
+            let pressTimer = null;
+            let isDraggingThis = false;
+            let startClientX = 0, startClientY = 0;
+            let currentDragX = 0, currentDragY = 0;
+            const widgetType = w.getAttribute('data-widget-type'); // 'calendar' | 'todo'
+
+            const onStart = (clientX, clientY) => {
+                startClientX = clientX;
+                startClientY = clientY;
+                isDraggingThis = false;
+
+                pressTimer = setTimeout(() => {
+                    enterWidgetEditMode();
+                    if (navigator.vibrate) {
+                        try { navigator.vibrate(35); } catch (_) {}
+                    }
+                }, 480);
+            };
+
+            const onMove = (clientX, clientY) => {
+                const diffX = clientX - startClientX;
+                const diffY = clientY - startClientY;
+
+                // 如果还没进入长按晃动模式，移动超过阈值则取消长按计时
+                if (!window._isWidgetEditMode) {
+                    if (Math.hypot(diffX, diffY) > 8 && pressTimer) {
+                        clearTimeout(pressTimer);
+                        pressTimer = null;
+                    }
+                    return;
+                }
+
+                // 处于编辑模式，启动跟随手指拖拽位移
+                isDraggingThis = true;
+                currentDragX = clientX;
+                currentDragY = clientY;
+
+                w.style.zIndex = '999';
+                w.style.opacity = '0.85';
+                w.style.transform = `translate(${diffX}px, ${diffY}px) scale(1.03)`;
+
+                // 边缘接近检测：自动翻页引导
+                const winW = window.innerWidth;
+                if (clientX < 32 && currentDesktopPage === 1) {
+                    window.switchDesktopPage(0);
+                } else if (clientX > winW - 32 && currentDesktopPage === 0) {
+                    window.switchDesktopPage(1);
+                }
+            };
+
+            const onEnd = () => {
+                if (pressTimer) {
+                    clearTimeout(pressTimer);
+                    pressTimer = null;
+                }
+
+                if (!window._isWidgetEditMode || !isDraggingThis) {
+                    w.style.transform = '';
+                    w.style.opacity = '';
+                    w.style.zIndex = '';
+                    return;
+                }
+
+                isDraggingThis = false;
+                w.style.transform = '';
+                w.style.opacity = '';
+                w.style.zIndex = '';
+
+                // 检测释放位置处于第几页
+                const targetPage = (currentDesktopPage === 1) ? 2 : 1;
+                const currentSavedPage = parseInt(localStorage.getItem(`mcyt_widget_${widgetType}_page`) || '1', 10);
+
+                if (targetPage !== currentSavedPage) {
+                    localStorage.setItem(`mcyt_widget_${widgetType}_page`, targetPage.toString());
+                    if (typeof showToast === 'function') {
+                        showToast(`已将${widgetType === 'calendar' ? '日历' : '待办'}放置在第 ${targetPage} 页`);
+                    }
+                }
+
+                // 重新渲染插槽布局
+                window.renderDesktopWidgetsLayout();
+                // 维持长按编辑态
+                document.querySelectorAll('.calendar-widget-card, .todo-widget-card').forEach(el => {
+                    el.classList.add('widget-jiggle');
+                });
+            };
+
+            // 触摸事件
+            w.addEventListener('touchstart', (e) => {
+                if (e.touches.length === 1) onStart(e.touches[0].clientX, e.touches[0].clientY);
+            }, { passive: true });
+
+            w.addEventListener('touchmove', (e) => {
+                if (e.touches.length === 1) onMove(e.touches[0].clientX, e.touches[0].clientY);
+            }, { passive: true });
+
+            w.addEventListener('touchend', onEnd);
+
+            // 鼠标事件
+            w.addEventListener('mousedown', (e) => {
+                onStart(e.clientX, e.clientY);
+                const mouseMove = (ev) => onMove(ev.clientX, ev.clientY);
+                const mouseUp = () => {
+                    onEnd();
+                    window.removeEventListener('mousemove', mouseMove);
+                    window.removeEventListener('mouseup', mouseUp);
+                };
+                window.addEventListener('mousemove', mouseMove);
+                window.addEventListener('mouseup', mouseUp);
+            });
+        });
+    }
 
     // 11. 纯净待办数据管理
     function getCleanInitialTodos() {
@@ -608,6 +761,7 @@
     };
 
     window.toggleTodoDone = function (id) {
+        if (window._isWidgetEditMode) return;
         let todos = getStoredTodos();
         const target = todos.find(t => t.id === id);
         if (!target) return;
@@ -627,6 +781,7 @@
     };
 
     window.promptAddTodoItem = function () {
+        if (window._isWidgetEditMode) return;
         window.openRetroTodoInputModal('📝 新建待办事项', '', '输入待办任务内容...', function (textVal) {
             const todos = getStoredTodos();
             todos.push({
@@ -641,6 +796,7 @@
     };
 
     window.generateSmartDayTodos = function () {
+        if (window._isWidgetEditMode) return;
         const now = new Date();
         const dayOfWeek = now.getDay();
         const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
