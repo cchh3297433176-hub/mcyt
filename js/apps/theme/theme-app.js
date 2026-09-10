@@ -98,6 +98,48 @@
         return '#ff5c8a';
     }
 
+    // 控制色相盘容器何时可见（默认隐藏，除非处于自定义颜色）
+    function updateHsvVisibilityDom() {
+        const wrap = document.getElementById('themeHsvPickerWrap');
+        if (!wrap) return;
+        if (currentHsvTarget === 'status_text') {
+            wrap.style.display = (currentThemeMode === 'custom') ? 'block' : 'none';
+        } else {
+            wrap.style.display = 'block';
+        }
+    }
+
+    // 直接对系统 CSS 变量进行实时响应应用
+    function applyThemeModeDirect(mode) {
+        const root = document.documentElement;
+        if (mode === 'dark') {
+            // 纯白模式（针对深色壁纸，强制白色文本与图标）
+            root.style.setProperty('--status-color', '#ffffff');
+            root.style.setProperty('--lock-text-color', '#ffffff');
+            root.style.setProperty('--status-svg-fill', '#ffffff');
+            root.style.setProperty('--star-glow-color', 'rgba(255, 255, 255, 0.9)');
+            if (typeof window.applyColorTheme === 'function') window.applyColorTheme(false);
+        } else if (mode === 'light') {
+            // 黑巧模式（针对浅色壁纸，强制黑巧文本与图标）
+            root.style.setProperty('--status-color', '#1a1a1a');
+            root.style.setProperty('--lock-text-color', '#1a1a1a');
+            root.style.setProperty('--status-svg-fill', '#1a1a1a');
+            root.style.setProperty('--star-glow-color', 'rgba(0, 0, 0, 0.4)');
+            if (typeof window.applyColorTheme === 'function') window.applyColorTheme(true);
+        } else if (mode === 'auto') {
+            // 自动检测明暗反色
+            const currentLock = pendingLockBg || localStorage.getItem('mcyt_custom_lock_bg') || 'assets/system/default_lock.jpg';
+            if (typeof window.analyzeImageLuminance === 'function') {
+                window.analyzeImageLuminance(currentLock, window.applyColorTheme);
+            } else if (typeof window.applyColorTheme === 'function') {
+                window.applyColorTheme(false);
+            }
+        } else if (mode === 'custom') {
+            const hex = localStorage.getItem('mcyt_phone_custom_color') || rgbToHex(hsvToRgb(hsvState.h, hsvState.s, hsvState.v).r, hsvToRgb(hsvState.h, hsvState.s, hsvState.v).g, hsvToRgb(hsvState.h, hsvState.s, hsvState.v).b);
+            previewColorLive(hex);
+        }
+    }
+
     window.renderThemeApp = function (container) {
         if (!container) return;
 
@@ -217,8 +259,8 @@
                     </div>
                 </div>
 
-                <!-- 专业深灰底板正等边 HSV 色盘与水滴放大镜 -->
-                <div id="themeHsvPickerWrap" style="margin-top:6px;">
+                <!-- 专业深灰底板正等边 HSV 色盘与水滴放大镜（根据模式默认隐藏） -->
+                <div id="themeHsvPickerWrap" style="margin-top:6px;display:${(currentHsvTarget === 'status_text' && currentThemeMode !== 'custom') ? 'none' : 'block'};">
                     <div class="hsv-pixel-perfect-plate" style="background:#2b2b2b;border-radius:20px;padding:18px 16px;box-shadow:inset 0 2px 8px rgba(0,0,0,0.5), 0 6px 18px rgba(0,0,0,0.25);width:100%;max-width:320px;margin:0 auto;box-sizing:border-box;">
                         
                         <div class="hsv-wheel-box" id="hsvWheelBox" style="width:230px;height:230px;margin:0 auto 12px auto;position:relative;user-select:none;touch-action:none;">
@@ -280,58 +322,64 @@
                 </div>
             </div>
 
-            <!-- 🌟 卡片 3：桌面组件多页自由系统（支持独立开关与位置分配） -->
+            <!-- 🌟 卡片 3：桌面组件多页自由系统（默认折叠 + 精巧矮版选页按钮） -->
             <div class="theme-setting-card">
-                <div class="theme-setting-title">
-                    <span>桌面小组件与位置分配</span>
-                </div>
-                <div class="theme-setting-desc">
-                    自由决定每个小组件是否显示、以及挂载在桌面第 1 页还是第 2 页。
+                <div class="theme-collapsible-header" onclick="window.toggleWidgetsSettingsCollapse()" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
+                    <div class="theme-setting-title" style="margin-bottom:0;">
+                        <span>桌面小组件与位置分配</span>
+                    </div>
+                    <span class="theme-collapsible-arrow" id="widgetsCollapseArrow" style="font-size:12px;color:var(--primary);font-weight:bold;">▶ 展开</span>
                 </div>
 
-                <div style="display:flex;flex-direction:column;gap:10px;">
-                    <!-- 组件 A：极简黑白日历 -->
-                    <div style="background:#fff8fa;padding:10px;border-radius:12px;border:1px solid #ffeef2;">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                            <span style="font-size:12.5px;font-weight:700;color:var(--text);">📅 极简黑白月历</span>
-                            <button class="btn-secondary" style="padding:2px 8px;font-size:11px;${calEnabled ? 'color:var(--primary);font-weight:bold;' : 'color:#999;'}" onclick="window.toggleWidgetEnabled('calendar')">
-                                ${calEnabled ? '● 已开启' : '○ 已关闭'}
-                            </button>
-                        </div>
-                        <div style="display:flex;align-items:center;justify-content:space-between;">
-                            <span style="font-size:11px;color:var(--text2);">显示页面：</span>
-                            <div style="display:flex;gap:6px;">
-                                <button class="btn-secondary ${calPage === 1 ? 'btn-primary' : ''}" style="padding:3px 10px;font-size:11px;" onclick="window.setWidgetPage('calendar', 1)">第 1 页</button>
-                                <button class="btn-secondary ${calPage === 2 ? 'btn-primary' : ''}" style="padding:3px 10px;font-size:11px;" onclick="window.setWidgetPage('calendar', 2)">第 2 页</button>
-                            </div>
-                        </div>
+                <div id="widgetsSettingsBody" style="display:none;margin-top:12px;">
+                    <div class="theme-setting-desc">
+                        自由决定每个小组件是否显示、以及挂载在桌面第 1 页还是第 2 页。
                     </div>
 
-                    <!-- 组件 B：温暖米白待办便签 -->
-                    <div style="background:#fff8fa;padding:10px;border-radius:12px;border:1px solid #ffeef2;">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                            <span style="font-size:12.5px;font-weight:700;color:var(--text);">📝 米白待办便签</span>
-                            <button class="btn-secondary" style="padding:2px 8px;font-size:11px;${todoEnabled ? 'color:var(--primary);font-weight:bold;' : 'color:#999;'}" onclick="window.toggleWidgetEnabled('todo')">
-                                ${todoEnabled ? '● 已开启' : '○ 已关闭'}
-                            </button>
-                        </div>
-                        <div style="display:flex;align-items:center;justify-content:space-between;">
-                            <span style="font-size:11px;color:var(--text2);">显示页面：</span>
-                            <div style="display:flex;gap:6px;">
-                                <button class="btn-secondary ${todoPage === 1 ? 'btn-primary' : ''}" style="padding:3px 10px;font-size:11px;" onclick="window.setWidgetPage('todo', 1)">第 1 页</button>
-                                <button class="btn-secondary ${todoPage === 2 ? 'btn-primary' : ''}" style="padding:3px 10px;font-size:11px;" onclick="window.setWidgetPage('todo', 2)">第 2 页</button>
+                    <div style="display:flex;flex-direction:column;gap:10px;">
+                        <!-- 组件 A：极简黑白日历 -->
+                        <div style="background:#fff8fa;padding:10px;border-radius:12px;border:1px solid #ffeef2;">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                                <span style="font-size:12.5px;font-weight:700;color:var(--text);">📅 极简黑白月历</span>
+                                <button class="btn-secondary" style="padding:2px 8px;font-size:11px;${calEnabled ? 'color:var(--primary);font-weight:bold;' : 'color:#999;'}" onclick="window.toggleWidgetEnabled('calendar')">
+                                    ${calEnabled ? '● 已开启' : '○ 已关闭'}
+                                </button>
+                            </div>
+                            <div style="display:flex;align-items:center;justify-content:space-between;">
+                                <span style="font-size:11px;color:var(--text2);">显示页面：</span>
+                                <div style="display:flex;gap:6px;align-items:center;">
+                                    <button class="widget-page-btn ${calPage === 1 ? 'active' : ''}" onclick="window.setWidgetPage('calendar', 1)">第 1 页</button>
+                                    <button class="widget-page-btn ${calPage === 2 ? 'active' : ''}" onclick="window.setWidgetPage('calendar', 2)">第 2 页</button>
+                                </div>
                             </div>
                         </div>
-                    </div>
 
-                    <!-- 待办快捷动作 -->
-                    <div style="display:flex;gap:8px;margin-top:2px;">
-                        <button class="btn-secondary" style="flex:1;font-size:11.5px;" onclick="if(typeof window.generateSmartDayTodos==='function')window.generateSmartDayTodos();">
-                            ✨ 智能生成一日待办
-                        </button>
-                        <button class="btn-secondary" style="flex:1;font-size:11.5px;" onclick="if(typeof window.promptAddTodoItem==='function')window.promptAddTodoItem();">
-                            ＋ 新增一条待办
-                        </button>
+                        <!-- 组件 B：温暖米白待办便签 -->
+                        <div style="background:#fff8fa;padding:10px;border-radius:12px;border:1px solid #ffeef2;">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                                <span style="font-size:12.5px;font-weight:700;color:var(--text);">📝 米白待办便签</span>
+                                <button class="btn-secondary" style="padding:2px 8px;font-size:11px;${todoEnabled ? 'color:var(--primary);font-weight:bold;' : 'color:#999;'}" onclick="window.toggleWidgetEnabled('todo')">
+                                    ${todoEnabled ? '● 已开启' : '○ 已关闭'}
+                                </button>
+                            </div>
+                            <div style="display:flex;align-items:center;justify-content:space-between;">
+                                <span style="font-size:11px;color:var(--text2);">显示页面：</span>
+                                <div style="display:flex;gap:6px;align-items:center;">
+                                    <button class="widget-page-btn ${todoPage === 1 ? 'active' : ''}" onclick="window.setWidgetPage('todo', 1)">第 1 页</button>
+                                    <button class="widget-page-btn ${todoPage === 2 ? 'active' : ''}" onclick="window.setWidgetPage('todo', 2)">第 2 页</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 待办快捷动作 -->
+                        <div style="display:flex;gap:8px;margin-top:2px;">
+                            <button class="btn-secondary" style="flex:1;font-size:11.5px;" onclick="if(typeof window.generateSmartDayTodos==='function')window.generateSmartDayTodos();">
+                                ✨ 智能生成一日待办
+                            </button>
+                            <button class="btn-secondary" style="flex:1;font-size:11.5px;" onclick="if(typeof window.promptAddTodoItem==='function')window.promptAddTodoItem();">
+                                ＋ 新增一条待办
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -412,6 +460,16 @@
         renderInstalledFontsList();
     };
 
+    // 折叠/展开小组件设置面板
+    window.toggleWidgetsSettingsCollapse = function () {
+        const body = document.getElementById('widgetsSettingsBody');
+        const arrow = document.getElementById('widgetsCollapseArrow');
+        if (!body || !arrow) return;
+        const isHidden = body.style.display === 'none';
+        body.style.display = isHidden ? 'block' : 'none';
+        arrow.textContent = isHidden ? '▼ 收起' : '▶ 展开';
+    };
+
     // 组件开关与位置切换核心
     window.toggleWidgetEnabled = function (widgetKey) {
         const storageKey = `mcyt_widget_${widgetKey}_enabled`;
@@ -423,7 +481,13 @@
         }
 
         const appModalBody = document.getElementById('appModalBody');
-        if (appModalBody) window.renderThemeApp(appModalBody);
+        if (appModalBody) {
+            window.renderThemeApp(appModalBody);
+            // 保持展开状态
+            const b = document.getElementById('widgetsSettingsBody');
+            const a = document.getElementById('widgetsCollapseArrow');
+            if (b && a) { b.style.display = 'block'; a.textContent = '▼ 收起'; }
+        }
 
         if (typeof showToast === 'function') {
             showToast(`${widgetKey === 'calendar' ? '日历组件' : '待办便签'}已${!current ? '开启' : '关闭'}`);
@@ -439,7 +503,13 @@
         }
 
         const appModalBody = document.getElementById('appModalBody');
-        if (appModalBody) window.renderThemeApp(appModalBody);
+        if (appModalBody) {
+            window.renderThemeApp(appModalBody);
+            // 保持展开状态
+            const b = document.getElementById('widgetsSettingsBody');
+            const a = document.getElementById('widgetsCollapseArrow');
+            if (b && a) { b.style.display = 'block'; a.textContent = '▼ 收起'; }
+        }
 
         if (typeof showToast === 'function') {
             showToast(`已将${widgetKey === 'calendar' ? '日历组件' : '待办便签'}移至第 ${targetPage} 页`);
@@ -466,6 +536,7 @@
         const badge = document.getElementById('currentHexBadge');
         if (badge) badge.textContent = targetHex.toUpperCase();
 
+        updateHsvVisibilityDom();
         if (window.refreshHsvWheelCanvas) window.refreshHsvWheelCanvas();
     };
 
@@ -522,12 +593,7 @@
         root.style.setProperty('--status-bar-bg-img', 'none');
 
         currentThemeMode = 'auto';
-        if (typeof window.applyColorTheme === 'function') {
-            const lock = pendingLockBg || localStorage.getItem('mcyt_custom_lock_bg') || 'assets/system/default_lock.jpg';
-            if (typeof window.analyzeImageLuminance === 'function') {
-                window.analyzeImageLuminance(lock, window.applyColorTheme);
-            }
-        }
+        applyThemeModeDirect('auto');
 
         const appModalBody = document.getElementById('appModalBody');
         if (appModalBody) window.renderThemeApp(appModalBody);
@@ -537,22 +603,15 @@
 
     window.onThemeModeRadioChange = function (mode) {
         currentThemeMode = mode;
+        localStorage.setItem('mcyt_phone_theme_mode', mode);
         const radios = document.querySelectorAll('input[name="themeModeRadio"]');
         radios.forEach(r => { r.checked = (r.value === mode); });
 
-        if (mode === 'auto') {
-            const currentLock = pendingLockBg || localStorage.getItem('mcyt_custom_lock_bg') || 'assets/system/default_lock.jpg';
-            if (typeof window.analyzeImageLuminance === 'function') {
-                window.analyzeImageLuminance(currentLock, window.applyColorTheme);
-            }
-        } else if (mode === 'custom') {
-            const curRgb = hsvToRgb(hsvState.h, hsvState.s, hsvState.v);
-            previewColorLive(rgbToHex(curRgb.r, curRgb.g, curRgb.b));
-        } else {
-            if (typeof window.applyColorTheme === 'function') {
-                window.applyColorTheme(mode === 'light');
-            }
-        }
+        // 即刻根据模式生效色彩
+        applyThemeModeDirect(mode);
+
+        // 仅在自定义模式下才展现色盘
+        updateHsvVisibilityDom();
     };
 
     function previewColorLive(hex) {
@@ -583,7 +642,10 @@
 
         if (currentHsvTarget === 'status_text') {
             localStorage.setItem('mcyt_phone_theme_mode', currentThemeMode);
-            localStorage.setItem('mcyt_phone_custom_color', hex);
+            if (currentThemeMode === 'custom') {
+                localStorage.setItem('mcyt_phone_custom_color', hex);
+            }
+            applyThemeModeDirect(currentThemeMode);
         } else if (currentHsvTarget === 'icon_label') {
             localStorage.setItem('mcyt_icon_label_color', hex);
         } else if (currentHsvTarget === 'status_fill') {
@@ -592,15 +654,6 @@
             localStorage.setItem('mcyt_custom_main_pink', hex);
         } else if (currentHsvTarget === 'main_white') {
             localStorage.setItem('mcyt_custom_main_white', hex);
-        }
-
-        if (typeof window.applyColorTheme === 'function') {
-            if (currentThemeMode === 'auto') {
-                const targetLock = pendingLockBg || localStorage.getItem('mcyt_custom_lock_bg') || 'assets/system/default_lock.jpg';
-                window.analyzeImageLuminance(targetLock, window.applyColorTheme);
-            } else {
-                window.applyColorTheme(currentThemeMode === 'light');
-            }
         }
 
         if (typeof showToast === 'function') showToast(`[${document.getElementById('themeHsvTargetSelect').selectedOptions[0].text}] 色彩已永久保存！`);
@@ -1365,14 +1418,7 @@
         const appModalBody = document.getElementById('appModalBody');
         if (appModalBody) window.renderThemeApp(appModalBody);
 
-        if (typeof window.applyColorTheme === 'function') {
-            if (currentThemeMode === 'auto') {
-                const lock = target.lockBg || 'assets/system/default_lock.jpg';
-                window.analyzeImageLuminance(lock, window.applyColorTheme);
-            } else {
-                window.applyColorTheme(currentThemeMode === 'light');
-            }
-        }
+        applyThemeModeDirect(currentThemeMode);
         if (typeof showToast === 'function') showToast('已切换至方案: ' + target.name);
     };
 
