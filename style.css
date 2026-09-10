@@ -29,7 +29,7 @@
 
     /* 字体与系统图标颜色 */
     --app-font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
-    --app-icon-label-color: #ffffff;
+    --app-icon-label-color: #2e1a22;
 
     /* 状态栏三维定制变量：描边勾线、填充底色、底图 */
     --status-bar-stroke: none;
@@ -376,11 +376,11 @@ body {
     overflow: hidden;
 }
 
-/* 🌟 顶部空白预留位：精准腾出空间，后续放新大组件 */
+/* 顶部空白预留位 */
 .desktop-future-slot {
     flex: 1;
-    min-height: 40px;
-    max-height: 160px;
+    min-height: 20px;
+    max-height: 120px;
     width: 100%;
     display: flex;
     align-items: center;
@@ -388,7 +388,7 @@ body {
     pointer-events: none;
 }
 
-/* 🌟 动态组件挂载插槽（自动感知单组件 / 双组件并排排布） */
+/* 动态组件挂载插槽 */
 .desktop-widgets-slot {
     display: flex;
     gap: 10px;
@@ -403,7 +403,7 @@ body {
     display: none;
 }
 
-/* 当插槽内只有 1 个组件时：自适应优雅展开为中央全宽卡片 */
+/* 当插槽内只有 1 个组件时自适应撑开居中 */
 .desktop-widgets-slot.single-widget .calendar-widget-card,
 .desktop-widgets-slot.single-widget .todo-widget-card {
     flex: 1 !important;
@@ -411,15 +411,15 @@ body {
     margin: 0 auto;
 }
 
-/* 组件编辑模式：晃动与虚线边框动效 */
+/* 组件与图标编辑模式：晃动动效 */
 @keyframes widgetJiggle {
     0% { transform: rotate(0deg); }
-    25% { transform: rotate(-1.2deg) scale(0.98); }
-    75% { transform: rotate(1.2deg) scale(0.98); }
+    25% { transform: rotate(-1.5deg) scale(0.98); }
+    75% { transform: rotate(1.5deg) scale(0.98); }
     100% { transform: rotate(0deg); }
 }
 .widget-jiggle {
-    animation: widgetJiggle 0.28s infinite ease-in-out !important;
+    animation: widgetJiggle 0.26s infinite ease-in-out !important;
     outline: 2px dashed var(--primary) !important;
     outline-offset: 3px;
     cursor: grab !important;
@@ -428,7 +428,6 @@ body {
 }
 .widget-jiggle:active {
     cursor: grabbing !important;
-    opacity: 0.85;
 }
 
 /* 左侧：极简黑白日历 */
@@ -444,7 +443,7 @@ body {
     justify-content: space-between;
     user-select: none;
     overflow: hidden;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    touch-action: none;
 }
 .calendar-widget-top {
     text-align: center;
@@ -529,7 +528,7 @@ body {
     flex-direction: column;
     user-select: none;
     overflow: hidden;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    touch-action: none;
 }
 .todo-widget-header {
     display: flex;
@@ -653,6 +652,7 @@ body {
     cursor: pointer;
     position: relative;
     user-select: none;
+    touch-action: none;
 }
 .app-slot:active .app-icon-box {
     transform: scale(0.92);
@@ -667,7 +667,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.14);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.12);
     transition: transform 0.15s cubic-bezier(0.3, 1.4, 0.5, 1);
     position: relative;
     overflow: hidden;
@@ -685,13 +685,15 @@ body {
     max-width: 29px !important;
     max-height: 29px !important;
 }
+
+/* 彻底清除脏脏的黑色文字阴影，保证干净透亮 */
 .app-title-label {
     font-size: 11px;
-    color: var(--app-icon-label-color, #ffffff);
+    color: var(--app-icon-label-color, #2e1a22);
     font-weight: 600;
     letter-spacing: 0.1px;
     white-space: nowrap;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.6);
+    text-shadow: none !important;
     transition: color 0.3s ease;
 }
 .app-unread-badge {
@@ -1107,7 +1109,7 @@ body {
     background: #ffe2e8;
 }
 
-/* 🌟 专门针对小组件选页的矮版胶囊切换按钮（彻底杜绝变长、变形与折行） */
+/* 专门针对小组件选页的矮版胶囊切换按钮 */
 .widget-page-btn {
     width: auto !important;
     min-width: 54px !important;
@@ -1137,6 +1139,67 @@ body {
     border-color: var(--primary) !important;
     box-shadow: 0 2px 6px rgba(255, 92, 138, 0.3) !important;
     font-weight: 700 !important;
+}
+
+/* 🌸 仿粉白 Win 甜心自定义下拉弹窗 */
+.custom-theme-target-dropdown {
+    width: 100%;
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: 1px solid #ffd1dc;
+    background: #fff8fa;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--text);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    cursor: pointer;
+    user-select: none;
+}
+.custom-theme-dropdown-menu {
+    background: #ffffff;
+    border: 2px solid #ffd1dc;
+    border-radius: 10px;
+    box-shadow: 0 6px 20px rgba(216, 27, 96, 0.15);
+    margin-top: 4px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+}
+.custom-theme-dropdown-item {
+    padding: 9px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: background 0.15s ease;
+}
+.custom-theme-dropdown-item:active,
+.custom-theme-dropdown-item.active {
+    background: #fff0f3;
+    color: var(--primary);
+}
+
+/* HSV 迷你数字输入框 */
+.hsv-number-input {
+    width: 38px;
+    height: 20px;
+    background: rgba(255, 255, 255, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    border-radius: 4px;
+    color: #ffffff;
+    font-size: 11.5px;
+    text-align: center;
+    font-family: monospace;
+    outline: none;
+}
+.hsv-number-input:focus {
+    border-color: var(--primary);
+    background: rgba(255, 255, 255, 0.2);
 }
 
 .theme-setting-card {
