@@ -1,8 +1,9 @@
 /**
  * js/apps/theme/theme-app.js
  * 🎀 个性化与主题中心 App
- * 职责：壁纸自适应裁剪、正等边三角形专业 HSV 色相盘（严格 1:1 还原参考图排版）、
- *       水滴吸色器、多配置方案管理器、扩展字体多格式导入（CSS/HTML自由切换+全局强制生效）
+ * 职责：主体粉色与白色可调节自定制、状态栏三维解耦（描边勾线/填充底色/底图）、
+ *       桌面组件配置面板、壁纸自适应裁剪、正等边三角形专业 HSV 色相盘、
+ *       水滴吸色器、多配置方案管理器、免费字体网超链接引导与扩展字体多格式导入
  */
 
 (function () {
@@ -19,6 +20,9 @@
     let pendingDesktopBg = null;
     let currentThemeMode = 'auto';
     let currentFontFormat = 'html';
+
+    // 当前自定义调节目标：'font_icon' (字体与图标) | 'status_bar' (状态栏) | 'theme_palette' (主体粉白)
+    let currentAdjustTarget = 'font_icon';
 
     function hsvToRgb(h, s, v) {
         s = s / 100;
@@ -45,9 +49,11 @@
     }
 
     function hexToHsv(hex) {
+        if (!hex || typeof hex !== 'string') return { h: 61, s: 82, v: 89 };
         let c = hex.replace('#', '');
         if (c.length === 3) c = c.split('').map(x => x + x).join('');
         const num = parseInt(c, 16);
+        if (isNaN(num)) return { h: 61, s: 82, v: 89 };
         const r = (num >> 16) / 255;
         const g = ((num >> 8) & 255) / 255;
         const b = (num & 255) / 255;
@@ -79,6 +85,13 @@
 
         pendingLockBg = localStorage.getItem('mcyt_custom_lock_bg');
         pendingDesktopBg = localStorage.getItem('mcyt_custom_desktop_bg');
+
+        const activeWidget = localStorage.getItem('mcyt_active_widget_type') || 'todo';
+        const customMainPink = localStorage.getItem('mcyt_custom_main_pink') || '#ff5c8a';
+        const customMainWhite = localStorage.getItem('mcyt_custom_main_white') || '#ffffff';
+        const customIconColor = localStorage.getItem('mcyt_icon_label_color') || '#ffffff';
+        const sStrokeVal = localStorage.getItem('mcyt_statusbar_stroke') || 'none';
+        const sFillVal = localStorage.getItem('mcyt_statusbar_fill') || 'transparent';
 
         container.innerHTML = `
             <!-- 卡片 1：壁纸设置 -->
@@ -118,47 +131,120 @@
                 </div>
             </div>
 
-            <!-- 卡片 2：色彩模式与参考图 1:1 拾色器 -->
+            <!-- 卡片 2：色彩与状态栏深度定制（含下拉框目标选择） -->
             <div class="theme-setting-card">
                 <div class="theme-setting-title">
-                    <span>字体与状态栏颜色模式</span>
+                    <span>主体色彩与状态栏深度定制</span>
                 </div>
                 <div class="theme-setting-desc">
-                    自动识别壁纸明暗反色，或自定义固定主题色。
+                    下拉选择想要个性化的层级，随心调配专属粉白与状态栏质感。
                 </div>
 
-                <div class="theme-pointer-group">
-                    <div class="theme-pointer-item" onclick="window.onThemeModeRadioChange('auto')">
-                        <input type="radio" name="themeModeRadio" id="modeAuto" value="auto" ${currentThemeMode === 'auto' ? 'checked' : ''}>
-                        <label for="modeAuto">自动识别壁纸明暗反色</label>
+                <!-- 下拉选择器 -->
+                <div style="margin-bottom:12px;">
+                    <label style="font-size:11.5px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px;">自定义目标层级：</label>
+                    <select id="themeAdjustTargetSelect" style="width:100%;padding:8px 10px;border-radius:10px;border:1px solid #ffd1dc;background:#fff8fa;font-size:12.5px;font-weight:600;color:var(--text);outline:none;" onchange="window.onAdjustTargetSelectChange(this.value)">
+                        <option value="font_icon" ${currentAdjustTarget === 'font_icon' ? 'selected' : ''}>字体与系统图标颜色</option>
+                        <option value="status_bar" ${currentAdjustTarget === 'status_bar' ? 'selected' : ''}>状态栏（描边勾线 / 填充底色 / 底图）</option>
+                        <option value="theme_palette" ${currentAdjustTarget === 'theme_palette' ? 'selected' : ''}>主体粉色与纯白底色自调节</option>
+                    </select>
+                </div>
+
+                <!-- 子区域 A：字体与系统图标 -->
+                <div id="targetArea_font_icon" style="display:${currentAdjustTarget === 'font_icon' ? 'block' : 'none'};">
+                    <div class="theme-pointer-group">
+                        <div class="theme-pointer-item" onclick="window.onThemeModeRadioChange('auto')">
+                            <input type="radio" name="themeModeRadio" id="modeAuto" value="auto" ${currentThemeMode === 'auto' ? 'checked' : ''}>
+                            <label for="modeAuto">自动识别壁纸明暗反色（精准识别白底/黑底）</label>
+                        </div>
+                        <div class="theme-pointer-item" onclick="window.onThemeModeRadioChange('dark')">
+                            <input type="radio" name="themeModeRadio" id="modeDark" value="dark" ${currentThemeMode === 'dark' ? 'checked' : ''}>
+                            <label for="modeDark">默认白色质感（常显纯白）</label>
+                        </div>
+                        <div class="theme-pointer-item" onclick="window.onThemeModeRadioChange('light')">
+                            <input type="radio" name="themeModeRadio" id="modeLight" value="light" ${currentThemeMode === 'light' ? 'checked' : ''}>
+                            <label for="modeLight">默认黑色质感（常显黑巧深色）</label>
+                        </div>
+                        <div class="theme-pointer-item" onclick="window.onThemeModeRadioChange('custom')">
+                            <input type="radio" name="themeModeRadio" id="modeCustom" value="custom" ${currentThemeMode === 'custom' ? 'checked' : ''}>
+                            <label for="modeCustom">自定义固定颜色（拾色器调配）</label>
+                        </div>
                     </div>
-                    <div class="theme-pointer-item" onclick="window.onThemeModeRadioChange('dark')">
-                        <input type="radio" name="themeModeRadio" id="modeDark" value="dark" ${currentThemeMode === 'dark' ? 'checked' : ''}>
-                        <label for="modeDark">强制纯白质感</label>
-                    </div>
-                    <div class="theme-pointer-item" onclick="window.onThemeModeRadioChange('light')">
-                        <input type="radio" name="themeModeRadio" id="modeLight" value="light" ${currentThemeMode === 'light' ? 'checked' : ''}>
-                        <label for="modeLight">强制黑巧深色</label>
-                    </div>
-                    <div class="theme-pointer-item" onclick="window.onThemeModeRadioChange('custom')">
-                        <input type="radio" name="themeModeRadio" id="modeCustom" value="custom" ${currentThemeMode === 'custom' ? 'checked' : ''}>
-                        <label for="modeCustom">自定义固定颜色</label>
+
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:10px;padding:8px 10px;background:#fff8fa;border-radius:10px;border:1px solid #ffeef2;">
+                        <span style="font-size:12px;font-weight:600;color:var(--text);">桌面 App 标题文字颜色：</span>
+                        <input type="color" id="iconLabelColorPicker" value="${customIconColor}" style="width:36px;height:24px;border:none;border-radius:4px;cursor:pointer;" onchange="window.onIconLabelColorChange(this.value)">
                     </div>
                 </div>
 
-                <!-- 🌟 严格还原参考图：专业深灰底板卡片，布局居中无溢出 -->
-                <div id="themeHsvPickerWrap" style="display:${currentThemeMode === 'custom' ? 'block' : 'none'};margin-top:10px;">
+                <!-- 子区域 B：状态栏三维解耦 -->
+                <div id="targetArea_status_bar" style="display:${currentAdjustTarget === 'status_bar' ? 'block' : 'none'};">
+                    <div style="display:flex;flex-direction:column;gap:10px;">
+                        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#fff8fa;border-radius:10px;border:1px solid #ffeef2;">
+                            <span style="font-size:12px;font-weight:600;color:var(--text);">状态栏底部分割描边：</span>
+                            <select id="statusBarStrokeSelect" style="padding:4px 8px;border-radius:6px;border:1px solid #ffd1dc;font-size:11.5px;" onchange="window.updateStatusBarStroke(this.value)">
+                                <option value="none" ${sStrokeVal === 'none' ? 'selected' : ''}>无描边</option>
+                                <option value="1px solid rgba(255, 92, 138, 0.35)" ${sStrokeVal.includes('255, 92, 138') ? 'selected' : ''}>柔粉描边 (1px)</option>
+                                <option value="1px solid rgba(255, 255, 255, 0.45)" ${sStrokeVal.includes('255, 255, 255') ? 'selected' : ''}>纯白轻描边 (1px)</option>
+                                <option value="1px solid rgba(0, 0, 0, 0.18)" ${sStrokeVal.includes('0, 0, 0') ? 'selected' : ''}>黑巧深色描边 (1px)</option>
+                            </select>
+                        </div>
+
+                        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#fff8fa;border-radius:10px;border:1px solid #ffeef2;">
+                            <span style="font-size:12px;font-weight:600;color:var(--text);">状态栏填充底色：</span>
+                            <div style="display:flex;align-items:center;gap:6px;">
+                                <button class="btn-secondary" style="padding:2px 8px;font-size:10.5px;" onclick="window.updateStatusBarFill('transparent')">完全透明</button>
+                                <button class="btn-secondary" style="padding:2px 8px;font-size:10.5px;" onclick="window.updateStatusBarFill('rgba(255, 92, 138, 0.85)')">经典粉</button>
+                                <input type="color" id="statusBarFillColorPicker" value="#ff5c8a" style="width:34px;height:24px;border:none;border-radius:4px;cursor:pointer;" onchange="window.updateStatusBarFill(this.value)">
+                            </div>
+                        </div>
+
+                        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#fff8fa;border-radius:10px;border:1px solid #ffeef2;">
+                            <span style="font-size:12px;font-weight:600;color:var(--text);">状态栏专属背景底图：</span>
+                            <input type="file" id="statusBarBgFileInput" accept="image/*" style="display:none;" onchange="window.handleStatusBarBgUpload(event)">
+                            <div style="display:flex;gap:6px;">
+                                <button class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="document.getElementById('statusBarBgFileInput').click()">导入图片</button>
+                                <button class="btn-secondary" style="padding:3px 8px;font-size:11px;color:#c92a2a;" onclick="window.clearStatusBarBg()">清除</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 子区域 C：主体粉色与主体白色自调节 -->
+                <div id="targetArea_theme_palette" style="display:${currentAdjustTarget === 'theme_palette' ? 'block' : 'none'};">
+                    <div style="display:flex;flex-direction:column;gap:10px;">
+                        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#fff8fa;border-radius:10px;border:1px solid #ffeef2;">
+                            <div>
+                                <div style="font-size:12px;font-weight:600;color:var(--text);">主体核心主色（粉色区）：</div>
+                                <div style="font-size:10.5px;color:var(--text2);">影响主按钮、高亮标题、重点标识</div>
+                            </div>
+                            <input type="color" id="themeMainPinkPicker" value="${customMainPink}" style="width:36px;height:26px;border:none;border-radius:4px;cursor:pointer;" onchange="window.onThemeMainPinkChange(this.value)">
+                        </div>
+
+                        <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#fff8fa;border-radius:10px;border:1px solid #ffeef2;">
+                            <div>
+                                <div style="font-size:12px;font-weight:600;color:var(--text);">主体背景底色（纯白区）：</div>
+                                <div style="font-size:10.5px;color:var(--text2);">影响窗口背景、卡片底色</div>
+                            </div>
+                            <input type="color" id="themeMainWhitePicker" value="${customMainWhite}" style="width:36px;height:26px;border:none;border-radius:4px;cursor:pointer;" onchange="window.onThemeMainWhiteChange(this.value)">
+                        </div>
+
+                        <button class="btn-secondary" style="width:100%;font-size:11.5px;" onclick="window.restoreDefaultMainPalette()">
+                            恢复默认草莓粉白配色
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 🌟 专业深灰底板 HSV 拾色器（当处于 custom 模式或调色时展示） -->
+                <div id="themeHsvPickerWrap" style="display:${currentThemeMode === 'custom' ? 'block' : 'none'};margin-top:12px;">
                     <div class="hsv-pixel-perfect-plate" style="background:#2b2b2b;border-radius:20px;padding:20px 16px;box-shadow:inset 0 2px 8px rgba(0,0,0,0.5), 0 6px 18px rgba(0,0,0,0.25);width:100%;max-width:320px;margin:0 auto;box-sizing:border-box;">
                         
-                        <!-- 色相环 + 正等边三角形居中盒子 -->
                         <div class="hsv-wheel-box" id="hsvWheelBox" style="width:230px;height:230px;margin:0 auto 12px auto;position:relative;user-select:none;touch-action:none;">
                             <canvas id="hsvWheelCanvas" class="hsv-wheel-canvas" width="460" height="460" style="width:100%;height:100%;border-radius:50%;display:block;"></canvas>
-                            <!-- 白色空心圆环手柄 -->
                             <div class="hsv-ring-handle" id="hsvRingHandle" style="position:absolute;width:24px;height:24px;border:3px solid #ffffff;border-radius:50%;box-shadow:0 0 5px rgba(0,0,0,0.6);transform:translate(-50%,-50%);pointer-events:none;box-sizing:border-box;"></div>
                             <div class="hsv-triangle-handle" id="hsvTriangleHandle" style="position:absolute;width:20px;height:20px;border:3px solid #ffffff;border-radius:50%;box-shadow:0 0 5px rgba(0,0,0,0.6);transform:translate(-50%,-50%);pointer-events:none;box-sizing:border-box;"></div>
                         </div>
 
-                        <!-- 居中左右排布的工具按钮行（左侧 ...，右侧带加号的水滴吸色） -->
                         <div style="display:flex;justify-content:space-between;align-items:center;padding:0 8px 14px 8px;">
                             <div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;color:#888;cursor:pointer;" onclick="if(typeof showToast==='function')showToast('HSV色彩空间取色中');">
                                 <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:#888;stroke-width:2;"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
@@ -173,9 +259,7 @@
                             </div>
                         </div>
 
-                        <!-- 严格还原的三条渐变轨 + 右侧纯文本数字（无方框） -->
                         <div style="display:flex;flex-direction:column;gap:14px;padding:0 6px;">
-                            <!-- H 滑块 -->
                             <div style="display:flex;align-items:center;gap:12px;">
                                 <span style="font-size:13px;font-family:serif;color:#a0a0a0;width:12px;font-weight:bold;">H</span>
                                 <div style="flex:1;position:relative;display:flex;align-items:center;">
@@ -184,7 +268,6 @@
                                 <span id="textValH" style="font-size:13px;color:#a0a0a0;width:24px;text-align:right;font-family:monospace;">${hsvState.h}</span>
                             </div>
 
-                            <!-- S 滑块 -->
                             <div style="display:flex;align-items:center;gap:12px;">
                                 <span style="font-size:13px;font-family:serif;color:#a0a0a0;width:12px;font-weight:bold;">S</span>
                                 <div style="flex:1;position:relative;display:flex;align-items:center;">
@@ -193,7 +276,6 @@
                                 <span id="textValS" style="font-size:13px;color:#a0a0a0;width:24px;text-align:right;font-family:monospace;">${hsvState.s}</span>
                             </div>
 
-                            <!-- V 滑块 -->
                             <div style="display:flex;align-items:center;gap:12px;">
                                 <span style="font-size:13px;font-family:serif;color:#a0a0a0;width:12px;font-weight:bold;">V</span>
                                 <div style="flex:1;position:relative;display:flex;align-items:center;">
@@ -208,26 +290,42 @@
 
                 <div class="theme-action-bar" style="margin-top:16px;">
                     <button class="btn-primary" style="width:100%;" onclick="window.saveAndApplyColorThemeOnly()">
-                        保存并应用设置
+                        保存并应用当前色彩配置
                     </button>
                 </div>
             </div>
 
-            <!-- 卡片 3：主题方案管理器 -->
+            <!-- 卡片 3：桌面组件管理（位于字体功能上方） -->
             <div class="theme-setting-card">
                 <div class="theme-setting-title">
-                    <span>主题配置方案</span>
-                    <button class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="window.promptSaveNewProfile()">
-                        新建方案
-                    </button>
+                    <span>桌面组件管理</span>
                 </div>
                 <div class="theme-setting-desc">
-                    保存当前的壁纸、色彩与字体配置，随时自由切换。
+                    定制桌面首屏常驻小组件：温暖米白待办便签，或极简高级黑白日历。
                 </div>
-                <div class="profile-chip-list" id="themeProfileList"></div>
+
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                    <div style="display:flex;gap:8px;">
+                        <button class="btn-secondary ${activeWidget === 'todo' ? 'btn-primary' : ''}" style="flex:1;font-size:12px;" onclick="window.setDesktopWidgetFromTheme('todo')">
+                            📝 待办事项便签
+                        </button>
+                        <button class="btn-secondary ${activeWidget === 'calendar' ? 'btn-primary' : ''}" style="flex:1;font-size:12px;" onclick="window.setDesktopWidgetFromTheme('calendar')">
+                            📅 极简黑白日历
+                        </button>
+                    </div>
+
+                    <div style="display:flex;gap:8px;margin-top:4px;">
+                        <button class="btn-secondary" style="flex:1;font-size:11.5px;" onclick="if(typeof window.generateSmartDayTodos==='function')window.generateSmartDayTodos();">
+                            ✨ 智能生成一日待办
+                        </button>
+                        <button class="btn-secondary" style="flex:1;font-size:11.5px;" onclick="if(typeof window.promptAddTodoItem==='function')window.promptAddTodoItem();">
+                            ＋ 新增一条待办
+                        </button>
+                    </div>
+                </div>
             </div>
 
-            <!-- 卡片 4：字体库与多格式扩展 -->
+            <!-- 卡片 4：字体库与多格式扩展（内含免费字体网引导链接） -->
             <div class="theme-setting-card">
                 <div class="theme-collapsible-header" onclick="window.toggleFontLibraryCollapse()" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
                     <div class="theme-setting-title" style="margin-bottom:0;">
@@ -237,6 +335,20 @@
                 </div>
 
                 <div id="fontLibraryBody" style="display:none;margin-top:12px;">
+                    
+                    <!-- 免费字体网站友情外链推荐位 -->
+                    <div style="background:#f4f9fd;border:1px solid #d0e7fa;border-radius:10px;padding:8px 12px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
+                        <div style="display:flex;flex-direction:column;">
+                            <span style="font-size:12px;font-weight:700;color:#1864ab;">🔤 免费商业字体大全</span>
+                            <span style="font-size:10.5px;color:#495057;">收录数千款开源无版权字体，即点即用</span>
+                        </div>
+                        <a href="https://fonts.zeoseven.com/" target="_blank" rel="noopener noreferrer" style="text-decoration:none;">
+                            <button class="btn-secondary" style="padding:4px 10px;font-size:11px;background:#e7f5ff;border-color:#a5d8ff;color:#1971c2;">
+                                访问网站 ↗
+                            </button>
+                        </a>
+                    </div>
+
                     <div class="theme-setting-desc">
                         选择对应的导入格式。导入成功后，整部手机界面字体将即刻全面生效！
                     </div>
@@ -269,11 +381,116 @@
                     <div id="installedFontsList" style="margin-top:14px;display:flex;flex-direction:column;gap:6px;"></div>
                 </div>
             </div>
+
+            <!-- 卡片 5：主题方案管理器 -->
+            <div class="theme-setting-card">
+                <div class="theme-setting-title">
+                    <span>主题配置方案</span>
+                    <button class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="window.promptSaveNewProfile()">
+                        新建方案
+                    </button>
+                </div>
+                <div class="theme-setting-desc">
+                    保存当前的壁纸、色彩与字体配置，随时自由切换。
+                </div>
+                <div class="profile-chip-list" id="themeProfileList"></div>
+            </div>
         `;
 
         initHsvCanvasPicker();
         renderProfileChips();
         renderInstalledFontsList();
+    };
+
+    // 切换下拉调节目标
+    window.onAdjustTargetSelectChange = function (val) {
+        currentAdjustTarget = val;
+        ['font_icon', 'status_bar', 'theme_palette'].forEach(k => {
+            const sec = document.getElementById('targetArea_' + k);
+            if (sec) sec.style.display = (k === val) ? 'block' : 'none';
+        });
+    };
+
+    // 状态栏属性调整
+    window.updateStatusBarStroke = function (val) {
+        localStorage.setItem('mcyt_statusbar_stroke', val);
+        document.documentElement.style.setProperty('--status-bar-stroke', val);
+    };
+
+    window.updateStatusBarFill = function (val) {
+        localStorage.setItem('mcyt_statusbar_fill', val);
+        document.documentElement.style.setProperty('--status-bar-fill', val);
+        const picker = document.getElementById('statusBarFillColorPicker');
+        if (picker && val.startsWith('#')) picker.value = val;
+    };
+
+    window.handleStatusBarBgUpload = function (event) {
+        const file = event.target.files && event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function (e) {
+            const base64 = e.target.result;
+            localStorage.setItem('mcyt_statusbar_bg_img', base64);
+            document.documentElement.style.setProperty('--status-bar-bg-img', `url('${base64}')`);
+            if (typeof showToast === 'function') showToast('已成功应用状态栏背景底图');
+        };
+        reader.readAsDataURL(file);
+        event.target.value = '';
+    };
+
+    window.clearStatusBarBg = function () {
+        localStorage.removeItem('mcyt_statusbar_bg_img');
+        document.documentElement.style.setProperty('--status-bar-bg-img', 'none');
+        if (typeof showToast === 'function') showToast('已清除状态栏底图');
+    };
+
+    // 主体粉白调节
+    window.onThemeMainPinkChange = function (hex) {
+        localStorage.setItem('mcyt_custom_main_pink', hex);
+        document.documentElement.style.setProperty('--theme-main-pink', hex);
+    };
+
+    window.onThemeMainWhiteChange = function (hex) {
+        localStorage.setItem('mcyt_custom_main_white', hex);
+        document.documentElement.style.setProperty('--theme-main-white', hex);
+        document.documentElement.style.setProperty('--theme-sub-white', hex);
+    };
+
+    window.restoreDefaultMainPalette = function () {
+        localStorage.removeItem('mcyt_custom_main_pink');
+        localStorage.removeItem('mcyt_custom_main_white');
+        document.documentElement.style.setProperty('--theme-main-pink', '#ff5c8a');
+        document.documentElement.style.setProperty('--theme-main-white', '#ffffff');
+        document.documentElement.style.setProperty('--theme-sub-white', '#fff5f7');
+        const pinkP = document.getElementById('themeMainPinkPicker');
+        const whiteP = document.getElementById('themeMainWhitePicker');
+        if (pinkP) pinkP.value = '#ff5c8a';
+        if (whiteP) whiteP.value = '#ffffff';
+        if (typeof showToast === 'function') showToast('已重置为主体经典粉白');
+    };
+
+    window.onIconLabelColorChange = function (hex) {
+        localStorage.setItem('mcyt_icon_label_color', hex);
+        document.documentElement.style.setProperty('--app-icon-label-color', hex);
+    };
+
+    // 桌面组件从主题设置一键切换
+    window.setDesktopWidgetFromTheme = function (type) {
+        localStorage.setItem('mcyt_active_widget_type', type);
+        const todoWidget = document.getElementById('desktopTodoWidget');
+        const calWidget = document.getElementById('desktopCalendarWidget');
+        if (type === 'calendar') {
+            if (todoWidget) todoWidget.style.display = 'none';
+            if (calWidget) calWidget.style.display = 'block';
+            if (typeof window.renderDesktopCalendar === 'function') window.renderDesktopCalendar();
+        } else {
+            if (todoWidget) todoWidget.style.display = 'block';
+            if (calWidget) calWidget.style.display = 'none';
+            if (typeof window.renderDesktopTodos === 'function') window.renderDesktopTodos();
+        }
+        const appModalBody = document.getElementById('appModalBody');
+        if (appModalBody) window.renderThemeApp(appModalBody);
+        if (typeof showToast === 'function') showToast(`桌面组件已设为: ${type === 'calendar' ? '极简日历' : '待办便签'}`);
     };
 
     window.switchFontFormat = function(fmt) {
@@ -293,7 +510,7 @@
         }
     };
 
-    // 2. 正等边三角形 HSV 拾色器绘制（严格像素对准参考图）
+    // 正等边三角形 HSV 拾色器绘制
     function initHsvCanvasPicker() {
         const box = document.getElementById('hsvWheelBox');
         const canvas = document.getElementById('hsvWheelCanvas');
@@ -366,7 +583,6 @@
             const boxRect = box.getBoundingClientRect();
             const scale = (boxRect.width || 230) / size;
 
-            // 色相环白色空心圆环
             const rad = (hsvState.h - 90) * Math.PI / 180;
             const ringMidR = (outerR + innerR) / 2;
             const ringX = (center + ringMidR * Math.cos(rad)) * scale;
@@ -376,7 +592,6 @@
             const pureRgb = hsvToRgb(hsvState.h, 100, 100);
             rHandle.style.backgroundColor = `rgb(${pureRgb.r},${pureRgb.g},${pureRgb.b})`;
 
-            // 三角形白色空心圆环
             const v = getEquilateralTriangleVertices();
             const sat = hsvState.s / 100;
             const val = hsvState.v / 100;
@@ -394,7 +609,6 @@
             const curRgb = hsvToRgb(hsvState.h, hsvState.s, hsvState.v);
             tHandle.style.backgroundColor = `rgb(${curRgb.r},${curRgb.g},${curRgb.b})`;
 
-            // 滑块数值与背景渐变更新
             const sH = document.getElementById('sliderH');
             const sS = document.getElementById('sliderS');
             const sV = document.getElementById('sliderV');
@@ -510,7 +724,7 @@
         root.style.setProperty('--star-glow-color', hex);
     }
 
-    // 3. 水滴吸色器
+    // 水滴吸色器
     window.handlePipetteImageSelected = function (event) {
         const file = event.target.files && event.target.files[0];
         if (!file) return;
@@ -621,7 +835,7 @@
         };
     }
 
-    // 4. 壁纸导入与裁剪
+    // 壁纸裁剪
     window.handleWallpaperUpload = function (event, targetType) {
         const file = event.target.files && event.target.files[0];
         if (!file) return;
@@ -837,7 +1051,7 @@
         if (typeof showToast === 'function') showToast('主题色彩已成功保存');
     };
 
-    // 5. 扩展字体
+    // 扩展字体
     window.toggleFontLibraryCollapse = function () {
         const body = document.getElementById('fontLibraryBody');
         const arrow = document.getElementById('fontCollapseArrow');
@@ -1007,7 +1221,7 @@
         renderInstalledFontsList();
     };
 
-    // 6. 配置方案管理器
+    // 配置方案管理器
     function getStoredProfiles() {
         try { return JSON.parse(localStorage.getItem('mcyt_theme_profiles') || '[]'); } catch (e) { return []; }
     }
