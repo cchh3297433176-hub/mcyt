@@ -72,7 +72,7 @@
             </div>
         </div>
 
-        <!-- 2. 桌面主界面（严格双页滑动视口，无挤压腰斩） -->
+        <!-- 2. 桌面主界面（支持双页左右滑屏 & 多页自由组件流系统） -->
         <div class="screen-desktop" id="screenDesktop">
             <div class="desktop-top-widget">
                 <div class="widget-day-info" id="desktopWidgetInfo">第 <span>1</span> 天 · 早晨 (行动点 6/6)</div>
@@ -83,51 +83,16 @@
             <div class="desktop-pages-viewport" id="desktopPagesViewport">
                 <div class="desktop-pages-track" id="desktopPagesTrack">
                     
-                    <!-- 第 1 页：顶部并排双组件（左日历+右待办） + 完整应用网格 -->
+                    <!-- 第 1 页：顶部空白预留 + 动态组件挂载位 + 舒适下沉应用网格 -->
                     <div class="desktop-page desktop-page-1" id="desktopPage1">
                         
-                        <!-- 🌟 顶部并排双组件：左边日历，右边待办 -->
-                        <div class="desktop-widgets-row">
-                            <!-- 左边：极简黑白日历 -->
-                            <div class="calendar-widget-card" id="desktopCalendarWidget">
-                                <div class="calendar-widget-top">
-                                    <div class="calendar-month-title" id="calMonthTitle">JULY</div>
-                                    <div class="calendar-year-title" id="calYearTitle">2026</div>
-                                </div>
-                                <div class="calendar-week-row">
-                                    <div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div><div>S</div>
-                                </div>
-                                <div class="calendar-days-grid" id="calDaysGrid"></div>
-                                <div class="calendar-widget-notes">NOTES</div>
-                            </div>
+                        <!-- 🌟 顶部空白预留位（后续大组件专属槽位） -->
+                        <div class="desktop-future-slot"></div>
 
-                            <!-- 右边：温暖米白待办便签（彻底无任何隐私数据） -->
-                            <div class="todo-widget-card" id="desktopTodoWidget">
-                                <div class="todo-widget-header">
-                                    <div class="todo-widget-count" id="todoWidgetCountText">0 条待办</div>
-                                    <div class="todo-widget-actions">
-                                        <!-- 一键根据人设/日期智能排布今日待办 -->
-                                        <button class="todo-icon-btn" onclick="window.generateSmartDayTodos()" title="智能生成今日待办">
-                                            <svg viewBox="0 0 24 24">
-                                                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
-                                            </svg>
-                                        </button>
-                                        <!-- 手动添加一条待办 -->
-                                        <button class="todo-icon-btn" onclick="window.promptAddTodoItem()" title="添加待办">
-                                            <svg viewBox="0 0 24 24">
-                                                <line x1="12" y1="5" x2="12" y2="19"></line>
-                                                <line x1="5" y1="12" x2="19" y2="12"></line>
-                                            </svg>
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="todo-list-wrap" id="todoWidgetList">
-                                    <!-- 纯净待办项动态注入 -->
-                                </div>
-                            </div>
-                        </div>
+                        <!-- 🌟 第 1 页动态组件插槽（支持单/双组件自由挂载） -->
+                        <div class="desktop-widgets-slot" id="page1WidgetSlot"></div>
 
-                        <!-- 下方完整的应用网格（无裁切、不腰斩） -->
+                        <!-- 🌟 紧凑贴在组件下方的应用网格 -->
                         <div class="app-grid">
                             <div class="app-slot" id="appSlotChat" onclick="openPhoneApp('chat')">
                                 <div class="app-icon-box" style="background: linear-gradient(135deg, #51cf66, #2b8a3e);">
@@ -203,9 +168,11 @@
                         </div>
                     </div>
 
-                    <!-- 第 2 页：纯净留白扩展屏（无任何多余文字说明干扰） -->
+                    <!-- 第 2 页：支持第二页动态组件挂载插槽 -->
                     <div class="desktop-page desktop-page-2" id="desktopPage2">
-                        <!-- 纯净预留区域，清爽整洁 -->
+                        <div class="desktop-future-slot"></div>
+                        <!-- 🌟 第 2 页动态组件插槽（若把日历或待办移到第 2 页将在此渲染） -->
+                        <div class="desktop-widgets-slot" id="page2WidgetSlot"></div>
                     </div>
 
                 </div>
