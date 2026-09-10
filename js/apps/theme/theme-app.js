@@ -2,8 +2,8 @@
  * js/apps/theme/theme-app.js
  * 🎀 个性化与主题中心 App
  * 职责：主体粉白可调节自定制、状态栏三维解耦（描边勾线/填充底色/底图）、
- *       全层级统一切换至正等边三角形专业 HSV 色盘与水滴准星吸色放大镜（彻底杜绝原生丑陋选色）、
- *       桌面组件自由多页穿梭与独立开关控制、壁纸自适应裁剪、一键全站色彩重置、
+ *       粉白甜心自定义下拉菜单（杜绝原生 Android 白框）、正等边三角形高精度触控对齐校准、
+ *       HSV 触控输入实时响应、桌面组件自由多页穿梭与独立开关控制、壁纸自适应裁剪、一键全站色彩重置、
  *       多配置方案管理器、免费字体网引导与扩展字体导入
  */
 
@@ -29,6 +29,14 @@
     // 'main_pink'   (主体核心草莓粉)
     // 'main_white'  (主体纯白底色/背景)
     let currentHsvTarget = 'status_text';
+
+    const HSV_TARGET_NAMES = {
+        status_text: '字体与状态栏指示颜色',
+        icon_label: '桌面 App 标题文字颜色',
+        status_fill: '状态栏填充底色',
+        main_pink: '主体核心色彩（草莓粉区）',
+        main_white: '主体纯白背景（纯白区）'
+    };
 
     function hsvToRgb(h, s, v) {
         s = s / 100;
@@ -86,7 +94,7 @@
         if (targetKey === 'status_text') {
             return localStorage.getItem('mcyt_phone_custom_color') || '#ff5c8a';
         } else if (targetKey === 'icon_label') {
-            return localStorage.getItem('mcyt_icon_label_color') || '#ffffff';
+            return localStorage.getItem('mcyt_icon_label_color') || '#2e1a22';
         } else if (targetKey === 'status_fill') {
             const fill = localStorage.getItem('mcyt_statusbar_fill');
             return (fill && fill.startsWith('#')) ? fill : '#ff5c8a';
@@ -98,7 +106,6 @@
         return '#ff5c8a';
     }
 
-    // 控制色相盘容器何时可见（默认隐藏，除非处于自定义颜色）
     function updateHsvVisibilityDom() {
         const wrap = document.getElementById('themeHsvPickerWrap');
         if (!wrap) return;
@@ -109,25 +116,21 @@
         }
     }
 
-    // 直接对系统 CSS 变量进行实时响应应用
     function applyThemeModeDirect(mode) {
         const root = document.documentElement;
         if (mode === 'dark') {
-            // 纯白模式（针对深色壁纸，强制白色文本与图标）
             root.style.setProperty('--status-color', '#ffffff');
             root.style.setProperty('--lock-text-color', '#ffffff');
             root.style.setProperty('--status-svg-fill', '#ffffff');
             root.style.setProperty('--star-glow-color', 'rgba(255, 255, 255, 0.9)');
             if (typeof window.applyColorTheme === 'function') window.applyColorTheme(false);
         } else if (mode === 'light') {
-            // 黑巧模式（针对浅色壁纸，强制黑巧文本与图标）
             root.style.setProperty('--status-color', '#1a1a1a');
             root.style.setProperty('--lock-text-color', '#1a1a1a');
             root.style.setProperty('--status-svg-fill', '#1a1a1a');
             root.style.setProperty('--star-glow-color', 'rgba(0, 0, 0, 0.4)');
             if (typeof window.applyColorTheme === 'function') window.applyColorTheme(true);
         } else if (mode === 'auto') {
-            // 自动检测明暗反色
             const currentLock = pendingLockBg || localStorage.getItem('mcyt_custom_lock_bg') || 'assets/system/default_lock.jpg';
             if (typeof window.analyzeImageLuminance === 'function') {
                 window.analyzeImageLuminance(currentLock, window.applyColorTheme);
@@ -197,24 +200,29 @@
                 </div>
             </div>
 
-            <!-- 卡片 2：色彩与状态栏全局专业定制（全线统一切换至 HSV 色盘） -->
+            <!-- 卡片 2：色彩与状态栏全局专业定制（彻底干掉系统级丑白下拉菜单） -->
             <div class="theme-setting-card">
                 <div class="theme-setting-title">
                     <span>主题全层级色彩与状态栏定制</span>
                 </div>
                 <div class="theme-setting-desc">
-                    下拉选择想要调节的目标，全线接入正等边专业 HSV 色相盘与水滴吸色准星。
+                    轻触切换调节目标，全线接入专业 HSV 色相盘与水滴吸色准星。
                 </div>
 
-                <div style="margin-bottom:12px;">
+                <div style="margin-bottom:12px;position:relative;">
                     <label style="font-size:11.5px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px;">色盘当前调控目标：</label>
-                    <select id="themeHsvTargetSelect" style="width:100%;padding:8px 10px;border-radius:10px;border:1px solid #ffd1dc;background:#fff8fa;font-size:12.5px;font-weight:600;color:var(--text);outline:none;" onchange="window.onHsvTargetChange(this.value)">
-                        <option value="status_text" ${currentHsvTarget === 'status_text' ? 'selected' : ''}>字体与状态栏指示颜色</option>
-                        <option value="icon_label" ${currentHsvTarget === 'icon_label' ? 'selected' : ''}>桌面 App 标题文字颜色</option>
-                        <option value="status_fill" ${currentHsvTarget === 'status_fill' ? 'selected' : ''}>状态栏填充底色</option>
-                        <option value="main_pink" ${currentHsvTarget === 'main_pink' ? 'selected' : ''}>主体核心色彩（草莓粉区）</option>
-                        <option value="main_white" ${currentHsvTarget === 'main_white' ? 'selected' : ''}>主体纯白背景（纯白区）</option>
-                    </select>
+                    <div id="themeHsvTargetDropdownBtn" class="custom-theme-target-dropdown" onclick="window.toggleThemeTargetDropdown()">
+                        <span id="themeHsvTargetDropdownLabel">${HSV_TARGET_NAMES[currentHsvTarget]}</span>
+                        <span style="font-size:10px;color:var(--primary);">▼</span>
+                    </div>
+                    <div id="themeHsvTargetDropdownMenu" class="custom-theme-dropdown-menu" style="display:none;">
+                        ${Object.keys(HSV_TARGET_NAMES).map(k => `
+                            <div class="custom-theme-dropdown-item ${k === currentHsvTarget ? 'active' : ''}" onclick="window.selectHsvTarget('${k}')">
+                                <span>${HSV_TARGET_NAMES[k]}</span>
+                                ${k === currentHsvTarget ? '<span style="color:var(--primary);">✓</span>' : ''}
+                            </div>
+                        `).join('')}
+                    </div>
                 </div>
 
                 <div id="statusBarExtraControls" style="display:${currentHsvTarget === 'status_fill' ? 'block' : 'none'};margin-bottom:12px;background:#fff8fa;padding:10px;border-radius:12px;border:1px solid #ffeef2;">
@@ -259,12 +267,12 @@
                     </div>
                 </div>
 
-                <!-- 专业深灰底板正等边 HSV 色盘与水滴放大镜（根据模式默认隐藏） -->
+                <!-- 专业深灰底板正等边 HSV 色盘与水滴放大镜（精准对齐手指触控 + 可点输入数值） -->
                 <div id="themeHsvPickerWrap" style="margin-top:6px;display:${(currentHsvTarget === 'status_text' && currentThemeMode !== 'custom') ? 'none' : 'block'};">
                     <div class="hsv-pixel-perfect-plate" style="background:#2b2b2b;border-radius:20px;padding:18px 16px;box-shadow:inset 0 2px 8px rgba(0,0,0,0.5), 0 6px 18px rgba(0,0,0,0.25);width:100%;max-width:320px;margin:0 auto;box-sizing:border-box;">
                         
                         <div class="hsv-wheel-box" id="hsvWheelBox" style="width:230px;height:230px;margin:0 auto 12px auto;position:relative;user-select:none;touch-action:none;">
-                            <canvas id="hsvWheelCanvas" class="hsv-wheel-canvas" width="460" height="460" style="width:100%;height:100%;border-radius:50%;display:block;"></canvas>
+                            <canvas id="hsvWheelCanvas" class="hsv-wheel-canvas" width="460" height="460" style="width:100%;height:100%;border-radius:50%;display:block;touch-action:none;"></canvas>
                             <div class="hsv-ring-handle" id="hsvRingHandle" style="position:absolute;width:24px;height:24px;border:3px solid #ffffff;border-radius:50%;box-shadow:0 0 5px rgba(0,0,0,0.6);transform:translate(-50%,-50%);pointer-events:none;box-sizing:border-box;"></div>
                             <div class="hsv-triangle-handle" id="hsvTriangleHandle" style="position:absolute;width:20px;height:20px;border:3px solid #ffffff;border-radius:50%;box-shadow:0 0 5px rgba(0,0,0,0.6);transform:translate(-50%,-50%);pointer-events:none;box-sizing:border-box;"></div>
                         </div>
@@ -283,29 +291,30 @@
                             </div>
                         </div>
 
+                        <!-- 支持直接打字输入的数字框 -->
                         <div style="display:flex;flex-direction:column;gap:12px;padding:0 6px;">
-                            <div style="display:flex;align-items:center;gap:12px;">
+                            <div style="display:flex;align-items:center;gap:10px;">
                                 <span style="font-size:13px;font-family:serif;color:#a0a0a0;width:12px;font-weight:bold;">H</span>
                                 <div style="flex:1;position:relative;display:flex;align-items:center;">
                                     <input type="range" id="sliderH" min="0" max="360" value="${hsvState.h}" style="width:100%;height:6px;border-radius:3px;appearance:none;-webkit-appearance:none;outline:none;background:linear-gradient(to right, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%);">
                                 </div>
-                                <span id="textValH" style="font-size:13px;color:#a0a0a0;width:24px;text-align:right;font-family:monospace;">${hsvState.h}</span>
+                                <input type="number" id="inputValH" class="hsv-number-input" min="0" max="360" value="${hsvState.h}" onchange="window.onHsvManualInputChange('h', this.value)" />
                             </div>
 
-                            <div style="display:flex;align-items:center;gap:12px;">
+                            <div style="display:flex;align-items:center;gap:10px;">
                                 <span style="font-size:13px;font-family:serif;color:#a0a0a0;width:12px;font-weight:bold;">S</span>
                                 <div style="flex:1;position:relative;display:flex;align-items:center;">
                                     <input type="range" id="sliderS" min="0" max="100" value="${hsvState.s}" style="width:100%;height:6px;border-radius:3px;appearance:none;-webkit-appearance:none;outline:none;" id="sliderSTrack">
                                 </div>
-                                <span id="textValS" style="font-size:13px;color:#a0a0a0;width:24px;text-align:right;font-family:monospace;">${hsvState.s}</span>
+                                <input type="number" id="inputValS" class="hsv-number-input" min="0" max="100" value="${hsvState.s}" onchange="window.onHsvManualInputChange('s', this.value)" />
                             </div>
 
-                            <div style="display:flex;align-items:center;gap:12px;">
+                            <div style="display:flex;align-items:center;gap:10px;">
                                 <span style="font-size:13px;font-family:serif;color:#a0a0a0;width:12px;font-weight:bold;">V</span>
                                 <div style="flex:1;position:relative;display:flex;align-items:center;">
                                     <input type="range" id="sliderV" min="0" max="100" value="${hsvState.v}" style="width:100%;height:6px;border-radius:3px;appearance:none;-webkit-appearance:none;outline:none;" id="sliderVTrack">
                                 </div>
-                                <span id="textValV" style="font-size:13px;color:#a0a0a0;width:24px;text-align:right;font-family:monospace;">${hsvState.v}</span>
+                                <input type="number" id="inputValV" class="hsv-number-input" min="0" max="100" value="${hsvState.v}" onchange="window.onHsvManualInputChange('v', this.value)" />
                             </div>
                         </div>
 
@@ -322,7 +331,7 @@
                 </div>
             </div>
 
-            <!-- 🌟 卡片 3：桌面组件多页自由系统（默认折叠 + 精巧矮版选页按钮） -->
+            <!-- 卡片 3：桌面组件多页自由系统 -->
             <div class="theme-setting-card">
                 <div class="theme-collapsible-header" onclick="window.toggleWidgetsSettingsCollapse()" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
                     <div class="theme-setting-title" style="margin-bottom:0;">
@@ -394,7 +403,6 @@
                 </div>
 
                 <div id="fontLibraryBody" style="display:none;margin-top:12px;">
-                    
                     <div style="background:#f4f9fd;border:1px solid #d0e7fa;border-radius:10px;padding:8px 12px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
                         <div style="display:flex;flex-direction:column;">
                             <span style="font-size:12px;font-weight:700;color:#1864ab;">🔤 免费商业字体大全</span>
@@ -419,13 +427,13 @@
 
                     <div id="fontInputSection_html" style="display:${currentFontFormat === 'html' ? 'block' : 'none'};">
                         <input type="text" id="fontRemarkInput_html" placeholder="字体名称备注（如：长坂点宋体）" style="width:100%;margin-bottom:6px;padding:8px 10px;border-radius:8px;border:1px solid #ffd1dc;font-size:12px;outline:none;">
-                        <textarea id="fontCodeInput_html" placeholder="粘贴完整的 HTML 代码，如：&#10;<link href='...' rel='stylesheet'>&#10;<style>body { font-family: '...'; }</style>" style="width:100%;min-height:75px;padding:8px 10px;border-radius:8px;border:1px solid #ffd1dc;font-size:11px;outline:none;resize:none;font-family:monospace;"></textarea>
+                        <textarea id="fontCodeInput_html" placeholder="粘贴完整的 HTML 代码" style="width:100%;min-height:75px;padding:8px 10px;border-radius:8px;border:1px solid #ffd1dc;font-size:11px;outline:none;resize:none;font-family:monospace;"></textarea>
                         <button class="btn-primary" style="width:100%;margin-top:8px;" onclick="window.handleUnifiedFontImport('html')">导入并强制全局应用</button>
                     </div>
 
                     <div id="fontInputSection_css" style="display:${currentFontFormat === 'css' ? 'block' : 'none'};">
                         <input type="text" id="fontRemarkInput_css" placeholder="字体名称备注（如：像素甜心）" style="width:100%;margin-bottom:6px;padding:8px 10px;border-radius:8px;border:1px solid #ffd1dc;font-size:12px;outline:none;">
-                        <textarea id="fontCodeInput_css" placeholder="粘贴 CSS 代码，如：&#10;@import url('...');&#10;body { font-family: 'MyFont'; }" style="width:100%;min-height:75px;padding:8px 10px;border-radius:8px;border:1px solid #ffd1dc;font-size:11px;outline:none;resize:none;font-family:monospace;"></textarea>
+                        <textarea id="fontCodeInput_css" placeholder="粘贴 CSS 代码" style="width:100%;min-height:75px;padding:8px 10px;border-radius:8px;border:1px solid #ffd1dc;font-size:11px;outline:none;resize:none;font-family:monospace;"></textarea>
                         <button class="btn-primary" style="width:100%;margin-top:8px;" onclick="window.handleUnifiedFontImport('css')">导入并强制全局应用</button>
                     </div>
 
@@ -460,6 +468,26 @@
         renderInstalledFontsList();
     };
 
+    // 🌸 自定义下拉菜单控制（替代原生 Android 弹窗）
+    window.toggleThemeTargetDropdown = function () {
+        const menu = document.getElementById('themeHsvTargetDropdownMenu');
+        if (menu) {
+            menu.style.display = (menu.style.display === 'none') ? 'flex' : 'none';
+        }
+    };
+
+    window.selectHsvTarget = function (targetKey) {
+        window.onHsvTargetChange(targetKey);
+        const label = document.getElementById('themeHsvTargetDropdownLabel');
+        if (label) label.textContent = HSV_TARGET_NAMES[targetKey];
+        const menu = document.getElementById('themeHsvTargetDropdownMenu');
+        if (menu) menu.style.display = 'none';
+
+        document.querySelectorAll('.custom-theme-dropdown-item').forEach(it => {
+            it.classList.remove('active');
+        });
+    };
+
     // 折叠/展开小组件设置面板
     window.toggleWidgetsSettingsCollapse = function () {
         const body = document.getElementById('widgetsSettingsBody');
@@ -483,7 +511,6 @@
         const appModalBody = document.getElementById('appModalBody');
         if (appModalBody) {
             window.renderThemeApp(appModalBody);
-            // 保持展开状态
             const b = document.getElementById('widgetsSettingsBody');
             const a = document.getElementById('widgetsCollapseArrow');
             if (b && a) { b.style.display = 'block'; a.textContent = '▼ 收起'; }
@@ -505,7 +532,6 @@
         const appModalBody = document.getElementById('appModalBody');
         if (appModalBody) {
             window.renderThemeApp(appModalBody);
-            // 保持展开状态
             const b = document.getElementById('widgetsSettingsBody');
             const a = document.getElementById('widgetsCollapseArrow');
             if (b && a) { b.style.display = 'block'; a.textContent = '▼ 收起'; }
@@ -538,6 +564,22 @@
 
         updateHsvVisibilityDom();
         if (window.refreshHsvWheelCanvas) window.refreshHsvWheelCanvas();
+    };
+
+    // 数字手动输入改变 HSV
+    window.onHsvManualInputChange = function (channel, val) {
+        let num = parseInt(val, 10);
+        if (isNaN(num)) num = 0;
+        if (channel === 'h') {
+            hsvState.h = Math.max(0, Math.min(360, num));
+            if (window.refreshHsvWheelCanvas) window.refreshHsvWheelCanvas();
+        } else if (channel === 's') {
+            hsvState.s = Math.max(0, Math.min(100, num));
+            if (window.updateHsvHandles) window.updateHsvHandles();
+        } else if (channel === 'v') {
+            hsvState.v = Math.max(0, Math.min(100, num));
+            if (window.updateHsvHandles) window.updateHsvHandles();
+        }
     };
 
     // 状态栏边框与填充
@@ -587,7 +629,7 @@
         root.style.setProperty('--theme-main-pink', '#ff5c8a');
         root.style.setProperty('--theme-main-white', '#ffffff');
         root.style.setProperty('--theme-sub-white', '#fff5f7');
-        root.style.setProperty('--app-icon-label-color', '#ffffff');
+        root.style.setProperty('--app-icon-label-color', '#2e1a22');
         root.style.setProperty('--status-bar-stroke', 'none');
         root.style.setProperty('--status-bar-fill', 'transparent');
         root.style.setProperty('--status-bar-bg-img', 'none');
@@ -607,10 +649,7 @@
         const radios = document.querySelectorAll('input[name="themeModeRadio"]');
         radios.forEach(r => { r.checked = (r.value === mode); });
 
-        // 即刻根据模式生效色彩
         applyThemeModeDirect(mode);
-
-        // 仅在自定义模式下才展现色盘
         updateHsvVisibilityDom();
     };
 
@@ -656,10 +695,10 @@
             localStorage.setItem('mcyt_custom_main_white', hex);
         }
 
-        if (typeof showToast === 'function') showToast(`[${document.getElementById('themeHsvTargetSelect').selectedOptions[0].text}] 色彩已永久保存！`);
+        if (typeof showToast === 'function') showToast(`[${HSV_TARGET_NAMES[currentHsvTarget]}] 色彩已永久保存！`);
     };
 
-    // 正等边三角形 HSV 拾色器绘制
+    // 正等边三角形 HSV 拾色器绘制（严密像素级触控对齐校准）
     function initHsvCanvasPicker() {
         const box = document.getElementById('hsvWheelBox');
         const canvas = document.getElementById('hsvWheelCanvas');
@@ -761,9 +800,9 @@
             const sH = document.getElementById('sliderH');
             const sS = document.getElementById('sliderS');
             const sV = document.getElementById('sliderV');
-            const txtH = document.getElementById('textValH');
-            const txtS = document.getElementById('textValS');
-            const txtV = document.getElementById('textValV');
+            const inH = document.getElementById('inputValH');
+            const inS = document.getElementById('inputValS');
+            const inV = document.getElementById('inputValV');
 
             if (sH) sH.value = hsvState.h;
             if (sS) {
@@ -775,13 +814,15 @@
                 sV.style.background = `linear-gradient(to right, #000000, rgb(${pureRgb.r},${pureRgb.g},${pureRgb.b}))`;
             }
 
-            if (txtH) txtH.textContent = hsvState.h;
-            if (txtS) txtS.textContent = hsvState.s;
-            if (txtV) txtV.textContent = hsvState.v;
+            if (inH && document.activeElement !== inH) inH.value = hsvState.h;
+            if (inS && document.activeElement !== inS) inS.value = hsvState.s;
+            if (inV && document.activeElement !== inV) inV.value = hsvState.v;
 
             const hex = rgbToHex(curRgb.r, curRgb.g, curRgb.b);
             previewColorLive(hex);
         }
+
+        window.updateHsvHandles = updateHandlesAndSliders;
 
         function onPointerDown(e) {
             const rect = box.getBoundingClientRect();
@@ -795,7 +836,7 @@
             const dy = py - center;
             const dist = Math.sqrt(dx * dx + dy * dy);
 
-            if (dist >= innerR - 10 && dist <= outerR + 10) {
+            if (dist >= innerR - 15 && dist <= outerR + 15) {
                 hsvState.activeDrag = 'ring';
                 updateRingFromPoint(dx, dy);
             } else {
@@ -831,6 +872,7 @@
             renderColorWheel();
         }
 
+        // 精准投影矩阵，绝对贴合手指坐标
         function updateTriangleFromPoint(px, py) {
             const v = getEquilateralTriangleVertices();
             let satRatio = (px - v.top.x) / (v.right.x - v.top.x);
@@ -850,8 +892,8 @@
         window.addEventListener('mousemove', onPointerMove);
         window.addEventListener('mouseup', onPointerUp);
 
-        box.addEventListener('touchstart', onPointerDown, { passive: true });
-        window.addEventListener('touchmove', onPointerMove, { passive: true });
+        box.addEventListener('touchstart', onPointerDown, { passive: false });
+        window.addEventListener('touchmove', onPointerMove, { passive: false });
         window.addEventListener('touchend', onPointerUp, { passive: true });
 
         const sH = document.getElementById('sliderH');
