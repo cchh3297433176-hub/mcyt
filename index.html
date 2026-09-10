@@ -18,7 +18,7 @@
             <div class="phone-camera-lens"></div>
         </div>
 
-        <!-- 智能感知色彩状态栏（支持勾线/填充/底图定制） -->
+        <!-- 智能感知色彩状态栏 -->
         <div class="status-bar" id="statusBar">
             <div id="statusTimeText">12:00</div>
             <div class="status-bar-right">
@@ -72,7 +72,7 @@
             </div>
         </div>
 
-        <!-- 2. 桌面主界面（支持双页左右滑屏 & 下沉图标布局） -->
+        <!-- 2. 桌面主界面（严格双页滑动视口，无挤压腰斩） -->
         <div class="screen-desktop" id="screenDesktop">
             <div class="desktop-top-widget">
                 <div class="widget-day-info" id="desktopWidgetInfo">第 <span>1</span> 天 · 早晨 (行动点 6/6)</div>
@@ -83,18 +83,31 @@
             <div class="desktop-pages-viewport" id="desktopPagesViewport">
                 <div class="desktop-pages-track" id="desktopPagesTrack">
                     
-                    <!-- 第 1 页：桌面组件 + 常用 App -->
+                    <!-- 第 1 页：顶部并排双组件（左日历+右待办） + 完整应用网格 -->
                     <div class="desktop-page desktop-page-1" id="desktopPage1">
                         
-                        <!-- 桌面组件挂载区（按需显示待办或日历） -->
-                        <div id="desktopWidgetsMountArea">
-                            <!-- 小组件 1：待办事项便签（1:1 复刻参考图一） -->
+                        <!-- 🌟 顶部并排双组件：左边日历，右边待办 -->
+                        <div class="desktop-widgets-row">
+                            <!-- 左边：极简黑白日历 -->
+                            <div class="calendar-widget-card" id="desktopCalendarWidget">
+                                <div class="calendar-widget-top">
+                                    <div class="calendar-month-title" id="calMonthTitle">JULY</div>
+                                    <div class="calendar-year-title" id="calYearTitle">2026</div>
+                                </div>
+                                <div class="calendar-week-row">
+                                    <div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div><div>S</div>
+                                </div>
+                                <div class="calendar-days-grid" id="calDaysGrid"></div>
+                                <div class="calendar-widget-notes">NOTES</div>
+                            </div>
+
+                            <!-- 右边：温暖米白待办便签（彻底无任何隐私数据） -->
                             <div class="todo-widget-card" id="desktopTodoWidget">
                                 <div class="todo-widget-header">
-                                    <div class="todo-widget-count" id="todoWidgetCountText">4 条待办</div>
+                                    <div class="todo-widget-count" id="todoWidgetCountText">0 条待办</div>
                                     <div class="todo-widget-actions">
-                                        <!-- 一键根据人设/日期生成一日待办 -->
-                                        <button class="todo-icon-btn" onclick="window.generateSmartDayTodos()" title="根据人设智能生成今日待办">
+                                        <!-- 一键根据人设/日期智能排布今日待办 -->
+                                        <button class="todo-icon-btn" onclick="window.generateSmartDayTodos()" title="智能生成今日待办">
                                             <svg viewBox="0 0 24 24">
                                                 <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
                                             </svg>
@@ -106,41 +119,15 @@
                                                 <line x1="5" y1="12" x2="19" y2="12"></line>
                                             </svg>
                                         </button>
-                                        <!-- 切换日历/便签视图快捷键 -->
-                                        <button class="todo-icon-btn" onclick="window.toggleDesktopWidgetType()" title="切换组件视图">
-                                            <svg viewBox="0 0 24 24">
-                                                <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                                                <line x1="16" y1="2" x2="16" y2="6"></line>
-                                                <line x1="8" y1="2" x2="8" y2="6"></line>
-                                                <line x1="3" y1="10" x2="21" y2="10"></line>
-                                            </svg>
-                                        </button>
                                     </div>
                                 </div>
                                 <div class="todo-list-wrap" id="todoWidgetList">
-                                    <!-- 待办项动态注入 -->
-                                </div>
-                            </div>
-
-                            <!-- 小组件 2：极简日历（1:1 复刻参考图二） -->
-                            <div class="calendar-widget-card" id="desktopCalendarWidget" style="display:none;">
-                                <div class="calendar-widget-top">
-                                    <div class="calendar-month-title" id="calMonthTitle">JULY</div>
-                                    <div class="calendar-year-title" id="calYearTitle">2026</div>
-                                </div>
-                                <div class="calendar-week-row">
-                                    <div>M</div><div>T</div><div>W</div><div>T</div><div>F</div><div>S</div><div>S</div>
-                                </div>
-                                <div class="calendar-days-grid" id="calDaysGrid">
-                                    <!-- 日期单元格动态注入 -->
-                                </div>
-                                <div class="calendar-widget-notes" onclick="window.toggleDesktopWidgetType()" style="cursor:pointer;" title="点击切换回待办事项">
-                                    NOTES ◂
+                                    <!-- 纯净待办项动态注入 -->
                                 </div>
                             </div>
                         </div>
 
-                        <!-- 沉底的应用网格（第 1 页） -->
+                        <!-- 下方完整的应用网格（无裁切、不腰斩） -->
                         <div class="app-grid">
                             <div class="app-slot" id="appSlotChat" onclick="openPhoneApp('chat')">
                                 <div class="app-icon-box" style="background: linear-gradient(135deg, #51cf66, #2b8a3e);">
@@ -216,14 +203,9 @@
                         </div>
                     </div>
 
-                    <!-- 第 2 页：扩展备用桌面（留白便于后续添加更多 App / 小组件） -->
+                    <!-- 第 2 页：纯净留白扩展屏（无任何多余文字说明干扰） -->
                     <div class="desktop-page desktop-page-2" id="desktopPage2">
-                        <div class="theme-setting-card" style="margin-top:20px;background:rgba(255,255,255,0.75);backdrop-filter:blur(16px);border:1px solid rgba(255,255,255,0.6);">
-                            <div class="theme-setting-title">✨ 第二桌面已开启</div>
-                            <div class="theme-setting-desc" style="color:#555;">
-                                左右轻滑即可在第 1 页与第 2 页之间随心穿梭，后续装载的扩展工具与新应用将陈列在此处。
-                            </div>
-                        </div>
+                        <!-- 纯净预留区域，清爽整洁 -->
                     </div>
 
                 </div>

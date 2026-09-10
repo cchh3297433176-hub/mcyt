@@ -7,7 +7,7 @@
     -webkit-tap-highlight-color: transparent;
 }
 :root {
-    /* 主体粉色与白色可调节核心变量（支持在主题中自定义覆盖） */
+    /* 主体粉色与白色核心变量（支持自定义覆盖） */
     --theme-main-pink: #ff5c8a;
     --theme-main-white: #ffffff;
     --theme-sub-white: #fff5f7;
@@ -40,7 +40,7 @@
     --lock-bg-url: url('assets/system/default_lock.jpg');
     --desktop-bg-url: url('assets/system/default_desktop.jpg');
     
-    /* 动态自适应核心变量（默认纯白） */
+    /* 动态自适应核心变量 */
     --status-color: #ffffff;
     --lock-text-color: #ffffff;
     --status-svg-fill: #ffffff;
@@ -63,8 +63,8 @@ body {
 }
 
 ::-webkit-scrollbar {
-    width: 4px;
-    height: 4px;
+    width: 3px;
+    height: 3px;
 }
 ::-webkit-scrollbar-track {
     background: transparent;
@@ -124,7 +124,7 @@ body {
     box-shadow: inset 0 0 2px #39527f;
 }
 
-/* 智能感知色彩状态栏（支持勾线边框、填充底色、背景底图） */
+/* 智能感知色彩状态栏 */
 .status-bar {
     position: absolute;
     top: 0;
@@ -268,7 +268,6 @@ body {
     transition: color 0.3s ease;
 }
 
-/* 锁屏滑动指示器 */
 .lock-swipe-panel {
     display: flex;
     flex-direction: column;
@@ -299,7 +298,7 @@ body {
 }
 
 /* ============================================================ */
-/* 桌面主界面：双页滑屏与向下沉淀布局 */
+/* 桌面主界面：双页独立视口 & 彻底消除腰斩变形 */
 /* ============================================================ */
 .screen-desktop {
     position: absolute;
@@ -312,7 +311,7 @@ body {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    padding: 44px 14px 14px 14px;
+    padding: 44px 14px 12px 14px;
     z-index: 500;
     overflow: hidden;
 }
@@ -322,7 +321,7 @@ body {
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-radius: 18px;
-    padding: 8px 14px;
+    padding: 7px 14px;
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -350,89 +349,155 @@ body {
     cursor: pointer;
 }
 
-/* 滑页视口与轨道 */
+/* 严谨的滑动视口结构：锁定 100% 宽度，消除任何挤压与右侧穿模 */
 .desktop-pages-viewport {
     flex: 1;
     width: 100%;
+    min-height: 0;
     overflow: hidden;
     position: relative;
-    display: flex;
-    touch-action: pan-y;
 }
 .desktop-pages-track {
     display: flex;
-    width: 200%;
+    width: 100%;
     height: 100%;
     transition: transform 0.32s cubic-bezier(0.2, 0.9, 0.25, 1);
     will-change: transform;
 }
 .desktop-page {
-    width: 50%;
+    flex: 0 0 100%;
+    width: 100%;
+    max-width: 100%;
     height: 100%;
     display: flex;
     flex-direction: column;
-    justify-content: flex-end; /* 图标与主要内容沉底，留出上方空间 */
+    justify-content: space-between;
     box-sizing: border-box;
-    padding: 2px 2px 6px 2px;
-    overflow-y: auto;
-    overflow-x: hidden;
-}
-.desktop-page::-webkit-scrollbar {
-    display: none;
-}
-.desktop-page-2 {
-    justify-content: flex-start;
-    padding-top: 10px;
+    padding: 2px 2px 2px 2px;
+    overflow: hidden;
 }
 
-/* 桌面小圆点指示器 */
-.desktop-pagination {
+/* ============================================================ */
+/* 🌟 顶部并排双组件：左边日历 + 右边待办（高度适中，给下方留足空间） */
+/* ============================================================ */
+.desktop-widgets-row {
     display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 6px;
-    height: 14px;
-    margin: 2px 0 4px 0;
+    gap: 10px;
+    width: 100%;
+    height: 168px; /* 紧凑固定高度，彻底保障下方 App 图标完整展现不腰斩 */
+    margin-bottom: 6px;
     flex-shrink: 0;
-}
-.pagination-dot {
-    width: 6px;
-    height: 6px;
-    border-radius: 3px;
-    background: rgba(255, 255, 255, 0.45);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-    transition: all 0.25s ease;
-    cursor: pointer;
-}
-.pagination-dot.active {
-    width: 16px;
-    background: #ffffff;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 
-/* ============================================================ */
-/* 📝 桌面小组件 1：待办事项便签（1:1 复刻参考图一，温柔纸质白底） */
-/* ============================================================ */
-.todo-widget-card {
-    background: #fdfcf7; /* 温暖纯净的便签纸白 */
-    border-radius: 22px;
-    padding: 14px 16px;
-    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.08);
-    border: 1px solid rgba(240, 237, 228, 0.9);
-    margin-bottom: 12px;
-    color: #2b2725;
+/* 左侧：1:1 极简黑白日历卡片 */
+.calendar-widget-card {
+    flex: 1.05;
+    background: #ffffff;
+    border-radius: 20px;
+    padding: 10px 10px 8px 10px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
+    border: 1px solid rgba(235, 232, 225, 0.85);
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
     user-select: none;
-    flex-shrink: 0;
+    overflow: hidden;
+}
+.calendar-widget-top {
+    text-align: center;
+    margin-bottom: 4px;
+}
+.calendar-month-title {
+    font-size: 13px;
+    font-weight: 400;
+    letter-spacing: 3px;
+    color: #000000;
+    text-transform: uppercase;
+    line-height: 1.1;
+}
+.calendar-year-title {
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 2px;
+    color: #222222;
+    display: inline-block;
+    border-bottom: 1px solid #000000;
+    padding-bottom: 1px;
+}
+.calendar-week-row {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    text-align: center;
+    font-size: 8.5px;
+    font-weight: 800;
+    color: #000000;
+    margin-bottom: 3px;
+}
+.calendar-days-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 2px 0;
+    text-align: center;
+    font-size: 10px;
+    font-weight: 600;
+    color: #222222;
+}
+.calendar-day-cell {
+    height: 15px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+}
+.calendar-day-cell.today-cell::after {
+    content: "";
+    position: absolute;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #111111;
+    z-index: 1;
+}
+.calendar-day-cell.today-cell span {
+    color: #ffffff !important;
+    position: relative;
+    z-index: 2;
+    font-weight: 800;
+}
+.calendar-widget-notes {
+    font-size: 8px;
+    font-weight: 800;
+    letter-spacing: 1.5px;
+    color: #111111;
+    text-transform: uppercase;
+    text-align: left;
+    margin-top: 2px;
+}
+
+/* 右侧：1:1 温暖纯净米白便签待办卡片 */
+.todo-widget-card {
+    flex: 1.15;
+    background: #fdfcf7; /* 温暖纸白，告别突兀粉白 */
+    border-radius: 20px;
+    padding: 10px 12px;
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
+    border: 1px solid rgba(235, 232, 225, 0.85);
+    display: flex;
+    flex-direction: column;
+    user-select: none;
+    overflow: hidden;
 }
 .todo-widget-header {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 8px;
-    padding-bottom: 4px;
+    margin-bottom: 6px;
+    padding-bottom: 3px;
+    border-bottom: 1px solid #f2ede4;
+    flex-shrink: 0;
 }
 .todo-widget-count {
-    font-size: 13.5px;
+    font-size: 12px;
     font-weight: 600;
     color: #433d3c;
     letter-spacing: 0.2px;
@@ -440,7 +505,7 @@ body {
 .todo-widget-actions {
     display: flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
 }
 .todo-icon-btn {
     background: transparent;
@@ -450,52 +515,54 @@ body {
     align-items: center;
     justify-content: center;
     color: #2b2725;
-    padding: 2px;
-    border-radius: 6px;
+    padding: 1px;
+    border-radius: 4px;
     transition: transform 0.12s ease;
 }
 .todo-icon-btn:active {
-    transform: scale(0.88);
+    transform: scale(0.85);
 }
 .todo-icon-btn svg {
-    width: 17px;
-    height: 17px;
+    width: 15px;
+    height: 15px;
     stroke: #2b2725;
-    stroke-width: 2;
+    stroke-width: 2.2;
     fill: none;
 }
 
 .todo-list-wrap {
+    flex: 1;
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
+    min-height: 0;
+}
+.todo-list-wrap::-webkit-scrollbar {
+    display: none;
 }
 .todo-item-row {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 9px 0;
-    border-bottom: 1px solid #f2eee6;
-    transition: opacity 0.2s ease, transform 0.2s ease;
+    gap: 8px;
+    padding: 5px 0;
+    border-bottom: 1px solid #f5f0e6;
+    transition: opacity 0.2s ease;
 }
 .todo-item-row:last-child {
     border-bottom: none;
-    padding-bottom: 2px;
 }
 .todo-check-circle {
-    width: 18px;
-    height: 18px;
+    width: 15px;
+    height: 15px;
     border-radius: 50%;
-    border: 1.6px solid #d4cdc5;
+    border: 1.5px solid #d4cdc5;
     background: transparent;
     flex-shrink: 0;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.todo-check-circle:hover {
-    border-color: #8c857e;
+    transition: all 0.2s ease;
 }
 .todo-item-row.completed .todo-check-circle {
     background: #63b97b;
@@ -503,20 +570,21 @@ body {
 }
 .todo-item-row.completed .todo-check-circle::after {
     content: "";
-    width: 5px;
-    height: 9px;
+    width: 4px;
+    height: 7px;
     border: solid #ffffff;
-    border-width: 0 2px 2px 0;
-    transform: rotate(45deg) translate(-0.5px, -1px);
+    border-width: 0 1.8px 1.8px 0;
+    transform: rotate(45deg) translate(-0.5px, -0.8px);
 }
 .todo-item-text {
-    font-size: 13.5px;
+    font-size: 12px;
     color: #2b2725;
     font-weight: 500;
     flex: 1;
-    line-height: 1.35;
-    word-break: break-word;
-    transition: color 0.2s ease, text-decoration 0.2s ease;
+    line-height: 1.3;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 .todo-item-row.completed .todo-item-text {
     color: #a49c95;
@@ -524,106 +592,25 @@ body {
 }
 
 /* ============================================================ */
-/* 📅 桌面小组件 2：极简日历（1:1 复刻参考图二，纯黑白简约高级感） */
+/* 下方应用网格：严谨排布，100% 完整展示绝不被腰斩 */
 /* ============================================================ */
-.calendar-widget-card {
-    background: #ffffff;
-    border-radius: 22px;
-    padding: 16px 18px 14px 18px;
-    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.08);
-    border: 1px solid rgba(240, 237, 228, 0.9);
-    margin-bottom: 12px;
-    color: #111111;
-    user-select: none;
-    flex-shrink: 0;
-}
-.calendar-widget-top {
-    text-align: center;
-    margin-bottom: 14px;
-}
-.calendar-month-title {
-    font-size: 18px;
-    font-weight: 300;
-    letter-spacing: 5px;
-    color: #000000;
-    text-transform: uppercase;
-}
-.calendar-year-title {
-    font-size: 13px;
-    font-weight: 400;
-    letter-spacing: 3px;
-    color: #222222;
-    margin-top: 3px;
-    display: inline-block;
-    border-bottom: 1.2px solid #000000;
-    padding-bottom: 2px;
-}
-
-.calendar-week-row {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    text-align: center;
-    font-size: 11px;
-    font-weight: 800;
-    color: #000000;
-    margin-bottom: 10px;
-}
-.calendar-days-grid {
-    display: grid;
-    grid-template-columns: repeat(7, 1fr);
-    gap: 7px 0;
-    text-align: center;
-    font-size: 12.5px;
-    font-weight: 600;
-    color: #222222;
-}
-.calendar-day-cell {
-    height: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-family: -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
-    position: relative;
-}
-.calendar-day-cell.today-cell::after {
-    content: "";
-    position: absolute;
-    width: 24px;
-    height: 24px;
-    border-radius: 50%;
-    background: #111111;
-    z-index: 1;
-}
-.calendar-day-cell.today-cell span {
-    color: #ffffff !important;
-    position: relative;
-    z-index: 2;
-    font-weight: 700;
-}
-.calendar-widget-notes {
-    margin-top: 14px;
-    font-size: 9px;
-    font-weight: 800;
-    letter-spacing: 2px;
-    color: #111111;
-    text-transform: uppercase;
-}
-
-/* 应用网格 */
 .app-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 16px 12px;
-    padding: 6px 2px;
+    gap: 14px 10px;
+    padding: 6px 2px 10px 2px;
     width: 100%;
+    box-sizing: border-box;
+    flex-shrink: 0;
 }
 .app-slot {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
     cursor: pointer;
     position: relative;
+    user-select: none;
 }
 .app-slot:active .app-icon-box {
     transform: scale(0.92);
@@ -638,7 +625,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 14px rgba(0,0,0,0.12);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.14);
     transition: transform 0.15s cubic-bezier(0.3, 1.4, 0.5, 1);
     position: relative;
     overflow: hidden;
@@ -662,7 +649,7 @@ body {
     font-weight: 600;
     letter-spacing: 0.1px;
     white-space: nowrap;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+    text-shadow: 0 1px 2px rgba(0,0,0,0.6);
     transition: color 0.3s ease;
 }
 .app-unread-badge {
@@ -681,6 +668,31 @@ body {
     justify-content: center;
     padding: 0 4px;
     border: 2px solid #ffffff;
+}
+
+/* 桌面小圆点指示器 */
+.desktop-pagination {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 6px;
+    height: 12px;
+    margin: 2px 0 4px 0;
+    flex-shrink: 0;
+}
+.pagination-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.45);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    transition: all 0.25s ease;
+    cursor: pointer;
+}
+.pagination-dot.active {
+    width: 16px;
+    background: #ffffff;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 
 /* 底部毛玻璃 Dock 栏 */
@@ -937,9 +949,7 @@ body {
     animation: pixelPointerHop 0.8s infinite ease-in-out;
 }
 
-/* ============================================================ */
-/* 📱 自由裁剪壁纸弹窗样式 */
-/* ============================================================ */
+/* 自由裁剪壁纸弹窗 */
 .crop-overlay {
     position: fixed;
     inset: 0;
@@ -1061,7 +1071,6 @@ body {
     line-height: 1.4;
 }
 
-/* 方案管理器样式 */
 .profile-chip-list {
     display: flex;
     flex-wrap: wrap;
