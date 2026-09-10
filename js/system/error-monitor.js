@@ -124,7 +124,7 @@
                             ${formatAssistantText(sub)}
                         </div>
                     `).join('')}
-                    ${extraNotice ? `<div style="padding:2px 6px;font-size:11px;color:var(--primary,#ff5c8a);font-weight:700;">${extraNotice}</div>` : ''}
+                    ${extraNotice ? `<div style="padding:2px 6px;font-size:11px;color:var(--primary,#ff5c8a);font-weight:750;">${extraNotice}</div>` : ''}
                 </div>
             </div>
         `;
@@ -303,7 +303,7 @@
             orbElement.style.top = nextY + 'px';
         };
 
-        const onTouchEnd = () => {
+        const onTouchEnd = (e) => {
             if (!isDragging) return;
             isDragging = false;
             orbElement.style.transition = 'left 0.25s cubic-bezier(0.18, 0.89, 0.32, 1.28), top 0.2s ease';
@@ -322,26 +322,38 @@
             config.position = { x: snapX, y: snapY };
             saveConfig();
 
+            // 若非拖拽移动，则判定为点击打开窗口，并严格阻止事件冒泡与后续穿透
             if (!hasMoved) {
-                openDualOrbModal();
+                if (e) {
+                    if (e.stopPropagation) e.stopPropagation();
+                    if (e.cancelable && e.preventDefault) e.preventDefault();
+                }
+                setTimeout(() => {
+                    openDualOrbModal();
+                }, 10);
             }
         };
 
         orbElement.addEventListener('touchstart', (e) => {
-            if (e.touches.length === 1) onTouchStart(e.touches[0].clientX, e.touches[0].clientY);
+            if (e.touches.length === 1) {
+                onTouchStart(e.touches[0].clientX, e.touches[0].clientY);
+            }
         }, { passive: true });
 
         window.addEventListener('touchmove', (e) => {
             if (isDragging && e.touches.length === 1) onTouchMove(e.touches[0].clientX, e.touches[0].clientY);
         }, { passive: true });
 
-        window.addEventListener('touchend', () => { if (isDragging) onTouchEnd(); });
+        window.addEventListener('touchend', (e) => {
+            if (isDragging) onTouchEnd(e);
+        });
 
         orbElement.addEventListener('mousedown', (e) => {
+            e.stopPropagation();
             onTouchStart(e.clientX, e.clientY);
             const moveHandler = (ev) => onTouchMove(ev.clientX, ev.clientY);
-            const upHandler = () => {
-                onTouchEnd();
+            const upHandler = (ev) => {
+                onTouchEnd(ev);
                 window.removeEventListener('mousemove', moveHandler);
                 window.removeEventListener('mouseup', upHandler);
             };
@@ -386,7 +398,7 @@
         });
 
         modalBody.innerHTML = `
-            <div>
+            <div onclick="event.stopPropagation();">
                 <!-- 切换 Tab -->
                 <div style="display:flex;gap:6px;margin-bottom:10px;">
                     <button class="retro-pink-btn" id="orbTabMarukoBtn" style="flex:1;height:28px;font-size:12px;${currentModalTab === 'maruko' ? 'background:var(--primary);color:#fff;' : ''}">
@@ -458,11 +470,13 @@
     }
 
     function bindDualModalEvents() {
-        document.getElementById('orbTabMarukoBtn').onclick = () => {
+        document.getElementById('orbTabMarukoBtn').onclick = (e) => {
+            e.stopPropagation();
             currentModalTab = 'maruko';
             openDualOrbModal();
         };
-        document.getElementById('orbTabLogsBtn').onclick = () => {
+        document.getElementById('orbTabLogsBtn').onclick = (e) => {
+            e.stopPropagation();
             currentModalTab = 'logs';
             openDualOrbModal();
         };
@@ -514,8 +528,9 @@
             });
         };
 
-        if (sendBtn) sendBtn.onclick = doSend;
+        if (sendBtn) sendBtn.onclick = (e) => { e.stopPropagation(); doSend(); };
         if (input) {
+            input.onclick = (e) => e.stopPropagation();
             input.onkeydown = (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
@@ -526,7 +541,8 @@
 
         const resetBtn = document.getElementById('marukoResetMemoryBtn');
         if (resetBtn) {
-            resetBtn.onclick = () => {
+            resetBtn.onclick = (e) => {
+                e.stopPropagation();
                 if (window.MCYT_ASSISTANT_AGENT) window.MCYT_ASSISTANT_AGENT.clear();
                 openDualOrbModal();
                 if (typeof showToast === 'function') showToast('已开启新对话', 'info', 1000);
@@ -535,7 +551,8 @@
 
         const copyBtn = document.getElementById('copyAllErrorsBtn');
         if (copyBtn) {
-            copyBtn.onclick = () => {
+            copyBtn.onclick = (e) => {
+                e.stopPropagation();
                 if (errorLogs.length === 0) {
                     showRetroPinkAlert('提示', '当前暂无报错日志可复制。');
                     return;
@@ -552,7 +569,8 @@
 
         const exportBtn = document.getElementById('exportErrorFileBtn');
         if (exportBtn) {
-            exportBtn.onclick = () => {
+            exportBtn.onclick = (e) => {
+                e.stopPropagation();
                 if (errorLogs.length === 0) {
                     showRetroPinkAlert('提示', '当前暂无报错日志可导出。');
                     return;
@@ -577,7 +595,8 @@
 
         const clearBtn = document.getElementById('clearAllErrorsBtn');
         if (clearBtn) {
-            clearBtn.onclick = () => {
+            clearBtn.onclick = (e) => {
+                e.stopPropagation();
                 errorLogs.length = 0;
                 updateOrbBadge();
                 openDualOrbModal();
