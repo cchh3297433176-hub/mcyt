@@ -14,6 +14,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Checkout Tarot Subproject
+        uses: actions/checkout@v4
+        with:
+          repository: 'cchh3297433176-hub/taluo'
+          path: 'tarot'
+
+      - name: Clean Tarot Git Cache
+        run: |
+          rm -rf tarot/.git
+
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
@@ -29,7 +39,7 @@ jobs:
           # ⚠️ 这里必须列出所有需要打进 WebView 资源目录的顶层文件/文件夹。
           # 以后仓库根目录新增任何文件夹（图片、字体、音频等），务必同步加到下面这一行，
           # 否则该资源在 APK 里会 404（历史教训：assets/ 曾被漏掉过一次）。
-          cp -r index.html style.css js assets icon.png proj/app/src/main/assets/ 2>/dev/null || cp -r * proj/app/src/main/assets/
+          cp -r index.html style.css js assets tarot icon.png proj/app/src/main/assets/ 2>/dev/null || cp -r * proj/app/src/main/assets/
 
           if [ -f "icon.png" ]; then
             cp icon.png proj/app/src/main/res/mipmap/ic_launcher.png
