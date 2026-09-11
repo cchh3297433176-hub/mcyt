@@ -640,10 +640,74 @@
         const draggables = document.querySelectorAll('.calendar-widget-card, .todo-widget-card, .app-slot');
 
         draggables.forEach(item => {
+            const isAppSlot = item.classList.contains('app-slot');
+
             let pressTimer = null;
             let isDragging = false;
             let startX = 0, startY = 0;
-            let initialOffsetLeft = 0, initialOffsetTop = 0;
+            let ghostEl = null;
+            let ghostOriginLeft = 0, ghostOriginTop = 0;
+            let lastTargetSlot = null;
+            let rafPending = false;
+            let pendingClientX = 0, pendingClientY = 0;
+
+            // FLIP 动画：先记下同一 grid 内所有图标的当前位置，DOM 顺序改变后
+            // 再让每个图标从"旧位置"平滑过渡到新位置，做出真机那种"自动让位"效果
+            const captureFlip = (grid) => {
+                const before = new Map();
+                grid.querySelectorAll('.app-slot').forEach(el => {
+                    before.set(el, el.getBoundingClientRect());
+                });
+                return () => {
+                    before.forEach((prevRect, el) => {
+                        const nowRect = el.getBoundingClientRect();
+                        const dx = prevRect.left - nowRect.left;
+                        const dy = prevRect.top - nowRect.top;
+                        if (!dx && !dy) return;
+                        el.style.transition = 'none';
+                        el.style.transform = `translate3d(${dx}px, ${dy}px, 0)`;
+                        requestAnimationFrame(() => {
+                            el.style.transition = 'transform 0.22s ease';
+                            el.style.transform = '';
+                        });
+                    });
+                };
+            };
+
+            // App 图标专用：抬起来时生成一个跟手指走的"浮动分身"，
+            // 原图标本身留在网格里当占位符（透明），这样其它图标才能围绕它实时挪位
+            const createGhost = () => {
+                const rect = item.getBoundingClientRect();
+                const ghost = item.cloneNode(true);
+                ghost.classList.remove('widget-jiggle');
+                ghost.style.position = 'fixed';
+                ghost.style.left = rect.left + 'px';
+                ghost.style.top = rect.top + 'px';
+                ghost.style.width = rect.width + 'px';
+                ghost.style.height = rect.height + 'px';
+                ghost.style.margin = '0';
+                ghost.style.zIndex = '9999';
+                ghost.style.pointerEvents = 'none';
+                ghost.style.transform = 'scale(1.08)';
+                ghost.style.opacity = '0.92';
+                document.body.appendChild(ghost);
+                ghostOriginLeft = rect.left;
+                ghostOriginTop = rect.top;
+                return ghost;
+            };
+
+            const cleanupVisuals = () => {
+                if (ghostEl) {
+                    ghostEl.remove();
+                    ghostEl = null;
+                }
+                item.style.transition = '';
+                item.style.transform = '';
+                item.style.opacity = '';
+                item.style.zIndex = '';
+                item.style.pointerEvents = '';
+                lastTargetSlot = null;
+            };
 
             const onStart = (clientX, clientY) => {
                 startX = clientX;
@@ -673,11 +737,24 @@
                 // 进入编辑模式下的拖拽，严禁页面滚动
                 if (event && event.cancelable) event.preventDefault();
 
-                isDragging = true;
-                item.style.zIndex = '9999';
-                item.style.opacity = '0.85';
-                item.style.transform = `translate3d(${deltaX}px, ${deltaY}px, 0) scale(1.08)`;
-                item.style.pointerEvents = 'none';
+                if (!isDragging) {
+                    isDragging = true;
+                    if (isAppSlot) {
+                        ghostEl = createGhost();
+                        item.style.opacity = '0.001'; // 原图标只作占位，不可见但仍占据网格坐标
+                    } else {
+                        item.style.zIndex = '9999';
+                        item.style.opacity = '0.85';
+                    }
+                    item.style.pointerEvents = 'none';
+                }
+
+                if (isAppSlot && ghostEl) {
+                    ghostEl.style.left = (ghostOriginLeft + deltaX) + 'px';
+                    ghostEl.style.top = (ghostOriginTop + deltaY) + 'px';
+                } else {
+                    item.style.transform = `translate3d(${deltaX}px, ${deltaY}px, 0) scale(1.08)`;
+                }
 
                 // 智能跨页翻页检测
                 const winW = window.innerWidth;
@@ -686,37 +763,66 @@
                 } else if (clientX > winW - 28 && currentDesktopPage === 0) {
                     window.switchDesktopPage(1);
                 }
+
+                // App 图标：手指经过谁头上，谁和周边图标就实时让位（节流到每帧一次）
+                if (isAppSlot) {
+                    pendingClientX = clientX;
+                    pendingClientY = clientY;
+                    if (!rafPending) {
+                        rafPending = true;
+                        requestAnimationFrame(() => {
+                            rafPending = false;
+                            if (!isDragging) return;
+                            const under = document.elementFromPoint(pendingClientX, pendingClientY);
+                            const targetSlot = under ? under.closest('.app-slot') : null;
+                            const targetGrid = under ? under.closest('.app-grid') : null;
+
+                            if (targetSlot && targetSlot !== item && targetSlot !== lastTargetSlot) {
+                                const grid = targetSlot.closest('.app-grid');
+                                if (grid) {
+                                    const playFlip = captureFlip(grid);
+                                    const siblings = Array.from(grid.querySelectorAll('.app-slot'));
+                                    const itemIndex = siblings.indexOf(item);
+                                    const targetIndex = siblings.indexOf(targetSlot);
+                                    if (itemIndex !== -1 && itemIndex < targetIndex) {
+                                        targetSlot.after(item);
+                                    } else {
+                                        targetSlot.before(item);
+                                    }
+                                    playFlip();
+                                    lastTargetSlot = targetSlot;
+                                }
+                            } else if (targetGrid && !targetSlot && targetGrid !== item.parentNode) {
+                                const playFlip = captureFlip(targetGrid);
+                                targetGrid.appendChild(item);
+                                playFlip();
+                                lastTargetSlot = null;
+                            }
+                        });
+                    }
+                }
             };
 
-            const onEnd = (clientX, clientY) => {
+            const onEnd = () => {
                 if (pressTimer) {
                     clearTimeout(pressTimer);
                     pressTimer = null;
                 }
 
                 if (!window._isWidgetEditMode || !isDragging) {
-                    item.style.transform = '';
-                    item.style.opacity = '';
-                    item.style.zIndex = '';
-                    item.style.pointerEvents = '';
+                    cleanupVisuals();
                     return;
                 }
 
                 isDragging = false;
-                item.style.pointerEvents = '';
 
-                // 检测落点目标
-                const dropTarget = document.elementFromPoint(clientX, clientY);
-
-                // 1. 如果是小组件
+                // 1. 如果是小组件：维持"拖到对面页"的原逻辑
                 if (item.classList.contains('calendar-widget-card') || item.classList.contains('todo-widget-card')) {
                     const wType = item.getAttribute('data-widget-type');
                     const targetPage = (currentDesktopPage === 1) ? 2 : 1;
                     localStorage.setItem(`mcyt_widget_${wType}_page`, targetPage.toString());
 
-                    item.style.transform = '';
-                    item.style.opacity = '';
-                    item.style.zIndex = '';
+                    cleanupVisuals();
 
                     window.renderDesktopWidgetsLayout();
                     document.querySelectorAll('.calendar-widget-card, .todo-widget-card, .app-slot').forEach(el => {
@@ -725,26 +831,9 @@
                     return;
                 }
 
-                // 2. 如果是普通 App 图标
-                if (item.classList.contains('app-slot')) {
-                    const targetSlot = dropTarget ? dropTarget.closest('.app-slot') : null;
-                    const targetGrid = dropTarget ? dropTarget.closest('.app-grid') : null;
-
-                    if (targetSlot && targetSlot !== item) {
-                        // 与目标图标互换位置
-                        const parentA = item.parentNode;
-                        const siblingA = item.nextSibling === targetSlot ? item : item.nextSibling;
-                        targetSlot.parentNode.insertBefore(item, targetSlot);
-                        parentA.insertBefore(targetSlot, siblingA);
-                    } else if (targetGrid && targetGrid !== item.parentNode) {
-                        // 拖至另一页的网格末尾
-                        targetGrid.appendChild(item);
-                    }
-
-                    item.style.transform = '';
-                    item.style.opacity = '';
-                    item.style.zIndex = '';
-
+                // 2. App 图标：位置在拖动过程中已经实时换好了，松手只需收尾保存
+                if (isAppSlot) {
+                    cleanupVisuals();
                     saveDesktopAppOrder();
                 }
             };
@@ -762,17 +851,16 @@
                 }
             }, { passive: false });
 
-            item.addEventListener('touchend', (e) => {
-                const t = e.changedTouches[0] || {};
-                onEnd(t.clientX || 0, t.clientY || 0);
+            item.addEventListener('touchend', () => {
+                onEnd();
             });
 
             // 鼠标事件
             item.addEventListener('mousedown', (e) => {
                 onStart(e.clientX, e.clientY);
                 const mouseMove = (ev) => onMove(ev.clientX, ev.clientY, ev);
-                const mouseUp = (ev) => {
-                    onEnd(ev.clientX, ev.clientY);
+                const mouseUp = () => {
+                    onEnd();
                     window.removeEventListener('mousemove', mouseMove);
                     window.removeEventListener('mouseup', mouseUp);
                 };
