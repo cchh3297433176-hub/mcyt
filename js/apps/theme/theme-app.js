@@ -825,6 +825,7 @@
         window.updateHsvHandles = updateHandlesAndSliders;
 
         function onPointerDown(e) {
+            if (e.cancelable) e.preventDefault();
             const rect = box.getBoundingClientRect();
             const clientX = e.touches ? e.touches[0].clientX : e.clientX;
             const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -836,7 +837,9 @@
             const dy = py - center;
             const dist = Math.sqrt(dx * dx + dy * dy);
 
-            if (dist >= innerR - 15 && dist <= outerR + 15) {
+            // 判定环形/三角区域时，命中范围绝不能和三角形本身的外接半径(triR)重叠，
+            // 否则点在三角边角上会被误判成在拖色相环，导致"点哪不出现在哪"
+            if (dist >= triR + 4 && dist <= outerR + 10) {
                 hsvState.activeDrag = 'ring';
                 updateRingFromPoint(dx, dy);
             } else {
@@ -847,6 +850,7 @@
 
         function onPointerMove(e) {
             if (!hsvState.activeDrag) return;
+            if (e.cancelable) e.preventDefault();
             const rect = box.getBoundingClientRect();
             const clientX = e.touches ? e.touches[0].clientX : e.clientX;
             const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -1234,36 +1238,29 @@
         }
 
         let familyName = '';
+        let cssText = '';
+        let linkHrefs = [];
 
         if (formatType === 'html') {
             const parser = new DOMParser();
             const doc = parser.parseFromString(rawCode, 'text/html');
 
             const links = doc.querySelectorAll('link[href]');
-            links.forEach(l => {
-                const linkEl = document.createElement('link');
-                linkEl.rel = 'stylesheet';
-                linkEl.href = l.getAttribute('href');
-                linkEl.crossOrigin = 'anonymous';
-                document.head.appendChild(linkEl);
-            });
+            links.forEach(l => linkHrefs.push(l.getAttribute('href')));
 
             const styleTags = doc.querySelectorAll('style');
-            let styleContent = '';
-            styleTags.forEach(s => { styleContent += s.textContent + '\n'; });
+            styleTags.forEach(s => { cssText += s.textContent + '\n'; });
 
-            const match = styleContent.match(/font-family:\s*["']?([^'";\n]+)["']?/i);
+            const match = cssText.match(/font-family:\s*["']?([^'";\n]+)["']?/i);
             if (match && match[1]) {
                 familyName = match[1].trim();
             }
         } else {
+            cssText = rawCode;
             const match = rawCode.match(/font-family:\s*["']?([^'";\n]+)["']?/i);
             if (match && match[1]) {
                 familyName = match[1].trim();
             }
-            const styleEl = document.createElement('style');
-            styleEl.innerHTML = rawCode;
-            document.head.appendChild(styleEl);
         }
 
         if (!familyName) {
@@ -1275,13 +1272,14 @@
             name: remark,
             family: familyName,
             type: formatType,
-            code: rawCode
+            code: cssText,
+            linkHrefs: linkHrefs
         });
 
-        applyGlobalFontForce(familyName, rawCode);
+        applyGlobalFontForce(familyName, cssText, linkHrefs);
         renderInstalledFontsList();
         codeInput.value = '';
-        if (typeof showToast === 'function') showToast(`字体 [${remark}] 已全局生效！`, 'success');
+        if (typeof showToast === 'function') showToast(`字体 [${remark}] 已全局生效，重启App也会保留！`, 'success');
     };
 
     window.handleThemeFontUpload = function (event) {
@@ -1291,51 +1289,97 @@
         const reader = new FileReader();
         reader.onload = function (evt) {
             const fontName = 'LocalFont_' + Date.now();
-            const fontFace = new FontFace(fontName, evt.target.result);
-            fontFace.load().then(function (loaded) {
-                document.fonts.add(loaded);
+            const dataUrl = evt.target.result; // base64 data URL，可直接写进 localStorage 持久化
+            const ext = (file.name.split('.').pop() || 'woff2').toLowerCase();
+            const formatMap = { ttf: 'truetype', otf: 'opentype', woff: 'woff', woff2: 'woff2' };
+            const fmt = formatMap[ext] || 'woff2';
+            const cssText = `@font-face { font-family: "${fontName}"; src: url("${dataUrl}") format("${fmt}"); font-display: swap; }`;
+
+            try {
                 saveFontRecord({
                     id: 'font_' + Date.now(),
                     name: file.name.replace(/\.[^/.]+$/, ""),
                     family: fontName,
-                    type: 'local'
+                    type: 'local',
+                    code: cssText,
+                    linkHrefs: []
                 });
-                applyGlobalFontForce(fontName);
+                applyGlobalFontForce(fontName, cssText, []);
                 renderInstalledFontsList();
-                if (typeof showToast === 'function') showToast('本地字体安装并应用成功');
-            }).catch(function () {
-                if (typeof showToast === 'function') showToast('字体解析失败，请检查文件格式');
-            });
+                if (typeof showToast === 'function') showToast('本地字体安装并应用成功，重启App也会保留');
+            } catch (err) {
+                if (typeof showToast === 'function') showToast('字体文件太大，本地存储装不下，换个小一点的文件试试');
+            }
         };
-        reader.readAsArrayBuffer(file);
+        reader.onerror = function () {
+            if (typeof showToast === 'function') showToast('字体读取失败，请检查文件格式');
+        };
+        reader.readAsDataURL(file);
     };
 
-    function applyGlobalFontForce(familyName, rawCode = '') {
+    function applyGlobalFontForce(familyName, cssText = '', linkHrefs = []) {
         const root = document.documentElement;
         root.style.setProperty('--app-font', `"${familyName}", -apple-system, sans-serif`);
 
-        let dynamicStyle = document.getElementById('globalDynamicFontStyleTag');
-        if (!dynamicStyle) {
-            dynamicStyle = document.createElement('style');
-            dynamicStyle.id = 'globalDynamicFontStyleTag';
-            document.head.appendChild(dynamicStyle);
+        // 1. 真正负责"加载"字体资源的外链 <link>，必须是真实DOM节点才会生效，
+        //    塞进 <style> 标签的 innerHTML 里是没用的
+        let linkContainer = document.getElementById('globalDynamicFontLinks');
+        if (!linkContainer) {
+            linkContainer = document.createElement('div');
+            linkContainer.id = 'globalDynamicFontLinks';
+            linkContainer.style.display = 'none';
+            document.head.appendChild(linkContainer);
         }
+        linkContainer.innerHTML = '';
+        (linkHrefs || []).forEach(href => {
+            if (!href) return;
+            const linkEl = document.createElement('link');
+            linkEl.rel = 'stylesheet';
+            linkEl.href = href;
+            linkEl.crossOrigin = 'anonymous';
+            linkContainer.appendChild(linkEl);
+        });
 
-        dynamicStyle.innerHTML = `
-            ${rawCode.includes('<style>') ? '' : (rawCode.startsWith('@') ? rawCode : '')}
+        // 2. @font-face / @import 等真正定义字体的 CSS 文本
+        let resourceStyle = document.getElementById('globalDynamicFontResourceTag');
+        if (!resourceStyle) {
+            resourceStyle = document.createElement('style');
+            resourceStyle.id = 'globalDynamicFontResourceTag';
+            document.head.appendChild(resourceStyle);
+        }
+        resourceStyle.textContent = cssText || '';
+
+        // 3. 强制全局把这个字体名套用到每个元素上
+        let forceStyle = document.getElementById('globalDynamicFontStyleTag');
+        if (!forceStyle) {
+            forceStyle = document.createElement('style');
+            forceStyle.id = 'globalDynamicFontStyleTag';
+            document.head.appendChild(forceStyle);
+        }
+        forceStyle.textContent = `
             * {
                 font-family: "${familyName}", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
             }
         `;
-        localStorage.setItem('mcyt_active_font_family', familyName);
-        if (rawCode) localStorage.setItem('mcyt_active_font_code', rawCode);
+
+        try {
+            localStorage.setItem('mcyt_active_font_family', familyName);
+            localStorage.setItem('mcyt_active_font_code', cssText || '');
+            localStorage.setItem('mcyt_active_font_links', JSON.stringify(linkHrefs || []));
+        } catch (_) {
+            if (typeof showToast === 'function') showToast('该字体体积较大，重启App后可能需要重新导入');
+        }
     }
 
     function saveFontRecord(fontItem) {
         let list = [];
         try { list = JSON.parse(localStorage.getItem('mcyt_installed_fonts') || '[]'); } catch (e) { list = []; }
         list.push(fontItem);
-        localStorage.setItem('mcyt_installed_fonts', JSON.stringify(list));
+        try {
+            localStorage.setItem('mcyt_installed_fonts', JSON.stringify(list));
+        } catch (e) {
+            if (typeof showToast === 'function') showToast('字体记录保存失败，可能是本地存储空间不足');
+        }
     }
 
     function renderInstalledFontsList() {
@@ -1368,7 +1412,7 @@
         let list = JSON.parse(localStorage.getItem('mcyt_installed_fonts') || '[]');
         const target = list.find(x => x.id === id);
         if (target) {
-            applyGlobalFontForce(target.family, target.code || '');
+            applyGlobalFontForce(target.family, target.code || '', target.linkHrefs || []);
             if (typeof showToast === 'function') showToast('已应用字体: ' + target.name);
         }
     };
@@ -1478,6 +1522,8 @@
     try {
         const actFam = localStorage.getItem('mcyt_active_font_family');
         const actCode = localStorage.getItem('mcyt_active_font_code') || '';
-        if (actFam) applyGlobalFontForce(actFam, actCode);
+        let actLinks = [];
+        try { actLinks = JSON.parse(localStorage.getItem('mcyt_active_font_links') || '[]'); } catch (_) {}
+        if (actFam) applyGlobalFontForce(actFam, actCode, actLinks);
     } catch (_) {}
 })();
