@@ -22,27 +22,20 @@
         <div class="status-bar" id="statusBar">
             <div id="statusTimeText">12:00</div>
             <div class="status-bar-right">
-                <!-- 蓝牙指示 -->
                 <svg class="status-bar-svg" id="statusBluetoothSvg" viewBox="0 0 24 24" style="display:none; width:13px; height:13px;">
                     <path d="M17.71 7.71L12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4.29zM13 5.83l1.88 1.88L13 9.59V5.83zm1.88 10.46L13 18.17v-3.76l1.88 1.88z"/>
                 </svg>
-
-                <!-- 蜂窝移动网络信号 -->
                 <svg class="status-bar-svg" id="statusCellularSvg" viewBox="0 0 24 24">
                     <rect x="2" y="16" width="3.2" height="5" rx="1"></rect>
                     <rect x="7.5" y="12" width="3.2" height="9" rx="1"></rect>
                     <rect x="13" y="7" width="3.2" height="14" rx="1"></rect>
                     <rect x="18.5" y="2" width="3.2" height="19" rx="1"></rect>
                 </svg>
-
-                <!-- Wi-Fi 无线网络 -->
                 <svg class="status-bar-svg" viewBox="0 0 24 24" id="wifiSvg">
                     <path d="M12 18a1.5 1.5 0 100 3 1.5 1.5 0 000-3z"></path>
                     <path d="M4.93 12.93a10 10 0 0114.14 0l-1.41 1.41a8 8 0 00-11.32 0l-1.41-1.41z"></path>
                     <path d="M2.1 10.1a14 14 0 0119.8 0l-1.41 1.41a12 12 0 00-16.98 0L2.1 10.1z"></path>
                 </svg>
-
-                <!-- 电池与四芒星充电指示 -->
                 <div class="battery-pill">
                     <div class="charging-star-icon" id="chargingStarIcon">
                         <svg viewBox="0 0 100 100">
@@ -63,7 +56,6 @@
                 <div class="lock-date" id="lockDateText">10月24日 星期四</div>
                 <div class="lock-clock" id="lockClockText">12:00</div>
             </div>
-
             <div class="lock-swipe-panel" id="unlockTapArea">
                 <svg class="lock-arrow-svg" viewBox="0 0 24 24">
                     <polyline points="18 15 12 9 6 15"></polyline>
@@ -72,27 +64,25 @@
             </div>
         </div>
 
-        <!-- 2. 桌面主界面（支持双页左右滑屏 & 多页自由组件流系统） -->
+        <!-- 2. 桌面主界面 -->
         <div class="screen-desktop" id="screenDesktop">
             <div class="desktop-top-widget">
                 <div class="widget-day-info" id="desktopWidgetInfo">第 <span>1</span> 天 · 早晨 (行动点 6/6)</div>
                 <button class="widget-lock-action" id="lockBtn">锁定屏幕</button>
             </div>
 
-            <!-- 滑屏视口 -->
             <div class="desktop-pages-viewport" id="desktopPagesViewport">
                 <div class="desktop-pages-track" id="desktopPagesTrack">
                     
-                    <!-- 第 1 页：顶部 4 格大组件 + 动态组件挂载位 + 完整原生应用网格 -->
+                    <!-- 第 1 页 -->
                     <div class="desktop-page desktop-page-1" id="desktopPage1">
-                        
                         <!-- 🌟 顶部 4 格宽专属复古星象塔罗大组件插槽 -->
                         <div id="desktopTarotContainer"></div>
 
-                        <!-- 🌟 第 1 页动态组件插槽（日历/待办） -->
+                        <!-- 第 1 页动态组件插槽（日历/待办） -->
                         <div class="desktop-widgets-slot" id="page1WidgetSlot"></div>
 
-                        <!-- 🌟 原生 8 大应用网格（完整保留原有全部 App，位置不挤占） -->
+                        <!-- 8 大原生应用网格 -->
                         <div class="app-grid">
                             <div class="app-slot" id="appSlotChat" onclick="openPhoneApp('chat')">
                                 <div class="app-icon-box" style="background: linear-gradient(135deg, #51cf66, #2b8a3e);">
@@ -157,7 +147,7 @@
                                 <div class="app-title-label">个性主题</div>
                             </div>
 
-                            <!-- 商务赞助 APP（原版位置完整保留） -->
+                            <!-- 商务赞助 APP -->
                             <div class="app-slot" id="appSlotShop" onclick="openPhoneApp('shop')">
                                 <div class="app-icon-box" style="background: linear-gradient(135deg, #38d9a9, #087f5b);">
                                     <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
@@ -169,18 +159,15 @@
                         </div>
                     </div>
 
-                    <!-- 第 2 页：支持第二页动态组件插槽 + 塔罗星轨独立应用入口 -->
+                    <!-- 第 2 页 -->
                     <div class="desktop-page desktop-page-2" id="desktopPage2">
-                        <div class="desktop-future-slot"></div>
                         <div class="desktop-widgets-slot" id="page2WidgetSlot"></div>
 
-                        <!-- 第 2 页应用网格：塔罗独立 App 优雅驻留于此 -->
+                        <!-- 🌟 塔罗独立 App 专属卡位：精确读取 assets/icons/tarot.png -->
                         <div class="app-grid">
                             <div class="app-slot" id="appSlotTarot" onclick="openPhoneApp('tarot')">
-                                <div class="app-icon-box" style="background: linear-gradient(135deg, #35251a, #16100b); border: 1.5px solid #d4af37;">
-                                    <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#f4d06f">
-                                        <path d="M12 2L14.4 7.2L20 9.6L15.6 13.8L16.8 19.5L12 16.8L7.2 19.5L8.4 13.8L4 9.6L9.6 7.2L12 2Z"/>
-                                    </svg>
+                                <div class="app-icon-box" style="background: #19141f;">
+                                    <img src="assets/icons/tarot.png" alt="塔罗星轨" onerror="this.onerror=null;this.src='tarot/images/card_back.png';" />
                                 </div>
                                 <div class="app-title-label">塔罗星轨</div>
                             </div>
@@ -190,13 +177,13 @@
                 </div>
             </div>
 
-            <!-- 分页指示器（小圆点） -->
+            <!-- 分页指示器 -->
             <div class="desktop-pagination" id="desktopPagination">
                 <div class="pagination-dot active" data-page="0" onclick="window.switchDesktopPage(0)"></div>
                 <div class="pagination-dot" data-page="1" onclick="window.switchDesktopPage(1)"></div>
             </div>
 
-            <!-- 底部毛玻璃 Dock 栏 -->
+            <!-- Dock 栏 -->
             <div>
                 <div class="dock-container">
                     <div class="app-slot" onclick="openPhoneApp('contacts')">
@@ -223,7 +210,7 @@
             </div>
         </div>
 
-        <!-- 3. App 独立全屏窗口容器 -->
+        <!-- App 独立全屏窗口容器 -->
         <div class="app-modal-layer" id="appModal">
             <div class="app-modal-head">
                 <button class="app-back-nav" onclick="closePhoneApp()">
@@ -241,13 +228,13 @@
             </div>
         </div>
 
-        <!-- 游戏核心功能底层宿主 -->
+        <!-- 游戏底层宿主 -->
         <div id="app" class="game-inner-viewport">
             <div id="setupPage" class="page active"></div>
             <div id="gamePage" style="display:none;"></div>
         </div>
 
-        <!-- 全站复古风格弹窗基座 -->
+        <!-- 全站通用弹窗基座 -->
         <div class="modal-overlay" id="modal">
             <div class="modal-box retro-pink-window" id="modalContent">
                 <div class="retro-pink-titlebar">
@@ -259,19 +246,16 @@
         </div>
     </div>
     
-    <!-- 安全 DOM 代理 -->
     <script>
         (function(){
-            window.$ = function(id) {
-                return document.getElementById(id);
-            };
+            window.$ = function(id) { return document.getElementById(id); };
             window.addEventListener('error', function(e) {
                 console.warn('[WebView Warning]:', e.message);
             });
         })();
     </script>
 
-    <!-- 1. 底层核心与游戏数据 -->
+    <!-- 1. 底层核心数据与网络 -->
     <script src="js/01-state-config.js"></script>
     <script src="js/02-ai-network.js"></script>
     <script src="js/03-game-core-1.js"></script>
@@ -284,20 +268,18 @@
     <script src="js/08-save-load.js"></script>
     <script src="js/09-events-init.js"></script>
 
-    <!-- 2. 硬件外壳系统与原生功能驱动 -->
+    <!-- 2. 硬件外壳系统与原生驱动 -->
     <script src="js/shell/phone-shell.js"></script>
 
-    <!-- 3. 悬浮球诊断中枢与玩家功能向导系统 -->
+    <!-- 3. 悬浮球向导 -->
     <script src="js/system/assistant-registry.js"></script>
     <script src="js/system/assistant-agent.js"></script>
     <script src="js/system/error-monitor.js"></script>
 
-    <!-- 4. 独立 App 模块矩阵 -->
+    <!-- 4. 独立 App 矩阵 -->
     <script src="js/apps/theme/theme-app.js"></script>
     <script src="js/apps/settings/settings-app.js"></script>
-    <script src="js/apps/tarot/tarot-app.js"></script>
 
-    <!-- 视图启动器 -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             setTimeout(function() {
