@@ -819,7 +819,9 @@
                 // 1. 如果是小组件：维持"拖到对面页"的原逻辑
                 if (item.classList.contains('calendar-widget-card') || item.classList.contains('todo-widget-card')) {
                     const wType = item.getAttribute('data-widget-type');
-                    const targetPage = (currentDesktopPage === 1) ? 2 : 1;
+                    // 注意：currentDesktopPage 是 0/1 两个值，而组件存储用的是 1/2 两个值。
+                    // 之前这里写反了，算出来的"目标页"其实等于组件当前所在页，导致拖了跟没拖一样。
+                    const targetPage = (currentDesktopPage === 0) ? 2 : 1;
                     localStorage.setItem(`mcyt_widget_${wType}_page`, targetPage.toString());
 
                     cleanupVisuals();
