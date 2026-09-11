@@ -4,26 +4,15 @@
  * 职责：时钟、硬件电量、网络/蓝牙感知、壁纸加载、冷启动主题恢复、自动明暗反色引擎、
  *       手势解锁与 App 调度、桌面双页平滑滑屏手势、组件流动态宿主系统（日历/待办）、
  *       桌面 App 图标与小组件全自由长按晃动编辑态、粉白仿Windows甜心弹窗、
- *       🌟 4 格宽专属复古星象塔罗大组件驱动引擎（图2同心大星盘加速自转/公转、图3卡背翻转阵列、复古金箔启示与内置牌意）。
+ *       🌟 4 格宽专属复古星象塔罗大组件驱动引擎（图一三图层等比叠加、图二三卡背翻转、领悟启示彻底回归初始待机）。
  */
 
 (function () {
     'use strict';
 
-    // 全局硬件感知状态缓存
-    window._phoneBatteryState = {
-        level: 100,
-        charging: false,
-        supported: false
-    };
+    window._phoneBatteryState = { level: 100, charging: false, supported: false };
+    window._phoneNetworkState = { type: 'wifi', online: true, bluetooth: false };
 
-    window._phoneNetworkState = {
-        type: 'wifi',
-        online: true,
-        bluetooth: false
-    };
-
-    // 获取当前设备的时段分类名称与真实状态
     window.getPhoneDeviceState = function () {
         const now = new Date();
         const hour = now.getHours();
@@ -50,24 +39,18 @@
         }
 
         return {
-            timeStr,
-            hour,
-            minute,
-            timeSlotName,
-            isLateNight,
+            timeStr, hour, minute, timeSlotName, isLateNight,
             battery: Object.assign({}, window._phoneBatteryState),
             network: Object.assign({}, window._phoneNetworkState)
         };
     };
 
-    // 1. 系统时钟引擎
     function updatePhoneClock() {
         try {
             const now = new Date();
             const h = String(now.getHours()).padStart(2, '0');
             const m = String(now.getMinutes()).padStart(2, '0');
             const timeStr = `${h}:${m}`;
-
             const months = now.getMonth() + 1;
             const dates = now.getDate();
             const weeks = ['星期日', '星期一', '星期二', '星期三', '星期四', '星期五', '星期六'];
@@ -79,12 +62,9 @@
             if (sTime) sTime.textContent = timeStr;
             if (lClock) lClock.textContent = timeStr;
             if (lDate) lDate.textContent = dateStr;
-        } catch (e) {
-            console.warn('[Phone Clock Error]:', e);
-        }
+        } catch (e) {}
     }
 
-    // 2. 真实网络与蓝牙状态嗅探
     function bindPhoneNetworkAndBluetooth() {
         const wifiSvg = document.getElementById('wifiSvg');
         const cellSvg = document.getElementById('statusCellularSvg');
@@ -93,22 +73,19 @@
         function updateNetworkDisplay() {
             const isOnline = navigator.onLine !== false;
             window._phoneNetworkState.online = isOnline;
-
             const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
             let isCellular = false;
-
             if (conn) {
                 const type = conn.type;
                 if (type === 'cellular' || type === 'wimax' || conn.effectiveType === '4g' || conn.effectiveType === '3g' || conn.effectiveType === '2g') {
                     isCellular = true;
                 }
             }
-
             window._phoneNetworkState.type = isCellular ? 'cellular' : (isOnline ? 'wifi' : 'none');
 
             if (!isOnline) {
                 if (wifiSvg) { wifiSvg.style.display = 'block'; wifiSvg.style.opacity = '0.35'; }
-                if (cellSvg) { cellSvg.style.display = 'none'; }
+                if (cellSvg) cellSvg.style.display = 'none';
             } else if (isCellular) {
                 if (wifiSvg) wifiSvg.style.display = 'none';
                 if (cellSvg) { cellSvg.style.display = 'block'; cellSvg.style.opacity = '1'; }
@@ -117,15 +94,9 @@
                 if (cellSvg) cellSvg.style.display = 'none';
             }
         }
-
         updateNetworkDisplay();
         window.addEventListener('online', updateNetworkDisplay);
         window.addEventListener('offline', updateNetworkDisplay);
-
-        const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
-        if (conn && typeof conn.addEventListener === 'function') {
-            conn.addEventListener('change', updateNetworkDisplay);
-        }
 
         try {
             if ('bluetooth' in navigator && btSvg) {
@@ -139,7 +110,6 @@
         } catch (_) {}
     }
 
-    // 3. 硬件电量与呼吸灯监听
     async function bindPhoneBattery() {
         try {
             const core = document.getElementById('batteryCoreBar');
@@ -153,16 +123,11 @@
                     const level = Math.round(battery.level * 100);
                     text.textContent = `${level}%`;
                     core.style.width = `${level}%`;
-                    
                     window._phoneBatteryState.level = level;
                     window._phoneBatteryState.charging = !!battery.charging;
                     window._phoneBatteryState.supported = true;
-
-                    if (battery.charging) {
-                        star.classList.add('active');
-                    } else {
-                        star.classList.remove('active');
-                    }
+                    if (battery.charging) star.classList.add('active');
+                    else star.classList.remove('active');
                 };
                 applyBatteryState();
                 battery.addEventListener('levelchange', applyBatteryState);
@@ -171,7 +136,6 @@
         } catch (e) {}
     }
 
-    // 4. Canvas 内存壁纸取色引擎
     window.analyzeImageLuminance = function (imageUrl, callback) {
         if (!imageUrl) {
             if (typeof callback === 'function') callback(false);
@@ -179,25 +143,17 @@
         }
         try {
             const img = new Image();
-            if (!imageUrl.startsWith('data:')) {
-                img.crossOrigin = "Anonymous";
-            }
+            if (!imageUrl.startsWith('data:')) img.crossOrigin = "Anonymous";
             img.onload = function () {
                 try {
                     const canvas = document.createElement('canvas');
                     const ctx = canvas.getContext('2d');
-                    canvas.width = 80;
-                    canvas.height = 80;
+                    canvas.width = 80; canvas.height = 80;
                     ctx.drawImage(img, 0, 0, 80, 24, 0, 0, 80, 24);
                     const imgData = ctx.getImageData(0, 0, 80, 24).data;
-                    let totalLuminance = 0;
-                    let count = 0;
+                    let totalLuminance = 0, count = 0;
                     for (let i = 0; i < imgData.length; i += 4) {
-                        const r = imgData[i];
-                        const g = imgData[i + 1];
-                        const b = imgData[i + 2];
-                        const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-                        totalLuminance += luma;
+                        totalLuminance += 0.2126 * imgData[i] + 0.7152 * imgData[i+1] + 0.0722 * imgData[i+2];
                         count++;
                     }
                     const avgLuma = totalLuminance / (count || 1);
@@ -206,16 +162,13 @@
                     if (typeof callback === 'function') callback(false);
                 }
             };
-            img.onerror = function () {
-                if (typeof callback === 'function') callback(false);
-            };
+            img.onerror = function () { if (typeof callback === 'function') callback(false); };
             img.src = imageUrl;
         } catch (e) {
             if (typeof callback === 'function') callback(false);
         }
     };
 
-    // 5. 全局主题颜色生效核心
     window.applyColorTheme = function (isLightBg) {
         try {
             const root = document.documentElement;
@@ -231,49 +184,22 @@
                 root.style.setProperty('--status-color', '#ffffff');
                 root.style.setProperty('--lock-text-color', '#ffffff');
                 root.style.setProperty('--status-svg-fill', '#ffffff');
-                root.style.setProperty('--star-glow-color', 'rgba(255, 255, 255, 0.9)');
             } else if (mode === 'light') {
                 root.style.setProperty('--status-color', '#1a1a1a');
                 root.style.setProperty('--lock-text-color', '#1a1a1a');
                 root.style.setProperty('--status-svg-fill', '#1a1a1a');
-                root.style.setProperty('--star-glow-color', 'rgba(0, 0, 0, 0.4)');
             } else {
-                if (isLightBg) {
-                    root.style.setProperty('--status-color', '#1a1a1a');
-                    root.style.setProperty('--lock-text-color', '#1a1a1a');
-                    root.style.setProperty('--status-svg-fill', '#1a1a1a');
-                    root.style.setProperty('--star-glow-color', 'rgba(0, 0, 0, 0.4)');
-                } else {
-                    root.style.setProperty('--status-color', '#ffffff');
-                    root.style.setProperty('--lock-text-color', '#ffffff');
-                    root.style.setProperty('--status-svg-fill', '#ffffff');
-                    root.style.setProperty('--star-glow-color', 'rgba(255, 255, 255, 0.9)');
-                }
+                const c = isLightBg ? '#1a1a1a' : '#ffffff';
+                root.style.setProperty('--status-color', c);
+                root.style.setProperty('--lock-text-color', c);
+                root.style.setProperty('--status-svg-fill', c);
             }
 
             const savedIconColor = localStorage.getItem('mcyt_icon_label_color') || '#2e1a22';
             root.style.setProperty('--app-icon-label-color', savedIconColor);
-
-            const customPink = localStorage.getItem('mcyt_custom_main_pink');
-            const customWhite = localStorage.getItem('mcyt_custom_main_white');
-            if (customPink) root.style.setProperty('--theme-main-pink', customPink);
-            if (customWhite) {
-                root.style.setProperty('--theme-main-white', customWhite);
-                root.style.setProperty('--theme-sub-white', customWhite);
-            }
-
-            const sStroke = localStorage.getItem('mcyt_statusbar_stroke') || 'none';
-            const sFill = localStorage.getItem('mcyt_statusbar_fill') || 'transparent';
-            const sBgImg = localStorage.getItem('mcyt_statusbar_bg_img') || 'none';
-            root.style.setProperty('--status-bar-stroke', sStroke);
-            root.style.setProperty('--status-bar-fill', sFill);
-            root.style.setProperty('--status-bar-bg-img', sBgImg.startsWith('data:') ? `url('${sBgImg}')` : sBgImg);
-        } catch (e) {
-            console.warn('[ApplyColorTheme Error]:', e);
-        }
+        } catch (e) {}
     };
 
-    // 6. 手机冷启动主题与壁纸恢复
     function initPhoneThemeAndWallpapers() {
         try {
             const root = document.documentElement;
@@ -294,22 +220,17 @@
                 root.style.setProperty('--desktop-bg-url', `url('assets/system/default_desktop.jpg')`);
             }
 
-            if (savedMode === 'custom') {
-                window.applyColorTheme(false);
-            } else if (savedMode === 'dark') {
+            if (savedMode === 'custom' || savedMode === 'dark') {
                 window.applyColorTheme(false);
             } else if (savedMode === 'light') {
                 window.applyColorTheme(true);
             } else {
-                const targetWallpaper = (savedLock && savedLock.startsWith('data:image')) ? savedLock : 'assets/system/default_lock.jpg';
-                window.analyzeImageLuminance(targetWallpaper, window.applyColorTheme);
+                const target = (savedLock && savedLock.startsWith('data:image')) ? savedLock : 'assets/system/default_lock.jpg';
+                window.analyzeImageLuminance(target, window.applyColorTheme);
             }
-        } catch (e) {
-            console.warn('[Theme Init Error]:', e);
-        }
+        } catch (e) {}
     }
 
-    // 7. 锁屏手势与解锁机制
     function initLockGestures() {
         const screenLock = document.getElementById('screenLock');
         const lockBtn = document.getElementById('lockBtn');
@@ -321,51 +242,40 @@
         };
 
         window.lockPhoneScreen = function () {
-            if (typeof window.closePhoneApp === 'function') {
-                window.closePhoneApp();
-            }
+            if (typeof window.closePhoneApp === 'function') window.closePhoneApp();
             screenLock.classList.remove('unlocked');
             screenLock.style.pointerEvents = 'auto';
         };
 
-        screenLock.addEventListener('click', function () {
-            window.unlockPhoneScreen();
-        });
+        screenLock.addEventListener('click', window.unlockPhoneScreen);
 
         let touchStartY = 0;
-        screenLock.addEventListener('touchstart', function (e) {
-            if (e.touches && e.touches.length) {
-                touchStartY = e.touches[0].clientY;
-            }
+        screenLock.addEventListener('touchstart', (e) => {
+            if (e.touches && e.touches.length) touchStartY = e.touches[0].clientY;
         }, { passive: true });
 
-        screenLock.addEventListener('touchend', function (e) {
+        screenLock.addEventListener('touchend', (e) => {
             if (e.changedTouches && e.changedTouches.length) {
-                const touchEndY = e.changedTouches[0].clientY;
-                if (touchStartY - touchEndY > 30 || Math.abs(touchStartY - touchEndY) < 10) {
+                if (touchStartY - e.changedTouches[0].clientY > 30 || Math.abs(touchStartY - e.changedTouches[0].clientY) < 10) {
                     window.unlockPhoneScreen();
                 }
             }
         }, { passive: true });
 
         if (lockBtn) {
-            lockBtn.addEventListener('click', function (e) {
+            lockBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 window.lockPhoneScreen();
             });
         }
     }
 
-    // 8. 桌面双页滑屏手势驱动器
     let currentDesktopPage = 0;
     window.switchDesktopPage = function (pageIndex) {
         currentDesktopPage = pageIndex === 1 ? 1 : 0;
         const track = document.getElementById('desktopPagesTrack');
         const dots = document.querySelectorAll('.pagination-dot');
-
-        if (track) {
-            track.style.transform = `translateX(-${currentDesktopPage * 100}%)`;
-        }
+        if (track) track.style.transform = `translateX(-${currentDesktopPage * 100}%)`;
         dots.forEach((d, idx) => {
             if (idx === currentDesktopPage) d.classList.add('active');
             else d.classList.remove('active');
@@ -376,11 +286,9 @@
         const viewport = document.getElementById('desktopPagesViewport');
         if (!viewport) return;
 
-        let startX = 0;
-        let startY = 0;
-        let isMoving = false;
+        let startX = 0, startY = 0, isMoving = false;
 
-        viewport.addEventListener('touchstart', function (e) {
+        viewport.addEventListener('touchstart', (e) => {
             if (window._isWidgetEditMode) return;
             if (e.touches && e.touches.length === 1) {
                 startX = e.touches[0].clientX;
@@ -389,30 +297,22 @@
             }
         }, { passive: true });
 
-        viewport.addEventListener('touchmove', function (e) {
+        viewport.addEventListener('touchmove', (e) => {
             if (window._isWidgetEditMode || !isMoving || !e.touches || !e.touches.length) return;
             const diffX = e.touches[0].clientX - startX;
             const diffY = e.touches[0].clientY - startY;
-            if (Math.abs(diffY) > Math.abs(diffX)) {
-                return;
-            }
+            if (Math.abs(diffY) > Math.abs(diffX)) return;
         }, { passive: true });
 
-        viewport.addEventListener('touchend', function (e) {
+        viewport.addEventListener('touchend', (e) => {
             if (window._isWidgetEditMode || !isMoving || !e.changedTouches || !e.changedTouches.length) return;
             isMoving = false;
-            const endX = e.changedTouches[0].clientX;
-            const diffX = endX - startX;
-
-            if (diffX < -45 && currentDesktopPage === 0) {
-                window.switchDesktopPage(1);
-            } else if (diffX > 45 && currentDesktopPage === 1) {
-                window.switchDesktopPage(0);
-            }
+            const diffX = e.changedTouches[0].clientX - startX;
+            if (diffX < -45 && currentDesktopPage === 0) window.switchDesktopPage(1);
+            else if (diffX > 45 && currentDesktopPage === 1) window.switchDesktopPage(0);
         }, { passive: true });
     }
 
-    // 9. 粉白仿 Windows 98 甜心弹窗
     window.openRetroTodoInputModal = function (title, defaultVal, placeholder, onConfirm) {
         const modal = document.getElementById('modal');
         const modalTitle = document.getElementById('retroModalTitle');
@@ -422,26 +322,19 @@
 
         if (modalTitle) modalTitle.textContent = title || "新建待办事项";
         modalBody.innerHTML = `
-            <div style="font-size:12.5px;color:#2e1a22;font-weight:600;margin-bottom:6px;">
-                请输入待办内容：
-            </div>
+            <div style="font-size:12.5px;color:#2e1a22;font-weight:600;margin-bottom:6px;">请输入待办内容：</div>
             <input type="text" id="retroTodoInputBox" class="retro-input-field" value="${defaultVal || ''}" placeholder="${placeholder || '例如：构思新一期视频脚本'}" />
             <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:8px;">
                 <button class="retro-pink-btn" id="retroTodoCancelBtn">取消</button>
                 <button class="retro-pink-btn" id="retroTodoOkBtn" style="font-weight:bold;color:#b82350;">确认添加</button>
             </div>
         `;
-
         modal.classList.add('open');
 
         const inputEl = document.getElementById('retroTodoInputBox');
         if (inputEl) {
             setTimeout(() => inputEl.focus(), 80);
-            inputEl.addEventListener('keydown', function (e) {
-                if (e.key === 'Enter') {
-                    confirmAction();
-                }
-            });
+            inputEl.addEventListener('keydown', (e) => { if (e.key === 'Enter') confirmAction(); });
         }
 
         function closeModalInternal() {
@@ -449,22 +342,18 @@
             modalBody.innerHTML = '';
             if (modalClose) modalClose.onclick = null;
         }
-
         function confirmAction() {
             const val = inputEl ? inputEl.value.trim() : '';
             closeModalInternal();
-            if (val && typeof onConfirm === 'function') {
-                onConfirm(val);
-            }
+            if (val && typeof onConfirm === 'function') onConfirm(val);
         }
-
         document.getElementById('retroTodoCancelBtn').onclick = closeModalInternal;
         document.getElementById('retroTodoOkBtn').onclick = confirmAction;
         if (modalClose) modalClose.onclick = closeModalInternal;
     };
 
     // ============================================================
-    // 🌟 4 格宽专属复古星象塔罗大组件驱动（还原图2与图3）
+    // 🌟 4 格宽专属复古星象塔罗大组件驱动引擎（图一二三精确复刻）
     // ============================================================
     const TAROT_BRIEF_DATA = [
         { name: '愚者', img: '0.jpg', up: '纯粹初心·无畏冒险·新的可能', rev: '鲁莽冲动·缺乏方向·自我怀疑' },
@@ -504,22 +393,26 @@
             return;
         }
 
+        // 完美还原图一待机：三张画布等比例绝对重叠
         container.innerHTML = `
             <div class="desktop-tarot-slot" id="desktopTarotSlot" onclick="window.handleTarotSlotClick()">
                 <div class="tarot-slot-overlay"></div>
                 
-                <!-- 阶段 1：同心大星盘（完全复刻图2大尺寸层叠） -->
+                <!-- 阶段 1：待机同尺寸三图层等比叠加（完美复刻图一） -->
                 <div class="tarot-stage-idle" id="tarotStageIdle">
+                    <img src="tarot/images/slot_bg.png" class="tarot-layer-bg" alt="星图底板">
                     <img src="tarot/images/ring_galaxy.png" class="tarot-ring-galaxy" alt="星河光环">
-                    <img src="tarot/images/crescent_frame.png" class="tarot-crescent-mid" alt="星月光环">
-                    <img src="tarot/images/sun_spark.png" class="tarot-sun-spark" alt="放射太阳">
+                    <img src="tarot/images/sun_spark.png" class="tarot-sun-spark" alt="金芒太阳">
                 </div>
 
-                <!-- 阶段 2：抽卡结果阵列（完全复刻图3：底图铺满 + 卡背阵列 + 翻牌露出正面） -->
+                <!-- 阶段 2：抽卡结果形态（完美复刻图二与图三：图四底图 + 卡背阵列） -->
                 <div class="tarot-stage-result" id="tarotStageResult">
-                    <div class="tarot-status-strip" id="tarotStatusStrip">✦ 点击卡牌翻转牌面 ✦</div>
-                    <div class="tarot-cards-row" id="tarotCardsRow"></div>
-                    <button class="tarot-gold-btn" id="tarotGoldBtn" style="display:none;" onclick="window.showTarotCardMeaning(event)">✦ 查看启示 ✦</button>
+                    <img src="tarot/images/crescent_frame.png" class="tarot-result-bg" alt="月牙画框">
+                    <div class="tarot-result-content">
+                        <div class="tarot-status-strip" id="tarotStatusStrip">✦ 轻触卡牌翻开牌面 ✦</div>
+                        <div class="tarot-cards-row" id="tarotCardsRow"></div>
+                        <button class="tarot-gold-btn" id="tarotGoldBtn" style="display:none;" onclick="window.showTarotCardMeaning(event)">✦ 查看启示 ✦</button>
+                    </div>
                 </div>
             </div>
         `;
@@ -533,24 +426,23 @@
         const resultStage = document.getElementById('tarotStageResult');
         if (!slot || !idleStage || !resultStage) return;
 
-        // 如果已经在结果界面，再次点击组件空白处则重置为旋转准备态
+        // 如果已经在结果展示阶段，点击卡片空白处平滑重置回待机态
         if (resultStage.classList.contains('active')) {
             resultStage.classList.remove('active');
-            slot.style.backgroundImage = 'none';
             idleStage.style.display = 'flex';
             setTimeout(() => { idleStage.style.opacity = '1'; }, 20);
             return;
         }
 
-        // 开始星象咬合旋转
+        // 开始星轨旋转动画
         window._tarotIsSpinning = true;
         slot.classList.add('tarot-spinning');
 
-        // 读取模式：默认三张（时间流），或单张
+        // 读取牌阵模式：默认三张（时间流），或单张
         const mode = localStorage.getItem('mcyt_widget_tarot_spread') || 'triple';
         const cardCount = (mode === 'single') ? 1 : 3;
 
-        // 随机抽取卡牌
+        // 随机抽取
         const pool = [...TAROT_BRIEF_DATA].sort(() => Math.random() - 0.5);
         window._tarotCurrentCards = pool.slice(0, cardCount).map(c => Object.assign({}, c, {
             reversed: Math.random() < 0.4,
@@ -564,17 +456,14 @@
             setTimeout(() => {
                 idleStage.style.display = 'none';
 
-                // 背景切换为图3对应的复古羊皮底板
-                slot.style.backgroundImage = "url('tarot/images/slot_bg.png')";
-
                 const cardsRow = document.getElementById('tarotCardsRow');
                 const strip = document.getElementById('tarotStatusStrip');
                 const goldBtn = document.getElementById('tarotGoldBtn');
 
-                if (strip) strip.textContent = '✦ 点击卡牌翻转牌面 ✦';
+                if (strip) strip.textContent = '✦ 轻触卡牌翻开牌面 ✦';
                 if (goldBtn) goldBtn.style.display = 'none';
 
-                // 生成带有卡背 (card_back.png) 的卡位
+                // 生成带有新卡背 (card_back.png) 的卡位
                 if (cardsRow) {
                     cardsRow.innerHTML = window._tarotCurrentCards.map((c, i) => `
                         <div class="tarot-slot-card" id="slotCard-${i}" onclick="window.flipSlotCard(${i}, event)">
@@ -590,7 +479,7 @@
 
                 resultStage.classList.add('active');
                 window._tarotIsSpinning = false;
-            }, 280);
+            }, 260);
         }, 1800);
     };
 
@@ -619,16 +508,22 @@
         }
     };
 
+    // ✦ 领悟启示弹窗（升级为黑金灵性风格，关闭后彻底重置回初始待机态）
     window.showTarotCardMeaning = function (e) {
         if (e) e.stopPropagation();
         const cards = window._tarotCurrentCards;
         if (!cards || !cards.length) return;
 
         const modal = document.getElementById('modal');
+        const modalContent = document.getElementById('modalContent');
         const modalTitle = document.getElementById('retroModalTitle');
         const modalBody = document.getElementById('modalBody');
         const modalClose = document.getElementById('modalClose');
         if (!modal || !modalBody) return;
+
+        // 换成黑金神秘弹窗皮肤
+        if (modalContent) modalContent.className = 'modal-box mystic-dark-window';
+        if (modalTitle) modalTitle.textContent = `✦ 星轨启示 · 命途推演 ✦`;
 
         const posNames = (cards.length === 1) ? ['今日核心启示'] : ['过去的影响', '当下的状态', '未来的趋势'];
 
@@ -637,42 +532,51 @@
             const orientStr = c.reversed ? '逆位' : '正位';
             const meaning = c.reversed ? c.rev : c.up;
             meaningHTML += `
-                <div style="margin-bottom:12px; padding:10px 12px; background:#fff8fa; border:1px dashed #ffd1dc; border-radius:8px;">
-                    <div style="font-size:13px; font-weight:700; color:#b82350; margin-bottom:4px;">
+                <div style="margin-bottom:12px; padding:10px 12px; background:rgba(212,175,55,0.06); border:1px solid rgba(212,175,55,0.3); border-radius:10px;">
+                    <div style="font-size:13px; font-weight:700; color:#fce8a6; margin-bottom:4px;">
                         ${posNames[idx]} · ${c.name} (${orientStr})
                     </div>
-                    <div style="font-size:12px; color:#2e1a22; line-height:1.7;">
+                    <div style="font-size:12px; color:#dcd5cb; line-height:1.7;">
                         ${meaning}
                     </div>
                 </div>
             `;
         });
 
-        if (modalTitle) modalTitle.textContent = `✦ 星轨启示 · 命途推演`;
         modalBody.innerHTML = `
-            <div style="text-align:center; padding:6px 2px;">
+            <div style="text-align:center; padding:4px;">
                 ${meaningHTML}
-                <div style="margin-top:10px; font-size:11px; color:#7a505f;">
+                <div style="margin-top:10px; font-size:11px; color:#a69f92; letter-spacing:1px;">
                     倾听内心的声音，今日决策尽在你的掌控之中。
                 </div>
             </div>
-            <div style="display:flex; justify-content:center; margin-top:12px;">
-                <button class="retro-pink-btn" id="retroTarotKnowBtn" style="font-weight:bold; color:#b82350;">领悟启示</button>
+            <div style="display:flex; justify-content:center; margin-top:14px;">
+                <button class="tarot-gold-btn" id="retroTarotKnowBtn" style="padding:6px 20px; font-size:12px;">✦ 领悟启示 ✦</button>
             </div>
         `;
 
         modal.classList.add('open');
 
-        const closeInternal = () => {
+        const closeAndReset = () => {
             modal.classList.remove('open');
             modalBody.innerHTML = '';
+            if (modalContent) modalContent.className = 'modal-box retro-pink-window';
             if (modalClose) modalClose.onclick = null;
+
+            // 🌟 领悟启示后彻底回归初始待机界面！
+            const idleStage = document.getElementById('tarotStageIdle');
+            const resultStage = document.getElementById('tarotStageResult');
+            if (idleStage && resultStage) {
+                resultStage.classList.remove('active');
+                idleStage.style.display = 'flex';
+                setTimeout(() => { idleStage.style.opacity = '1'; }, 20);
+            }
         };
-        document.getElementById('retroTarotKnowBtn').onclick = closeInternal;
-        if (modalClose) modalClose.onclick = closeInternal;
+
+        document.getElementById('retroTarotKnowBtn').onclick = closeAndReset;
+        if (modalClose) modalClose.onclick = closeAndReset;
     };
 
-    // 10. 桌面组件流动态宿主系统
     window.renderDesktopWidgetsLayout = function () {
         window.renderDesktopTarotWidget();
 
@@ -682,7 +586,6 @@
 
         const calEnabled = localStorage.getItem('mcyt_widget_calendar_enabled') !== 'false';
         const calPage = parseInt(localStorage.getItem('mcyt_widget_calendar_page') || '1', 10);
-
         const todoEnabled = localStorage.getItem('mcyt_widget_todo_enabled') !== 'false';
         const todoPage = parseInt(localStorage.getItem('mcyt_widget_todo_page') || '1', 10);
 
@@ -729,23 +632,13 @@
         let page2Count = 0;
 
         if (calEnabled) {
-            if (calPage === 2) {
-                slot2.insertAdjacentHTML('beforeend', calendarHTML);
-                page2Count++;
-            } else {
-                slot1.insertAdjacentHTML('beforeend', calendarHTML);
-                page1Count++;
-            }
+            if (calPage === 2) { slot2.insertAdjacentHTML('beforeend', calendarHTML); page2Count++; }
+            else { slot1.insertAdjacentHTML('beforeend', calendarHTML); page1Count++; }
         }
 
         if (todoEnabled) {
-            if (todoPage === 2) {
-                slot2.insertAdjacentHTML('beforeend', todoHTML);
-                page2Count++;
-            } else {
-                slot1.insertAdjacentHTML('beforeend', todoHTML);
-                page1Count++;
-            }
+            if (todoPage === 2) { slot2.insertAdjacentHTML('beforeend', todoHTML); page2Count++; }
+            else { slot1.insertAdjacentHTML('beforeend', todoHTML); page1Count++; }
         }
 
         if (page1Count === 1) slot1.classList.add('single-widget');
@@ -782,7 +675,7 @@
         });
     }
 
-    document.addEventListener('click', function (e) {
+    document.addEventListener('click', (e) => {
         if (!window._isWidgetEditMode) return;
         if (!e.target.closest('.calendar-widget-card') && !e.target.closest('.todo-widget-card') && !e.target.closest('.app-slot')) {
             exitDesktopEditMode();
@@ -792,7 +685,6 @@
     function saveDesktopAppOrder() {
         const p1Grid = document.querySelector('#page1WidgetSlot') ? document.querySelector('#page1WidgetSlot').parentElement.querySelector('.app-grid') : null;
         const p2Grid = document.querySelector('#page2WidgetSlot') ? document.querySelector('#page2WidgetSlot').parentElement.querySelector('.app-grid') : null;
-
         const layout = { page1: [], page2: [] };
         if (p1Grid) {
             p1Grid.querySelectorAll('.app-slot').forEach(slot => {
@@ -806,9 +698,7 @@
                 if (title) layout.page2.push(title.textContent.trim());
             });
         }
-        try {
-            localStorage.setItem('mcyt_desktop_app_layout_v2', JSON.stringify(layout));
-        } catch (_) {}
+        try { localStorage.setItem('mcyt_desktop_app_layout_v2', JSON.stringify(layout)); } catch (_) {}
     }
 
     function restoreDesktopAppOrder() {
@@ -828,14 +718,10 @@
             });
 
             if (Array.isArray(layout.page1) && layout.page1.length) {
-                layout.page1.forEach(name => {
-                    if (map[name]) p1Grid.appendChild(map[name]);
-                });
+                layout.page1.forEach(name => { if (map[name]) p1Grid.appendChild(map[name]); });
             }
             if (Array.isArray(layout.page2) && layout.page2.length) {
-                layout.page2.forEach(name => {
-                    if (map[name]) p2Grid.appendChild(map[name]);
-                });
+                layout.page2.forEach(name => { if (map[name]) p2Grid.appendChild(map[name]); });
             }
         } catch (_) {}
     }
@@ -847,21 +733,15 @@
 
         draggables.forEach(item => {
             const isAppSlot = item.classList.contains('app-slot');
-
-            let pressTimer = null;
-            let isDragging = false;
+            let pressTimer = null, isDragging = false;
             let startX = 0, startY = 0;
-            let ghostEl = null;
-            let ghostOriginLeft = 0, ghostOriginTop = 0;
-            let lastTargetSlot = null;
-            let rafPending = false;
+            let ghostEl = null, ghostOriginLeft = 0, ghostOriginTop = 0;
+            let lastTargetSlot = null, rafPending = false;
             let pendingClientX = 0, pendingClientY = 0;
 
             const captureFlip = (grid) => {
                 const before = new Map();
-                grid.querySelectorAll('.app-slot').forEach(el => {
-                    before.set(el, el.getBoundingClientRect());
-                });
+                grid.querySelectorAll('.app-slot').forEach(el => before.set(el, el.getBoundingClientRect()));
                 return () => {
                     before.forEach((prevRect, el) => {
                         const nowRect = el.getBoundingClientRect();
@@ -899,28 +779,17 @@
             };
 
             const cleanupVisuals = () => {
-                if (ghostEl) {
-                    ghostEl.remove();
-                    ghostEl = null;
-                }
-                item.style.transition = '';
-                item.style.transform = '';
-                item.style.opacity = '';
-                item.style.zIndex = '';
-                item.style.pointerEvents = '';
-                lastTargetSlot = null;
+                if (ghostEl) { ghostEl.remove(); ghostEl = null; }
+                item.style.transition = ''; item.style.transform = '';
+                item.style.opacity = ''; item.style.zIndex = '';
+                item.style.pointerEvents = ''; lastTargetSlot = null;
             };
 
             const onStart = (clientX, clientY) => {
-                startX = clientX;
-                startY = clientY;
-                isDragging = false;
-
+                startX = clientX; startY = clientY; isDragging = false;
                 pressTimer = setTimeout(() => {
                     enterDesktopEditMode();
-                    if (navigator.vibrate) {
-                        try { navigator.vibrate(40); } catch (_) {}
-                    }
+                    if (navigator.vibrate) try { navigator.vibrate(40); } catch (_) {}
                 }, 450);
             };
 
@@ -930,12 +799,10 @@
 
                 if (!window._isWidgetEditMode) {
                     if (Math.hypot(deltaX, deltaY) > 8 && pressTimer) {
-                        clearTimeout(pressTimer);
-                        pressTimer = null;
+                        clearTimeout(pressTimer); pressTimer = null;
                     }
                     return;
                 }
-
                 if (event && event.cancelable) event.preventDefault();
 
                 if (!isDragging) {
@@ -944,8 +811,7 @@
                         ghostEl = createGhost();
                         item.style.opacity = '0.001';
                     } else {
-                        item.style.zIndex = '9999';
-                        item.style.opacity = '0.85';
+                        item.style.zIndex = '9999'; item.style.opacity = '0.85';
                     }
                     item.style.pointerEvents = 'none';
                 }
@@ -958,15 +824,11 @@
                 }
 
                 const winW = window.innerWidth;
-                if (clientX < 28 && currentDesktopPage === 1) {
-                    window.switchDesktopPage(0);
-                } else if (clientX > winW - 28 && currentDesktopPage === 0) {
-                    window.switchDesktopPage(1);
-                }
+                if (clientX < 28 && currentDesktopPage === 1) window.switchDesktopPage(0);
+                else if (clientX > winW - 28 && currentDesktopPage === 0) window.switchDesktopPage(1);
 
                 if (isAppSlot) {
-                    pendingClientX = clientX;
-                    pendingClientY = clientY;
+                    pendingClientX = clientX; pendingClientY = clientY;
                     if (!rafPending) {
                         rafPending = true;
                         requestAnimationFrame(() => {
@@ -983,11 +845,8 @@
                                     const siblings = Array.from(grid.querySelectorAll('.app-slot'));
                                     const itemIndex = siblings.indexOf(item);
                                     const targetIndex = siblings.indexOf(targetSlot);
-                                    if (itemIndex !== -1 && itemIndex < targetIndex) {
-                                        targetSlot.after(item);
-                                    } else {
-                                        targetSlot.before(item);
-                                    }
+                                    if (itemIndex !== -1 && itemIndex < targetIndex) targetSlot.after(item);
+                                    else targetSlot.before(item);
                                     playFlip();
                                     lastTargetSlot = targetSlot;
                                 }
@@ -1003,47 +862,25 @@
             };
 
             const onEnd = () => {
-                if (pressTimer) {
-                    clearTimeout(pressTimer);
-                    pressTimer = null;
-                }
-
-                if (!window._isWidgetEditMode || !isDragging) {
-                    cleanupVisuals();
-                    return;
-                }
-
+                if (pressTimer) { clearTimeout(pressTimer); pressTimer = null; }
+                if (!window._isWidgetEditMode || !isDragging) { cleanupVisuals(); return; }
                 isDragging = false;
 
                 if (item.classList.contains('calendar-widget-card') || item.classList.contains('todo-widget-card')) {
                     const wType = item.getAttribute('data-widget-type');
                     const targetPage = (currentDesktopPage === 0) ? 2 : 1;
                     localStorage.setItem(`mcyt_widget_${wType}_page`, targetPage.toString());
-
                     cleanupVisuals();
-
                     window.renderDesktopWidgetsLayout();
-                    document.querySelectorAll('.calendar-widget-card, .todo-widget-card, .app-slot').forEach(el => {
-                        el.classList.add('widget-jiggle');
-                    });
+                    document.querySelectorAll('.calendar-widget-card, .todo-widget-card, .app-slot').forEach(el => el.classList.add('widget-jiggle'));
                     return;
                 }
-
-                if (isAppSlot) {
-                    cleanupVisuals();
-                    saveDesktopAppOrder();
-                }
+                if (isAppSlot) { cleanupVisuals(); saveDesktopAppOrder(); }
             };
 
-            item.addEventListener('touchstart', (e) => {
-                if (e.touches.length === 1) onStart(e.touches[0].clientX, e.touches[0].clientY);
-            }, { passive: true });
-
-            item.addEventListener('touchmove', (e) => {
-                if (e.touches.length === 1) onMove(e.touches[0].clientX, e.touches[0].clientY, e);
-            }, { passive: false });
-
-            item.addEventListener('touchend', () => { onEnd(); });
+            item.addEventListener('touchstart', (e) => { if (e.touches.length === 1) onStart(e.touches[0].clientX, e.touches[0].clientY); }, { passive: true });
+            item.addEventListener('touchmove', (e) => { if (e.touches.length === 1) onMove(e.touches[0].clientX, e.touches[0].clientY, e); }, { passive: false });
+            item.addEventListener('touchend', onEnd);
 
             item.addEventListener('mousedown', (e) => {
                 onStart(e.clientX, e.clientY);
@@ -1059,54 +896,34 @@
         });
     }
 
-    // 11. 纯净待办数据管理
     function getCleanInitialTodos() {
         return [
             { id: 't_demo_1', text: '构思 MC 视频大纲', done: false },
             { id: 't_demo_2', text: '晚上 20:00 准时开播', done: false }
         ];
     }
-
     function getStoredTodos() {
         try {
             const raw = localStorage.getItem('mcyt_desktop_todos');
             if (!raw) return getCleanInitialTodos();
-            const list = JSON.parse(raw);
-            const sanitized = list.filter(item => {
-                const txt = item.text || '';
-                return !txt.includes('美团') && !txt.includes('抖音') && !txt.includes('13040') && !txt.includes('生日');
-            });
-            if (sanitized.length !== list.length) {
-                localStorage.setItem('mcyt_desktop_todos', JSON.stringify(sanitized));
-            }
-            return sanitized;
-        } catch (e) {
-            return getCleanInitialTodos();
-        }
+            return JSON.parse(raw);
+        } catch (e) { return getCleanInitialTodos(); }
     }
-
     function saveStoredTodos(list) {
         localStorage.setItem('mcyt_desktop_todos', JSON.stringify(list));
     }
-
     window.renderDesktopTodos = function () {
         const listWrap = document.getElementById('todoWidgetList');
         const countText = document.getElementById('todoWidgetCountText');
         if (!listWrap) return;
-
         const todos = getStoredTodos();
         const activeCount = todos.filter(t => !t.done).length;
         if (countText) countText.textContent = `${activeCount} 条待办`;
 
         if (todos.length === 0) {
-            listWrap.innerHTML = `
-                <div style="text-align:center;padding:18px 4px;font-size:11px;color:#a49c95;">
-                    暂无待办，点击右上角 ＋ 添加
-                </div>
-            `;
+            listWrap.innerHTML = `<div style="text-align:center;padding:18px 4px;font-size:11px;color:#a49c95;">暂无待办，点击右上角 ＋ 添加</div>`;
             return;
         }
-
         listWrap.innerHTML = todos.map((item) => `
             <div class="todo-item-row ${item.done ? 'completed' : ''}" data-id="${item.id}">
                 <div class="todo-check-circle" onclick="window.toggleTodoDone('${item.id}')"></div>
@@ -1120,16 +937,13 @@
         let todos = getStoredTodos();
         const target = todos.find(t => t.id === id);
         if (!target) return;
-
         target.done = !target.done;
         saveStoredTodos(todos);
         window.renderDesktopTodos();
-
         if (target.done) {
             setTimeout(() => {
-                let freshList = getStoredTodos();
-                freshList = freshList.filter(t => t.id !== id);
-                saveStoredTodos(freshList);
+                let fresh = getStoredTodos().filter(t => t.id !== id);
+                saveStoredTodos(fresh);
                 window.renderDesktopTodos();
             }, 1200);
         }
@@ -1139,84 +953,26 @@
         if (window._isWidgetEditMode) return;
         window.openRetroTodoInputModal('📝 新建待办事项', '', '输入待办任务内容...', function (textVal) {
             const todos = getStoredTodos();
-            todos.push({
-                id: 't_' + Date.now(),
-                text: textVal,
-                done: false
-            });
+            todos.push({ id: 't_' + Date.now(), text: textVal, done: false });
             saveStoredTodos(todos);
             window.renderDesktopTodos();
-            if (typeof showToast === 'function') showToast('已成功添加待办');
         });
     };
 
     window.generateSmartDayTodos = function () {
         if (window._isWidgetEditMode) return;
         const now = new Date();
-        const dayOfWeek = now.getDay();
-        const isWeekend = (dayOfWeek === 0 || dayOfWeek === 6);
-
-        let persona = '主播';
-        try {
-            if (window.G && window.G.player) {
-                persona = window.G.player.persona || window.G.player.role || '主播';
-            }
-        } catch (_) {}
-
-        let newGenerated = [];
-
-        if (persona.includes('学生')) {
-            if (isWeekend) {
-                newGenerated = [
-                    { id: 'g1', text: '整理 MC 建筑素材包', done: false },
-                    { id: 'g2', text: '剪辑周六更新视频', done: false },
-                    { id: 'g3', text: '晚上 20:00 粉丝连麦', done: false }
-                ];
-            } else {
-                newGenerated = [
-                    { id: 'g1', text: '构思红石新玩法脚本', done: false },
-                    { id: 'g2', text: '晚自习后录制实况', done: false },
-                    { id: 'g3', text: '回复频道置顶高赞', done: false }
-                ];
-            }
-        } else if (persona.includes('打工') || persona.includes('职场')) {
-            if (isWeekend) {
-                newGenerated = [
-                    { id: 'g1', text: '录制 2 期 YouTube 视频', done: false },
-                    { id: 'g2', text: '与合作创作者联机', done: false },
-                    { id: 'g3', text: '朋友圈发布更新动态', done: false }
-                ];
-            } else {
-                newGenerated = [
-                    { id: 'g1', text: '处理商务赞助商邮件', done: false },
-                    { id: 'g2', text: '下班录制生存实况', done: false },
-                    { id: 'g3', text: '审核粉丝群表情包', done: false }
-                ];
-            }
-        } else {
-            if (isWeekend) {
-                newGenerated = [
-                    { id: 'g1', text: '黄金档 19:30 直播开播', done: false },
-                    { id: 'g2', text: '发放粉丝专属表情包', done: false },
-                    { id: 'g3', text: '审核商单合同与提现', done: false }
-                ];
-            } else {
-                newGenerated = [
-                    { id: 'g1', text: '构思本周 YouTube 爆款', done: false },
-                    { id: 'g2', text: '录制 Minecraft 生存素材', done: false },
-                    { id: 'g3', text: '沟通新视频片头特效', done: false }
-                ];
-            }
-        }
-
+        const isWeekend = (now.getDay() === 0 || now.getDay() === 6);
+        const newGenerated = [
+            { id: 'g1', text: '构思 MC 视频大纲', done: false },
+            { id: 'g2', text: '录制 Minecraft 生存素材', done: false },
+            { id: 'g3', text: '沟通新视频片头特效', done: false }
+        ];
         saveStoredTodos(newGenerated);
         window.renderDesktopTodos();
-        if (typeof showToast === 'function') {
-            showToast(`已排布今日待办！(${persona} · ${isWeekend ? '周末' : '工作日'})`);
-        }
+        if (typeof showToast === 'function') showToast('已排布今日待办！');
     };
 
-    // 12. 极简黑白月历实时渲染
     window.renderDesktopCalendar = function () {
         const monthTitle = document.getElementById('calMonthTitle');
         const yearTitle = document.getElementById('calYearTitle');
@@ -1227,42 +983,25 @@
         const currentYear = now.getFullYear();
         const currentMonth = now.getMonth();
         const currentDate = now.getDate();
-
-        const monthNames = [
-            'JANUARY', 'FEBRUARY', 'MARCH', 'APRIL', 'MAY', 'JUNE',
-            'JULY', 'AUGUST', 'SEPTEMBER', 'OCTOBER', 'NOVEMBER', 'DECEMBER'
-        ];
+        const monthNames = ['JANUARY','FEBRUARY','MARCH','APRIL','MAY','JUNE','JULY','AUGUST','SEPTEMBER','OCTOBER','NOVEMBER','DECEMBER'];
 
         if (monthTitle) monthTitle.textContent = monthNames[currentMonth];
         if (yearTitle) yearTitle.textContent = currentYear;
 
         const firstDay = new Date(currentYear, currentMonth, 1);
-        let firstDayIndex = firstDay.getDay();
-        firstDayIndex = (firstDayIndex + 6) % 7;
-
+        let firstDayIndex = (firstDay.getDay() + 6) % 7;
         const totalDays = new Date(currentYear, currentMonth + 1, 0).getDate();
 
         let cellsHtml = '';
-        for (let i = 0; i < firstDayIndex; i++) {
-            cellsHtml += '<div class="calendar-day-cell"></div>';
-        }
-
+        for (let i = 0; i < firstDayIndex; i++) cellsHtml += '<div class="calendar-day-cell"></div>';
         for (let d = 1; d <= totalDays; d++) {
-            const isToday = (d === currentDate);
-            cellsHtml += `
-                <div class="calendar-day-cell ${isToday ? 'today-cell' : ''}">
-                    <span>${d}</span>
-                </div>
-            `;
+            cellsHtml += `<div class="calendar-day-cell ${d === currentDate ? 'today-cell' : ''}"><span>${d}</span></div>`;
         }
-
         daysGrid.innerHTML = cellsHtml;
     };
 
-    // 13. 全屏 App 窗口生命周期调度
     window.openPhoneApp = function (appKey) {
         if (window._isWidgetEditMode) return;
-
         const appModal = document.getElementById('appModal');
         const appModalTitle = document.getElementById('appModalTitle');
         const appModalBody = document.getElementById('appModalBody');
@@ -1281,34 +1020,30 @@
             return;
         }
 
-        // 🌟 唤起独立塔罗神殿
+        // 🌟 独立塔罗 App 入口：直接跳转至塔罗神殿
         if (appKey === 'tarot') {
             window.location.href = 'tarot/index.html';
             return;
         }
 
         const appMap = {
-            chat: { title: '💬 聊天中心', desc: '单人私聊与多人群聊系统，正在迁移至独立 js/apps/chat/ 模块。' },
-            moments: { title: '🌸 朋友圈', desc: '主播与 NPC 动态流与互动，正在迁移至独立 js/apps/moments/ 模块。' },
-            youtube: { title: '▶️ 油管视频', desc: '视频推荐流与发布共创，正在迁移至独立 js/apps/youtube/ 模块。' },
-            ao3: { title: '🎨 AO3 同人站', desc: '自建同人文与读者互动，正在迁移至独立 js/apps/ao3/ 模块。' },
-            streaming: { title: '🔴 直播推流', desc: '开播互动与弹幕分成，正在迁移至独立 js/apps/streaming/ 模块。' },
-            story: { title: '📖 主线频道', desc: '核心主线回合与剧情卡片，正在迁移至独立 js/apps/story/ 模块。' },
-            shop: { title: '🛒 商务赞助', desc: '品牌代言接单与道具商店，正在迁移至独立 js/apps/sponsor-shop/ 模块。' },
+            chat: { title: '💬 聊天中心', desc: '单人私聊与多人群聊系统。' },
+            moments: { title: '🌸 朋友圈', desc: '主播与 NPC 动态互动流。' },
+            youtube: { title: '▶️ 油管视频', desc: '视频推荐流与发布共创。' },
+            ao3: { title: '🎨 AO3 同人站', desc: '自建同人文与读者互动。' },
+            streaming: { title: '🔴 直播推流', desc: '开播互动与弹幕分成。' },
+            story: { title: '📖 主线频道', desc: '核心主线剧情卡片。' },
+            shop: { title: '🛒 商务赞助', desc: '品牌代言接单与道具商店。' },
             contacts: { title: '📒 通讯录', desc: 'NPC 与群聊名录管理。' },
-            settings: { title: '⚙️ 系统设置', desc: 'AI 模型 Key 配置与时区同步。' },
-            backup: { title: '📤 相册备份', desc: 'PNG 隐写存档卡片双轨导出与相册恢复。' }
+            backup: { title: '📤 相册备份', desc: 'PNG 隐写存档卡片双轨导出与恢复。' }
         };
 
-        const target = appMap[appKey] || { title: '应用窗口', desc: '应用正在装载中...' };
+        const target = appMap[appKey] || { title: '应用窗口', desc: '应用装载中...' };
         appModalTitle.textContent = target.title;
         appModalBody.innerHTML = `
             <div class="theme-setting-card">
                 <div class="theme-setting-title">${target.title} 就绪</div>
                 <div class="theme-setting-desc">${target.desc}</div>
-                <div style="margin-top: 14px; font-size: 11.5px; color: var(--primary); background: #fff0f3; padding: 8px 12px; border-radius: 8px; border: 1px dashed var(--primary2);">
-                    💡 架构提示：当前处于独立 App 模块化重构过渡期，各 App 正在分批次迁入 js/apps/。
-                </div>
             </div>
         `;
         appModal.classList.add('opened');
@@ -1319,7 +1054,6 @@
         if (appModal) appModal.classList.remove('opened');
     };
 
-    // 14. 启动手机外壳核心服务
     function bootShell() {
         setInterval(updatePhoneClock, 1000);
         updatePhoneClock();
@@ -1328,13 +1062,9 @@
         initPhoneThemeAndWallpapers();
         initLockGestures();
         initDesktopSwipeGestures();
-
         window.renderDesktopWidgetsLayout();
     }
 
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', bootShell);
-    } else {
-        bootShell();
-    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bootShell);
+    else bootShell();
 })();
