@@ -2,9 +2,9 @@
  * js/shell/phone-shell.js
  * 📱 虚拟手机硬件外壳与操作系统驱动层
  * 职责：时钟、硬件电量、网络/蓝牙感知、壁纸加载、冷启动主题恢复、自动明暗反色引擎、
- *       手势解锁与 App 调度、桌面双页平滑滑屏手势、组件流动态宿主系统（日历/待办自由多页穿梭与单双并排自适应）、
- *       桌面 App 图标与小组件全自由长按晃动编辑态、粉白仿Windows甜心弹窗新增待办、
- *       🌟 4 格宽专属复古星象塔罗大组件驱动引擎（图1~图4星象齿轮咬合旋转、翻牌、金箔启示与内置牌意）。
+ *       手势解锁与 App 调度、桌面双页平滑滑屏手势、组件流动态宿主系统（日历/待办）、
+ *       桌面 App 图标与小组件全自由长按晃动编辑态、粉白仿Windows甜心弹窗、
+ *       🌟 4 格宽专属复古星象塔罗大组件驱动引擎（图2同心大星盘加速自转/公转、图3卡背翻转阵列、复古金箔启示与内置牌意）。
  */
 
 (function () {
@@ -464,7 +464,7 @@
     };
 
     // ============================================================
-    // 🌟 4 格宽专属复古星象塔罗大组件系统
+    // 🌟 4 格宽专属复古星象塔罗大组件驱动（还原图2与图3）
     // ============================================================
     const TAROT_BRIEF_DATA = [
         { name: '愚者', img: '0.jpg', up: '纯粹初心·无畏冒险·新的可能', rev: '鲁莽冲动·缺乏方向·自我怀疑' },
@@ -491,7 +491,7 @@
         { name: '世界', img: '21.jpg', up: '阶段圆满·融会贯通·广阔宏图', rev: '功亏一篑·收尾迟滞·需补齐细节' }
     ];
 
-    window._tarotCurrentCard = null;
+    window._tarotCurrentCards = [];
     window._tarotIsSpinning = false;
 
     window.renderDesktopTarotWidget = function () {
@@ -508,25 +508,18 @@
             <div class="desktop-tarot-slot" id="desktopTarotSlot" onclick="window.handleTarotSlotClick()">
                 <div class="tarot-slot-overlay"></div>
                 
-                <!-- 阶段 1：常态 & 旋转星盘 -->
+                <!-- 阶段 1：同心大星盘（完全复刻图2大尺寸层叠） -->
                 <div class="tarot-stage-idle" id="tarotStageIdle">
-                    <img src="tarot/images/ring_galaxy.png" class="tarot-ring-galaxy" alt="星河">
-                    <img src="tarot/images/sun_spark.png" class="tarot-sun-spark" alt="太阳">
+                    <img src="tarot/images/ring_galaxy.png" class="tarot-ring-galaxy" alt="星河光环">
+                    <img src="tarot/images/crescent_frame.png" class="tarot-crescent-mid" alt="星月光环">
+                    <img src="tarot/images/sun_spark.png" class="tarot-sun-spark" alt="放射太阳">
                 </div>
 
-                <!-- 阶段 2：抽卡完成（图4星月画框 + 卡面 + 金箔启示按钮） -->
+                <!-- 阶段 2：抽卡结果阵列（完全复刻图3：底图铺满 + 卡背阵列 + 翻牌露出正面） -->
                 <div class="tarot-stage-result" id="tarotStageResult">
-                    <div class="tarot-result-left">
-                        <img src="tarot/images/crescent_frame.png" class="tarot-crescent-frame" alt="星月框">
-                        <div class="tarot-mini-card" id="tarotMiniCard" onclick="window.flipTarotMiniCard(event)">
-                            <img id="tarotMiniCardImg" src="tarot/images/0.jpg" alt="卡面">
-                        </div>
-                    </div>
-                    <div class="tarot-result-right">
-                        <div class="tarot-card-name-title" id="tarotCardNameTitle">愚者</div>
-                        <div class="tarot-card-orient-tag" id="tarotCardOrientTag">▲ 正位 · 今日启示</div>
-                        <button class="tarot-gold-btn" onclick="window.showTarotCardMeaning(event)">✦ 查看启示 ✦</button>
-                    </div>
+                    <div class="tarot-status-strip" id="tarotStatusStrip">✦ 点击卡牌翻转牌面 ✦</div>
+                    <div class="tarot-cards-row" id="tarotCardsRow"></div>
+                    <button class="tarot-gold-btn" id="tarotGoldBtn" style="display:none;" onclick="window.showTarotCardMeaning(event)">✦ 查看启示 ✦</button>
                 </div>
             </div>
         `;
@@ -540,9 +533,10 @@
         const resultStage = document.getElementById('tarotStageResult');
         if (!slot || !idleStage || !resultStage) return;
 
-        // 如果已经在结果界面，再次点击则重置为旋转准备态
+        // 如果已经在结果界面，再次点击组件空白处则重置为旋转准备态
         if (resultStage.classList.contains('active')) {
             resultStage.classList.remove('active');
+            slot.style.backgroundImage = 'none';
             idleStage.style.display = 'flex';
             setTimeout(() => { idleStage.style.opacity = '1'; }, 20);
             return;
@@ -552,11 +546,16 @@
         window._tarotIsSpinning = true;
         slot.classList.add('tarot-spinning');
 
-        // 随机抽取一张大阿卡纳与正逆位
-        const randomIndex = Math.floor(Math.random() * TAROT_BRIEF_DATA.length);
-        const isReversed = Math.random() < 0.4;
-        const card = TAROT_BRIEF_DATA[randomIndex];
-        window._tarotCurrentCard = Object.assign({}, card, { reversed: isReversed });
+        // 读取模式：默认三张（时间流），或单张
+        const mode = localStorage.getItem('mcyt_widget_tarot_spread') || 'triple';
+        const cardCount = (mode === 'single') ? 1 : 3;
+
+        // 随机抽取卡牌
+        const pool = [...TAROT_BRIEF_DATA].sort(() => Math.random() - 0.5);
+        window._tarotCurrentCards = pool.slice(0, cardCount).map(c => Object.assign({}, c, {
+            reversed: Math.random() < 0.4,
+            flipped: false
+        }));
 
         setTimeout(() => {
             slot.classList.remove('tarot-spinning');
@@ -565,42 +564,65 @@
             setTimeout(() => {
                 idleStage.style.display = 'none';
 
-                // 填充抽取出的卡牌信息
-                const nameEl = document.getElementById('tarotCardNameTitle');
-                const orientEl = document.getElementById('tarotCardOrientTag');
-                const imgEl = document.getElementById('tarotMiniCardImg');
-                const miniCard = document.getElementById('tarotMiniCard');
+                // 背景切换为图3对应的复古羊皮底板
+                slot.style.backgroundImage = "url('tarot/images/slot_bg.png')";
 
-                if (nameEl) nameEl.textContent = card.name;
-                if (orientEl) orientEl.textContent = isReversed ? '▼ 逆位 · 能量内敛' : '▲ 正位 · 顺畅前行';
-                if (imgEl) {
-                    imgEl.src = `tarot/images/${card.img}`;
-                    imgEl.style.transform = isReversed ? 'rotate(180deg)' : 'none';
+                const cardsRow = document.getElementById('tarotCardsRow');
+                const strip = document.getElementById('tarotStatusStrip');
+                const goldBtn = document.getElementById('tarotGoldBtn');
+
+                if (strip) strip.textContent = '✦ 点击卡牌翻转牌面 ✦';
+                if (goldBtn) goldBtn.style.display = 'none';
+
+                // 生成带有卡背 (card_back.png) 的卡位
+                if (cardsRow) {
+                    cardsRow.innerHTML = window._tarotCurrentCards.map((c, i) => `
+                        <div class="tarot-slot-card" id="slotCard-${i}" onclick="window.flipSlotCard(${i}, event)">
+                            <div class="tarot-slot-card-inner">
+                                <div class="tarot-card-face tarot-card-face-back"></div>
+                                <div class="tarot-card-face tarot-card-face-front ${c.reversed ? 'reversed' : ''}">
+                                    <img src="tarot/images/${c.img}" alt="${c.name}">
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
                 }
-                if (miniCard) miniCard.style.transform = 'scale(1)';
 
                 resultStage.classList.add('active');
                 window._tarotIsSpinning = false;
-            }, 300);
+            }, 280);
         }, 1800);
     };
 
-    window.flipTarotMiniCard = function (e) {
+    window.flipSlotCard = function (idx, e) {
         if (e) e.stopPropagation();
-        const imgEl = document.getElementById('tarotMiniCardImg');
-        if (!imgEl) return;
-        imgEl.classList.toggle('flipped');
-        if (imgEl.classList.contains('flipped')) {
-            imgEl.style.filter = 'grayscale(0.6) brightness(0.8)';
-        } else {
-            imgEl.style.filter = 'none';
+        const cardEl = document.getElementById('slotCard-' + idx);
+        if (!cardEl || cardEl.classList.contains('flipped')) return;
+
+        cardEl.classList.add('flipped');
+        if (window._tarotCurrentCards[idx]) {
+            window._tarotCurrentCards[idx].flipped = true;
+        }
+
+        // 检查是否全部翻转完成
+        const allFlipped = window._tarotCurrentCards.every(c => c.flipped);
+        if (allFlipped) {
+            const strip = document.getElementById('tarotStatusStrip');
+            const goldBtn = document.getElementById('tarotGoldBtn');
+            if (strip) {
+                const names = window._tarotCurrentCards.map(c => `${c.name}${c.reversed ? '(逆)' : ''}`).join(' · ');
+                strip.textContent = `[ ${names} ]`;
+            }
+            if (goldBtn) {
+                goldBtn.style.display = 'inline-flex';
+            }
         }
     };
 
     window.showTarotCardMeaning = function (e) {
         if (e) e.stopPropagation();
-        const card = window._tarotCurrentCard;
-        if (!card) return;
+        const cards = window._tarotCurrentCards;
+        if (!cards || !cards.length) return;
 
         const modal = document.getElementById('modal');
         const modalTitle = document.getElementById('retroModalTitle');
@@ -608,19 +630,29 @@
         const modalClose = document.getElementById('modalClose');
         if (!modal || !modalBody) return;
 
-        const orientStr = card.reversed ? '逆位' : '正位';
-        const meaning = card.reversed ? card.rev : card.up;
+        const posNames = (cards.length === 1) ? ['今日核心启示'] : ['过去的影响', '当下的状态', '未来的趋势'];
 
-        if (modalTitle) modalTitle.textContent = `✦ 星轨启示 · ${card.name} (${orientStr})`;
+        let meaningHTML = '';
+        cards.forEach((c, idx) => {
+            const orientStr = c.reversed ? '逆位' : '正位';
+            const meaning = c.reversed ? c.rev : c.up;
+            meaningHTML += `
+                <div style="margin-bottom:12px; padding:10px 12px; background:#fff8fa; border:1px dashed #ffd1dc; border-radius:8px;">
+                    <div style="font-size:13px; font-weight:700; color:#b82350; margin-bottom:4px;">
+                        ${posNames[idx]} · ${c.name} (${orientStr})
+                    </div>
+                    <div style="font-size:12px; color:#2e1a22; line-height:1.7;">
+                        ${meaning}
+                    </div>
+                </div>
+            `;
+        });
+
+        if (modalTitle) modalTitle.textContent = `✦ 星轨启示 · 命途推演`;
         modalBody.innerHTML = `
-            <div style="text-align:center; padding:10px 4px;">
-                <div style="font-size:14px; font-weight:700; color:#b82350; margin-bottom:8px;">
-                    [ ${card.name} · ${orientStr} ]
-                </div>
-                <div style="font-size:12.5px; color:#2e1a22; line-height:1.8; padding:10px 14px; background:#fff8fa; border:1px dashed #ffd1dc; border-radius:8px;">
-                    ${meaning}
-                </div>
-                <div style="margin-top:12px; font-size:11px; color:#7a505f;">
+            <div style="text-align:center; padding:6px 2px;">
+                ${meaningHTML}
+                <div style="margin-top:10px; font-size:11px; color:#7a505f;">
                     倾听内心的声音，今日决策尽在你的掌控之中。
                 </div>
             </div>
@@ -642,7 +674,6 @@
 
     // 10. 桌面组件流动态宿主系统
     window.renderDesktopWidgetsLayout = function () {
-        // 先渲染顶层专属 4 格塔罗组件
         window.renderDesktopTarotWidget();
 
         const slot1 = document.getElementById('page1WidgetSlot');
@@ -1250,11 +1281,9 @@
             return;
         }
 
-        // 🌟 独立塔罗 App 接入
-        if (appKey === 'tarot' && typeof window.renderTarotApp === 'function') {
-            appModalTitle.textContent = "✦ 塔罗星轨占卜";
-            window.renderTarotApp(appModalBody);
-            appModal.classList.add('opened');
+        // 🌟 唤起独立塔罗神殿
+        if (appKey === 'tarot') {
+            window.location.href = 'tarot/index.html';
             return;
         }
 
