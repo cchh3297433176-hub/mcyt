@@ -3,8 +3,8 @@
  * 📱 虚拟手机硬件外壳与操作系统驱动层
  * 职责：时钟、硬件电量、网络/蓝牙感知、壁纸加载、冷启动主题恢复、自动明暗反色引擎、
  *       手势解锁与 App 调度、桌面双页平滑滑屏手势、组件流动态宿主系统（日历/待办自由多页穿梭与单双并排自适应）、
- *       桌面 App 图标与小组件全自由长按晃动编辑态（虚线抖动、手指跟随拖拽位移、跨页自动翻页排布、永久位置持久化记忆）、
- *       粉白仿Windows甜心弹窗新增待办、纯净游戏向一日待办智能排布算法
+ *       桌面 App 图标与小组件全自由长按晃动编辑态、粉白仿Windows甜心弹窗新增待办、
+ *       🌟 4 格宽专属复古星象塔罗大组件驱动引擎（图1~图4星象齿轮咬合旋转、翻牌、金箔启示与内置牌意）。
  */
 
 (function () {
@@ -18,7 +18,7 @@
     };
 
     window._phoneNetworkState = {
-        type: 'wifi',     // 'wifi' | 'cellular' | 'none'
+        type: 'wifi',
         online: true,
         bluetooth: false
     };
@@ -171,7 +171,7 @@
         } catch (e) {}
     }
 
-    // 4. Canvas 内存壁纸取色引擎（稳定异步抓取与明暗反色）
+    // 4. Canvas 内存壁纸取色引擎
     window.analyzeImageLuminance = function (imageUrl, callback) {
         if (!imageUrl) {
             if (typeof callback === 'function') callback(false);
@@ -356,7 +356,7 @@
         }
     }
 
-    // 8. 桌面双页滑屏手势驱动器（绝对按 100% 页面平移）
+    // 8. 桌面双页滑屏手势驱动器
     let currentDesktopPage = 0;
     window.switchDesktopPage = function (pageIndex) {
         currentDesktopPage = pageIndex === 1 ? 1 : 0;
@@ -412,7 +412,7 @@
         }, { passive: true });
     }
 
-    // 9. 粉白仿 Windows 98 甜心弹窗（完全替代原生 prompt）
+    // 9. 粉白仿 Windows 98 甜心弹窗
     window.openRetroTodoInputModal = function (title, defaultVal, placeholder, onConfirm) {
         const modal = document.getElementById('modal');
         const modalTitle = document.getElementById('retroModalTitle');
@@ -463,8 +463,188 @@
         if (modalClose) modalClose.onclick = closeModalInternal;
     };
 
-    // 10. 桌面组件流动态宿主系统（支持日历与待办自由多页穿梭与单双自适应）
+    // ============================================================
+    // 🌟 4 格宽专属复古星象塔罗大组件系统
+    // ============================================================
+    const TAROT_BRIEF_DATA = [
+        { name: '愚者', img: '0.jpg', up: '纯粹初心·无畏冒险·新的可能', rev: '鲁莽冲动·缺乏方向·自我怀疑' },
+        { name: '魔术师', img: '1.jpg', up: '显化意志·创造充沛·万事俱备', rev: '才华受阻·沟通断层·缺乏自信' },
+        { name: '女祭司', img: '2.jpg', up: '直觉敏锐·洞悉潜意识·静待时机', rev: '忽视内心·情绪波动·秘密浮现' },
+        { name: '皇后', img: '3.jpg', up: '丰饶富足·温暖滋养·灵感涌动', rev: '灵感枯竭·过度依赖·自我忽视' },
+        { name: '皇帝', img: '4.jpg', up: '秩序威严·掌控稳固·理性规划', rev: '固执僵化·控制过度·规则冲突' },
+        { name: '教皇', img: '5.jpg', up: '智慧传承·良师指路·团队共鸣', rev: '墨守成规·认知偏差·非传统途径' },
+        { name: '恋人', img: '6.jpg', up: '真诚共鸣·默契契合·重要抉择', rev: '关系隔阂·价值观碰撞·犹豫不决' },
+        { name: '战车', img: '7.jpg', up: '意志克难·专注前行·凯旋在望', rev: '方向摇摆·缺乏耐力·用力过猛' },
+        { name: '力量', img: '8.jpg', up: '以柔克刚·坚定包容·内在无畏', rev: '内心焦灼·自我怀疑·耐性耗尽' },
+        { name: '隐士', img: '9.jpg', up: '深沉省思·向内探寻·明灯在前', rev: '过度孤立·拒绝指引·封闭自我' },
+        { name: '命运之轮', img: '10.jpg', up: '顺势而为·契机转折·因果流转', rev: '抗拒变动·逆势对抗·需要打破循环' },
+        { name: '正义', img: '11.jpg', up: '客观理性·责任清晰·真相大白', rev: '判断失衡·逃避担当·偏见干扰' },
+        { name: '倒吊人', img: '12.jpg', up: '换位思考·主动沉淀·以退为进', rev: '无谓牺牲·原地固步·不愿放手' },
+        { name: '死神', img: '13.jpg', up: '蜕变重生·告别过往·翻开新章', rev: '紧抓执念·拒绝结束·阻碍新生' },
+        { name: '节制', img: '14.jpg', up: '平衡调和·从容自洽·融合贯通', rev: '节律失衡·焦躁激进·缺乏耐心' },
+        { name: '恶魔', img: '15.jpg', up: '看清枷锁·觉察欲望·挣脱诱惑', rev: '重获自由·冲破束缚·重归理性' },
+        { name: '高塔', img: '16.jpg', up: '打破虚妄·突发顿悟·彻底重塑', rev: '勉强维稳·缓慢耗损·隐患残留' },
+        { name: '星星', img: '17.jpg', up: '希望之光·灵性能量·疗愈安宁', rev: '信念动摇·自我怀疑·迷失初衷' },
+        { name: '月亮', img: '18.jpg', up: '潜意识探索·穿越迷茫·信任直觉', rev: '疑云散去·走出阴霾·真相清朗' },
+        { name: '太阳', img: '19.jpg', up: '生机勃勃·明朗开朗·达成所愿', rev: '光芒被蔽·短暂延迟·调整心态' },
+        { name: '审判', img: '20.jpg', up: '听从召唤·脱胎换骨·觉醒新生', rev: '抗拒召唤·沉溺自责·迟迟未决' },
+        { name: '世界', img: '21.jpg', up: '阶段圆满·融会贯通·广阔宏图', rev: '功亏一篑·收尾迟滞·需补齐细节' }
+    ];
+
+    window._tarotCurrentCard = null;
+    window._tarotIsSpinning = false;
+
+    window.renderDesktopTarotWidget = function () {
+        const container = document.getElementById('desktopTarotContainer');
+        if (!container) return;
+
+        const enabled = localStorage.getItem('mcyt_widget_tarot_enabled') !== 'false';
+        if (!enabled) {
+            container.innerHTML = '';
+            return;
+        }
+
+        container.innerHTML = `
+            <div class="desktop-tarot-slot" id="desktopTarotSlot" onclick="window.handleTarotSlotClick()">
+                <div class="tarot-slot-overlay"></div>
+                
+                <!-- 阶段 1：常态 & 旋转星盘 -->
+                <div class="tarot-stage-idle" id="tarotStageIdle">
+                    <img src="tarot/images/ring_galaxy.png" class="tarot-ring-galaxy" alt="星河">
+                    <img src="tarot/images/sun_spark.png" class="tarot-sun-spark" alt="太阳">
+                </div>
+
+                <!-- 阶段 2：抽卡完成（图4星月画框 + 卡面 + 金箔启示按钮） -->
+                <div class="tarot-stage-result" id="tarotStageResult">
+                    <div class="tarot-result-left">
+                        <img src="tarot/images/crescent_frame.png" class="tarot-crescent-frame" alt="星月框">
+                        <div class="tarot-mini-card" id="tarotMiniCard" onclick="window.flipTarotMiniCard(event)">
+                            <img id="tarotMiniCardImg" src="tarot/images/0.jpg" alt="卡面">
+                        </div>
+                    </div>
+                    <div class="tarot-result-right">
+                        <div class="tarot-card-name-title" id="tarotCardNameTitle">愚者</div>
+                        <div class="tarot-card-orient-tag" id="tarotCardOrientTag">▲ 正位 · 今日启示</div>
+                        <button class="tarot-gold-btn" onclick="window.showTarotCardMeaning(event)">✦ 查看启示 ✦</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    };
+
+    window.handleTarotSlotClick = function () {
+        if (window._isWidgetEditMode || window._tarotIsSpinning) return;
+
+        const slot = document.getElementById('desktopTarotSlot');
+        const idleStage = document.getElementById('tarotStageIdle');
+        const resultStage = document.getElementById('tarotStageResult');
+        if (!slot || !idleStage || !resultStage) return;
+
+        // 如果已经在结果界面，再次点击则重置为旋转准备态
+        if (resultStage.classList.contains('active')) {
+            resultStage.classList.remove('active');
+            idleStage.style.display = 'flex';
+            setTimeout(() => { idleStage.style.opacity = '1'; }, 20);
+            return;
+        }
+
+        // 开始星象咬合旋转
+        window._tarotIsSpinning = true;
+        slot.classList.add('tarot-spinning');
+
+        // 随机抽取一张大阿卡纳与正逆位
+        const randomIndex = Math.floor(Math.random() * TAROT_BRIEF_DATA.length);
+        const isReversed = Math.random() < 0.4;
+        const card = TAROT_BRIEF_DATA[randomIndex];
+        window._tarotCurrentCard = Object.assign({}, card, { reversed: isReversed });
+
+        setTimeout(() => {
+            slot.classList.remove('tarot-spinning');
+            idleStage.style.opacity = '0';
+            
+            setTimeout(() => {
+                idleStage.style.display = 'none';
+
+                // 填充抽取出的卡牌信息
+                const nameEl = document.getElementById('tarotCardNameTitle');
+                const orientEl = document.getElementById('tarotCardOrientTag');
+                const imgEl = document.getElementById('tarotMiniCardImg');
+                const miniCard = document.getElementById('tarotMiniCard');
+
+                if (nameEl) nameEl.textContent = card.name;
+                if (orientEl) orientEl.textContent = isReversed ? '▼ 逆位 · 能量内敛' : '▲ 正位 · 顺畅前行';
+                if (imgEl) {
+                    imgEl.src = `tarot/images/${card.img}`;
+                    imgEl.style.transform = isReversed ? 'rotate(180deg)' : 'none';
+                }
+                if (miniCard) miniCard.style.transform = 'scale(1)';
+
+                resultStage.classList.add('active');
+                window._tarotIsSpinning = false;
+            }, 300);
+        }, 1800);
+    };
+
+    window.flipTarotMiniCard = function (e) {
+        if (e) e.stopPropagation();
+        const imgEl = document.getElementById('tarotMiniCardImg');
+        if (!imgEl) return;
+        imgEl.classList.toggle('flipped');
+        if (imgEl.classList.contains('flipped')) {
+            imgEl.style.filter = 'grayscale(0.6) brightness(0.8)';
+        } else {
+            imgEl.style.filter = 'none';
+        }
+    };
+
+    window.showTarotCardMeaning = function (e) {
+        if (e) e.stopPropagation();
+        const card = window._tarotCurrentCard;
+        if (!card) return;
+
+        const modal = document.getElementById('modal');
+        const modalTitle = document.getElementById('retroModalTitle');
+        const modalBody = document.getElementById('modalBody');
+        const modalClose = document.getElementById('modalClose');
+        if (!modal || !modalBody) return;
+
+        const orientStr = card.reversed ? '逆位' : '正位';
+        const meaning = card.reversed ? card.rev : card.up;
+
+        if (modalTitle) modalTitle.textContent = `✦ 星轨启示 · ${card.name} (${orientStr})`;
+        modalBody.innerHTML = `
+            <div style="text-align:center; padding:10px 4px;">
+                <div style="font-size:14px; font-weight:700; color:#b82350; margin-bottom:8px;">
+                    [ ${card.name} · ${orientStr} ]
+                </div>
+                <div style="font-size:12.5px; color:#2e1a22; line-height:1.8; padding:10px 14px; background:#fff8fa; border:1px dashed #ffd1dc; border-radius:8px;">
+                    ${meaning}
+                </div>
+                <div style="margin-top:12px; font-size:11px; color:#7a505f;">
+                    倾听内心的声音，今日决策尽在你的掌控之中。
+                </div>
+            </div>
+            <div style="display:flex; justify-content:center; margin-top:12px;">
+                <button class="retro-pink-btn" id="retroTarotKnowBtn" style="font-weight:bold; color:#b82350;">领悟启示</button>
+            </div>
+        `;
+
+        modal.classList.add('open');
+
+        const closeInternal = () => {
+            modal.classList.remove('open');
+            modalBody.innerHTML = '';
+            if (modalClose) modalClose.onclick = null;
+        };
+        document.getElementById('retroTarotKnowBtn').onclick = closeInternal;
+        if (modalClose) modalClose.onclick = closeInternal;
+    };
+
+    // 10. 桌面组件流动态宿主系统
     window.renderDesktopWidgetsLayout = function () {
+        // 先渲染顶层专属 4 格塔罗组件
+        window.renderDesktopTarotWidget();
+
         const slot1 = document.getElementById('page1WidgetSlot');
         const slot2 = document.getElementById('page2WidgetSlot');
         if (!slot1 || !slot2) return;
@@ -546,11 +726,9 @@
         if (calEnabled) window.renderDesktopCalendar();
         if (todoEnabled) window.renderDesktopTodos();
 
-        // 重新挂载小组件和所有图标的自由拖拽重排逻辑
         bindDesktopInteractiveDragEngine();
     };
 
-    // 🌟 全功能桌面拖拽排布引擎（小组件 + 9个 App 图标全员长按晃动拖拽）
     window._isWidgetEditMode = false;
 
     function enterDesktopEditMode() {
@@ -573,7 +751,6 @@
         });
     }
 
-    // 点击空白处退出编辑模式
     document.addEventListener('click', function (e) {
         if (!window._isWidgetEditMode) return;
         if (!e.target.closest('.calendar-widget-card') && !e.target.closest('.todo-widget-card') && !e.target.closest('.app-slot')) {
@@ -581,7 +758,6 @@
         }
     });
 
-    // 读取或保存桌面 App 图标顺序
     function saveDesktopAppOrder() {
         const p1Grid = document.querySelector('#page1WidgetSlot') ? document.querySelector('#page1WidgetSlot').parentElement.querySelector('.app-grid') : null;
         const p2Grid = document.querySelector('#page2WidgetSlot') ? document.querySelector('#page2WidgetSlot').parentElement.querySelector('.app-grid') : null;
@@ -634,7 +810,6 @@
     }
 
     function bindDesktopInteractiveDragEngine() {
-        // 先按历史缓存排布好图标位置
         restoreDesktopAppOrder();
 
         const draggables = document.querySelectorAll('.calendar-widget-card, .todo-widget-card, .app-slot');
@@ -651,8 +826,6 @@
             let rafPending = false;
             let pendingClientX = 0, pendingClientY = 0;
 
-            // FLIP 动画：先记下同一 grid 内所有图标的当前位置，DOM 顺序改变后
-            // 再让每个图标从"旧位置"平滑过渡到新位置，做出真机那种"自动让位"效果
             const captureFlip = (grid) => {
                 const before = new Map();
                 grid.querySelectorAll('.app-slot').forEach(el => {
@@ -674,8 +847,6 @@
                 };
             };
 
-            // App 图标专用：抬起来时生成一个跟手指走的"浮动分身"，
-            // 原图标本身留在网格里当占位符（透明），这样其它图标才能围绕它实时挪位
             const createGhost = () => {
                 const rect = item.getBoundingClientRect();
                 const ghost = item.cloneNode(true);
@@ -734,14 +905,13 @@
                     return;
                 }
 
-                // 进入编辑模式下的拖拽，严禁页面滚动
                 if (event && event.cancelable) event.preventDefault();
 
                 if (!isDragging) {
                     isDragging = true;
                     if (isAppSlot) {
                         ghostEl = createGhost();
-                        item.style.opacity = '0.001'; // 原图标只作占位，不可见但仍占据网格坐标
+                        item.style.opacity = '0.001';
                     } else {
                         item.style.zIndex = '9999';
                         item.style.opacity = '0.85';
@@ -756,7 +926,6 @@
                     item.style.transform = `translate3d(${deltaX}px, ${deltaY}px, 0) scale(1.08)`;
                 }
 
-                // 智能跨页翻页检测
                 const winW = window.innerWidth;
                 if (clientX < 28 && currentDesktopPage === 1) {
                     window.switchDesktopPage(0);
@@ -764,7 +933,6 @@
                     window.switchDesktopPage(1);
                 }
 
-                // App 图标：手指经过谁头上，谁和周边图标就实时让位（节流到每帧一次）
                 if (isAppSlot) {
                     pendingClientX = clientX;
                     pendingClientY = clientY;
@@ -792,7 +960,7 @@
                                     playFlip();
                                     lastTargetSlot = targetSlot;
                                 }
-                            } else if (targetGrid && !targetSlot && targetGrid !== item.parentNode) {
+                            } else if (targetGrid && !targetGrid.contains(item)) {
                                 const playFlip = captureFlip(targetGrid);
                                 targetGrid.appendChild(item);
                                 playFlip();
@@ -816,11 +984,8 @@
 
                 isDragging = false;
 
-                // 1. 如果是小组件：维持"拖到对面页"的原逻辑
                 if (item.classList.contains('calendar-widget-card') || item.classList.contains('todo-widget-card')) {
                     const wType = item.getAttribute('data-widget-type');
-                    // 注意：currentDesktopPage 是 0/1 两个值，而组件存储用的是 1/2 两个值。
-                    // 之前这里写反了，算出来的"目标页"其实等于组件当前所在页，导致拖了跟没拖一样。
                     const targetPage = (currentDesktopPage === 0) ? 2 : 1;
                     localStorage.setItem(`mcyt_widget_${wType}_page`, targetPage.toString());
 
@@ -833,31 +998,22 @@
                     return;
                 }
 
-                // 2. App 图标：位置在拖动过程中已经实时换好了，松手只需收尾保存
                 if (isAppSlot) {
                     cleanupVisuals();
                     saveDesktopAppOrder();
                 }
             };
 
-            // 触摸事件绑定
             item.addEventListener('touchstart', (e) => {
-                if (e.touches.length === 1) {
-                    onStart(e.touches[0].clientX, e.touches[0].clientY);
-                }
+                if (e.touches.length === 1) onStart(e.touches[0].clientX, e.touches[0].clientY);
             }, { passive: true });
 
             item.addEventListener('touchmove', (e) => {
-                if (e.touches.length === 1) {
-                    onMove(e.touches[0].clientX, e.touches[0].clientY, e);
-                }
+                if (e.touches.length === 1) onMove(e.touches[0].clientX, e.touches[0].clientY, e);
             }, { passive: false });
 
-            item.addEventListener('touchend', () => {
-                onEnd();
-            });
+            item.addEventListener('touchend', () => { onEnd(); });
 
-            // 鼠标事件
             item.addEventListener('mousedown', (e) => {
                 onStart(e.clientX, e.clientY);
                 const mouseMove = (ev) => onMove(ev.clientX, ev.clientY, ev);
@@ -1074,7 +1230,7 @@
 
     // 13. 全屏 App 窗口生命周期调度
     window.openPhoneApp = function (appKey) {
-        if (window._isWidgetEditMode) return; // 编辑状态下不唤醒应用
+        if (window._isWidgetEditMode) return;
 
         const appModal = document.getElementById('appModal');
         const appModalTitle = document.getElementById('appModalTitle');
@@ -1090,6 +1246,14 @@
 
         if (appKey === 'settings' && typeof window.renderSettingsApp === 'function') {
             window.renderSettingsApp();
+            appModal.classList.add('opened');
+            return;
+        }
+
+        // 🌟 独立塔罗 App 接入
+        if (appKey === 'tarot' && typeof window.renderTarotApp === 'function') {
+            appModalTitle.textContent = "✦ 塔罗星轨占卜";
+            window.renderTarotApp(appModalBody);
             appModal.classList.add('opened');
             return;
         }
