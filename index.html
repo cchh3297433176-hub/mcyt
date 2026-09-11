@@ -83,13 +83,13 @@
             <div class="desktop-pages-viewport" id="desktopPagesViewport">
                 <div class="desktop-pages-track" id="desktopPagesTrack">
                     
-                    <!-- 第 1 页：顶部空白预留 + 动态组件挂载位 + 舒适下沉应用网格 -->
+                    <!-- 第 1 页：顶部专属塔罗大组件 + 动态组件挂载位 + 应用网格 -->
                     <div class="desktop-page desktop-page-1" id="desktopPage1">
                         
-                        <!-- 🌟 顶部空白预留位（后续大组件专属槽位） -->
-                        <div class="desktop-future-slot"></div>
+                        <!-- 🌟 顶部 4 格宽专属复古星象塔罗大组件插槽 -->
+                        <div id="desktopTarotContainer"></div>
 
-                        <!-- 🌟 第 1 页动态组件插槽（支持单/双组件自由挂载） -->
+                        <!-- 🌟 第 1 页动态组件插槽（支持日历/待办单/双组件自由挂载） -->
                         <div class="desktop-widgets-slot" id="page1WidgetSlot"></div>
 
                         <!-- 🌟 紧凑贴在组件下方的应用网格 -->
@@ -157,13 +157,14 @@
                                 <div class="app-title-label">个性主题</div>
                             </div>
 
-                            <div class="app-slot" id="appSlotShop" onclick="openPhoneApp('shop')">
-                                <div class="app-icon-box" style="background: linear-gradient(135deg, #38d9a9, #087f5b);">
-                                    <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
-                                        <path d="M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-6 0h-4V4h4v2z"/>
+                            <!-- 塔罗占卜独立 APP -->
+                            <div class="app-slot" id="appSlotTarot" onclick="openPhoneApp('tarot')">
+                                <div class="app-icon-box" style="background: linear-gradient(135deg, #443224, #1a120b); border: 1px solid #d4af37;">
+                                    <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#f4d06f">
+                                        <path d="M12 2L14.4 7.2L20 9.6L15.6 13.8L16.8 19.5L12 16.8L7.2 19.5L8.4 13.8L4 9.6L9.6 7.2L12 2Z"/>
                                     </svg>
                                 </div>
-                                <div class="app-title-label">商务赞助</div>
+                                <div class="app-title-label">塔罗星轨</div>
                             </div>
                         </div>
                     </div>
@@ -171,7 +172,7 @@
                     <!-- 第 2 页：支持第二页动态组件挂载插槽 -->
                     <div class="desktop-page desktop-page-2" id="desktopPage2">
                         <div class="desktop-future-slot"></div>
-                        <!-- 🌟 第 2 页动态组件插槽（若把日历或待办移到第 2 页将在此渲染） -->
+                        <!-- 🌟 第 2 页动态组件插槽 -->
                         <div class="desktop-widgets-slot" id="page2WidgetSlot"></div>
                     </div>
 
@@ -283,6 +284,7 @@
     <!-- 4. 独立 App 模块矩阵 -->
     <script src="js/apps/theme/theme-app.js"></script>
     <script src="js/apps/settings/settings-app.js"></script>
+    <script src="js/apps/tarot/tarot-app.js"></script>
 
     <!-- 视图启动器 -->
     <script>
