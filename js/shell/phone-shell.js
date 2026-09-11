@@ -4,7 +4,7 @@
  * 职责：时钟、硬件电量、网络/蓝牙感知、壁纸加载、冷启动主题恢复、自动明暗反色引擎、
  *       手势解锁与 App 调度、桌面双页平滑滑屏手势、组件流动态宿主系统（日历/待办）、
  *       桌面 App 图标与小组件全自由长按晃动编辑态、粉白仿Windows甜心弹窗、
- *       🌟 4 格宽专属复古星象塔罗大组件驱动引擎（图一三图层等比叠加、图二三卡背翻转、领悟启示彻底回归初始待机）。
+ *       🌟 4 格宽专属复古星象塔罗大组件驱动引擎（图一三图层等比叠加、图二三卡背翻转、黑紫金高对比弹窗、领悟启示彻底回归初始待机）。
  */
 
 (function () {
@@ -353,7 +353,7 @@
     };
 
     // ============================================================
-    // 🌟 4 格宽专属复古星象塔罗大组件驱动引擎（图一二三精确复刻）
+    // 🌟 4 格宽专属复古星象塔罗大组件驱动引擎
     // ============================================================
     const TAROT_BRIEF_DATA = [
         { name: '愚者', img: '0.jpg', up: '纯粹初心·无畏冒险·新的可能', rev: '鲁莽冲动·缺乏方向·自我怀疑' },
@@ -393,7 +393,6 @@
             return;
         }
 
-        // 完美还原图一待机：三张画布等比例绝对重叠
         container.innerHTML = `
             <div class="desktop-tarot-slot" id="desktopTarotSlot" onclick="window.handleTarotSlotClick()">
                 <div class="tarot-slot-overlay"></div>
@@ -405,7 +404,7 @@
                     <img src="tarot/images/sun_spark.png" class="tarot-sun-spark" alt="金芒太阳">
                 </div>
 
-                <!-- 阶段 2：抽卡结果形态（完美复刻图二与图三：图四底图 + 卡背阵列） -->
+                <!-- 阶段 2：抽卡结果形态（图四背景 + 卡背阵列） -->
                 <div class="tarot-stage-result" id="tarotStageResult">
                     <img src="tarot/images/crescent_frame.png" class="tarot-result-bg" alt="月牙画框">
                     <div class="tarot-result-content">
@@ -426,7 +425,6 @@
         const resultStage = document.getElementById('tarotStageResult');
         if (!slot || !idleStage || !resultStage) return;
 
-        // 如果已经在结果展示阶段，点击卡片空白处平滑重置回待机态
         if (resultStage.classList.contains('active')) {
             resultStage.classList.remove('active');
             idleStage.style.display = 'flex';
@@ -434,15 +432,12 @@
             return;
         }
 
-        // 开始星轨旋转动画
         window._tarotIsSpinning = true;
         slot.classList.add('tarot-spinning');
 
-        // 读取牌阵模式：默认三张（时间流），或单张
         const mode = localStorage.getItem('mcyt_widget_tarot_spread') || 'triple';
         const cardCount = (mode === 'single') ? 1 : 3;
 
-        // 随机抽取
         const pool = [...TAROT_BRIEF_DATA].sort(() => Math.random() - 0.5);
         window._tarotCurrentCards = pool.slice(0, cardCount).map(c => Object.assign({}, c, {
             reversed: Math.random() < 0.4,
@@ -463,7 +458,6 @@
                 if (strip) strip.textContent = '✦ 轻触卡牌翻开牌面 ✦';
                 if (goldBtn) goldBtn.style.display = 'none';
 
-                // 生成带有新卡背 (card_back.png) 的卡位
                 if (cardsRow) {
                     cardsRow.innerHTML = window._tarotCurrentCards.map((c, i) => `
                         <div class="tarot-slot-card" id="slotCard-${i}" onclick="window.flipSlotCard(${i}, event)">
@@ -493,7 +487,6 @@
             window._tarotCurrentCards[idx].flipped = true;
         }
 
-        // 检查是否全部翻转完成
         const allFlipped = window._tarotCurrentCards.every(c => c.flipped);
         if (allFlipped) {
             const strip = document.getElementById('tarotStatusStrip');
@@ -508,7 +501,7 @@
         }
     };
 
-    // ✦ 领悟启示弹窗（升级为黑金灵性风格，关闭后彻底重置回初始待机态）
+    // ✦ 黑紫金高对比弹窗 + 领悟后彻底回归初始待机态
     window.showTarotCardMeaning = function (e) {
         if (e) e.stopPropagation();
         const cards = window._tarotCurrentCards;
@@ -521,8 +514,8 @@
         const modalClose = document.getElementById('modalClose');
         if (!modal || !modalBody) return;
 
-        // 换成黑金神秘弹窗皮肤
-        if (modalContent) modalContent.className = 'modal-box mystic-dark-window';
+        // 彻底绝杀粉白样式：套上专属黑紫金类名
+        if (modalContent) modalContent.className = 'modal-box tarot-mystic-modal-box';
         if (modalTitle) modalTitle.textContent = `✦ 星轨启示 · 命途推演 ✦`;
 
         const posNames = (cards.length === 1) ? ['今日核心启示'] : ['过去的影响', '当下的状态', '未来的趋势'];
@@ -532,11 +525,11 @@
             const orientStr = c.reversed ? '逆位' : '正位';
             const meaning = c.reversed ? c.rev : c.up;
             meaningHTML += `
-                <div style="margin-bottom:12px; padding:10px 12px; background:rgba(212,175,55,0.06); border:1px solid rgba(212,175,55,0.3); border-radius:10px;">
-                    <div style="font-size:13px; font-weight:700; color:#fce8a6; margin-bottom:4px;">
+                <div class="tarot-meaning-item-card">
+                    <div class="tarot-meaning-item-title">
                         ${posNames[idx]} · ${c.name} (${orientStr})
                     </div>
-                    <div style="font-size:12px; color:#dcd5cb; line-height:1.7;">
+                    <div class="tarot-meaning-item-desc">
                         ${meaning}
                     </div>
                 </div>
@@ -544,14 +537,14 @@
         });
 
         modalBody.innerHTML = `
-            <div style="text-align:center; padding:4px;">
+            <div style="padding:4px 2px;">
                 ${meaningHTML}
-                <div style="margin-top:10px; font-size:11px; color:#a69f92; letter-spacing:1px;">
+                <div style="text-align:center; margin:14px 0 16px; font-size:11.5px; color:#c7bfb4; letter-spacing:1px;">
                     倾听内心的声音，今日决策尽在你的掌控之中。
                 </div>
-            </div>
-            <div style="display:flex; justify-content:center; margin-top:14px;">
-                <button class="tarot-gold-btn" id="retroTarotKnowBtn" style="padding:6px 20px; font-size:12px;">✦ 领悟启示 ✦</button>
+                <div style="display:flex; justify-content:center;">
+                    <button class="tarot-purple-glow-btn" id="retroTarotKnowBtn">✦ 领悟启示 ✦</button>
+                </div>
             </div>
         `;
 
@@ -563,7 +556,7 @@
             if (modalContent) modalContent.className = 'modal-box retro-pink-window';
             if (modalClose) modalClose.onclick = null;
 
-            // 🌟 领悟启示后彻底回归初始待机界面！
+            // 🌟 领悟启示后立刻重置回图一初始待机！
             const idleStage = document.getElementById('tarotStageIdle');
             const resultStage = document.getElementById('tarotStageResult');
             if (idleStage && resultStage) {
@@ -961,8 +954,6 @@
 
     window.generateSmartDayTodos = function () {
         if (window._isWidgetEditMode) return;
-        const now = new Date();
-        const isWeekend = (now.getDay() === 0 || now.getDay() === 6);
         const newGenerated = [
             { id: 'g1', text: '构思 MC 视频大纲', done: false },
             { id: 'g2', text: '录制 Minecraft 生存素材', done: false },
@@ -1020,7 +1011,7 @@
             return;
         }
 
-        // 🌟 独立塔罗 App 入口：直接跳转至塔罗神殿
+        // 🌟 唤起独立塔罗神殿
         if (appKey === 'tarot') {
             window.location.href = 'tarot/index.html';
             return;
