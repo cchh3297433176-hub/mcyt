@@ -7,12 +7,10 @@
     -webkit-tap-highlight-color: transparent;
 }
 :root {
-    /* 主体粉色与白色核心变量（支持自定义覆盖） */
     --theme-main-pink: #ff5c8a;
     --theme-main-white: #ffffff;
     --theme-sub-white: #fff5f7;
 
-    /* 全局核心色彩映射 */
     --bg: var(--theme-sub-white);
     --bg2: #ffeef2;
     --card: var(--theme-main-white);
@@ -27,26 +25,21 @@
     --shadow: 0 4px 16px rgba(216, 27, 96, 0.08);
     --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 
-    /* 字体与系统图标颜色 */
     --app-font: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif;
     --app-icon-label-color: #2e1a22;
 
-    /* 状态栏三维定制变量：描边勾线、填充底色、底图 */
     --status-bar-stroke: none;
     --status-bar-fill: transparent;
     --status-bar-bg-img: none;
 
-    /* 默认壁纸全部精准指向内部相对路径 */
     --lock-bg-url: url('assets/system/default_lock.jpg');
     --desktop-bg-url: url('assets/system/default_desktop.jpg');
     
-    /* 动态自适应核心变量 */
     --status-color: #ffffff;
     --lock-text-color: #ffffff;
     --status-svg-fill: #ffffff;
     --star-glow-color: rgba(255, 255, 255, 0.9);
 
-    /* 真实粉色指针图片源 */
     --pixel-pointer-url: url('assets/system/pointer.png');
 }
 
@@ -298,7 +291,7 @@ body {
 }
 
 /* ============================================================ */
-/* 桌面主界面：精准还原黄金排布 & 支持多页自由组件流 */
+/* 桌面主界面：布局下移微调，给塔罗大组件留出黄金展示高度 */
 /* ============================================================ */
 .screen-desktop {
     position: absolute;
@@ -311,7 +304,7 @@ body {
     display: flex;
     flex-direction: column;
     justify-content: space-between;
-    padding: 42px 14px 10px 14px;
+    padding: 38px 12px 8px 12px;
     z-index: 500;
     overflow: hidden;
 }
@@ -321,13 +314,13 @@ body {
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
     border-radius: 18px;
-    padding: 7px 14px;
+    padding: 6px 14px;
     display: flex;
     justify-content: space-between;
     align-items: center;
     border: 1px solid rgba(255, 255, 255, 0.7);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
-    margin-bottom: 4px;
+    margin-bottom: 6px;
     flex-shrink: 0;
 }
 .widget-day-info {
@@ -341,7 +334,7 @@ body {
 .widget-lock-action {
     background: rgba(255, 92, 138, 0.12);
     border: none;
-    padding: 4px 10px;
+    padding: 3px 10px;
     border-radius: 12px;
     font-size: 11px;
     font-weight: 600;
@@ -372,28 +365,21 @@ body {
     display: flex;
     flex-direction: column;
     box-sizing: border-box;
-    padding: 2px 2px 2px 2px;
+    padding: 0 2px;
     overflow: hidden;
 }
 
 .desktop-future-slot {
-    flex: 1;
-    min-height: 10px;
-    max-height: 60px;
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    position: relative;
+    display: none;
 }
 
-/* 动态组件挂载插槽（整体向下微调，留足塔罗大组件呼吸空间） */
+/* 动态组件挂载插槽（整体向下移，留足上方塔罗大组件） */
 .desktop-widgets-slot {
     display: flex;
-    gap: 10px;
+    gap: 8px;
     width: 100%;
-    min-height: 160px;
-    margin-bottom: 8px;
+    min-height: 148px;
+    margin-bottom: 6px;
     flex-shrink: 0;
     align-items: stretch;
     position: relative;
@@ -409,7 +395,6 @@ body {
     margin: 0 auto;
 }
 
-/* 晃动动效 */
 @keyframes widgetJiggle {
     0% { transform: rotate(0deg); }
     25% { transform: rotate(-1.5deg) scale(0.98); }
@@ -424,16 +409,13 @@ body {
     user-select: none;
     -webkit-user-select: none;
 }
-.widget-jiggle:active {
-    cursor: grabbing !important;
-}
 
-/* 日历组件 */
+/* 日历小卡片微缩紧凑化 */
 .calendar-widget-card {
     flex: 1.05;
     background: #ffffff;
-    border-radius: 20px;
-    padding: 8px 10px;
+    border-radius: 18px;
+    padding: 6px 8px;
     box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
     border: 1px solid rgba(235, 232, 225, 0.85);
     display: flex;
@@ -445,45 +427,40 @@ body {
 }
 .calendar-widget-top {
     text-align: center;
-    margin-bottom: 2px;
 }
 .calendar-month-title {
-    font-size: 12px;
-    font-weight: 400;
-    letter-spacing: 3px;
-    color: #000000;
-    text-transform: uppercase;
-    line-height: 1.1;
-}
-.calendar-year-title {
-    font-size: 10px;
+    font-size: 11px;
     font-weight: 500;
     letter-spacing: 2px;
-    color: #222222;
-    display: inline-block;
-    border-bottom: 1px solid #000000;
+    color: #000;
+    text-transform: uppercase;
+}
+.calendar-year-title {
+    font-size: 9px;
+    font-weight: 500;
+    letter-spacing: 1.5px;
+    color: #222;
+    border-bottom: 1px solid #000;
     padding-bottom: 1px;
 }
 .calendar-week-row {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
     text-align: center;
-    font-size: 8px;
+    font-size: 7.5px;
     font-weight: 800;
-    color: #000000;
-    margin-bottom: 2px;
+    color: #000;
 }
 .calendar-days-grid {
     display: grid;
     grid-template-columns: repeat(7, 1fr);
-    gap: 1px 0;
     text-align: center;
-    font-size: 9.5px;
+    font-size: 8.5px;
     font-weight: 600;
-    color: #222222;
+    color: #222;
 }
 .calendar-day-cell {
-    height: 14px;
+    height: 13px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -492,34 +469,32 @@ body {
 .calendar-day-cell.today-cell::after {
     content: "";
     position: absolute;
-    width: 15px;
-    height: 15px;
+    width: 14px;
+    height: 14px;
     border-radius: 50%;
-    background: #111111;
+    background: #111;
     z-index: 1;
 }
 .calendar-day-cell.today-cell span {
-    color: #ffffff !important;
+    color: #fff !important;
     position: relative;
     z-index: 2;
     font-weight: 800;
 }
 .calendar-widget-notes {
-    font-size: 7.5px;
+    font-size: 7px;
     font-weight: 800;
-    letter-spacing: 1.5px;
-    color: #111111;
+    letter-spacing: 1px;
+    color: #111;
     text-transform: uppercase;
-    text-align: left;
-    margin-top: 1px;
 }
 
-/* 待办组件 */
+/* 待办组件微缩紧凑化 */
 .todo-widget-card {
     flex: 1.15;
     background: #fdfcf7;
-    border-radius: 20px;
-    padding: 8px 10px;
+    border-radius: 18px;
+    padding: 6px 10px;
     box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
     border: 1px solid rgba(235, 232, 225, 0.85);
     display: flex;
@@ -532,21 +507,20 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 4px;
+    margin-bottom: 2px;
     padding-bottom: 2px;
     border-bottom: 1px solid #f2ede4;
     flex-shrink: 0;
 }
 .todo-widget-count {
-    font-size: 11.5px;
+    font-size: 11px;
     font-weight: 600;
     color: #433d3c;
-    letter-spacing: 0.2px;
 }
 .todo-widget-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
 }
 .todo-icon-btn {
     background: transparent;
@@ -556,21 +530,14 @@ body {
     align-items: center;
     justify-content: center;
     color: #2b2725;
-    padding: 1px;
-    border-radius: 4px;
-    transition: transform 0.12s ease;
-}
-.todo-icon-btn:active {
-    transform: scale(0.85);
 }
 .todo-icon-btn svg {
-    width: 14px;
-    height: 14px;
+    width: 13px;
+    height: 13px;
     stroke: #2b2725;
     stroke-width: 2.2;
     fill: none;
 }
-
 .todo-list-wrap {
     flex: 1;
     overflow-y: auto;
@@ -585,25 +552,23 @@ body {
     display: flex;
     align-items: center;
     gap: 6px;
-    padding: 4px 0;
+    padding: 3px 0;
     border-bottom: 1px solid #f5f0e6;
-    transition: opacity 0.2s ease;
 }
 .todo-item-row:last-child {
     border-bottom: none;
 }
 .todo-check-circle {
-    width: 14px;
-    height: 14px;
+    width: 13px;
+    height: 13px;
     border-radius: 50%;
-    border: 1.5px solid #d4cdc5;
+    border: 1.2px solid #d4cdc5;
     background: transparent;
     flex-shrink: 0;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: all 0.2s ease;
 }
 .todo-item-row.completed .todo-check-circle {
     background: #63b97b;
@@ -611,18 +576,18 @@ body {
 }
 .todo-item-row.completed .todo-check-circle::after {
     content: "";
-    width: 3.5px;
-    height: 6px;
-    border: solid #ffffff;
-    border-width: 0 1.8px 1.8px 0;
+    width: 3px;
+    height: 5.5px;
+    border: solid #fff;
+    border-width: 0 1.5px 1.5px 0;
     transform: rotate(45deg) translate(-0.5px, -0.8px);
 }
 .todo-item-text {
-    font-size: 11.5px;
+    font-size: 11px;
     color: #2b2725;
     font-weight: 500;
     flex: 1;
-    line-height: 1.3;
+    line-height: 1.2;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -636,8 +601,8 @@ body {
 .app-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 10px 8px;
-    padding: 2px 2px 6px 2px;
+    gap: 8px 6px;
+    padding: 2px 0 4px 0;
     width: 100%;
     box-sizing: border-box;
     flex-shrink: 0;
@@ -646,7 +611,7 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 4px;
+    gap: 3px;
     cursor: pointer;
     position: relative;
     user-select: none;
@@ -657,11 +622,11 @@ body {
 }
 
 .app-icon-box {
-    width: 54px !important;
-    height: 54px !important;
-    max-width: 54px !important;
-    max-height: 54px !important;
-    border-radius: 15px;
+    width: 52px !important;
+    height: 52px !important;
+    max-width: 52px !important;
+    max-height: 52px !important;
+    border-radius: 14px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -678,20 +643,19 @@ body {
     object-fit: cover;
 }
 .app-icon-svg {
-    width: 28px !important;
-    height: 28px !important;
-    max-width: 28px !important;
-    max-height: 28px !important;
+    width: 27px !important;
+    height: 27px !important;
+    max-width: 27px !important;
+    max-height: 27px !important;
 }
 
 .app-title-label {
-    font-size: 11px;
+    font-size: 10.5px;
     color: var(--app-icon-label-color, #2e1a22);
     font-weight: 600;
     letter-spacing: 0.1px;
     white-space: nowrap;
     text-shadow: none !important;
-    transition: color 0.3s ease;
 }
 .app-unread-badge {
     position: absolute;
@@ -701,9 +665,9 @@ body {
     color: #fff;
     font-size: 10px;
     font-weight: 700;
-    min-width: 17px;
-    height: 17px;
-    border-radius: 9px;
+    min-width: 16px;
+    height: 16px;
+    border-radius: 8px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -711,14 +675,14 @@ body {
     border: 2px solid #ffffff;
 }
 
-/* 桌面小圆点指示器 */
+/* 分页指示器 */
 .desktop-pagination {
     display: flex;
     justify-content: center;
     align-items: center;
     gap: 6px;
-    height: 10px;
-    margin: 2px 0 4px 0;
+    height: 8px;
+    margin: 2px 0;
     flex-shrink: 0;
 }
 .pagination-dot {
@@ -733,29 +697,26 @@ body {
 .pagination-dot.active {
     width: 16px;
     background: #ffffff;
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
 }
 
-/* 底部毛玻璃 Dock 栏 */
+/* Dock 栏 */
 .dock-container {
     background: rgba(255, 255, 255, 0.55);
     backdrop-filter: blur(24px);
     -webkit-backdrop-filter: blur(24px);
     border-radius: 28px;
-    padding: 8px 14px;
+    padding: 6px 14px;
     display: flex;
     justify-content: space-around;
     align-items: center;
     border: 1px solid rgba(255, 255, 255, 0.45);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
-    margin-bottom: 4px;
+    margin-bottom: 2px;
     flex-shrink: 0;
 }
 .dock-container .app-icon-box {
     width: 48px !important;
     height: 48px !important;
-    max-width: 48px !important;
-    max-height: 48px !important;
 }
 .home-bar-pill {
     width: 120px;
@@ -786,9 +747,9 @@ body {
     opacity: 1;
 }
 .app-modal-head {
-    height: 70px;
+    height: 68px;
     background: #ffffff;
-    padding: 28px 16px 8px 16px;
+    padding: 24px 16px 8px 16px;
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -818,7 +779,7 @@ body {
     color: var(--text);
 }
 .app-modal-foot {
-    height: 30px;
+    height: 28px;
     background: #ffffff;
     display: flex;
     justify-content: center;
@@ -854,8 +815,262 @@ body {
 }
 
 /* ============================================================ */
-/* 复古弹窗设计与仿 Win98 输入框规范 */
+/* 🔮 桌面 4 格宽专属复古星象塔罗大组件体系（精准复刻图一二三） */
 /* ============================================================ */
+.desktop-tarot-slot {
+    width: 100%;
+    height: 192px;
+    min-height: 192px;
+    max-height: 192px;
+    margin-bottom: 8px;
+    flex-shrink: 0;
+    position: relative;
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: 0 8px 24px rgba(18, 11, 8, 0.45);
+    border: 1.5px solid #a38253;
+    cursor: pointer;
+    user-select: none;
+    touch-action: manipulation;
+    background-color: #120c08;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* 柔和环境光遮罩 */
+.tarot-slot-overlay {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle, rgba(0,0,0,0.05) 0%, rgba(14,9,6,0.55) 100%);
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* ========== 待机阶段：图一、二、三同尺寸画布层叠（还原图一） ========== */
+.tarot-stage-idle {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+    transition: opacity 0.4s ease;
+}
+
+/* 图 1：复古星图底版（100%铺满容器） */
+.tarot-layer-bg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    pointer-events: none;
+}
+
+/* 图 2：深邃星河光环（同比例居中重叠） */
+.tarot-ring-galaxy {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none;
+    transform-origin: center center;
+}
+
+/* 图 3：金芒小太阳（同比例中心咬合） */
+.tarot-sun-spark {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    pointer-events: none;
+    transform-origin: center center;
+}
+
+/* 旋转转动动效 */
+@keyframes tarotRingSpin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(720deg); }
+}
+@keyframes tarotSunDoubleSpin {
+    0% { transform: rotate(0deg) scale(1); }
+    50% { transform: rotate(-720deg) scale(1.15); filter: drop-shadow(0 0 12px rgba(255, 215, 0, 0.9)); }
+    100% { transform: rotate(-1440deg) scale(1); filter: drop-shadow(0 0 3px rgba(255, 215, 0, 0.4)); }
+}
+.tarot-spinning .tarot-ring-galaxy {
+    animation: tarotRingSpin 1.8s cubic-bezier(0.35, 0, 0.25, 1) forwards;
+}
+.tarot-spinning .tarot-sun-spark {
+    animation: tarotSunDoubleSpin 1.8s cubic-bezier(0.35, 0, 0.25, 1) forwards;
+}
+
+/* ========== 抽卡结果阶段：图四背景 + 卡背阵列（还原图二与图三） ========== */
+.tarot-stage-result {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 14px;
+    opacity: 0;
+    z-index: 3;
+    transition: opacity 0.45s ease;
+}
+.tarot-stage-result.active {
+    display: flex;
+    opacity: 1;
+}
+
+/* 结果背景：图四 crescent_frame.png 完整衬底 */
+.tarot-result-bg {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    pointer-events: none;
+    z-index: 1;
+}
+
+.tarot-result-content {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: 100%;
+}
+
+/* 牌名状态指示条 */
+.tarot-status-strip {
+  font-size: 11px;
+  color: #fce8a6;
+  font-weight: 700;
+  letter-spacing: 1.2px;
+  text-shadow: 0 1px 4px rgba(0,0,0,0.9);
+  margin-bottom: 6px;
+}
+
+/* 卡牌横排容器 */
+.tarot-cards-row {
+  display: flex;
+  gap: 16px;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  margin-bottom: 8px;
+}
+
+/* 单张卡牌容器 */
+.tarot-slot-card {
+  width: 66px;
+  height: 106px;
+  perspective: 1000px;
+  cursor: pointer;
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7);
+}
+.tarot-slot-card-inner {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+  transform-style: preserve-3d;
+}
+.tarot-slot-card.flipped .tarot-slot-card-inner {
+  transform: rotateY(180deg);
+}
+.tarot-card-face {
+  position: absolute;
+  inset: 0;
+  backface-visibility: hidden;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1.2px solid #a38253;
+}
+/* 卡背：黑金 card_back.png */
+.tarot-card-face-back {
+  background: #0d0f14 url('tarot/images/card_back.png') center/cover no-repeat;
+}
+/* 卡面正面 */
+.tarot-card-face-front {
+  background: #000000;
+  transform: rotateY(180deg);
+}
+.tarot-card-face-front img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.tarot-card-face-front.reversed img {
+  transform: rotate(180deg);
+}
+
+/* 复古奢华金箔按钮 */
+.tarot-gold-btn {
+    background: linear-gradient(180deg, #382717 0%, #1e130a 100%);
+    border: 1.2px solid #e5c365;
+    color: #fce8a6;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.8px;
+    padding: 5px 16px;
+    border-radius: 6px;
+    cursor: pointer;
+    box-shadow: inset 0 0 6px rgba(229, 195, 101, 0.4), 0 3px 8px rgba(0, 0, 0, 0.7);
+    transition: all 0.2s ease;
+    user-select: none;
+}
+.tarot-gold-btn:active {
+    transform: scale(0.96);
+    background: #140c06;
+    border-color: #ffd978;
+}
+
+/* ============================================================ */
+/* ✦ 星轨启示专属黑金神秘弹窗规范（彻底替换粉白窗口） ✦ */
+/* ============================================================ */
+.mystic-dark-window {
+    background: #12141c !important;
+    border: 2px solid #d4af37 !important;
+    border-radius: 16px !important;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.85), inset 0 0 16px rgba(212,175,55,0.15) !important;
+    padding: 6px !important;
+}
+.mystic-dark-titlebar {
+    background: linear-gradient(90deg, #2c1a3a, #1a1226, #2c1a3a);
+    padding: 8px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    color: #fce8a6;
+    font-weight: 700;
+    font-size: 13px;
+    letter-spacing: 1.5px;
+    border-radius: 12px 12px 0 0;
+    border-bottom: 1px solid rgba(212,175,55,0.3);
+}
+.mystic-dark-content {
+    background: #0d0f17;
+    padding: 16px 14px;
+    border-radius: 0 0 12px 12px;
+    max-height: 65vh;
+    overflow-y: auto;
+    color: #f6f2e8;
+}
+
+/* 仿 Win 凹陷输入框 & 按钮 */
 .retro-pink-window {
     background: #fff3f6 !important;
     border: 3px solid #ffccd9 !important;
@@ -868,7 +1083,6 @@ body {
     border-radius: 6px !important;
     padding: 4px !important;
 }
-
 .retro-pink-titlebar {
     background: linear-gradient(90deg, #ff5c8a, #ff7e9e, #ffaec0);
     padding: 5px 8px;
@@ -883,7 +1097,6 @@ body {
     border-radius: 3px 3px 0 0;
     margin-bottom: 6px;
 }
-
 .retro-pink-btn {
     background: #fff3f6;
     border: 2px solid;
@@ -911,7 +1124,6 @@ body {
     height: 20px;
     padding: 0;
 }
-
 .retro-pink-content {
     background: #ffffff;
     border: 2px solid;
@@ -921,7 +1133,6 @@ body {
     max-height: 65vh;
     overflow-y: auto;
 }
-
 .retro-input-field {
     width: 100%;
     border: 2px solid;
@@ -935,326 +1146,11 @@ body {
     box-sizing: border-box;
     margin: 8px 0 14px 0;
 }
-.retro-input-field:focus {
-    background: #fffdfd;
-}
-
-@keyframes pixelPointerHop {
-    0%, 100% { transform: translateY(-56%) translateX(0); }
-    50% { transform: translateY(-56%) translateX(-3px); }
-}
-
-.radio-group input[type="radio"],
-.theme-pointer-item input[type="radio"] {
-    position: absolute !important;
-    opacity: 0 !important;
-    width: 0 !important;
-    height: 0 !important;
-    pointer-events: none !important;
-    margin: 0 !important;
-}
-
-.theme-pointer-group {
-    display: flex;
-    flex-direction: column;
-    gap: 12px;
-    padding: 8px 4px;
-}
-
-.theme-pointer-item {
-    display: flex;
-    align-items: center;
-    position: relative;
-    cursor: pointer;
-    user-select: none;
-}
-
-.theme-pointer-item label {
-    display: flex;
-    align-items: center;
-    cursor: pointer;
-    font-size: 14px;
-    font-weight: 600;
-    color: #4a2f38;
-    transition: var(--transition);
-    position: relative;
-    padding-left: 28px;
-    line-height: 1.4;
-}
-
-.theme-pointer-item label::before {
-    content: "";
-    position: absolute;
-    left: 4px;
-    top: 50%;
-    transform: translateY(-56%);
-    width: 16px;
-    height: 20px;
-    background: transparent;
-    image-rendering: pixelated;
-    transition: opacity 0.15s ease;
-}
-
-.theme-pointer-item input[type="radio"]:checked + label {
-    color: var(--primary) !important;
-    font-weight: 750;
-}
-.theme-pointer-item input[type="radio"]:checked + label::before {
-    background: var(--pixel-pointer-url) no-repeat center center / contain;
-    animation: pixelPointerHop 0.8s infinite ease-in-out;
-}
-
-/* 裁剪弹窗 */
-.crop-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(18, 12, 15, 0.92);
-    z-index: 3500;
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px;
-    touch-action: none;
-}
-.crop-view-container {
-    flex: 1;
-    width: 100%;
-    position: relative;
-    overflow: hidden;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: #000000;
-    border-radius: 16px;
-}
-.crop-image-viewport {
-    position: absolute;
-    touch-action: none;
-    transform-origin: center center;
-    user-select: none;
-}
-.crop-frame-box {
-    position: absolute;
-    pointer-events: none;
-    border: 2px solid var(--primary);
-    box-shadow: 0 0 0 4000px rgba(0, 0, 0, 0.65);
-    border-radius: 12px;
-    z-index: 3510;
-}
-.crop-frame-box::after {
-    content: "可拖动与缩放调整取景范围";
-    position: absolute;
-    bottom: 8px;
-    left: 50%;
-    transform: translateX(-50%);
-    color: rgba(255, 255, 255, 0.85);
-    font-size: 11px;
-    white-space: nowrap;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.8);
-}
-
-.theme-action-bar {
-    display: flex;
-    gap: 8px;
-    margin-top: 14px;
-}
-
-.btn-primary {
-    width: 100%;
-    padding: 11px;
-    border: none;
-    border-radius: 12px;
-    background: linear-gradient(135deg, var(--primary), var(--primary2));
-    color: #fff;
-    font-size: 14px;
-    font-weight: 700;
-    cursor: pointer;
-    box-shadow: 0 4px 14px rgba(255, 92, 138, 0.25);
-    letter-spacing: 0.5px;
-    touch-action: manipulation;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-}
-.btn-primary:active {
-    transform: scale(0.98);
-}
-.btn-secondary {
-    padding: 8px 14px;
-    border: none;
-    border-radius: 10px;
-    background: #fff0f3;
-    color: var(--primary);
-    font-size: 13px;
-    font-weight: 600;
-    cursor: pointer;
-    border: 1px solid rgba(255, 92, 138, 0.15);
-    touch-action: manipulation;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    gap: 6px;
-}
-.btn-secondary:active {
-    background: #ffe2e8;
-}
-
-.widget-page-btn {
-    width: auto !important;
-    min-width: 54px !important;
-    height: 25px !important;
-    min-height: 25px !important;
-    max-height: 25px !important;
-    padding: 0 10px !important;
-    font-size: 11px !important;
-    font-weight: 600 !important;
-    line-height: 1 !important;
-    border-radius: 8px !important;
-    border: 1px solid rgba(255, 92, 138, 0.2) !important;
-    background: #fff0f3 !important;
-    color: var(--primary) !important;
-    white-space: nowrap !important;
-    flex-shrink: 0 !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    box-shadow: none !important;
-    cursor: pointer;
-    transition: all 0.15s ease;
-}
-.widget-page-btn.active {
-    background: linear-gradient(135deg, var(--primary), var(--primary2)) !important;
-    color: #ffffff !important;
-    border-color: var(--primary) !important;
-    box-shadow: 0 2px 6px rgba(255, 92, 138, 0.3) !important;
-    font-weight: 700 !important;
-}
-
-.custom-theme-target-dropdown {
-    width: 100%;
-    padding: 8px 12px;
-    border-radius: 10px;
-    border: 1px solid #ffd1dc;
-    background: #fff8fa;
-    font-size: 12.5px;
-    font-weight: 600;
-    color: var(--text);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    cursor: pointer;
-    user-select: none;
-}
-.custom-theme-dropdown-menu {
-    background: #ffffff;
-    border: 2px solid #ffd1dc;
-    border-radius: 10px;
-    box-shadow: 0 6px 20px rgba(216, 27, 96, 0.15);
-    margin-top: 4px;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-}
-.custom-theme-dropdown-item {
-    padding: 9px 12px;
-    font-size: 12px;
-    font-weight: 600;
-    color: var(--text);
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    transition: background 0.15s ease;
-}
-.custom-theme-dropdown-item:active,
-.custom-theme-dropdown-item.active {
-    background: #fff0f3;
-    color: var(--primary);
-}
-
-.hsv-number-input {
-    width: 38px;
-    height: 20px;
-    background: rgba(255, 255, 255, 0.12);
-    border: 1px solid rgba(255, 255, 255, 0.25);
-    border-radius: 4px;
-    color: #ffffff;
-    font-size: 11.5px;
-    text-align: center;
-    font-family: monospace;
-    outline: none;
-}
-.hsv-number-input:focus {
-    border-color: var(--primary);
-    background: rgba(255, 255, 255, 0.2);
-}
-
-.theme-setting-card {
-    background: #ffffff;
-    border-radius: 14px;
-    padding: 14px;
-    margin-bottom: 12px;
-    border: 1px solid #ffeef2;
-    box-shadow: 0 2px 8px rgba(216, 27, 96, 0.04);
-}
-.theme-setting-title {
-    font-size: 13.5px;
-    font-weight: 700;
-    color: var(--text);
-    margin-bottom: 8px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-}
-.theme-setting-desc {
-    font-size: 12px;
-    color: var(--text2);
-    margin-bottom: 10px;
-    line-height: 1.4;
-}
-
-.profile-chip-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 8px;
-    margin-top: 8px;
-}
-.profile-chip {
-    background: #fff0f3;
-    border: 1px solid #ffd1dc;
-    border-radius: 10px;
-    padding: 6px 10px;
-    font-size: 12px;
-    font-weight: 600;
-    color: #4a2f38;
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    cursor: pointer;
-    transition: all 0.2s ease;
-}
-.profile-chip.active {
-    background: var(--primary);
-    color: #ffffff;
-    border-color: var(--primary);
-    box-shadow: 0 2px 8px rgba(255, 92, 138, 0.3);
-}
-.profile-chip-del {
-    font-size: 11px;
-    opacity: 0.7;
-    margin-left: 2px;
-}
-.profile-chip-del:hover {
-    opacity: 1;
-}
-
 .modal-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(46, 26, 34, 0.45);
-    backdrop-filter: blur(4px);
+    background: rgba(14, 10, 16, 0.65);
+    backdrop-filter: blur(5px);
     display: none;
     justify-content: center;
     align-items: center;
@@ -1290,12 +1186,10 @@ body {
     font-size: 13px;
     backdrop-filter: blur(10px);
 }
-
 @keyframes bounceUp {
     0%, 100% { transform: translateY(0); opacity: 0.7; }
     50% { transform: translateY(-6px); opacity: 1; }
 }
-
 .debug-floating-orb {
     position: fixed;
     z-index: 1800;
@@ -1313,12 +1207,10 @@ body {
     cursor: grabbing;
     transform: scale(0.93);
 }
-
 .debug-floating-orb.orb-transparent-skin {
     box-shadow: none !important;
     filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15));
 }
-
 .orb-inner-icon {
     width: 65%;
     height: 65%;
@@ -1338,7 +1230,6 @@ body {
     height: 100%;
     fill: #ffffff;
 }
-
 .orb-badge {
     position: absolute;
     top: -4px;
@@ -1358,7 +1249,6 @@ body {
     box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
     pointer-events: none;
 }
-
 @keyframes orbShakeAnim {
     0% { transform: translate(0, 0) rotate(0deg); }
     15% { transform: translate(-3px, 2px) rotate(-4deg); }
@@ -1371,221 +1261,12 @@ body {
 .orb-shake {
     animation: orbShakeAnim 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both;
 }
-
 .orb-shape-btn.active-shape {
     background: var(--primary) !important;
     color: #ffffff !important;
     border-color: var(--primary) !important;
     box-shadow: 0 3px 10px rgba(255, 92, 138, 0.35);
 }
-
 .settings-nav-tabs::-webkit-scrollbar {
     display: none;
-}
-
-/* ============================================================ */
-/* 🔮 桌面 4 格宽专属复古星象塔罗大组件体系（完美还原图2与图3） */
-/* ============================================================ */
-.desktop-tarot-slot {
-    width: 100%;
-    min-height: 146px;
-    max-height: 154px;
-    margin-bottom: 8px;
-    flex-shrink: 0;
-    position: relative;
-    border-radius: 18px;
-    overflow: hidden;
-    box-shadow: 0 6px 20px rgba(18, 11, 8, 0.35);
-    border: 1.5px solid #a38253;
-    cursor: pointer;
-    user-select: none;
-    touch-action: manipulation;
-    background-color: #1a120c;
-    background-position: center;
-    background-size: cover;
-    background-repeat: no-repeat;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-/* 遮罩 */
-.tarot-slot-overlay {
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(circle, rgba(0,0,0,0.1) 0%, rgba(18,12,8,0.45) 100%);
-    pointer-events: none;
-    z-index: 1;
-}
-
-/* ========== 阶段 1：同心咬合大星盘（还原图2） ========== */
-.tarot-stage-idle {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 2;
-    transition: opacity 0.4s ease;
-}
-
-/* 外圈：深邃星河光环 */
-.tarot-ring-galaxy {
-    position: absolute;
-    width: 240px;
-    height: 240px;
-    object-fit: contain;
-    pointer-events: none;
-    transform-origin: center center;
-}
-
-/* 中圈：月牙星芒画框（完美与星河居中嵌套） */
-.tarot-crescent-mid {
-    position: absolute;
-    width: 120px;
-    height: 120px;
-    object-fit: contain;
-    pointer-events: none;
-    transform-origin: center center;
-}
-
-/* 内圈：金芒小太阳（中心咬合点） */
-.tarot-sun-spark {
-    position: absolute;
-    width: 68px;
-    height: 68px;
-    object-fit: contain;
-    pointer-events: none;
-    transform-origin: center center;
-}
-
-/* 抽卡转动动画：外圈顺时针狂转，内圈太阳逆时针极速自转，中圈星月微频律动 */
-@keyframes tarotOuterSpin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(720deg); }
-}
-@keyframes tarotMidPulse {
-    0% { transform: rotate(0deg) scale(1); }
-    50% { transform: rotate(180deg) scale(1.08); }
-    100% { transform: rotate(360deg) scale(1); }
-}
-@keyframes tarotSunFastSpin {
-    0% { transform: rotate(0deg) scale(1); }
-    50% { transform: rotate(-720deg) scale(1.25); filter: drop-shadow(0 0 10px rgba(255, 215, 0, 0.9)); }
-    100% { transform: rotate(-1440deg) scale(1); filter: drop-shadow(0 0 3px rgba(255, 215, 0, 0.5)); }
-}
-.tarot-spinning .tarot-ring-galaxy {
-    animation: tarotOuterSpin 1.8s cubic-bezier(0.35, 0, 0.25, 1) forwards;
-}
-.tarot-spinning .tarot-crescent-mid {
-    animation: tarotMidPulse 1.8s cubic-bezier(0.35, 0, 0.25, 1) forwards;
-}
-.tarot-spinning .tarot-sun-spark {
-    animation: tarotSunFastSpin 1.8s cubic-bezier(0.35, 0, 0.25, 1) forwards;
-}
-
-/* ========== 阶段 2：抽卡结果阵列（还原图3） ========== */
-.tarot-stage-result {
-    position: absolute;
-    inset: 0;
-    display: none;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 10px 14px;
-    opacity: 0;
-    z-index: 3;
-    transition: opacity 0.5s ease;
-}
-.tarot-stage-result.active {
-    display: flex;
-    opacity: 1;
-}
-
-/* 卡牌横排容器 */
-.tarot-cards-row {
-  display: flex;
-  gap: 16px;
-  justify-content: center;
-  align-items: center;
-  width: 100%;
-  margin-bottom: 8px;
-}
-
-/* 单张卡牌容器（支持 3D 翻牌） */
-.tarot-slot-card {
-  width: 58px;
-  height: 90px;
-  perspective: 1000px;
-  cursor: pointer;
-  border-radius: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.6);
-}
-.tarot-slot-card-inner {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1);
-  transform-style: preserve-3d;
-}
-.tarot-slot-card.flipped .tarot-slot-card-inner {
-  transform: rotateY(180deg);
-}
-.tarot-card-face {
-  position: absolute;
-  inset: 0;
-  backface-visibility: hidden;
-  border-radius: 6px;
-  overflow: hidden;
-  border: 1.2px solid #a38253;
-}
-/* 卡背：采用用户图四 card_back.png */
-.tarot-card-face-back {
-  background: #0d0f14 url('tarot/images/card_back.png') center/cover no-repeat;
-}
-/* 卡面 */
-.tarot-card-face-front {
-  background: #000000;
-  transform: rotateY(180deg);
-}
-.tarot-card-face-front img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-.tarot-card-face-front.reversed img {
-  transform: rotate(180deg);
-}
-
-/* 牌名与状态栏 */
-.tarot-status-strip {
-  font-size: 11px;
-  color: #f4d06f;
-  font-weight: 600;
-  letter-spacing: 1px;
-  text-shadow: 0 1px 4px rgba(0,0,0,0.8);
-  margin-bottom: 6px;
-}
-
-/* 复古奢华金箔按钮（无 emoji，极简烫金描边） */
-.tarot-gold-btn {
-    background: linear-gradient(180deg, #3b2d1d 0%, #20170e 100%);
-    border: 1px solid #d4af37;
-    color: #fce8a6;
-    font-size: 11px;
-    font-weight: 600;
-    letter-spacing: 1.5px;
-    padding: 5px 14px;
-    border-radius: 6px;
-    cursor: pointer;
-    box-shadow: inset 0 0 5px rgba(212, 175, 55, 0.4), 0 3px 8px rgba(0, 0, 0, 0.6);
-    transition: all 0.2s ease;
-    user-select: none;
-}
-.tarot-gold-btn:active {
-    transform: scale(0.96);
-    background: #18110a;
-    border-color: #fce8a6;
 }
