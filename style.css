@@ -368,6 +368,15 @@ body {
     overflow: hidden;
 }
 
+/* 桌面页顶部弹性预留空档：把塔罗组件/日历待办/App图标整体往下托，
+   同时给以后新增桌面组件预留生长空间。⚠️防回归标记：此区块删除或改为 flex:0
+   会导致所有内容整体贴顶、底部空出一大块——历史上已发生过多次，改动前先确认。 */
+.desktop-future-slot {
+    flex: 1;
+    min-height: 20px;
+    max-height: 120px;
+}
+
 /* 下方动态组件挂载插槽 */
 .desktop-widgets-slot {
     display: flex;
