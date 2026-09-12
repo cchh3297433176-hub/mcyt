@@ -128,6 +128,13 @@
                 howToUse: "将当前游戏进度无损隐写嵌入生成一张拍立得 PNG 相片保存到手机相册，随时导入照片秒级恢复存档，支持本地 JSON 文件导出导入与多存档槽位。"
             },
             {
+                name: "塔罗星轨",
+                code: "tarot",
+                location: "桌面第二页",
+                whatItDoes: "塔罗牌占卜抽卡与 AI 解读，桌面还有对应的星象大组件。",
+                howToUse: "点击抽取三张牌阵（过去·现在·未来）或单张核心启示牌阵，可呼叫 AI 结合抽到的牌面给出解读；AI 接口默认跟随系统设置里的大模型配置，也可以在塔罗自己的设置里单独绑定一套专属方案。"
+            },
+            {
                 name: "通讯录",
                 code: "contacts",
                 location: "底部 Dock 栏左侧",
@@ -137,7 +144,7 @@
         ],
 
         // 允许助手安全带路的 App 动作白名单
-        validAppCodes: ['theme', 'chat', 'moments', 'youtube', 'ao3', 'streaming', 'story', 'shop', 'settings', 'backup', 'contacts']
+        validAppCodes: ['theme', 'chat', 'moments', 'youtube', 'ao3', 'streaming', 'story', 'shop', 'settings', 'backup', 'contacts', 'tarot']
     };
 
     // 纯白话高密度提示词上下文
