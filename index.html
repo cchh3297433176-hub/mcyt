@@ -144,7 +144,7 @@
                             <!-- 个性主题 APP -->
                             <div class="app-slot" id="appSlotTheme" onclick="openPhoneApp('theme')">
                                 <div class="app-icon-box">
-                                    <img src="assets/icons/theme.png" alt="个性主题" />
+                                    <img src="assets/icons/theme.png" alt="个性主题" draggable="false" />
                                 </div>
                                 <div class="app-title-label">个性主题</div>
                             </div>
@@ -164,14 +164,14 @@
                     <!-- 第 2 页 -->
                     <div class="desktop-page desktop-page-2" id="desktopPage2">
                         <!-- ⚠️防回归：预留空档，勿删，见 style.css .desktop-future-slot 注释 -->
-                        <div class="desktop-future-slot"></div>
+                        <div class="desktop-future-slot desktop-future-slot--page2"></div>
                         <div class="desktop-widgets-slot" id="page2WidgetSlot"></div>
 
                         <!-- 🌟 塔罗独立 App 专属卡位：精确读取 assets/icons/tarot.png -->
                         <div class="app-grid">
                             <div class="app-slot" id="appSlotTarot" onclick="openPhoneApp('tarot')">
                                 <div class="app-icon-box" style="background: #19141f;">
-                                    <img src="assets/icons/tarot.png" alt="塔罗星轨" onerror="this.onerror=null;this.src='tarot/images/card_back.png';" />
+                                    <img src="assets/icons/tarot.png" alt="塔罗星轨" draggable="false" onerror="this.onerror=null;this.src='tarot/images/card_back.png';" />
                                 </div>
                                 <div class="app-title-label">塔罗星轨</div>
                             </div>
@@ -199,7 +199,7 @@
                     </div>
                     <div class="app-slot" onclick="openPhoneApp('settings')">
                         <div class="app-icon-box" style="width: 48px; height: 48px;">
-                            <img src="assets/icons/icon_settings.png" alt="系统设置" />
+                            <img src="assets/icons/icon_settings.png" alt="系统设置" draggable="false" />
                         </div>
                     </div>
                     <div class="app-slot" onclick="openPhoneApp('backup')">
