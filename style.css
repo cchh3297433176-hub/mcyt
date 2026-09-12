@@ -308,7 +308,7 @@ body {
     overflow: hidden;
 }
 
-/* 顶部信息条：状态栏与中间大组件间的缓冲，设置紧凑适中的下边距 */
+/* 顶部信息条：紧凑轻薄，保持与上方状态栏贴合 */
 .desktop-top-widget {
     background: rgba(255, 255, 255, 0.85);
     backdrop-filter: blur(20px);
@@ -320,7 +320,7 @@ body {
     align-items: center;
     border: 1px solid rgba(255, 255, 255, 0.7);
     box-shadow: 0 4px 16px rgba(0, 0, 0, 0.05);
-    margin-bottom: 4px;
+    margin-bottom: 2px;
     flex-shrink: 0;
 }
 .widget-day-info {
@@ -372,27 +372,29 @@ body {
 /* ============================================================
    ⚠️ 防回归核心区域：桌面各层垂直间距与呼吸感控制规范
    严禁随意修改下面的高度与间距！任何 AI 或开发者修 bug 时绝对不能
-   擅自将 min-height 调高或删除 .desktop-future-slot，否则会立即复现
-   “第二排 App 图标文字被切断 / 整体贴顶或挤爆底部”的严重回归！
+   擅自调大 min-height 或删掉 .desktop-future-slot，也不能随意改动
+   下方的 margin-bottom，否则会立即复现“图标被挤出视口/文字切断”！
    ============================================================ */
 .desktop-future-slot {
-    flex: 1;
-    min-height: 4px;
-    max-height: 48px;
+    flex: 0 0 auto;
+    height: 2px;
+    min-height: 0px;
+    max-height: 8px;
 }
-/* 第2页图标本身位置偏靠下，空档上限调小，避免图标被顶过低 */
+/* 第2页图标由于只有一行，适当保留弹性撑开 */
 .desktop-future-slot--page2 {
+    flex: 1;
     max-height: 28px;
 }
 
-/* 下方动态组件挂载插槽（日历/待办） */
+/* 下方动态组件挂载插槽（日历/待办）：下沉并拉开下方间隙 */
 .desktop-widgets-slot {
     display: flex;
     gap: 8px;
     width: 100%;
-    min-height: 136px;
-    height: 136px;
-    margin-bottom: 8px; /* 待办卡片与下方图标网格的呼吸空隙 */
+    min-height: 130px;
+    height: 130px;
+    margin-bottom: 13px; /* 🌟 待办卡片与下方图标网格的大间距，保证APP下沉且透气 */
     flex-shrink: 0;
     align-items: stretch;
     position: relative;
@@ -422,12 +424,12 @@ body {
     -webkit-user-select: none;
 }
 
-/* 日历组件 */
+/* 日历组件：微缩适配，保持精致 */
 .calendar-widget-card {
     flex: 1.05;
     background: #ffffff;
     border-radius: 18px;
-    padding: 5px 8px;
+    padding: 4px 7px;
     box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
     border: 1px solid rgba(235, 232, 225, 0.85);
     display: flex;
@@ -439,26 +441,26 @@ body {
 }
 .calendar-widget-top { text-align: center; }
 .calendar-month-title {
-    font-size: 10.5px; font-weight: 500; letter-spacing: 2px; color: #000; text-transform: uppercase;
+    font-size: 10px; font-weight: 500; letter-spacing: 2px; color: #000; text-transform: uppercase;
 }
 .calendar-year-title {
-    font-size: 8.5px; font-weight: 500; letter-spacing: 1.5px; color: #222; border-bottom: 1px solid #000; padding-bottom: 1px;
+    font-size: 8px; font-weight: 500; letter-spacing: 1.5px; color: #222; border-bottom: 1px solid #000; padding-bottom: 1px;
 }
 .calendar-week-row {
-    display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 7.5px; font-weight: 800; color: #000;
+    display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 7px; font-weight: 800; color: #000;
 }
 .calendar-days-grid {
-    display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 8px; font-weight: 600; color: #222;
+    display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 7.5px; font-weight: 600; color: #222;
 }
 .calendar-day-cell {
-    height: 12px; display: flex; align-items: center; justify-content: center; position: relative;
+    height: 11px; display: flex; align-items: center; justify-content: center; position: relative;
 }
 .calendar-day-cell.today-cell::after {
-    content: ""; position: absolute; width: 13px; height: 13px; border-radius: 50%; background: #111; z-index: 1;
+    content: ""; position: absolute; width: 12px; height: 12px; border-radius: 50%; background: #111; z-index: 1;
 }
 .calendar-day-cell.today-cell span { color: #fff !important; position: relative; z-index: 2; font-weight: 800; }
 .calendar-widget-notes {
-    font-size: 7px; font-weight: 800; letter-spacing: 1px; color: #111; text-transform: uppercase;
+    font-size: 6.5px; font-weight: 800; letter-spacing: 1px; color: #111; text-transform: uppercase;
 }
 
 /* 待办组件 */
@@ -466,7 +468,7 @@ body {
     flex: 1.15;
     background: #fdfcf7;
     border-radius: 18px;
-    padding: 6px 10px;
+    padding: 5px 9px;
     box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
     border: 1px solid rgba(235, 232, 225, 0.85);
     display: flex;
@@ -479,32 +481,32 @@ body {
     display: flex; justify-content: space-between; align-items: center;
     margin-bottom: 2px; padding-bottom: 2px; border-bottom: 1px solid #f2ede4; flex-shrink: 0;
 }
-.todo-widget-count { font-size: 11px; font-weight: 600; color: #433d3c; }
+.todo-widget-count { font-size: 10.5px; font-weight: 600; color: #433d3c; }
 .todo-widget-actions { display: flex; align-items: center; gap: 6px; }
 .todo-icon-btn { background: transparent; border: none; cursor: pointer; display: flex; align-items: center; color: #2b2725; }
-.todo-icon-btn svg { width: 13px; height: 13px; stroke: #2b2725; stroke-width: 2.2; fill: none; }
+.todo-icon-btn svg { width: 12px; height: 12px; stroke: #2b2725; stroke-width: 2.2; fill: none; }
 .todo-list-wrap { flex: 1; overflow-y: auto; display: flex; flex-direction: column; min-height: 0; }
 .todo-list-wrap::-webkit-scrollbar { display: none; }
-.todo-item-row { display: flex; align-items: center; gap: 6px; padding: 2px 0; border-bottom: 1px solid #f5f0e6; }
+.todo-item-row { display: flex; align-items: center; gap: 5px; padding: 2px 0; border-bottom: 1px solid #f5f0e6; }
 .todo-item-row:last-child { border-bottom: none; }
 .todo-check-circle {
-    width: 13px; height: 13px; border-radius: 50%; border: 1.2px solid #d4cdc5;
+    width: 12px; height: 12px; border-radius: 50%; border: 1.2px solid #d4cdc5;
     background: transparent; flex-shrink: 0; cursor: pointer; display: flex; align-items: center; justify-content: center;
 }
 .todo-item-row.completed .todo-check-circle { background: #63b97b; border-color: #63b97b; }
 .todo-item-row.completed .todo-check-circle::after {
-    content: ""; width: 3px; height: 5.5px; border: solid #fff; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg) translate(-0.5px, -0.8px);
+    content: ""; width: 3px; height: 5px; border: solid #fff; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg) translate(-0.5px, -0.8px);
 }
 .todo-item-text {
-    font-size: 10.5px; color: #2b2725; font-weight: 500; flex: 1; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-size: 10px; color: #2b2725; font-weight: 500; flex: 1; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .todo-item-row.completed .todo-item-text { color: #a49c95; text-decoration: line-through; }
 
-/* 应用网格：优化图标间距与高度保护，杜绝第二排标题被切底 */
+/* 应用网格：整体下移微调，字距行高精准防护 */
 .app-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 6px 6px;
+    gap: 8px 6px; /* 纵向间隔适度舒展 */
     padding: 2px 0 2px 0;
     width: 100%;
     box-sizing: border-box;
@@ -531,12 +533,12 @@ body {
     width: 100% !important; height: 100% !important; object-fit: cover;
     -webkit-user-drag: none; user-drag: none;
     -webkit-touch-callout: none; user-select: none;
-    pointer-events: none; /* 拖拽手势交给外层 .app-slot 处理，避免浏览器原生图片拖拽抢占事件 */
+    pointer-events: none;
 }
 .app-icon-svg { width: 26px !important; height: 26px !important; }
 .app-title-label {
     font-size: 10px; color: var(--app-icon-label-color, #2e1a22); font-weight: 600;
-    letter-spacing: 0.1px; white-space: nowrap; text-shadow: none !important; line-height: 1.2;
+    letter-spacing: 0.1px; white-space: nowrap; text-shadow: none !important; line-height: 1.1;
 }
 .app-unread-badge {
     position: absolute; top: -3px; right: -3px; background: #ff3366; color: #fff;
@@ -597,14 +599,14 @@ body {
 }
 
 /* ============================================================ */
-/* 🔮 桌面 4 格宽专属复古星象塔罗大组件体系（优化高度释放垂直透气感） */
+/* 🔮 桌面 4 格宽专属复古星象塔罗大组件体系（精准往上靠拢并留出大间距） */
 /* ============================================================ */
 .desktop-tarot-slot {
     width: 100%;
-    height: 164px;
-    min-height: 164px;
-    max-height: 164px;
-    margin-bottom: 8px; /* 与下方日历待办之间的透气间距 */
+    height: 156px;
+    min-height: 156px;
+    max-height: 156px;
+    margin-bottom: 14px; /* 🌟 塔罗组件与下方便签日历之间宽绰的大间距 */
     flex-shrink: 0;
     position: relative;
     border-radius: 18px;
@@ -692,7 +694,7 @@ body {
   display: flex; gap: 14px; justify-content: center; align-items: center; width: 100%; margin-bottom: 6px;
 }
 .tarot-slot-card {
-  width: 60px; height: 96px; perspective: 1000px; cursor: pointer; border-radius: 6px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7);
+  width: 58px; height: 92px; perspective: 1000px; cursor: pointer; border-radius: 6px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7);
 }
 .tarot-slot-card-inner {
   position: relative; width: 100%; height: 100%; transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1); transform-style: preserve-3d;
