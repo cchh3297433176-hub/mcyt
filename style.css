@@ -290,7 +290,7 @@ body {
 }
 
 /* ============================================================ */
-/* 桌面主界面：布局整体透气感与防切字间距优化 */
+/* 桌面主界面：整体下沉呼吸感与等比均匀分布体系 */
 /* ============================================================ */
 .screen-desktop {
     position: absolute;
@@ -308,7 +308,7 @@ body {
     overflow: hidden;
 }
 
-/* 顶部信息条：紧凑轻薄，保持与上方状态栏贴合 */
+/* 顶部信息条 */
 .desktop-top-widget {
     background: rgba(255, 255, 255, 0.85);
     backdrop-filter: blur(20px);
@@ -364,37 +364,38 @@ body {
     height: 100%;
     display: flex;
     flex-direction: column;
+    justify-content: flex-start;
     box-sizing: border-box;
     padding: 0 2px;
     overflow: hidden;
 }
 
 /* ============================================================
-   ⚠️ 防回归核心区域：桌面各层垂直间距与呼吸感控制规范
-   严禁随意修改下面的高度与间距！任何 AI 或开发者修 bug 时绝对不能
-   擅自调大 min-height 或删掉 .desktop-future-slot，也不能随意改动
-   下方的 margin-bottom，否则会立即复现“图标被挤出视口/文字切断”！
+   ⚠️ 防回归核心铁律：桌面整体下沉与层级纵向间距规范（严禁擅动！）
+   此处的 .desktop-future-slot 负责将整个桌面向下按压，产生顶部透气
+   留白；下方的塔罗组件、便签组件各带 10px~12px 的 margin-bottom，
+   形成如“图二”所示的层级疏朗呼吸感。
+   修任何 Bug 严禁删除此 slot，严禁将 min-height 设为 0，否则全盘拥挤贴顶！
    ============================================================ */
 .desktop-future-slot {
     flex: 0 0 auto;
-    height: 2px;
-    min-height: 0px;
-    max-height: 8px;
+    height: 18px;
+    min-height: 14px;
+    max-height: 24px;
 }
-/* 第2页图标由于只有一行，适当保留弹性撑开 */
 .desktop-future-slot--page2 {
     flex: 1;
-    max-height: 28px;
+    max-height: 36px;
 }
 
-/* 下方动态组件挂载插槽（日历/待办）：下沉并拉开下方间隙 */
+/* 下方动态组件挂载插槽（日历/待办）：下沉并与下方APP拉开距离 */
 .desktop-widgets-slot {
     display: flex;
     gap: 8px;
     width: 100%;
-    min-height: 130px;
-    height: 130px;
-    margin-bottom: 13px; /* 🌟 待办卡片与下方图标网格的大间距，保证APP下沉且透气 */
+    min-height: 128px;
+    height: 128px;
+    margin-bottom: 12px; /* 🌟 待办日历与下方 App 图标之间的舒适透气间距 */
     flex-shrink: 0;
     align-items: stretch;
     position: relative;
@@ -424,7 +425,7 @@ body {
     -webkit-user-select: none;
 }
 
-/* 日历组件：微缩适配，保持精致 */
+/* 日历组件：精致微调，比例匀称 */
 .calendar-widget-card {
     flex: 1.05;
     background: #ffffff;
@@ -502,12 +503,12 @@ body {
 }
 .todo-item-row.completed .todo-item-text { color: #a49c95; text-decoration: line-through; }
 
-/* 应用网格：整体下移微调，字距行高精准防护 */
+/* 应用网格：整体下沉稳定，严防第二排切字 */
 .app-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
-    gap: 8px 6px; /* 纵向间隔适度舒展 */
-    padding: 2px 0 2px 0;
+    gap: 7px 6px;
+    padding: 0 0 2px 0;
     width: 100%;
     box-sizing: border-box;
     flex-shrink: 0;
@@ -524,7 +525,7 @@ body {
 }
 .app-slot:active .app-icon-box { transform: scale(0.92); }
 .app-icon-box {
-    width: 50px !important; height: 50px !important; max-width: 50px !important; max-height: 50px !important;
+    width: 49px !important; height: 49px !important; max-width: 49px !important; max-height: 49px !important;
     border-radius: 14px; display: flex; align-items: center; justify-content: center;
     box-shadow: 0 4px 14px rgba(0,0,0,0.12); transition: transform 0.15s cubic-bezier(0.3, 1.4, 0.5, 1);
     position: relative; overflow: hidden; background: #ffffff; flex-shrink: 0;
@@ -535,10 +536,10 @@ body {
     -webkit-touch-callout: none; user-select: none;
     pointer-events: none;
 }
-.app-icon-svg { width: 26px !important; height: 26px !important; }
+.app-icon-svg { width: 25px !important; height: 25px !important; }
 .app-title-label {
     font-size: 10px; color: var(--app-icon-label-color, #2e1a22); font-weight: 600;
-    letter-spacing: 0.1px; white-space: nowrap; text-shadow: none !important; line-height: 1.1;
+    letter-spacing: 0.1px; white-space: nowrap; text-shadow: none !important; line-height: 1.15;
 }
 .app-unread-badge {
     position: absolute; top: -3px; right: -3px; background: #ff3366; color: #fff;
@@ -599,14 +600,14 @@ body {
 }
 
 /* ============================================================ */
-/* 🔮 桌面 4 格宽专属复古星象塔罗大组件体系（精准往上靠拢并留出大间距） */
+/* 🔮 桌面 4 格宽专属复古星象塔罗大组件体系（整体下沉与透气） */
 /* ============================================================ */
 .desktop-tarot-slot {
     width: 100%;
-    height: 156px;
-    min-height: 156px;
-    max-height: 156px;
-    margin-bottom: 14px; /* 🌟 塔罗组件与下方便签日历之间宽绰的大间距 */
+    height: 152px;
+    min-height: 152px;
+    max-height: 152px;
+    margin-bottom: 10px; /* 🌟 塔罗与下方日历便签之间的透气空隙 */
     flex-shrink: 0;
     position: relative;
     border-radius: 18px;
