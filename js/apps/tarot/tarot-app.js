@@ -10,8 +10,21 @@
 
     // 默认读取主系统大模型配置
     function getSystemAIConfig() {
+        // 优先读取覆盖用户自选预设（若塔罗内单独切换过 Profile）
+        const overrideUrl = localStorage.getItem('tarot_ai_base_url');
+        const overrideKey = localStorage.getItem('tarot_ai_api_key');
+        if (overrideUrl || overrideKey) {
+            return {
+                baseUrl: overrideUrl || 'https://api.openai.com/v1',
+                apiKey: overrideKey || '',
+                model: localStorage.getItem('tarot_ai_model') || 'gpt-4o-mini'
+            };
+        }
+
         try {
-            const raw = localStorage.getItem('mcyt_ai_config');
+            // 真实主系统存储键名为 mc_yt_ai_config（mc 和 yt 之间有下划线），
+            // 兼容旧键名 mcyt_ai_config 以防万一
+            const raw = localStorage.getItem('mc_yt_ai_config') || localStorage.getItem('mcyt_ai_config');
             if (raw) {
                 const parsed = JSON.parse(raw);
                 if (parsed && (parsed.apiKey || parsed.baseUrl)) {
@@ -25,16 +38,17 @@
         } catch (_) {}
 
         return {
-            baseUrl: localStorage.getItem('tarot_ai_base_url') || 'https://api.openai.com/v1',
-            apiKey: localStorage.getItem('tarot_ai_api_key') || '',
-            model: localStorage.getItem('tarot_ai_model') || 'gpt-4o-mini'
+            baseUrl: 'https://api.openai.com/v1',
+            apiKey: '',
+            model: 'gpt-4o-mini'
         };
     }
 
-    // 获取系统设置里已保存的所有 Profiles
+    // 获取系统设置里已保存的所有 Profiles（真实键名 mcyt_ai_profiles，
+    // 结构为 [{ name, config: { baseUrl, apiKey, model } }]）
     function getSystemSavedProfiles() {
         try {
-            const raw = localStorage.getItem('mcyt_saved_models_v2');
+            const raw = localStorage.getItem('mcyt_ai_profiles');
             if (raw) {
                 const list = JSON.parse(raw);
                 if (Array.isArray(list) && list.length) return list;
@@ -53,7 +67,8 @@
 
         let profileOptionsHTML = `<option value="current">当前系统主配置 (${aiConfig.model || '未设定'})</option>`;
         savedProfiles.forEach((p, idx) => {
-            profileOptionsHTML += `<option value="${idx}">预设：${p.name || ('配置 ' + (idx + 1))} (${p.model})</option>`;
+            const pModel = (p.config && p.config.model) || '未设定';
+            profileOptionsHTML += `<option value="${idx}">预设：${p.name || ('配置 ' + (idx + 1))} (${pModel})</option>`;
         });
 
         container.innerHTML = `
@@ -171,13 +186,14 @@
                 } else {
                     const idx = parseInt(val, 10);
                     const p = savedProfiles[idx];
-                    if (p) {
-                        localStorage.setItem('tarot_ai_base_url', p.baseUrl || '');
-                        localStorage.setItem('tarot_ai_api_key', p.apiKey || '');
-                        localStorage.setItem('tarot_ai_model', p.model || '');
-                        document.getElementById('tarotActiveEndpointText').textContent = p.baseUrl || '继承主系统';
-                        document.getElementById('tarotActiveModelText').textContent = p.model || '未设定';
-                        if (typeof showToast === 'function') showToast(`已切换为【${p.name || p.model}】预设`);
+                    const pc = p && p.config;
+                    if (pc) {
+                        localStorage.setItem('tarot_ai_base_url', pc.baseUrl || '');
+                        localStorage.setItem('tarot_ai_api_key', pc.apiKey || '');
+                        localStorage.setItem('tarot_ai_model', pc.model || '');
+                        document.getElementById('tarotActiveEndpointText').textContent = pc.baseUrl || '继承主系统';
+                        document.getElementById('tarotActiveModelText').textContent = pc.model || '未设定';
+                        if (typeof showToast === 'function') showToast(`已切换为【${p.name || pc.model}】预设`);
                     }
                 }
             };
