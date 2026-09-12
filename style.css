@@ -290,7 +290,7 @@ body {
 }
 
 /* ============================================================ */
-/* 桌面主界面：整体下沉呼吸感与等比均匀分布体系 */
+/* 桌面主界面：P2 级极致透气与大留白纵向均匀分布体系 */
 /* ============================================================ */
 .screen-desktop {
     position: absolute;
@@ -371,31 +371,150 @@ body {
 }
 
 /* ============================================================
-   ⚠️ 防回归核心铁律：桌面整体下沉与层级纵向间距规范（严禁擅动！）
-   此处的 .desktop-future-slot 负责将整个桌面向下按压，产生顶部透气
-   留白；下方的塔罗组件、便签组件各带 10px~12px 的 margin-bottom，
-   形成如“图二”所示的层级疏朗呼吸感。
-   修任何 Bug 严禁删除此 slot，严禁将 min-height 设为 0，否则全盘拥挤贴顶！
+   ⚠️ 绝对防回归铁律【严禁擅改】：P2 大透气感间距核心控制区！
+   此处的间距经过高精度平衡计算：
+   1. 顶部预留 slot 让塔罗组件保持适度下沉，不顶头。
+   2. 塔罗组件 margin-bottom: 20px，保证塔罗与便签之间留出宽阔大空隙！
+   3. 便签日历 margin-bottom: 22px，保证便签与 App 图标之间留出宽阔大空隙！
+   4. 图标紧凑防护，杜绝第二排文字切断！
+   后来的 AI 或维护者严禁将这些 margin-bottom 缩减，否则立即重现拥挤！
    ============================================================ */
 .desktop-future-slot {
     flex: 0 0 auto;
-    height: 18px;
-    min-height: 14px;
-    max-height: 24px;
+    height: 8px;
+    min-height: 6px;
+    max-height: 12px;
 }
 .desktop-future-slot--page2 {
     flex: 1;
     max-height: 36px;
 }
 
-/* 下方动态组件挂载插槽（日历/待办）：下沉并与下方APP拉开距离 */
+/* 🔮 1. 桌面复古星象塔罗大组件：轻巧高度 + 20px 宽绰底距 */
+.desktop-tarot-slot {
+    width: 100%;
+    height: 148px;
+    min-height: 148px;
+    max-height: 148px;
+    margin-bottom: 20px; /* 🌟 核心透气间距：拉开塔罗与便签之间的距离！ */
+    flex-shrink: 0;
+    position: relative;
+    border-radius: 18px;
+    overflow: hidden;
+    box-shadow: 0 8px 24px rgba(18, 11, 8, 0.45);
+    border: 1.5px solid #a38253;
+    cursor: pointer;
+    user-select: none;
+    touch-action: manipulation;
+    background-color: #120c08;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.tarot-slot-overlay {
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(circle, rgba(0,0,0,0.05) 0%, rgba(14,9,6,0.55) 100%);
+    pointer-events: none;
+    z-index: 1;
+}
+
+/* 待机状态：同比例居中重叠 */
+.tarot-stage-idle {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+    transition: opacity 0.4s ease;
+}
+.tarot-layer-bg {
+    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none;
+}
+.tarot-ring-galaxy {
+    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; transform-origin: center center;
+}
+.tarot-sun-spark {
+    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; transform-origin: center center;
+}
+
+@keyframes tarotRingSpin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(720deg); }
+}
+@keyframes tarotSunDoubleSpin {
+    0% { transform: rotate(0deg) scale(1); }
+    50% { transform: rotate(-720deg) scale(1.15); filter: drop-shadow(0 0 12px rgba(255, 215, 0, 0.9)); }
+    100% { transform: rotate(-1440deg) scale(1); filter: drop-shadow(0 0 3px rgba(255, 215, 0, 0.4)); }
+}
+.tarot-spinning .tarot-ring-galaxy { animation: tarotRingSpin 1.8s cubic-bezier(0.35, 0, 0.25, 1) forwards; }
+.tarot-spinning .tarot-sun-spark { animation: tarotSunDoubleSpin 1.8s cubic-bezier(0.35, 0, 0.25, 1) forwards; }
+
+/* 抽卡结果阶段 */
+.tarot-stage-result {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 6px 12px;
+    opacity: 0;
+    z-index: 3;
+    transition: opacity 0.45s ease;
+}
+.tarot-stage-result.active { display: flex; opacity: 1; }
+
+.tarot-result-bg {
+    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; z-index: 1;
+}
+.tarot-result-content {
+    position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%;
+}
+.tarot-status-strip {
+  font-size: 10px; color: #fce8a6; font-weight: 700; letter-spacing: 1.2px; text-shadow: 0 1px 4px rgba(0,0,0,0.9); margin-bottom: 4px;
+}
+.tarot-cards-row {
+  display: flex; gap: 14px; justify-content: center; align-items: center; width: 100%; margin-bottom: 6px;
+}
+.tarot-slot-card {
+  width: 56px; height: 90px; perspective: 1000px; cursor: pointer; border-radius: 6px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7);
+}
+.tarot-slot-card-inner {
+  position: relative; width: 100%; height: 100%; transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1); transform-style: preserve-3d;
+}
+.tarot-slot-card.flipped .tarot-slot-card-inner { transform: rotateY(180deg); }
+.tarot-card-face {
+  position: absolute; inset: 0; backface-visibility: hidden; border-radius: 6px; overflow: hidden; border: 1.2px solid #a38253;
+}
+.tarot-card-face-back { background: #0d0f14 url('tarot/images/card_back.png') center/cover no-repeat; }
+.tarot-card-face-front { background: #000000; transform: rotateY(180deg); }
+.tarot-card-face-front img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.tarot-card-face-front.reversed img { transform: rotate(180deg); }
+
+.tarot-gold-btn {
+    background: linear-gradient(180deg, #382717 0%, #1e130a 100%);
+    border: 1.2px solid #e5c365; color: #fce8a6; font-size: 10px; font-weight: 700;
+    letter-spacing: 1.8px; padding: 4px 12px; border-radius: 6px; cursor: pointer;
+    box-shadow: inset 0 0 6px rgba(229, 195, 101, 0.4), 0 3px 8px rgba(0, 0, 0, 0.7);
+    transition: all 0.2s ease; user-select: none;
+}
+.tarot-gold-btn:active { transform: scale(0.96); background: #140c06; border-color: #ffd978; }
+
+/* 📝 2. 日历与待办组件挂载插槽：精致微缩 + 22px 宽绰底距 */
 .desktop-widgets-slot {
     display: flex;
     gap: 8px;
     width: 100%;
-    min-height: 128px;
-    height: 128px;
-    margin-bottom: 12px; /* 🌟 待办日历与下方 App 图标之间的舒适透气间距 */
+    min-height: 124px;
+    height: 124px;
+    margin-bottom: 22px; /* 🌟 核心透气间距：拉开便签与 App 图标之间的距离！ */
     flex-shrink: 0;
     align-items: stretch;
     position: relative;
@@ -425,7 +544,7 @@ body {
     -webkit-user-select: none;
 }
 
-/* 日历组件：精致微调，比例匀称 */
+/* 日历组件 */
 .calendar-widget-card {
     flex: 1.05;
     background: #ffffff;
@@ -442,22 +561,22 @@ body {
 }
 .calendar-widget-top { text-align: center; }
 .calendar-month-title {
-    font-size: 10px; font-weight: 500; letter-spacing: 2px; color: #000; text-transform: uppercase;
+    font-size: 9.5px; font-weight: 500; letter-spacing: 2px; color: #000; text-transform: uppercase;
 }
 .calendar-year-title {
-    font-size: 8px; font-weight: 500; letter-spacing: 1.5px; color: #222; border-bottom: 1px solid #000; padding-bottom: 1px;
+    font-size: 7.5px; font-weight: 500; letter-spacing: 1.5px; color: #222; border-bottom: 1px solid #000; padding-bottom: 1px;
 }
 .calendar-week-row {
     display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 7px; font-weight: 800; color: #000;
 }
 .calendar-days-grid {
-    display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 7.5px; font-weight: 600; color: #222;
+    display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 7px; font-weight: 600; color: #222;
 }
 .calendar-day-cell {
     height: 11px; display: flex; align-items: center; justify-content: center; position: relative;
 }
 .calendar-day-cell.today-cell::after {
-    content: ""; position: absolute; width: 12px; height: 12px; border-radius: 50%; background: #111; z-index: 1;
+    content: ""; position: absolute; width: 11px; height: 11px; border-radius: 50%; background: #111; z-index: 1;
 }
 .calendar-day-cell.today-cell span { color: #fff !important; position: relative; z-index: 2; font-weight: 800; }
 .calendar-widget-notes {
@@ -482,7 +601,7 @@ body {
     display: flex; justify-content: space-between; align-items: center;
     margin-bottom: 2px; padding-bottom: 2px; border-bottom: 1px solid #f2ede4; flex-shrink: 0;
 }
-.todo-widget-count { font-size: 10.5px; font-weight: 600; color: #433d3c; }
+.todo-widget-count { font-size: 10px; font-weight: 600; color: #433d3c; }
 .todo-widget-actions { display: flex; align-items: center; gap: 6px; }
 .todo-icon-btn { background: transparent; border: none; cursor: pointer; display: flex; align-items: center; color: #2b2725; }
 .todo-icon-btn svg { width: 12px; height: 12px; stroke: #2b2725; stroke-width: 2.2; fill: none; }
@@ -491,7 +610,7 @@ body {
 .todo-item-row { display: flex; align-items: center; gap: 5px; padding: 2px 0; border-bottom: 1px solid #f5f0e6; }
 .todo-item-row:last-child { border-bottom: none; }
 .todo-check-circle {
-    width: 12px; height: 12px; border-radius: 50%; border: 1.2px solid #d4cdc5;
+    width: 11px; height: 11px; border-radius: 50%; border: 1.2px solid #d4cdc5;
     background: transparent; flex-shrink: 0; cursor: pointer; display: flex; align-items: center; justify-content: center;
 }
 .todo-item-row.completed .todo-check-circle { background: #63b97b; border-color: #63b97b; }
@@ -499,16 +618,16 @@ body {
     content: ""; width: 3px; height: 5px; border: solid #fff; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg) translate(-0.5px, -0.8px);
 }
 .todo-item-text {
-    font-size: 10px; color: #2b2725; font-weight: 500; flex: 1; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    font-size: 9.5px; color: #2b2725; font-weight: 500; flex: 1; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 .todo-item-row.completed .todo-item-text { color: #a49c95; text-decoration: line-through; }
 
-/* 应用网格：整体下沉稳定，严防第二排切字 */
+/* 📱 3. 应用网格：独立紧凑，底部完全不切字 */
 .app-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
     gap: 7px 6px;
-    padding: 0 0 2px 0;
+    padding: 0;
     width: 100%;
     box-sizing: border-box;
     flex-shrink: 0;
@@ -517,7 +636,7 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 3px;
+    gap: 2px;
     cursor: pointer;
     position: relative;
     user-select: none;
@@ -525,8 +644,8 @@ body {
 }
 .app-slot:active .app-icon-box { transform: scale(0.92); }
 .app-icon-box {
-    width: 49px !important; height: 49px !important; max-width: 49px !important; max-height: 49px !important;
-    border-radius: 14px; display: flex; align-items: center; justify-content: center;
+    width: 48px !important; height: 48px !important; max-width: 48px !important; max-height: 48px !important;
+    border-radius: 13px; display: flex; align-items: center; justify-content: center;
     box-shadow: 0 4px 14px rgba(0,0,0,0.12); transition: transform 0.15s cubic-bezier(0.3, 1.4, 0.5, 1);
     position: relative; overflow: hidden; background: #ffffff; flex-shrink: 0;
 }
@@ -536,7 +655,7 @@ body {
     -webkit-touch-callout: none; user-select: none;
     pointer-events: none;
 }
-.app-icon-svg { width: 25px !important; height: 25px !important; }
+.app-icon-svg { width: 24px !important; height: 24px !important; }
 .app-title-label {
     font-size: 10px; color: var(--app-icon-label-color, #2e1a22); font-weight: 600;
     letter-spacing: 0.1px; white-space: nowrap; text-shadow: none !important; line-height: 1.15;
@@ -600,125 +719,6 @@ body {
 }
 
 /* ============================================================ */
-/* 🔮 桌面 4 格宽专属复古星象塔罗大组件体系（整体下沉与透气） */
-/* ============================================================ */
-.desktop-tarot-slot {
-    width: 100%;
-    height: 152px;
-    min-height: 152px;
-    max-height: 152px;
-    margin-bottom: 10px; /* 🌟 塔罗与下方日历便签之间的透气空隙 */
-    flex-shrink: 0;
-    position: relative;
-    border-radius: 18px;
-    overflow: hidden;
-    box-shadow: 0 8px 24px rgba(18, 11, 8, 0.45);
-    border: 1.5px solid #a38253;
-    cursor: pointer;
-    user-select: none;
-    touch-action: manipulation;
-    background-color: #120c08;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-}
-
-.tarot-slot-overlay {
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(circle, rgba(0,0,0,0.05) 0%, rgba(14,9,6,0.55) 100%);
-    pointer-events: none;
-    z-index: 1;
-}
-
-/* 待机状态：图一二三同比例画布 100% 绝对重叠居中 */
-.tarot-stage-idle {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 2;
-    transition: opacity 0.4s ease;
-}
-.tarot-layer-bg {
-    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none;
-}
-.tarot-ring-galaxy {
-    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; transform-origin: center center;
-}
-.tarot-sun-spark {
-    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; transform-origin: center center;
-}
-
-@keyframes tarotRingSpin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(720deg); }
-}
-@keyframes tarotSunDoubleSpin {
-    0% { transform: rotate(0deg) scale(1); }
-    50% { transform: rotate(-720deg) scale(1.15); filter: drop-shadow(0 0 12px rgba(255, 215, 0, 0.9)); }
-    100% { transform: rotate(-1440deg) scale(1); filter: drop-shadow(0 0 3px rgba(255, 215, 0, 0.4)); }
-}
-.tarot-spinning .tarot-ring-galaxy { animation: tarotRingSpin 1.8s cubic-bezier(0.35, 0, 0.25, 1) forwards; }
-.tarot-spinning .tarot-sun-spark { animation: tarotSunDoubleSpin 1.8s cubic-bezier(0.35, 0, 0.25, 1) forwards; }
-
-/* 抽卡结果阶段：图四背景 + 卡背阵列 */
-.tarot-stage-result {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    display: none;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 8px 12px;
-    opacity: 0;
-    z-index: 3;
-    transition: opacity 0.45s ease;
-}
-.tarot-stage-result.active { display: flex; opacity: 1; }
-
-.tarot-result-bg {
-    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; z-index: 1;
-}
-.tarot-result-content {
-    position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%;
-}
-.tarot-status-strip {
-  font-size: 10.5px; color: #fce8a6; font-weight: 700; letter-spacing: 1.2px; text-shadow: 0 1px 4px rgba(0,0,0,0.9); margin-bottom: 5px;
-}
-.tarot-cards-row {
-  display: flex; gap: 14px; justify-content: center; align-items: center; width: 100%; margin-bottom: 6px;
-}
-.tarot-slot-card {
-  width: 58px; height: 92px; perspective: 1000px; cursor: pointer; border-radius: 6px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7);
-}
-.tarot-slot-card-inner {
-  position: relative; width: 100%; height: 100%; transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1); transform-style: preserve-3d;
-}
-.tarot-slot-card.flipped .tarot-slot-card-inner { transform: rotateY(180deg); }
-.tarot-card-face {
-  position: absolute; inset: 0; backface-visibility: hidden; border-radius: 6px; overflow: hidden; border: 1.2px solid #a38253;
-}
-.tarot-card-face-back { background: #0d0f14 url('tarot/images/card_back.png') center/cover no-repeat; }
-.tarot-card-face-front { background: #000000; transform: rotateY(180deg); }
-.tarot-card-face-front img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.tarot-card-face-front.reversed img { transform: rotate(180deg); }
-
-.tarot-gold-btn {
-    background: linear-gradient(180deg, #382717 0%, #1e130a 100%);
-    border: 1.2px solid #e5c365; color: #fce8a6; font-size: 10.5px; font-weight: 700;
-    letter-spacing: 1.8px; padding: 4px 14px; border-radius: 6px; cursor: pointer;
-    box-shadow: inset 0 0 6px rgba(229, 195, 101, 0.4), 0 3px 8px rgba(0, 0, 0, 0.7);
-    transition: all 0.2s ease; user-select: none;
-}
-.tarot-gold-btn:active { transform: scale(0.96); background: #140c06; border-color: #ffd978; }
-
-/* ============================================================ */
 /* ✦ 星轨启示专属黑金神秘弹窗规范（彻底绝杀粉白弹窗） ✦ */
 /* ============================================================ */
 .modal-box.tarot-mystic-modal-box {
@@ -762,7 +762,6 @@ body {
     color: #e5e0d8 !important;
     line-height: 1.7 !important;
 }
-/* 闪耀深紫领悟启示大按钮（与图一对应） */
 .tarot-purple-glow-btn {
     background: linear-gradient(135deg, #9356e8 0%, #6332ba 100%) !important;
     border: 1px solid #c9a3ff !important;
@@ -784,13 +783,7 @@ body {
 
 /* ============================================================
    ⚠️防回归标记：设置类App通用组件样式（卡片/按钮/下拉菜单等）
-   下面这批class被 theme-app.js / settings-app.js / tarot-app.js /
-   phone-shell.js 大量复用，2026-09 排查发现这里整段CSS曾经丢失，
-   导致"个性化与主题"等设置页面变成没有卡片底色、没有按钮样式的
-   素白页面。以后改动前务必先搜索这批class名确认有没有地方在用，
-   不要整段删除或覆盖。
    ============================================================ */
-
 .theme-setting-card {
     background: var(--card2);
     border: 1.5px solid #ffd4e0;
@@ -888,7 +881,7 @@ body {
 
 .settings-app-container { padding: 16px 16px 40px; }
 
-/* 仿 Win 弹窗标准规范（其它功能复用） */
+/* 仿 Win 弹窗标准规范 */
 .retro-pink-window {
     background: #fff3f6 !important;
     border: 3px solid #ffccd9 !important;
