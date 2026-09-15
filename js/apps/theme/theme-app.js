@@ -4,7 +4,8 @@
  * 职责：主体粉白可调节自定制、状态栏三维解耦（描边勾线/填充底色/底图）、
  *       粉白甜心自定义下拉菜单（杜绝原生 Android 白框）、正等边三角形高精度触控对齐校准、
  *       HSV 触控输入实时响应、桌面组件自由多页穿梭与独立开关控制、壁纸自适应裁剪、一键全站色彩重置、
- *       多配置方案管理器、免费字体网引导与扩展字体导入
+ *       多配置方案管理器、免费字体网引导与扩展字体导入、
+ *       🌟 桌面排版模式入口：在已有组件卡片中直接开启桌面手拖排版与重置。
  */
 
 (function () {
@@ -23,11 +24,6 @@
     let currentFontFormat = 'html';
 
     // 当前通过 HSV 色相盘调节的目标对象：
-    // 'status_text' (状态栏字体/系统状态图标)
-    // 'icon_label'  (桌面App标题文字)
-    // 'status_fill' (状态栏填充底色)
-    // 'main_pink'   (主体核心草莓粉)
-    // 'main_white'  (主体纯白底色/背景)
     let currentHsvTarget = 'status_text';
 
     const HSV_TARGET_NAMES = {
@@ -162,6 +158,22 @@
         const todoEnabled = localStorage.getItem('mcyt_widget_todo_enabled') !== 'false';
         const todoPage = parseInt(localStorage.getItem('mcyt_widget_todo_page') || '1', 10);
 
+        // 读取已保存的排版偏移量摘要
+        let offsetSummary = '默认位置（未自定义）';
+        try {
+            const rawOffsets = localStorage.getItem('mcyt_desktop_block_offsets_v1');
+            if (rawOffsets) {
+                const off = JSON.parse(rawOffsets);
+                const items = [];
+                if (off.lock) items.push(`锁屏条:${off.lock > 0 ? '+' : ''}${off.lock}px`);
+                if (off.tarot) items.push(`塔罗:${off.tarot > 0 ? '+' : ''}${off.tarot}px`);
+                if (off.calendar) items.push(`日历:${off.calendar > 0 ? '+' : ''}${off.calendar}px`);
+                if (off.todo) items.push(`便签:${off.todo > 0 ? '+' : ''}${off.todo}px`);
+                if (off.appGrid) items.push(`应用:${off.appGrid > 0 ? '+' : ''}${off.appGrid}px`);
+                if (items.length) offsetSummary = items.join(' | ');
+            }
+        } catch (_) {}
+
         container.innerHTML = `
             <!-- 卡片 1：壁纸设置 -->
             <div class="theme-setting-card">
@@ -200,7 +212,7 @@
                 </div>
             </div>
 
-            <!-- 卡片 2：色彩与状态栏全局专业定制（彻底干掉系统级丑白下拉菜单） -->
+            <!-- 卡片 2：色彩与状态栏全局专业定制 -->
             <div class="theme-setting-card">
                 <div class="theme-setting-title">
                     <span>主题全层级色彩与状态栏定制</span>
@@ -267,10 +279,9 @@
                     </div>
                 </div>
 
-                <!-- 专业深灰底板正等边 HSV 色盘与水滴放大镜（精准对齐手指触控 + 可点输入数值） -->
+                <!-- 正等边 HSV 色盘与水滴放大镜 -->
                 <div id="themeHsvPickerWrap" style="margin-top:6px;display:${(currentHsvTarget === 'status_text' && currentThemeMode !== 'custom') ? 'none' : 'block'};">
                     <div class="hsv-pixel-perfect-plate" style="background:#2b2b2b;border-radius:20px;padding:18px 16px;box-shadow:inset 0 2px 8px rgba(0,0,0,0.5), 0 6px 18px rgba(0,0,0,0.25);width:100%;max-width:320px;margin:0 auto;box-sizing:border-box;">
-                        
                         <div class="hsv-wheel-box" id="hsvWheelBox" style="width:230px;height:230px;margin:0 auto 12px auto;position:relative;user-select:none;touch-action:none;">
                             <canvas id="hsvWheelCanvas" class="hsv-wheel-canvas" width="460" height="460" style="width:100%;height:100%;border-radius:50%;display:block;touch-action:none;"></canvas>
                             <div class="hsv-ring-handle" id="hsvRingHandle" style="position:absolute;width:24px;height:24px;border:3px solid #ffffff;border-radius:50%;box-shadow:0 0 5px rgba(0,0,0,0.6);transform:translate(-50%,-50%);pointer-events:none;box-sizing:border-box;"></div>
@@ -291,7 +302,6 @@
                             </div>
                         </div>
 
-                        <!-- 支持直接打字输入的数字框 -->
                         <div style="display:flex;flex-direction:column;gap:12px;padding:0 6px;">
                             <div style="display:flex;align-items:center;gap:10px;">
                                 <span style="font-size:13px;font-family:serif;color:#a0a0a0;width:12px;font-weight:bold;">H</span>
@@ -331,7 +341,7 @@
                 </div>
             </div>
 
-            <!-- 卡片 3：桌面组件多页自由系统 -->
+            <!-- 卡片 3：桌面组件多页自由系统 + 桌面排版模式入口 -->
             <div class="theme-setting-card">
                 <div class="theme-collapsible-header" onclick="window.toggleWidgetsSettingsCollapse()" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
                     <div class="theme-setting-title" style="margin-bottom:0;">
@@ -342,7 +352,7 @@
 
                 <div id="widgetsSettingsBody" style="display:none;margin-top:12px;">
                     <div class="theme-setting-desc">
-                        自由决定每个小组件是否显示、以及挂载在桌面第 1 页还是第 2 页。
+                        自由决定每个小组件是否显示、挂载页码，并可直接进入桌面手势自由排版模式。
                     </div>
 
                     <div style="display:flex;flex-direction:column;gap:10px;">
@@ -389,6 +399,26 @@
                                 ＋ 新增一条待办
                             </button>
                         </div>
+
+                        <!-- 🌟 桌面手势排版微调模式操作区（不新建卡片，直接在内部优雅集成） -->
+                        <div style="background:#fff3f6;border:1.5px dashed #ffccd9;border-radius:12px;padding:10px;margin-top:4px;">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                                <span style="font-size:12px;font-weight:700;color:#2e1a22;">📐 桌面各层手拖排版模式</span>
+                                <span style="font-size:10px;color:var(--primary);font-weight:600;">自由调高低</span>
+                            </div>
+                            <div style="font-size:11px;color:var(--text2);margin-bottom:8px;line-height:1.45;">
+                                当前微调状态：<span style="font-family:monospace;color:#ff5c8a;">${offsetSummary}</span>
+                            </div>
+                            <div style="display:flex;gap:8px;">
+                                <button class="btn-primary" style="flex:1.5;font-size:11.5px;padding:8px;" onclick="window.triggerDesktopCustomLayoutMode()">
+                                    进入桌面排版模式
+                                </button>
+                                <button class="btn-secondary" style="flex:1;font-size:11.5px;padding:8px;" onclick="window.triggerResetDesktopBlockOffsets()">
+                                    恢复默认
+                                </button>
+                            </div>
+                        </div>
+
                     </div>
                 </div>
             </div>
@@ -468,7 +498,36 @@
         renderInstalledFontsList();
     };
 
-    // 🌸 自定义下拉菜单控制（替代原生 Android 弹窗）
+    // 🌸 触发桌面手拖排版模式
+    window.triggerDesktopCustomLayoutMode = function () {
+        if (typeof window.closePhoneApp === 'function') window.closePhoneApp();
+        setTimeout(() => {
+            if (typeof window.enterDesktopBlockLayoutMode === 'function') {
+                window.enterDesktopBlockLayoutMode();
+            } else if (typeof showToast === 'function') {
+                showToast('排版引擎加载中，请稍候...');
+            }
+        }, 160);
+    };
+
+    // 一键重置桌面块偏移
+    window.triggerResetDesktopBlockOffsets = function () {
+        if (typeof window.resetDesktopBlockOffsets === 'function') {
+            window.resetDesktopBlockOffsets();
+        } else {
+            localStorage.removeItem('mcyt_desktop_block_offsets_v1');
+            if (typeof showToast === 'function') showToast('已恢复桌面默认排版');
+        }
+        const appModalBody = document.getElementById('appModalBody');
+        if (appModalBody) {
+            window.renderThemeApp(appModalBody);
+            const b = document.getElementById('widgetsSettingsBody');
+            const a = document.getElementById('widgetsCollapseArrow');
+            if (b && a) { b.style.display = 'block'; a.textContent = '▼ 收起'; }
+        }
+    };
+
+    // 自定义下拉菜单控制
     window.toggleThemeTargetDropdown = function () {
         const menu = document.getElementById('themeHsvTargetDropdownMenu');
         if (menu) {
@@ -566,7 +625,6 @@
         if (window.refreshHsvWheelCanvas) window.refreshHsvWheelCanvas();
     };
 
-    // 数字手动输入改变 HSV
     window.onHsvManualInputChange = function (channel, val) {
         let num = parseInt(val, 10);
         if (isNaN(num)) num = 0;
@@ -582,7 +640,6 @@
         }
     };
 
-    // 状态栏边框与填充
     window.updateStatusBarStroke = function (val) {
         localStorage.setItem('mcyt_statusbar_stroke', val);
         document.documentElement.style.setProperty('--status-bar-stroke', val);
@@ -614,7 +671,6 @@
         if (typeof showToast === 'function') showToast('已清除状态栏底图');
     };
 
-    // 一键恢复全站默认主题色彩
     window.restoreAllDefaultColors = function () {
         localStorage.removeItem('mcyt_phone_theme_mode');
         localStorage.removeItem('mcyt_phone_custom_color');
@@ -698,7 +754,7 @@
         if (typeof showToast === 'function') showToast(`[${HSV_TARGET_NAMES[currentHsvTarget]}] 色彩已永久保存！`);
     };
 
-    // 正等边三角形 HSV 拾色器绘制（严密像素级触控对齐校准）
+    // 正等边三角形 HSV 拾色器绘制
     function initHsvCanvasPicker() {
         const box = document.getElementById('hsvWheelBox');
         const canvas = document.getElementById('hsvWheelCanvas');
@@ -837,8 +893,6 @@
             const dy = py - center;
             const dist = Math.sqrt(dx * dx + dy * dy);
 
-            // 判定环形/三角区域时，命中范围绝不能和三角形本身的外接半径(triR)重叠，
-            // 否则点在三角边角上会被误判成在拖色相环，导致"点哪不出现在哪"
             if (dist >= triR + 4 && dist <= outerR + 10) {
                 hsvState.activeDrag = 'ring';
                 updateRingFromPoint(dx, dy);
@@ -876,7 +930,6 @@
             renderColorWheel();
         }
 
-        // 精准投影矩阵，绝对贴合手指坐标
         function updateTriangleFromPoint(px, py) {
             const v = getEquilateralTriangleVertices();
             let satRatio = (px - v.top.x) / (v.right.x - v.top.x);
@@ -911,7 +964,7 @@
         renderColorWheel();
     }
 
-    // 水滴吸色放大镜
+    // 水滴吸色
     window.handlePipetteImageSelected = function (event) {
         const file = event.target.files && event.target.files[0];
         if (!file) return;
@@ -1289,7 +1342,7 @@
         const reader = new FileReader();
         reader.onload = function (evt) {
             const fontName = 'LocalFont_' + Date.now();
-            const dataUrl = evt.target.result; // base64 data URL，可直接写进 localStorage 持久化
+            const dataUrl = evt.target.result;
             const ext = (file.name.split('.').pop() || 'woff2').toLowerCase();
             const formatMap = { ttf: 'truetype', otf: 'opentype', woff: 'woff', woff2: 'woff2' };
             const fmt = formatMap[ext] || 'woff2';
@@ -1321,8 +1374,6 @@
         const root = document.documentElement;
         root.style.setProperty('--app-font', `"${familyName}", -apple-system, sans-serif`);
 
-        // 1. 真正负责"加载"字体资源的外链 <link>，必须是真实DOM节点才会生效，
-        //    塞进 <style> 标签的 innerHTML 里是没用的
         let linkContainer = document.getElementById('globalDynamicFontLinks');
         if (!linkContainer) {
             linkContainer = document.createElement('div');
@@ -1340,7 +1391,6 @@
             linkContainer.appendChild(linkEl);
         });
 
-        // 2. @font-face / @import 等真正定义字体的 CSS 文本
         let resourceStyle = document.getElementById('globalDynamicFontResourceTag');
         if (!resourceStyle) {
             resourceStyle = document.createElement('style');
@@ -1349,7 +1399,6 @@
         }
         resourceStyle.textContent = cssText || '';
 
-        // 3. 强制全局把这个字体名套用到每个元素上
         let forceStyle = document.getElementById('globalDynamicFontStyleTag');
         if (!forceStyle) {
             forceStyle = document.createElement('style');
