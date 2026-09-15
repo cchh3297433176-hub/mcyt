@@ -289,10 +289,8 @@
             });
         }
 
-        // 检查是否从外部独立 App（如塔罗）返回
         checkAndHandleReturnFromApp();
 
-        // 针对 WebView 的历史回退 bfcache 场景进行拦截
         window.addEventListener('pageshow', function () {
             checkAndHandleReturnFromApp();
         });
@@ -630,7 +628,6 @@
         window._isDesktopBlockAdjustMode = true;
         loadSavedBlockOffsets();
 
-        // 注入临时控制栏胶囊（垂直贴右中侧，绝不被全屏横条遮挡）
         let toolbar = document.getElementById('desktopLayoutTunerBar');
         if (!toolbar) {
             toolbar = document.createElement('div');
@@ -666,7 +663,6 @@
         }
         toolbar.style.display = 'flex';
 
-        // 找到 5 大块绑定手势微调
         const blocksConfig = [
             { el: document.querySelector('.desktop-top-widget'), key: 'lock', label: '锁定屏幕条' },
             { el: document.getElementById('desktopTarotContainer'), key: 'tarot', label: '塔罗大组件' },
@@ -1184,6 +1180,13 @@
         const appModalTitle = document.getElementById('appModalTitle');
         const appModalBody = document.getElementById('appModalBody');
         if (!appModal || !appModalTitle || !appModalBody) return;
+
+        if (appKey === 'chat' && typeof window.renderChatApp === 'function') {
+            appModalTitle.textContent = "💬 聊天中心";
+            window.renderChatApp(appModalBody);
+            appModal.classList.add('opened');
+            return;
+        }
 
         if (appKey === 'theme' && typeof window.renderThemeApp === 'function') {
             appModalTitle.textContent = "🎀 个性化与主题";
