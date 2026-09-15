@@ -2,11 +2,11 @@
  * js/apps/chat/chat-moments.js
  * 🌟 微信朋友圈动态流独立模块
  * 职责：
- * 1. 朋友圈动态列表构建（微信极简黑白灰视觉 · 无彩色Emoji）
- * 2. 发布新动态、图片/配图文字模式选择
+ * 1. 朋友圈动态列表构建（极简黑白灰视觉 · 无彩色Emoji）
+ * 2. 发布动态：原生手机相册本地选图、即时缩略图预览与清除
  * 3. 点赞、发表评论、回复好友评论
  * 4. 召唤 NPC 好友智能互动评论、生成随机好友动态
- * 5. 动态编辑、撤回与删除
+ * 5. 动态撤回与删除
  */
 
 (function() {
@@ -52,16 +52,15 @@
             }
 
             let mediaHtml = '';
-            if (m.imageMode === 'text_only' && m.imageDesc) {
+            if (m.image) {
+                mediaHtml = `
+                <div style="margin:6px 0;">
+                    <img src="${m.image}" style="max-width:100%;max-height:220px;border-radius:4px;object-fit:cover;display:block;" onerror="this.style.display='none';">
+                </div>`;
+            } else if (m.imageDesc) {
                 mediaHtml = `
                 <div style="margin:6px 0;background:#f8fafc;border-left:2.5px solid #64748b;padding:5px 8px;border-radius:3px;font-size:11.5px;color:#475569;">
                     [配图描述] ${escapeHtml(m.imageDesc)}
-                </div>`;
-            } else if (m.image) {
-                mediaHtml = `
-                <div style="margin:6px 0;">
-                    <img src="${m.image}" style="max-width:100%;max-height:180px;border-radius:4px;object-fit:cover;display:block;" onerror="this.style.display='none';">
-                    ${m.imageDesc ? `<div style="font-size:11px;color:#777;margin-top:2px;">${escapeHtml(m.imageDesc)}</div>` : ''}
                 </div>`;
             }
 
@@ -110,74 +109,76 @@
     }
     window.buildMomentsHTML = buildMomentsHTML;
 
-    // 发布动态弹窗
+    // 📷 发布动态弹窗（支持相册选图 + 即时预览）
     window.openPostMomentModal = function() {
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { name: '我', avatar: 'assets/icons/chat.png' };
+        let selectedLocalImgBase64 = null;
 
         openModal(`
             <div style="text-align:left;font-family:-apple-system,sans-serif;">
                 <div style="font-size:15px;font-weight:700;color:#1e3a8a;border-bottom:1.5px solid #eef2f7;padding-bottom:8px;margin-bottom:10px;">
-                    发布动态
+                    发布朋友圈动态
                 </div>
                 <div style="font-size:12px;color:#64748b;margin-bottom:6px;">以「${escapeHtml(curAcc.name)}」发布：</div>
                 <div class="form-group" style="margin-bottom:10px;">
                     <textarea id="postMomentBody" rows="4" placeholder="分享此刻的MC创作心情或趣事..." style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid #cbd5e1;font-size:13px;line-height:1.5;box-sizing:border-box;resize:none;outline:none;font-family:inherit;"></textarea>
                 </div>
 
-                <div class="form-group" style="margin-bottom:8px;">
-                    <label style="font-size:12px;color:#475569;font-weight:600;display:block;margin-bottom:4px;">配图模式：</label>
-                    <div style="display:flex;flex-direction:column;gap:5px;font-size:12px;color:#334155;">
-                        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
-                            <input type="radio" name="momentPicMode" value="none" checked> 纯文字无配图
+                <!-- 本地相册选图区域 -->
+                <div style="margin-bottom:10px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                        <span style="font-size:12.5px;color:#475569;font-weight:600;">配图选择：</span>
+                        <label style="display:inline-block;border:1px solid #cbd5e1;background:#f8fafc;padding:4px 10px;border-radius:5px;cursor:pointer;font-size:12px;color:#2563eb;font-weight:500;">
+                            从本地相册选图
+                            <input type="file" id="momentLocalFileInput" accept="image/*" style="display:none;">
                         </label>
-                        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
-                            <input type="radio" name="momentPicMode" value="text_only"> 文字代替配图 (AI通过描述感知画面)
-                        </label>
-                        <label style="display:flex;align-items:center;gap:5px;cursor:pointer;">
-                            <input type="radio" name="momentPicMode" value="image_real"> 上传本地截图
-                        </label>
+                    </div>
+
+                    <!-- 选中的图片即时预览 -->
+                    <div id="momentImgPreviewWrap" style="display:none;position:relative;width:fit-content;margin-top:6px;">
+                        <img id="momentImgPreview" src="" style="max-height:120px;max-width:180px;border-radius:6px;object-fit:cover;border:1px solid #e2e8f0;display:block;" />
+                        <button type="button" id="btnRemoveMomentImg" style="position:absolute;top:-6px;right:-6px;background:#ef4444;color:#fff;border:none;width:18px;height:18px;border-radius:50%;font-size:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;">✕</button>
                     </div>
                 </div>
 
-                <div id="momentDescSec" style="display:none;margin-bottom:8px;">
-                    <input type="text" id="postMomentImgDesc" placeholder="简述画面内容，如：在下界堡垒残血被烈焰人包围..." style="width:100%;padding:6px 9px;border-radius:5px;border:1px solid #cbd5e1;font-size:12px;box-sizing:border-box;outline:none;">
+                <!-- 文字配图描述（可选，帮助AI理解） -->
+                <div class="form-group" style="margin-bottom:12px;">
+                    <input type="text" id="postMomentImgDesc" placeholder="画面文字描述（选填，帮助AI更精准互动）" style="width:100%;padding:6px 9px;border-radius:5px;border:1px solid #cbd5e1;font-size:12px;box-sizing:border-box;outline:none;">
                 </div>
 
-                <div id="momentImgSec" style="display:none;margin-bottom:8px;">
-                    <input type="file" id="postMomentFileInput" accept="image/*" style="font-size:12px;">
-                </div>
-
-                <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;border-top:1px solid #f1f5f9;padding-top:8px;">
+                <div style="display:flex;justify-content:flex-end;gap:8px;border-top:1px solid #f1f5f9;padding-top:8px;">
                     <button type="button" onclick="closeModal()" style="border:1px solid #cbd5e1;background:#f8fafc;color:#64748b;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;">取消</button>
                     <button type="button" id="btnConfirmPublishMoment" style="border:none;background:#2563eb;color:#ffffff;padding:5px 16px;border-radius:5px;font-size:12px;font-weight:600;cursor:pointer;">发布</button>
                 </div>
             </div>
         `);
 
-        let localImg = '';
-        const radios = document.querySelectorAll('input[name="momentPicMode"]');
-        const descSec = document.getElementById('momentDescSec');
-        const imgSec = document.getElementById('momentImgSec');
+        const fileInput = document.getElementById('momentLocalFileInput');
+        const previewWrap = document.getElementById('momentImgPreviewWrap');
+        const previewImg = document.getElementById('momentImgPreview');
+        const removeBtn = document.getElementById('btnRemoveMomentImg');
 
-        radios.forEach(r => {
-            r.onchange = () => {
-                const v = r.value;
-                descSec.style.display = (v === 'text_only') ? 'block' : 'none';
-                imgSec.style.display = (v === 'image_real') ? 'block' : 'none';
-            };
-        });
-
-        document.getElementById('postMomentFileInput').onchange = (e) => {
-            const f = e.target.files[0];
-            if (!f) return;
+        fileInput.onchange = function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
             const reader = new FileReader();
-            reader.onload = (evt) => { localImg = evt.target.result; };
-            reader.readAsDataURL(f);
+            reader.onload = function(evt) {
+                selectedLocalImgBase64 = evt.target.result;
+                previewImg.src = selectedLocalImgBase64;
+                previewWrap.style.display = 'block';
+            };
+            reader.readAsDataURL(file);
+        };
+
+        removeBtn.onclick = function() {
+            selectedLocalImgBase64 = null;
+            previewImg.src = '';
+            previewWrap.style.display = 'none';
+            fileInput.value = '';
         };
 
         document.getElementById('btnConfirmPublishMoment').onclick = () => {
             const body = document.getElementById('postMomentBody').value.trim();
-            const mode = document.querySelector('input[name="momentPicMode"]:checked')?.value || 'none';
             const imgDesc = document.getElementById('postMomentImgDesc')?.value.trim();
 
             if (!body) {
@@ -192,8 +193,7 @@
                 avatar: curAcc.avatar,
                 isPlayer: true,
                 body,
-                imageMode: mode,
-                image: (mode === 'image_real') ? localImg : null,
+                image: selectedLocalImgBase64,
                 imageDesc: imgDesc || null,
                 time: '刚刚',
                 liked: false,
@@ -296,7 +296,7 @@
         if (typeof showToast === 'function') showToast(`${speaker.name} 正在赶来评论...`, 'info', 1200);
 
         let picInfo = '';
-        if (item.imageMode === 'text_only' && item.imageDesc) picInfo = ` [附带配图画面：${item.imageDesc}]`;
+        if (item.imageDesc) picInfo = ` [附带配图描述：${item.imageDesc}]`;
 
         try {
             const sys = `你正在扮演MC好友「${speaker.name}」（性格：${speaker.persona || '朋友'}）。好友「${item.author}」发了动态：“${item.body}”${picInfo}。写一句极接地气的评论（20字内），像真实微信朋友圈评论一样自然吐槽或调侃，只输出评论正文，严禁任何动作括号。`;

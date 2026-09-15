@@ -3,13 +3,17 @@
  * 👤 微信身份与人设中枢模块
  * 职责：
  * 1. 玩家三维人设档案（线上主播 / 线下现实作息 / MC游戏皮肤），默认纯净空白
- * 2. 国家与地区实时检索筛选器、时区偏移换算、中国真实时间跟随询问
- * 3. 账号多马甲管理：小号独立空白通讯录、小号注册/改名/换头像
- * 4. 专属双轨防丢持久化引擎（解决冷启动小号丢失问题）
+ * 2. 预留 assets/avatars/ 头像子目录架构，支持本地相册选取头像与图库随机
+ * 3. 国家与地区实时检索筛选器、时区偏移换算、中国真实时间跟随询问
+ * 4. 账号多马甲管理：小号独立空白通讯录、小号注册/改名/换头像
+ * 5. 专属双轨防丢持久化引擎（彻底解决冷启动小号与人设丢失问题）
  */
 
 (function() {
     'use strict';
+
+    // 预留头像库专属子目录路径
+    const AVATAR_SUBDIR = 'assets/avatars/';
 
     // 预置国家与时区字典（支持名称、拼音缩写与关键词极速过滤）
     const PRESET_REGIONS = [
@@ -54,7 +58,7 @@
         if (!window.G) window.G = {};
         if (!window.G.player) window.G.player = {};
 
-        // 1. 恢复三维人设与地区
+        // 1. 恢复三维人设与地区（默认全部为空字符串，绝不强加默认人设）
         try {
             const rawPersonas = localStorage.getItem('mcyt_wechat_player_personas');
             if (rawPersonas) {
@@ -68,7 +72,6 @@
             }
         } catch (_) {}
 
-        // 默认值：纯净为空，绝不强加默认人设
         if (window.G.player.offlinePersona === undefined) window.G.player.offlinePersona = '';
         if (window.G.player.onlinePersona === undefined) window.G.player.onlinePersona = '';
         if (window.G.player.gameSkinPersona === undefined) window.G.player.gameSkinPersona = '';
@@ -93,7 +96,6 @@
         }
     }
 
-    // 暴露初始化恢复函数
     window.restoreWechatProfileData = restoreAccountsFromStorage;
     restoreAccountsFromStorage();
 
@@ -159,12 +161,12 @@
         });
 
         return `
-        <div style="background:#f7f7f7;min-height:100%;padding-bottom:30px;box-sizing:border-box;">
+        <div style="background:#f7f7f7;min-height:100%;padding-bottom:30px;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Helvetica,sans-serif;">
             <!-- 当前激活名片 -->
             <div style="background:#ffffff;padding:16px;display:flex;align-items:center;gap:14px;border-bottom:0.5px solid #e0e0e0;">
                 <div style="position:relative;flex-shrink:0;cursor:pointer;" onclick="window.openChangeAvatarOptionsModal('${curAcc.id}')">
                     <img id="myWechatAvatar" src="${curAcc.avatar}" style="width:62px;height:62px;border-radius:8px;object-fit:cover;display:block;" onerror="this.src='assets/icons/chat.png';" />
-                    <span style="position:absolute;bottom:0;right:0;background:rgba(0,0,0,0.6);color:#fff;font-size:9px;padding:1px 3px;border-radius:2px;">修改</span>
+                    <span style="position:absolute;bottom:0;right:0;background:rgba(0,0,0,0.6);color:#fff;font-size:9px;padding:1px 4px;border-radius:2px;">修改</span>
                 </div>
                 <div style="flex:1;min-width:0;">
                     <div style="display:flex;align-items:center;gap:6px;">
@@ -172,7 +174,7 @@
                         <button type="button" onclick="window.openChangeAccountNameModal('${curAcc.id}')" style="border:none;background:none;color:#576b95;font-size:12px;cursor:pointer;padding:0;">[改名]</button>
                     </div>
                     <div style="font-size:12px;color:#888888;margin-top:4px;">
-                        地区：${escapeHtml(curAcc.region || '中国 (China)')} · ${isAlt ? '小号模式 (通讯录独立)' : '主账号'}
+                        地区：${escapeHtml(curAcc.region || '中国 (China)')} · ${isAlt ? '小号模式 (独立通讯录)' : '官方大号'}
                     </div>
                 </div>
                 <button type="button" onclick="window.openChangeAvatarOptionsModal('${curAcc.id}')" style="border:1px solid #dcdcdc;background:#f9f9f9;color:#07c160;padding:5px 9px;border-radius:6px;font-size:11.5px;font-weight:600;cursor:pointer;">
@@ -186,7 +188,7 @@
                 <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:#f9fafb;border-radius:6px;border:1px solid #e5e7eb;">
                     <div>
                         <div style="font-size:13px;font-weight:600;color:#1f2937;" id="currentSelectedRegionText">${escapeHtml(curAcc.region || '中国 (China)')}</div>
-                        <div style="font-size:11px;color:#6b7280;margin-top:2px;">与异地角色互动时将自动体现现实时差与作息</div>
+                        <div style="font-size:11px;color:#6b7280;margin-top:2px;">与异地角色互动时将自动体现现实时差与作息差异</div>
                     </div>
                     <button type="button" onclick="window.openRegionSearchModal()" style="border:1px solid #cbd5e1;background:#fff;color:#2563eb;padding:5px 10px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:500;">
                         选择地区
@@ -226,14 +228,13 @@
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
                     <div>
                         <div style="font-size:14px;font-weight:600;color:#181818;">账号多马甲管理</div>
-                        <div style="font-size:11px;color:#888;">小号初始通讯录为空，享有独立对话与名片</div>
+                        <div style="font-size:11px;color:#888;">小号初始通讯录为空，享有独立对话圈</div>
                     </div>
                     <button type="button" onclick="window.openCreateAltAccountModalModern()" style="border:none;background:#eef2ff;color:#2563eb;padding:4px 10px;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;">
                         + 注册小号
                     </button>
                 </div>
 
-                <!-- 官方主号卡片 -->
                 <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#f9fafb;border-radius:8px;border:0.5px solid #e5e7eb;margin-bottom:6px;">
                     <div style="display:flex;align-items:center;gap:10px;">
                         <img src="${p.avatar || 'assets/icons/chat.png'}" style="width:36px;height:36px;border-radius:6px;object-fit:cover;" onerror="this.src='assets/icons/chat.png';" />
@@ -339,7 +340,6 @@
 
         syncAccountsToStorage();
 
-        // 选中中国时弹出真实时间跟随确认
         if (item.code === 'CN') {
             setTimeout(() => {
                 openModal(`
@@ -372,7 +372,7 @@
     };
 
     // ============================================================
-    // 🖼️ 头像更换（本地相册 / 图库抽取）与改名
+    // 🖼️ 头像更换与改名
     // ============================================================
     window.openChangeAvatarOptionsModal = function(targetAccountId) {
         openModal(`
@@ -382,11 +382,11 @@
                 </div>
                 <div style="display:flex;flex-direction:column;gap:8px;">
                     <label style="display:block;border:1px solid #cbd5e1;background:#f8fafc;padding:10px 12px;border-radius:6px;cursor:pointer;text-align:center;">
-                        <span style="font-size:13px;font-weight:600;color:#1e293b;">📁 从手机本地相册选取</span>
+                        <span style="font-size:13px;font-weight:600;color:#1e293b;">从本地相册选取图片</span>
                         <input type="file" id="localAvatarFileInput" accept="image/*" style="display:none;">
                     </label>
                     <button type="button" onclick="window.pickFromAvatarLibrary('${targetAccountId}')" style="border:1px solid #cbd5e1;background:#f8fafc;padding:10px 12px;border-radius:6px;font-size:13px;font-weight:600;color:#1e293b;cursor:pointer;">
-                        🎲 从头像库随机抽取
+                        从头像库随机抽取
                     </button>
                 </div>
                 <div style="display:flex;justify-content:flex-end;margin-top:12px;">
@@ -409,7 +409,7 @@
     };
 
     window.pickFromAvatarLibrary = function(targetAccountId) {
-        const randImg = (typeof getRandomAvatar === 'function') ? getRandomAvatar() : 'assets/icons/chat.png';
+        const randImg = (typeof getRandomAvatar === 'function') ? getRandomAvatar() : `${AVATAR_SUBDIR}1.png`;
         window.applyNewAvatar(targetAccountId, randImg);
         closeModal();
     };
@@ -428,6 +428,7 @@
         if (typeof autoSaveGame === 'function') autoSaveGame();
     };
 
+    // 改名弹窗
     window.openChangeAccountNameModal = function(targetAccountId) {
         const curAcc = getActiveAccountInfo();
         const currentName = (targetAccountId === 'main') ? (window.G.player?.ytName || '') : curAcc.name;
@@ -479,7 +480,7 @@
     };
 
     window.openCreateAltAccountModalModern = function() {
-        let assignedAvatar = (typeof getRandomAvatar === 'function') ? getRandomAvatar() : 'assets/icons/chat.png';
+        let assignedAvatar = (typeof getRandomAvatar === 'function') ? getRandomAvatar() : `${AVATAR_SUBDIR}1.png`;
         openModal(`
             <div style="text-align:left;font-family:-apple-system,sans-serif;">
                 <div style="font-size:15px;font-weight:700;color:#1e3a8a;margin-bottom:10px;">注册新小号</div>
