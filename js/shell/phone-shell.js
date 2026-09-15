@@ -4,7 +4,8 @@
  * 职责：时钟、硬件电量、网络/蓝牙感知、壁纸加载、冷启动主题恢复、自动明暗反色引擎、
  *       手势解锁与 App 调度、桌面双页平滑滑屏手势、组件流动态宿主系统（日历/待办）、
  *       桌面 App 图标与小组件全自由长按晃动编辑态、粉白仿Windows甜心弹窗、
- *       🌟 4 格宽专属复古星象塔罗大组件驱动引擎（图一三图层等比叠加、图二三卡背翻转、黑紫金高对比弹窗、领悟启示彻底回归初始待机）。
+ *       🌟 4 格宽专属复古星象塔罗大组件驱动引擎、
+ *       🌟 桌面层级自由手拖微调引擎（锁定屏幕条、塔罗、日历、便签、App网格分别手拖并持久化保存与一键重置）。
  */
 
 (function () {
@@ -289,7 +290,7 @@
         let startX = 0, startY = 0, isMoving = false;
 
         viewport.addEventListener('touchstart', (e) => {
-            if (window._isWidgetEditMode) return;
+            if (window._isWidgetEditMode || window._isDesktopBlockAdjustMode) return;
             if (e.touches && e.touches.length === 1) {
                 startX = e.touches[0].clientX;
                 startY = e.touches[0].clientY;
@@ -298,14 +299,14 @@
         }, { passive: true });
 
         viewport.addEventListener('touchmove', (e) => {
-            if (window._isWidgetEditMode || !isMoving || !e.touches || !e.touches.length) return;
+            if (window._isWidgetEditMode || window._isDesktopBlockAdjustMode || !isMoving || !e.touches || !e.touches.length) return;
             const diffX = e.touches[0].clientX - startX;
             const diffY = e.touches[0].clientY - startY;
             if (Math.abs(diffY) > Math.abs(diffX)) return;
         }, { passive: true });
 
         viewport.addEventListener('touchend', (e) => {
-            if (window._isWidgetEditMode || !isMoving || !e.changedTouches || !e.changedTouches.length) return;
+            if (window._isWidgetEditMode || window._isDesktopBlockAdjustMode || !isMoving || !e.changedTouches || !e.changedTouches.length) return;
             isMoving = false;
             const diffX = e.changedTouches[0].clientX - startX;
             if (diffX < -45 && currentDesktopPage === 0) window.switchDesktopPage(1);
@@ -396,15 +397,11 @@
         container.innerHTML = `
             <div class="desktop-tarot-slot" id="desktopTarotSlot" onclick="window.handleTarotSlotClick()">
                 <div class="tarot-slot-overlay"></div>
-                
-                <!-- 阶段 1：待机同尺寸三图层等比叠加（完美复刻图一） -->
                 <div class="tarot-stage-idle" id="tarotStageIdle">
                     <img src="tarot/images/slot_bg.png" class="tarot-layer-bg" alt="星图底板">
                     <img src="tarot/images/ring_galaxy.png" class="tarot-ring-galaxy" alt="星河光环">
                     <img src="tarot/images/sun_spark.png" class="tarot-sun-spark" alt="金芒太阳">
                 </div>
-
-                <!-- 阶段 2：抽卡结果形态（图四背景 + 卡背阵列） -->
                 <div class="tarot-stage-result" id="tarotStageResult">
                     <img src="tarot/images/crescent_frame.png" class="tarot-result-bg" alt="月牙画框">
                     <div class="tarot-result-content">
@@ -418,7 +415,7 @@
     };
 
     window.handleTarotSlotClick = function () {
-        if (window._isWidgetEditMode || window._tarotIsSpinning) return;
+        if (window._isWidgetEditMode || window._isDesktopBlockAdjustMode || window._tarotIsSpinning) return;
 
         const slot = document.getElementById('desktopTarotSlot');
         const idleStage = document.getElementById('tarotStageIdle');
@@ -501,7 +498,6 @@
         }
     };
 
-    // ✦ 黑紫金高对比弹窗 + 领悟后彻底回归初始待机态
     window.showTarotCardMeaning = function (e) {
         if (e) e.stopPropagation();
         const cards = window._tarotCurrentCards;
@@ -514,7 +510,6 @@
         const modalClose = document.getElementById('modalClose');
         if (!modal || !modalBody) return;
 
-        // 彻底绝杀粉白样式：套上专属黑紫金类名
         if (modalContent) modalContent.className = 'modal-box tarot-mystic-modal-box';
         if (modalTitle) modalTitle.textContent = `✦ 星轨启示 · 命途推演 ✦`;
 
@@ -556,7 +551,6 @@
             if (modalContent) modalContent.className = 'modal-box retro-pink-window';
             if (modalClose) modalClose.onclick = null;
 
-            // 🌟 领悟启示后立刻重置回图一初始待机！
             const idleStage = document.getElementById('tarotStageIdle');
             const resultStage = document.getElementById('tarotStageResult');
             if (idleStage && resultStage) {
@@ -569,6 +563,165 @@
         document.getElementById('retroTarotKnowBtn').onclick = closeAndReset;
         if (modalClose) modalClose.onclick = closeAndReset;
     };
+
+    // ============================================================
+    // 🌟 桌面块级自由手拖微调系统（锁定屏幕/塔罗/日历/便签/App网格）
+    // ============================================================
+    window._isDesktopBlockAdjustMode = false;
+    let _blockOffsets = { lock: 0, tarot: 0, calendar: 0, todo: 0, appGrid: 0 };
+
+    function loadSavedBlockOffsets() {
+        try {
+            const raw = localStorage.getItem('mcyt_desktop_block_offsets_v1');
+            if (raw) _blockOffsets = Object.assign({ lock: 0, tarot: 0, calendar: 0, todo: 0, appGrid: 0 }, JSON.parse(raw));
+        } catch (_) {}
+    }
+
+    function applyBlockOffsetsToDOM() {
+        const topWidget = document.querySelector('.desktop-top-widget');
+        const tarotContainer = document.getElementById('desktopTarotContainer');
+        const calWidget = document.getElementById('desktopCalendarWidget');
+        const todoWidget = document.getElementById('desktopTodoWidget');
+        const appGrid = document.querySelector('.desktop-page-1 .app-grid');
+
+        if (topWidget) topWidget.style.transform = `translateY(${_blockOffsets.lock || 0}px)`;
+        if (tarotContainer) tarotContainer.style.transform = `translateY(${_blockOffsets.tarot || 0}px)`;
+        if (calWidget) calWidget.style.transform = `translateY(${_blockOffsets.calendar || 0}px)`;
+        if (todoWidget) todoWidget.style.transform = `translateY(${_blockOffsets.todo || 0}px)`;
+        if (appGrid) appGrid.style.transform = `translateY(${_blockOffsets.appGrid || 0}px)`;
+    }
+
+    window.resetDesktopBlockOffsets = function () {
+        _blockOffsets = { lock: 0, tarot: 0, calendar: 0, todo: 0, appGrid: 0 };
+        localStorage.removeItem('mcyt_desktop_block_offsets_v1');
+        applyBlockOffsetsToDOM();
+        if (typeof showToast === 'function') showToast('桌面各层位置已恢复默认！');
+    };
+
+    window.enterDesktopBlockLayoutMode = function () {
+        if (window._isDesktopBlockAdjustMode) return;
+        window._isDesktopBlockAdjustMode = true;
+        loadSavedBlockOffsets();
+
+        // 注入临时控制栏胶囊（垂直贴右中侧，绝不被全屏横条遮挡）
+        let toolbar = document.getElementById('desktopLayoutTunerBar');
+        if (!toolbar) {
+            toolbar = document.createElement('div');
+            toolbar.id = 'desktopLayoutTunerBar';
+            toolbar.style.cssText = `
+                position: fixed; right: 12px; top: 50%; transform: translateY(-50%);
+                z-index: 999999; display: flex; flex-direction: column; gap: 8px;
+                background: rgba(26, 18, 22, 0.94); border: 1.5px solid #ff5c8a;
+                border-radius: 18px; padding: 10px 8px; box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+                font-family: -apple-system, sans-serif; backdrop-filter: blur(12px);
+            `;
+            toolbar.innerHTML = `
+                <div style="font-size:10px;color:#ffd4e0;font-weight:bold;text-align:center;margin-bottom:2px;">📐排版微调</div>
+                <button id="tunerSaveBtn" style="background:linear-gradient(135deg,#ff5c8a,#d81b60);color:#fff;border:none;border-radius:10px;padding:8px 10px;font-size:11px;font-weight:bold;cursor:pointer;">💾 保存</button>
+                <button id="tunerResetBtn" style="background:#ffffff;border:1px solid #ffccd9;color:#2e1a22;border-radius:10px;padding:6px 10px;font-size:11px;cursor:pointer;">↺ 重置</button>
+                <button id="tunerExitBtn" style="background:rgba(255,255,255,0.15);border:none;color:#ddd;border-radius:10px;padding:6px 10px;font-size:11px;cursor:pointer;">✕ 退出</button>
+            `;
+            document.body.appendChild(toolbar);
+
+            document.getElementById('tunerSaveBtn').onclick = () => {
+                localStorage.setItem('mcyt_desktop_block_offsets_v1', JSON.stringify(_blockOffsets));
+                exitDesktopBlockLayoutMode();
+                if (typeof showToast === 'function') showToast('桌面排版位置已成功永久保存！', 'success');
+            };
+            document.getElementById('tunerResetBtn').onclick = () => {
+                window.resetDesktopBlockOffsets();
+            };
+            document.getElementById('tunerExitBtn').onclick = () => {
+                loadSavedBlockOffsets();
+                applyBlockOffsetsToDOM();
+                exitDesktopBlockLayoutMode();
+            };
+        }
+        toolbar.style.display = 'flex';
+
+        // 找到 5 大块绑定手势微调
+        const blocksConfig = [
+            { el: document.querySelector('.desktop-top-widget'), key: 'lock', label: '锁定屏幕条' },
+            { el: document.getElementById('desktopTarotContainer'), key: 'tarot', label: '塔罗大组件' },
+            { el: document.getElementById('desktopCalendarWidget'), key: 'calendar', label: '日历卡片' },
+            { el: document.getElementById('desktopTodoWidget'), key: 'todo', label: '待办便签' },
+            { el: document.querySelector('.desktop-page-1 .app-grid'), key: 'appGrid', label: 'App图标网格' }
+        ];
+
+        blocksConfig.forEach(({ el, key, label }) => {
+            if (!el) return;
+            el.setAttribute('data-tuning-key', key);
+            el.style.outline = '2px dashed #ff5c8a';
+            el.style.outlineOffset = '2px';
+            el.style.cursor = 'grab';
+
+            let startY = 0, initialOffset = 0, isDragging = false;
+
+            function onPointerDown(e) {
+                if (!window._isDesktopBlockAdjustMode) return;
+                isDragging = true;
+                startY = e.clientY || (e.touches && e.touches[0].clientY);
+                initialOffset = _blockOffsets[key] || 0;
+                el.style.outline = '2.5px solid #d81b60';
+                el.style.zIndex = '900';
+                if (el.setPointerCapture) el.setPointerCapture(e.pointerId);
+                e.preventDefault();
+                e.stopPropagation();
+            }
+
+            function onPointerMove(e) {
+                if (!isDragging || !window._isDesktopBlockAdjustMode) return;
+                const curY = e.clientY || (e.touches && e.touches[0].clientY);
+                const deltaY = curY - startY;
+                const newOffset = Math.round(initialOffset + deltaY);
+                _blockOffsets[key] = newOffset;
+                el.style.transform = `translateY(${newOffset}px)`;
+            }
+
+            function onPointerUp() {
+                if (!isDragging) return;
+                isDragging = false;
+                el.style.outline = '2px dashed #ff5c8a';
+                el.style.zIndex = '';
+            }
+
+            el._tuningDown = onPointerDown;
+            el._tuningMove = onPointerMove;
+            el._tuningUp = onPointerUp;
+
+            el.addEventListener('pointerdown', onPointerDown);
+            window.addEventListener('pointermove', onPointerMove);
+            window.addEventListener('pointerup', onPointerUp);
+            window.addEventListener('pointercancel', onPointerUp);
+        });
+
+        if (typeof showToast === 'function') showToast('已开启排版模式：手指直接按住任意框上下拖拽，调好点击右侧保存');
+    };
+
+    function exitDesktopBlockLayoutMode() {
+        window._isDesktopBlockAdjustMode = false;
+        const toolbar = document.getElementById('desktopLayoutTunerBar');
+        if (toolbar) toolbar.style.display = 'none';
+
+        const blocks = [
+            document.querySelector('.desktop-top-widget'),
+            document.getElementById('desktopTarotContainer'),
+            document.getElementById('desktopCalendarWidget'),
+            document.getElementById('desktopTodoWidget'),
+            document.querySelector('.desktop-page-1 .app-grid')
+        ];
+
+        blocks.forEach(el => {
+            if (!el) return;
+            el.style.outline = '';
+            el.style.outlineOffset = '';
+            el.style.cursor = '';
+            el.style.zIndex = '';
+            if (el._tuningDown) el.removeEventListener('pointerdown', el._tuningDown);
+            if (el._tuningMove) window.removeEventListener('pointermove', el._tuningMove);
+            if (el._tuningUp) window.removeEventListener('pointerup', el._tuningUp);
+        });
+    }
 
     window.renderDesktopWidgetsLayout = function () {
         window.renderDesktopTarotWidget();
@@ -643,13 +796,16 @@
         if (calEnabled) window.renderDesktopCalendar();
         if (todoEnabled) window.renderDesktopTodos();
 
+        loadSavedBlockOffsets();
+        applyBlockOffsetsToDOM();
+
         bindDesktopInteractiveDragEngine();
     };
 
     window._isWidgetEditMode = false;
 
     function enterDesktopEditMode() {
-        if (window._isWidgetEditMode) return;
+        if (window._isWidgetEditMode || window._isDesktopBlockAdjustMode) return;
         window._isWidgetEditMode = true;
         document.querySelectorAll('.calendar-widget-card, .todo-widget-card, .app-slot').forEach(el => {
             el.classList.add('widget-jiggle');
@@ -666,6 +822,7 @@
             el.style.opacity = '';
             el.style.zIndex = '';
         });
+        applyBlockOffsetsToDOM();
     }
 
     document.addEventListener('click', (e) => {
@@ -776,9 +933,11 @@
                 item.style.transition = ''; item.style.transform = '';
                 item.style.opacity = ''; item.style.zIndex = '';
                 item.style.pointerEvents = ''; lastTargetSlot = null;
+                applyBlockOffsetsToDOM();
             };
 
             const onStart = (clientX, clientY) => {
+                if (window._isDesktopBlockAdjustMode) return;
                 startX = clientX; startY = clientY; isDragging = false;
                 pressTimer = setTimeout(() => {
                     enterDesktopEditMode();
@@ -787,6 +946,7 @@
             };
 
             const onMove = (clientX, clientY, event) => {
+                if (window._isDesktopBlockAdjustMode) return;
                 const deltaX = clientX - startX;
                 const deltaY = clientY - startY;
 
@@ -926,7 +1086,7 @@
     };
 
     window.toggleTodoDone = function (id) {
-        if (window._isWidgetEditMode) return;
+        if (window._isWidgetEditMode || window._isDesktopBlockAdjustMode) return;
         let todos = getStoredTodos();
         const target = todos.find(t => t.id === id);
         if (!target) return;
@@ -943,7 +1103,7 @@
     };
 
     window.promptAddTodoItem = function () {
-        if (window._isWidgetEditMode) return;
+        if (window._isWidgetEditMode || window._isDesktopBlockAdjustMode) return;
         window.openRetroTodoInputModal('📝 新建待办事项', '', '输入待办任务内容...', function (textVal) {
             const todos = getStoredTodos();
             todos.push({ id: 't_' + Date.now(), text: textVal, done: false });
@@ -953,7 +1113,7 @@
     };
 
     window.generateSmartDayTodos = function () {
-        if (window._isWidgetEditMode) return;
+        if (window._isWidgetEditMode || window._isDesktopBlockAdjustMode) return;
         const newGenerated = [
             { id: 'g1', text: '构思 MC 视频大纲', done: false },
             { id: 'g2', text: '录制 Minecraft 生存素材', done: false },
@@ -992,7 +1152,7 @@
     };
 
     window.openPhoneApp = function (appKey) {
-        if (window._isWidgetEditMode) return;
+        if (window._isWidgetEditMode || window._isDesktopBlockAdjustMode) return;
         const appModal = document.getElementById('appModal');
         const appModalTitle = document.getElementById('appModalTitle');
         const appModalBody = document.getElementById('appModalBody');
@@ -1011,7 +1171,6 @@
             return;
         }
 
-        // 🌟 唤起独立塔罗神殿
         if (appKey === 'tarot') {
             window.location.href = 'tarot/index.html';
             return;
