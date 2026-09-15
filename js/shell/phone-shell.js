@@ -232,6 +232,25 @@
         } catch (e) {}
     }
 
+    function checkAndHandleReturnFromApp() {
+        try {
+            if (sessionStorage.getItem('mcyt_skip_lock_screen') === 'true') {
+                sessionStorage.removeItem('mcyt_skip_lock_screen');
+                if (typeof window.unlockPhoneScreen === 'function') {
+                    window.unlockPhoneScreen();
+                }
+                const returnPage = sessionStorage.getItem('mcyt_return_desktop_page');
+                if (returnPage !== null) {
+                    sessionStorage.removeItem('mcyt_return_desktop_page');
+                    const pIdx = parseInt(returnPage, 10);
+                    if (!isNaN(pIdx) && typeof window.switchDesktopPage === 'function') {
+                        setTimeout(() => { window.switchDesktopPage(pIdx); }, 40);
+                    }
+                }
+            }
+        } catch (_) {}
+    }
+
     function initLockGestures() {
         const screenLock = document.getElementById('screenLock');
         const lockBtn = document.getElementById('lockBtn');
@@ -269,6 +288,14 @@
                 window.lockPhoneScreen();
             });
         }
+
+        // 检查是否从外部独立 App（如塔罗）返回
+        checkAndHandleReturnFromApp();
+
+        // 针对 WebView 的历史回退 bfcache 场景进行拦截
+        window.addEventListener('pageshow', function () {
+            checkAndHandleReturnFromApp();
+        });
     }
 
     let currentDesktopPage = 0;
@@ -1172,6 +1199,10 @@
         }
 
         if (appKey === 'tarot') {
+            try {
+                sessionStorage.setItem('mcyt_skip_lock_screen', 'true');
+                sessionStorage.setItem('mcyt_return_desktop_page', '1');
+            } catch (_) {}
             window.location.href = 'tarot/index.html';
             return;
         }
