@@ -88,6 +88,7 @@
                         <div class="app-grid">
                             <div class="app-slot" id="appSlotChat" onclick="openPhoneApp('chat')">
                                 <div class="app-icon-box" style="background: linear-gradient(135deg, #51cf66, #2b8a3e);">
+                                    <img src="assets/icons/chat.png" alt="聊天中心" draggable="false" style="display:none;" onload="this.style.display='block';if(this.nextElementSibling)this.nextElementSibling.style.display='none';this.parentElement.style.background='none';" onerror="this.style.display='none';" />
                                     <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
                                         <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
                                     </svg>
@@ -283,6 +284,7 @@
     <!-- 4. 独立 App 矩阵 -->
     <script src="js/apps/theme/theme-app.js"></script>
     <script src="js/apps/settings/settings-app.js"></script>
+    <script src="js/apps/chat/chat-app.js"></script>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
