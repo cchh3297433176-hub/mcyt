@@ -37,7 +37,7 @@ jobs:
           mkdir -p assets/avatars
           mkdir -p assets/moments
 
-          # 1. 处理头像库：复制所有格式图片并自动生成 list.json
+          # 1. 处理头像库：复制所有格式图片，同时生成 list.json 与 list.js
           if [ -d "image_repo/avatars" ]; then
             cp -r image_repo/avatars/* assets/avatars/ 2>/dev/null || true
           fi
@@ -49,10 +49,12 @@ jobs:
           files.sort()
           with open(os.path.join(avatar_dir, 'list.json'), 'w', encoding='utf-8') as fp:
               json.dump(files, fp, ensure_ascii=False)
-          print(f'已生成头像池索引，共计 {len(files)} 张图片')
+          with open(os.path.join(avatar_dir, 'list.js'), 'w', encoding='utf-8') as fp:
+              fp.write('window._MCYT_AVATARS_POOL = ' + json.dumps(files, ensure_ascii=False) + ';\n')
+          print(f'已生成头像池索引 (list.json / list.js)，共计 {len(files)} 张图片')
           "
 
-          # 2. 处理动态库（预留）：复制所有格式图片并自动生成 list.json
+          # 2. 处理动态库（预留）：复制所有格式图片，同时生成 list.json 与 list.js
           if [ -d "image_repo/moments" ]; then
             cp -r image_repo/moments/* assets/moments/ 2>/dev/null || true
           fi
@@ -64,7 +66,9 @@ jobs:
           files.sort()
           with open(os.path.join(moment_dir, 'list.json'), 'w', encoding='utf-8') as fp:
               json.dump(files, fp, ensure_ascii=False)
-          print(f'已生成动态池索引，共计 {len(files)} 张图片')
+          with open(os.path.join(moment_dir, 'list.js'), 'w', encoding='utf-8') as fp:
+              fp.write('window._MCYT_MOMENTS_POOL = ' + json.dumps(files, ensure_ascii=False) + ';\n')
+          print(f'已生成动态池索引 (list.json / list.js)，共计 {len(files)} 张图片')
           "
 
           # 清理临时拉取的图片仓库
@@ -356,6 +360,8 @@ jobs:
                   s.setDatabaseEnabled(true);
                   s.setAllowFileAccess(true);
                   s.setAllowContentAccess(true);
+                  s.setAllowFileAccessFromFileURLs(true);
+                  s.setAllowUniversalAccessFromFileURLs(true);
                   s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
                   s.setUseWideViewPort(true);
                   s.setLoadWithOverviewMode(true);
