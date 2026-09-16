@@ -14,22 +14,59 @@
     const CUSTOM_NPCS_BACKUP_KEY = 'mcyt_wechat_custom_npcs';
     const CHAT_HISTORY_BACKUP_KEY = 'mcyt_wechat_chathistory_v2';
 
-    // 动态头像池
-    window._MCYT_AVATARS_POOL = [];
-    async function initAvatarPool() {
+    // 动态头像池：多轨保障（动态脚本注入 + XHR 本地文件直读 + Fetch）
+    if (!Array.isArray(window._MCYT_AVATARS_POOL)) {
+        window._MCYT_AVATARS_POOL = [];
+    }
+
+    function initAvatarPool() {
+        // 轨1：如果已经在全局或通过构建的 list.js 注入成功，直接使用
+        if (Array.isArray(window._MCYT_AVATARS_POOL) && window._MCYT_AVATARS_POOL.length > 0) {
+            return;
+        }
+
+        // 动态创建 script 标签预加载 list.js（file:// 协议下最稳妥的跨域免疫手段）
         try {
-            const resp = await fetch(AVATAR_SUBDIR + 'list.json');
-            if (resp.ok) {
-                const list = await resp.json();
+            const script = document.createElement('script');
+            script.src = AVATAR_SUBDIR + 'list.js?t=' + Date.now();
+            script.onload = function() {
+                if (Array.isArray(window._MCYT_AVATARS_POOL) && window._MCYT_AVATARS_POOL.length > 0) {
+                    console.log('✅ 头像池已通过 list.js 成功装载，数量:', window._MCYT_AVATARS_POOL.length);
+                }
+            };
+            document.head.appendChild(script);
+        } catch (_) {}
+
+        // 轨2：使用兼容 file:// 本地协议的 XMLHttpRequest 读取 list.json
+        try {
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', AVATAR_SUBDIR + 'list.json', true);
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === 4) {
+                    // 本地 file 协议下 status 可能是 0 或 200
+                    if (xhr.status === 200 || xhr.status === 0) {
+                        try {
+                            const list = JSON.parse(xhr.responseText);
+                            if (Array.isArray(list) && list.length > 0) {
+                                window._MCYT_AVATARS_POOL = list;
+                                console.log('✅ 头像池已通过 XHR 成功装载，数量:', list.length);
+                            }
+                        } catch (e) {}
+                    }
+                }
+            };
+            xhr.send(null);
+        } catch (_) {}
+
+        // 轨3：Fetch 异步通道
+        fetch(AVATAR_SUBDIR + 'list.json')
+            .then(r => r.json())
+            .then(list => {
                 if (Array.isArray(list) && list.length > 0) {
                     window._MCYT_AVATARS_POOL = list;
-                    return;
                 }
-            }
-        } catch (_) {}
-        if (!window._MCYT_AVATARS_POOL || window._MCYT_AVATARS_POOL.length === 0) {
-            window._MCYT_AVATARS_POOL = ['1.png', '2.png', '3.png', '4.png', '5.png', '6.png', '7.png', '8.png'];
-        }
+            })
+            .catch(() => {});
     }
     initAvatarPool();
 
@@ -40,7 +77,8 @@
             if (picked.startsWith('http') || picked.startsWith('data:') || picked.startsWith('assets/')) {
                 return picked;
             }
-            return `${AVATAR_SUBDIR}${picked}`;
+            // 路径拼装并做安全编码，兼容中文与特殊文件名
+            return `${AVATAR_SUBDIR}${encodeURIComponent(picked).replace(/%2F/g, '/')}`;
         }
         return 'assets/icons/chat.png';
     }
@@ -317,7 +355,9 @@
             if (!npc.name) npc.name = id;
             if (npc.favor === undefined) npc.favor = 50;
             if (!npc.region) npc.region = (id.includes('dream') || id.includes('george')) ? '美国 - 东部' : '中国';
-            if (!npc.avatarUrl) npc.avatarUrl = getRandomAvatar();
+            if (!npc.avatarUrl || npc.avatarUrl === 'assets/icons/chat.png') {
+                npc.avatarUrl = getRandomAvatar();
+            }
             if (!npc.ownerAccountId) npc.ownerAccountId = 'main';
         }
     }
@@ -349,7 +389,8 @@
 
     function renderAvatarBadge(obj, size = 46) {
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { avatar: 'assets/icons/chat.png' };
-        const url = (obj && obj.isPlayer) ? curAcc.avatar : (obj?.avatarUrl || getRandomAvatar());
+        let url = (obj && obj.isPlayer) ? curAcc.avatar : (obj?.avatarUrl || getRandomAvatar());
+        if (!url) url = 'assets/icons/chat.png';
         return `<div style="width:${size}px;height:${size}px;border-radius:6px;overflow:hidden;background:#e9e9e9;flex-shrink:0;box-shadow:inset 0 0 0 0.5px rgba(0,0,0,0.06);">
             <img src="${url}" draggable="false" style="width:100%;height:100%;object-fit:cover;display:block;" onerror="this.onerror=null;this.src='assets/icons/chat.png';" />
         </div>`;
@@ -935,6 +976,7 @@
                         document.querySelector('.wechat-action-sheet-mask')?.remove();
                         const disp = document.getElementById('npcCardAvatarDisplay');
                         if (disp) disp.src = npc.avatarUrl;
+                        if (typeof showToast === 'function') showToast('头像已更换', 'success', 1200);
                     };
                     reader.readAsDataURL(file);
                 };
@@ -945,13 +987,20 @@
     window._randomNpcAvatar = function(npcId) {
         document.querySelector('.wechat-action-sheet-mask')?.remove();
         const npc = window.G.npcs[npcId];
-        if (npc) {
-            npc.avatarUrl = getRandomAvatar();
-            syncCustomNpcsToLocalBackup();
-            if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
-            const disp = document.getElementById('npcCardAvatarDisplay');
-            if (disp) disp.src = npc.avatarUrl;
+        if (!npc) return;
+
+        // 如果头像池为空，主动重新检查
+        if (!Array.isArray(window._MCYT_AVATARS_POOL) || window._MCYT_AVATARS_POOL.length === 0) {
+            initAvatarPool();
         }
+
+        const newAvatar = getRandomAvatar();
+        npc.avatarUrl = newAvatar;
+        syncCustomNpcsToLocalBackup();
+        if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+        const disp = document.getElementById('npcCardAvatarDisplay');
+        if (disp) disp.src = npc.avatarUrl;
+        if (typeof showToast === 'function') showToast('已随机更换头像', 'success', 1200);
     };
 
     window.openEditNpcNameModal = function(npcId) {
