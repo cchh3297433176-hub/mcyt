@@ -1181,6 +1181,11 @@
         const appModalBody = document.getElementById('appModalBody');
         if (!appModal || !appModalTitle || !appModalBody) return;
 
+        // 兜底清理：聊天 App 会给 appModal 打上 wechat-seamless-shell 类来隐藏通用顶部退出条，
+        // 换成自己的"‹ 桌面"按钮；如果上次聊天渲染中途报错导致这个类没被正常摘掉，
+        // 会连带其它 App（比如设置）也看不到退出按钮。这里保证每次打开非聊天 App 时强制摘掉。
+        if (appKey !== 'chat') appModal.classList.remove('wechat-seamless-shell');
+
         if (appKey === 'chat' && typeof window.renderChatApp === 'function') {
             appModalTitle.textContent = "💬 聊天中心";
             window.renderChatApp(appModalBody);
