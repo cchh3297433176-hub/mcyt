@@ -291,6 +291,7 @@
             }
         };
     }
+    window.openWechatCleanModal = openWechatCleanModal;
 
     function ensureNpcIntegrity() {
         if (!window.G) window.G = {};
@@ -403,11 +404,6 @@
     }
 
     // 微信"消息"主列表构建（私聊+群聊二选一，取决于 window.G.chatActiveTab）
-    // ⚠️ 2026-09 排查发现：该函数在从 04-game-core-2.js 拆分/迁移到本文件时被漏掉，
-    // 导致 renderChatApp() 在默认的"聊天"分页下必定抛出 ReferenceError 而提前中断，
-    // 聊天图标点击后表现为“无反应”；同时第413行已提前打上的 wechat-seamless-shell
-    // 类不会被清理，导致之后再打开任意其他 App（如设置）都会缺失顶部退出按钮。
-    // 现补齐本函数，并已在 phone-shell.js 的 openPhoneApp 里加了兜底清理逻辑。
     function buildChatListHTML() {
         const isDirect = window.G.chatActiveTab !== 'group';
 
@@ -460,7 +456,7 @@
             return `
             <div style="text-align:center;color:#b2b2b2;padding:60px 16px;font-size:13px;line-height:1.8;">
                 <b>暂无群聊</b><br>
-                点击右上角「+」创建或加入一个群聊吧！
+                点击右上角「+」发起群聊吧！
             </div>`;
         }
 
@@ -504,7 +500,7 @@
         const appModal = document.getElementById('appModal');
         if (appModal) appModal.classList.add('wechat-seamless-shell');
 
-        // 彻底清空可能由于 4 号文件历史残留渲染在 #socialTab 的旧 DOM
+        // 清理旧残留
         const legacyWrap = document.querySelector('#socialTab .phone-app-wrap');
         if (legacyWrap) legacyWrap.remove();
 
@@ -628,6 +624,224 @@
     };
 
     // ============================================================
+    // ➕ 右上角加号微信极简操作菜单
+    // ============================================================
+    window.openAddChatTargetModal = function() {
+        const reqCount = (window.G.friendRequests || []).length + (window.G.groupInvites || []).length;
+        let mask = document.createElement('div');
+        mask.className = 'wechat-action-sheet-mask';
+        mask.innerHTML = `
+            <div class="wechat-action-sheet-box">
+                <div class="wechat-action-item" onclick="window.openCreateCustomNpcModal()">添加 / 自建联系人</div>
+                <div class="wechat-action-item" onclick="window.openCreateGroupModal()">发起群聊</div>
+                <div class="wechat-action-item" onclick="window.openSocialRequestsModal()">新的朋友与群邀请 ${reqCount > 0 ? `<span style="color:#fa5151;font-weight:600;">(${reqCount})</span>` : ''}</div>
+                <div class="wechat-action-cancel" onclick="this.closest('.wechat-action-sheet-mask').remove()">取消</div>
+            </div>
+        `;
+        document.body.appendChild(mask);
+    };
+
+    // 自建联系人
+    window.openCreateCustomNpcModal = function() {
+        document.querySelector('.wechat-action-sheet-mask')?.remove();
+        openWechatCleanModal('添加自建联系人', `
+            <div style="display:flex;flex-direction:column;gap:10px;text-align:left;">
+                <div>
+                    <label style="font-size:12px;color:#666;">联系人昵称</label>
+                    <input type="text" id="wcleanNewNpcName" placeholder="例如：Technoblade / 派蒙" class="wechat-clean-input" style="margin-top:3px;">
+                </div>
+                <div>
+                    <label style="font-size:12px;color:#666;">常驻地区 / 时区</label>
+                    <select id="wcleanNewNpcRegion" class="wechat-clean-input" style="margin-top:3px;">
+                        <option value="中国">中国</option>
+                        <option value="美国 - 东部">美国 - 东部</option>
+                        <option value="美国 - 西部">美国 - 西部</option>
+                        <option value="英国">英国</option>
+                        <option value="日本">日本</option>
+                        <option value="韩国">韩国</option>
+                        <option value="加拿大">加拿大</option>
+                    </select>
+                </div>
+                <div>
+                    <label style="font-size:12px;color:#666;">人设档案 / 说话风格</label>
+                    <textarea id="wcleanNewNpcPersona" rows="4" placeholder="例如：性格高冷，Minecraft PVP技术天花板，毒舌但很讲义气..." class="wechat-clean-input" style="margin-top:3px;resize:none;line-height:1.4;"></textarea>
+                </div>
+            </div>
+        `, () => {
+            const name = document.getElementById('wcleanNewNpcName').value.trim();
+            if (!name) {
+                if (typeof showToast === 'function') showToast('请填写联系人昵称', 'error');
+                return false;
+            }
+            const region = document.getElementById('wcleanNewNpcRegion').value;
+            const persona = document.getElementById('wcleanNewNpcPersona').value.trim() || 'MC好友同伴。';
+            const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
+            const newId = 'custom_' + Date.now();
+
+            if (!window.G.npcs) window.G.npcs = {};
+            window.G.npcs[newId] = {
+                id: newId,
+                name: name,
+                region: region,
+                persona: persona,
+                favor: 50,
+                avatarUrl: getRandomAvatar(),
+                isCustom: true,
+                ownerAccountId: curAcc.id
+            };
+
+            syncCustomNpcsToLocalBackup();
+            if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+            if (typeof showToast === 'function') showToast('已成功添加联系人', 'success', 1200);
+            renderChatApp();
+        });
+    };
+
+    // 发起群聊
+    window.openCreateGroupModal = function() {
+        document.querySelector('.wechat-action-sheet-mask')?.remove();
+        const npcs = Object.values(window.G.npcs || {});
+        if (npcs.length === 0) {
+            if (typeof showToast === 'function') showToast('暂无可选联系人，请先添加', 'info');
+            return;
+        }
+
+        const listHtml = npcs.map(n => `
+            <label style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:0.5px solid #f2f2f2;cursor:pointer;">
+                <input type="checkbox" class="wclean-grp-chk" value="${n.id}" style="accent-color:#07c160;width:16px;height:16px;">
+                ${renderAvatarBadge(n, 32)}
+                <span style="font-size:13.5px;color:#181818;">${escapeHtml(n.name)}</span>
+            </label>
+        `).join('');
+
+        openWechatCleanModal('发起群聊', `
+            <div style="display:flex;flex-direction:column;gap:8px;text-align:left;">
+                <input type="text" id="wcleanNewGroupName" placeholder="群聊名称..." class="wechat-clean-input">
+                <div style="font-size:12px;color:#888;margin-top:4px;">选择群成员：</div>
+                <div style="max-height:180px;overflow-y:auto;padding-right:4px;">
+                    ${listHtml}
+                </div>
+            </div>
+        `, () => {
+            const name = document.getElementById('wcleanNewGroupName').value.trim() || '我的MC小群';
+            const chks = Array.from(document.querySelectorAll('.wclean-grp-chk:checked')).map(c => c.value);
+            if (chks.length === 0) {
+                if (typeof showToast === 'function') showToast('请至少选择一位群成员', 'error');
+                return false;
+            }
+
+            const gid = 'group_' + Date.now();
+            if (!window.G.groups) window.G.groups = {};
+            window.G.groups[gid] = {
+                id: gid,
+                name: name,
+                members: chks,
+                avatarUrl: getRandomAvatar()
+            };
+            if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
+            window.G.groupChatHistory[gid] = [];
+
+            if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+            if (typeof showToast === 'function') showToast('群聊已建立', 'success', 1200);
+            window.G.chatActiveTab = 'group';
+            renderChatApp();
+        });
+    };
+
+    // 新的好友与群邀请
+    window.openSocialRequestsModal = function() {
+        document.querySelector('.wechat-action-sheet-mask')?.remove();
+        const fReqs = window.G.friendRequests || [];
+        const gInvs = window.G.groupInvites || [];
+
+        if (fReqs.length === 0 && gInvs.length === 0) {
+            openWechatCleanModal('申请与邀请', `<div style="text-align:center;color:#999;padding:20px 0;font-size:13px;">暂无新的申请或群邀请</div>`, () => {});
+            return;
+        }
+
+        let bodyHtml = '<div style="max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;">';
+
+        fReqs.forEach((r, idx) => {
+            bodyHtml += `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px;background:#f9f9f9;border-radius:6px;">
+                <div style="font-size:12.5px;color:#181818;">
+                    <b>${escapeHtml(r.name || '玩家')}</b> 请求添加好友<br>
+                    <span style="font-size:11px;color:#888;">${escapeHtml(r.reason || '想跟你一起玩MC')}</span>
+                </div>
+                <div style="display:flex;gap:6px;">
+                    <button onclick="window.handleFriendRequestAction(${idx}, true)" style="border:none;background:#07c160;color:#fff;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;">接受</button>
+                    <button onclick="window.handleFriendRequestAction(${idx}, false)" style="border:none;background:#e5e5e5;color:#555;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;">忽略</button>
+                </div>
+            </div>`;
+        });
+
+        gInvs.forEach((inv, idx) => {
+            bodyHtml += `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px;background:#f9f9f9;border-radius:6px;">
+                <div style="font-size:12.5px;color:#181818;">
+                    邀请加入群聊 <b>${escapeHtml(inv.groupName || 'MC开黑群')}</b>
+                </div>
+                <div style="display:flex;gap:6px;">
+                    <button onclick="window.handleGroupInviteAction(${idx}, true)" style="border:none;background:#07c160;color:#fff;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;">加入</button>
+                    <button onclick="window.handleGroupInviteAction(${idx}, false)" style="border:none;background:#e5e5e5;color:#555;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;">忽略</button>
+                </div>
+            </div>`;
+        });
+
+        bodyHtml += '</div>';
+
+        openWechatCleanModal('新的申请与邀请', bodyHtml, () => {});
+    };
+
+    window.handleFriendRequestAction = function(idx, accept) {
+        document.querySelector('.wechat-clean-modal-mask')?.remove();
+        const req = (window.G.friendRequests || [])[idx];
+        if (req) {
+            if (accept) {
+                const nid = 'npc_req_' + Date.now();
+                if (!window.G.npcs) window.G.npcs = {};
+                window.G.npcs[nid] = {
+                    id: nid,
+                    name: req.name || '新好友',
+                    region: '中国',
+                    persona: req.persona || '一位热情的游戏粉丝。',
+                    favor: 50,
+                    avatarUrl: getRandomAvatar(),
+                    isCustom: true
+                };
+                syncCustomNpcsToLocalBackup();
+                if (typeof showToast === 'function') showToast('已添加新好友', 'success', 1200);
+            }
+            window.G.friendRequests.splice(idx, 1);
+            if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+            renderChatApp();
+        }
+    };
+
+    window.handleGroupInviteAction = function(idx, accept) {
+        document.querySelector('.wechat-clean-modal-mask')?.remove();
+        const inv = (window.G.groupInvites || [])[idx];
+        if (inv) {
+            if (accept) {
+                const gid = 'group_inv_' + Date.now();
+                if (!window.G.groups) window.G.groups = {};
+                window.G.groups[gid] = {
+                    id: gid,
+                    name: inv.groupName || 'MC探险群',
+                    members: inv.members || [],
+                    avatarUrl: getRandomAvatar()
+                };
+                if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
+                window.G.groupChatHistory[gid] = [];
+                if (typeof showToast === 'function') showToast('已加入群聊', 'success', 1200);
+            }
+            window.G.groupInvites.splice(idx, 1);
+            if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+            renderChatApp();
+        }
+    };
+
+    // ============================================================
     // 📖 角色名片页：彻底告别粉白复古框，纯正微信极简风
     // ============================================================
     window.openNpcProfileCardModal = function(npcId) {
@@ -689,6 +903,55 @@
             close();
             window.openChat(npcId);
         };
+    };
+
+    window.triggerChangeNpcAvatar = function(npcId) {
+        const npc = window.G.npcs[npcId];
+        if (!npc) return;
+        let mask = document.createElement('div');
+        mask.className = 'wechat-action-sheet-mask';
+        mask.innerHTML = `
+            <div class="wechat-action-sheet-box">
+                <label class="wechat-action-item" style="display:block;cursor:pointer;">
+                    <span>从相册选择新头像</span>
+                    <input type="file" id="localNpcAvatarInput" accept="image/*" style="display:none;">
+                </label>
+                <div class="wechat-action-item" onclick="window._randomNpcAvatar('${npcId}')">随机头像池挑选</div>
+                <div class="wechat-action-cancel" onclick="this.closest('.wechat-action-sheet-mask').remove()">取消</div>
+            </div>
+        `;
+        document.body.appendChild(mask);
+        setTimeout(() => {
+            const input = document.getElementById('localNpcAvatarInput');
+            if (input) {
+                input.onchange = (e) => {
+                    const file = e.target.files && e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (evt) => {
+                        npc.avatarUrl = evt.target.result;
+                        syncCustomNpcsToLocalBackup();
+                        if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+                        document.querySelector('.wechat-action-sheet-mask')?.remove();
+                        const disp = document.getElementById('npcCardAvatarDisplay');
+                        if (disp) disp.src = npc.avatarUrl;
+                    };
+                    reader.readAsDataURL(file);
+                };
+            }
+        }, 30);
+    };
+
+    window._randomNpcAvatar = function(npcId) {
+        document.querySelector('.wechat-action-sheet-mask')?.remove();
+        const npc = window.G.npcs[npcId];
+        if (npc) {
+            npc.avatarUrl = getRandomAvatar();
+            syncCustomNpcsToLocalBackup();
+            if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+            const disp = document.getElementById('npcCardAvatarDisplay');
+            if (disp) disp.src = npc.avatarUrl;
+        }
     };
 
     window.openEditNpcNameModal = function(npcId) {
@@ -952,6 +1215,304 @@
             };
         }
     }
+
+    // ============================================================
+    // 👥 多人群聊窗口渲染
+    // ============================================================
+    function renderGroupChatWindow(container) {
+        if (!container) container = document.getElementById('appModalBody') || document.getElementById('socialTab');
+        if (!container) return;
+
+        const gid = window.G.currentChatGroup;
+        const group = window.G.groups && window.G.groups[gid];
+        if (!group) { window.closeGroupChat(); return; }
+
+        const history = (window.G.groupChatHistory && window.G.groupChatHistory[gid]) || [];
+        const memberCount = (group.members || []).length + 1;
+
+        let messagesHtml = '';
+        for (const msg of history) {
+            const isSelf = msg.from === 'player';
+            const senderNpc = (!isSelf && msg.senderId) ? window.G.npcs[msg.senderId] : null;
+            const senderName = isSelf ? '我' : (msg.senderName || senderNpc?.name || '群友');
+            const avatarObj = isSelf ? { isPlayer: true } : (senderNpc || { avatarUrl: getRandomAvatar() });
+
+            if (msg.type === 'sticker' && msg.stickerUrl) {
+                messagesHtml += `
+                <div class="chat-msg-row" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
+                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${renderAvatarBadge(avatarObj, 38)}</div>` : ''}
+                    <div style="max-width:65%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
+                        ${!isSelf ? `<div style="font-size:11px;color:#888;margin-bottom:2px;">${escapeHtml(senderName)}</div>` : ''}
+                        <img src="${escapeHtml(msg.stickerUrl)}" alt="${escapeHtml(msg.stickerDesc || '表情')}" style="width:100px;height:100px;object-fit:contain;border-radius:6px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,0.05);">
+                        <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
+                    </div>
+                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${renderAvatarBadge(avatarObj, 38)}</div>` : ''}
+                </div>`;
+            } else if (msg.type === 'image' || msg.imageUrl) {
+                const imgSrc = msg.imageUrl || msg.url;
+                messagesHtml += `
+                <div class="chat-msg-row" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
+                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${renderAvatarBadge(avatarObj, 38)}</div>` : ''}
+                    <div style="max-width:65%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
+                        ${!isSelf ? `<div style="font-size:11px;color:#888;margin-bottom:2px;">${escapeHtml(senderName)}</div>` : ''}
+                        <div style="background:#fff;padding:3px;border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,0.06);">
+                            <img src="${imgSrc}" style="max-width:180px;max-height:220px;border-radius:4px;object-fit:cover;display:block;" />
+                            ${msg.imageDesc ? `<div style="font-size:11px;color:#666;padding:4px 6px;">${escapeHtml(msg.imageDesc)}</div>` : ''}
+                        </div>
+                        <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
+                    </div>
+                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${renderAvatarBadge(avatarObj, 38)}</div>` : ''}
+                </div>`;
+            } else {
+                let text = isSelf ? escapeHtml(msg.text || '').replace(/\n/g, '<br>') : ((typeof renderContentWithThoughts === 'function') ? renderContentWithThoughts(msg.text || '') : escapeHtml(msg.text || ''));
+                messagesHtml += `
+                <div class="chat-msg-row" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
+                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${renderAvatarBadge(avatarObj, 38)}</div>` : ''}
+                    <div style="max-width:74%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
+                        ${!isSelf ? `<div style="font-size:11px;color:#888;margin-bottom:2px;">${escapeHtml(senderName)}</div>` : ''}
+                        <div style="background:${isSelf ? '#95ec69' : '#ffffff'};color:#111;padding:8px 12px;border-radius:5px;box-shadow:0 1px 2px rgba(0,0,0,0.05);font-size:14.5px;line-height:1.5;word-break:break-word;">
+                            ${text}
+                        </div>
+                        <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
+                    </div>
+                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${renderAvatarBadge(avatarObj, 38)}</div>` : ''}
+                </div>`;
+            }
+        }
+
+        const stickerDrawerHtml = _stickerDrawerOpen ? buildChatStickerDrawerHTML('group', gid) : '';
+        const plusDrawerHtml = _plusDrawerOpen ? buildChatPlusDrawerHTML('group', gid) : '';
+
+        const html = `
+        <div style="background:#ededed;display:flex;flex-direction:column;height:100%;min-height:100%;overflow:hidden;font-family:-apple-system,sans-serif;">
+            <div class="wechat-top-header">
+                <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;">
+                    <button onclick="window.closeGroupChat()" style="border:none;background:none;font-size:15px;color:#181818;cursor:pointer;padding:0;display:flex;align-items:center;gap:2px;font-weight:500;">
+                        <span>‹</span> <span>微信</span>
+                    </button>
+                    <div style="font-weight:600;font-size:15px;color:#181818;margin-left:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                        ${escapeHtml(group.name)} (${memberCount})
+                    </div>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
+                    <!-- 闪电生成按钮 -->
+                    <button id="btnGroupLightningTrigger" onclick="window.triggerGroupAIReply('${gid}')" style="border:none;background:#07c160;color:#fff;width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="生成群聊回复">
+                        <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                    </button>
+                    <!-- 群设置详情 -->
+                    <button onclick="window.openGroupSettingsModal('${gid}')" style="border:none;background:none;width:32px;height:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">
+                        <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:#181818;stroke-width:2;"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <div id="groupChatMessageArea" style="flex:1;overflow-y:auto;padding:12px;">
+                ${messagesHtml || '<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">群聊开启啦，向大家打个招呼吧！</div>'}
+            </div>
+
+            ${stickerDrawerHtml}
+            ${plusDrawerHtml}
+
+            <!-- 微信标准输入栏 -->
+            <div style="padding:8px 10px;background:#f7f7f7;border-top:0.5px solid #dcdcdc;display:flex;gap:8px;align-items:center;flex-shrink:0;">
+                <button onclick="window.toggleChatPlusDrawer('group','${gid}')" title="更多功能" style="border:none;background:none;width:28px;height:28px;cursor:pointer;flex-shrink:0;padding:0;display:flex;align-items:center;justify-content:center;">
+                    <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#555;stroke-width:1.8;stroke-linecap:round;"><circle cx="12" cy="12" r="9.5"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+                </button>
+
+                <div style="flex:1;position:relative;display:flex;align-items:center;">
+                    <textarea id="groupChatInput" rows="1" placeholder="发消息..." style="width:100%;padding:8px 34px 8px 10px;border-radius:5px;border:none;background:#ffffff;font-size:14px;resize:none;outline:none;font-family:inherit;box-shadow:inset 0 0 0 0.5px #dcdcdc;box-sizing:border-box;"></textarea>
+                    <button onclick="window.toggleChatStickerDrawer('group','${gid}')" title="表情" style="position:absolute;right:6px;border:none;background:none;width:24px;height:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">
+                        <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:#666666;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">
+                            <circle cx="12" cy="12" r="9.5"></circle>
+                            <path d="M8 14.5c1 1.5 2.5 2.2 4 2.2s3-0.7 4-2.2"></path>
+                            <circle cx="9" cy="9.5" r="1.2" fill="#666666" stroke="none"></circle>
+                            <circle cx="15" cy="9.5" r="1.2" fill="#666666" stroke="none"></circle>
+                        </svg>
+                    </button>
+                </div>
+
+                <button onclick="window.doSendGroupChat('${gid}')" style="border:none;background:#07c160;color:#fff;padding:6px 13px;border-radius:4px;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;">发送</button>
+            </div>
+        </div>
+        `;
+        container.innerHTML = html;
+
+        const msgArea = document.getElementById('groupChatMessageArea');
+        if (msgArea) setTimeout(() => { msgArea.scrollTop = msgArea.scrollHeight; }, 50);
+
+        const input = document.getElementById('groupChatInput');
+        if (input) {
+            input.onkeydown = (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    window.doSendGroupChat(gid);
+                }
+            };
+        }
+    }
+
+    // 群聊 AI 生成回复
+    window.triggerGroupAIReply = async function(gid) {
+        const group = window.G.groups && window.G.groups[gid];
+        if (!group) return;
+        const members = (group.members || []).map(mid => window.G.npcs[mid]).filter(Boolean);
+        if (members.length === 0) {
+            if (typeof showToast === 'function') showToast('群内没有其他成员', 'info');
+            return;
+        }
+
+        const history = (window.G.groupChatHistory && window.G.groupChatHistory[gid]) || [];
+        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { name: '我' };
+
+        const memberDesc = members.map(m => `「${m.name}」(人设:${m.persona || 'MC同伴'})`).join('、');
+        const recentDialogue = history.slice(-8).map(m => `${m.senderName || '群友'}: ${m.text || ''}`).join('\n');
+
+        const sysPrompt = `你正在模拟Minecraft多人微信群聊「${group.name}」。群内NPC成员有：${memberDesc}。
+【输出规范】：
+1. 挑选 1 到 2 位群成员依次发言。
+2. 每条发言格式必须为：[MSG sender="成员名字"]发言正文[/MSG]。
+3. 语气生动自然，贴合群友日常打字风格，严禁出现思维链和括号动作描述！`;
+
+        const btn = document.getElementById('btnGroupLightningTrigger');
+        if (btn) {
+            btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:15px;height:15px;fill:#ffffff;animation:spin 1s linear infinite;"><circle cx="12" cy="12" r="9" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-dasharray="28" stroke-dashoffset="14"></circle></svg>`;
+            btn.disabled = true;
+        }
+
+        try {
+            const raw = await callAI([
+                { role: 'system', content: sysPrompt },
+                { role: 'user', content: recentDialogue ? `【最近群聊记录】：\n${recentDialogue}\n\n请群友们接话：` : '群里有人在吗？' }
+            ], { maxTokens: 400, temperature: 0.85 });
+
+            let clean = (typeof stripThought === 'function') ? stripThought(raw.trim()) : raw.trim();
+            const msgRegex = /\[MSG sender="([^"]+)"\]([\s\S]*?)\[\/MSG\]/gi;
+            let match;
+            let found = false;
+
+            while ((match = msgRegex.exec(clean)) !== null) {
+                found = true;
+                const senderName = match[1].trim();
+                const text = match[2].trim();
+                if (text) {
+                    const matchedNpc = members.find(m => m.name === senderName) || members[0];
+                    window.G.groupChatHistory[gid].push({
+                        _id: 'gmsg_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
+                        from: 'npc',
+                        senderId: matchedNpc.id,
+                        senderName: matchedNpc.name,
+                        text: text,
+                        time: new Date().toLocaleTimeString().slice(0, 5)
+                    });
+                }
+            }
+
+            if (!found && clean) {
+                const randomNpc = members[Math.floor(Math.random() * members.length)];
+                window.G.groupChatHistory[gid].push({
+                    _id: 'gmsg_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
+                    from: 'npc',
+                    senderId: randomNpc.id,
+                    senderName: randomNpc.name,
+                    text: clean.replace(/\[\/?MSG.*?\]/gi, '').trim(),
+                    time: new Date().toLocaleTimeString().slice(0, 5)
+                });
+            }
+
+            syncChatHistoryToLocalBackup();
+            if (typeof autoSaveGame === 'function') autoSaveGame();
+            if (window.G.currentChatGroup === gid) renderGroupChatWindow();
+        } catch (e) {
+            console.error('群聊回复生成失败:', e);
+            if (typeof showToast === 'function') showToast('群聊回复失败', 'error');
+        } finally {
+            if (btn) {
+                btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`;
+                btn.disabled = false;
+            }
+        }
+    };
+
+    // 群设置详情弹窗
+    window.openGroupSettingsModal = function(gid) {
+        const group = window.G.groups && window.G.groups[gid];
+        if (!group) return;
+
+        const members = (group.members || []).map(mid => window.G.npcs[mid]).filter(Boolean);
+        let membersGrid = members.map(m => `
+            <div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:52px;">
+                ${renderAvatarBadge(m, 44)}
+                <span style="font-size:11px;color:#666;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;text-align:center;">${escapeHtml(m.name)}</span>
+            </div>
+        `).join('');
+
+        openWechatCleanModal('群聊信息', `
+            <div style="display:flex;flex-direction:column;gap:14px;text-align:left;">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:10px;border-bottom:0.5px solid #ededed;">
+                    <span style="font-size:14px;color:#333;">群聊名称</span>
+                    <span onclick="window.openEditGroupNameModal('${gid}')" style="font-size:14px;font-weight:600;color:#181818;cursor:pointer;display:flex;align-items:center;gap:3px;">
+                        ${escapeHtml(group.name)} <span style="color:#07c160;font-size:11px;">✎</span>
+                    </span>
+                </div>
+                <div>
+                    <div style="font-size:12px;color:#888;margin-bottom:8px;">群成员 (${members.length + 1}人)</div>
+                    <div style="display:flex;flex-wrap:wrap;gap:10px;">
+                        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:52px;">
+                            ${renderAvatarBadge({ isPlayer: true }, 44)}
+                            <span style="font-size:11px;color:#666;text-align:center;">我</span>
+                        </div>
+                        ${membersGrid}
+                    </div>
+                </div>
+                <div style="margin-top:10px;">
+                    <button type="button" onclick="window.dismissGroup('${gid}')" style="width:100%;border:none;background:#fff1f0;color:#fa5151;padding:9px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
+                        解散并删除群聊
+                    </button>
+                </div>
+            </div>
+        `, () => {});
+    };
+
+    window.openEditGroupNameModal = function(gid) {
+        const group = window.G.groups && window.G.groups[gid];
+        if (!group) return;
+        document.querySelector('.wechat-clean-modal-mask')?.remove();
+        openWechatCleanModal('修改群聊名称', `
+            <input type="text" id="wcleanGroupNameInput" value="${escapeHtml(group.name)}" class="wechat-clean-input">
+        `, () => {
+            const val = document.getElementById('wcleanGroupNameInput').value.trim();
+            if (!val) return false;
+            group.name = val;
+            if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+            window.openGroupSettingsModal(gid);
+        });
+    };
+
+    window.dismissGroup = function(gid) {
+        document.querySelector('.wechat-clean-modal-mask')?.remove();
+        let mask = document.createElement('div');
+        mask.className = 'wechat-clean-modal-mask';
+        mask.innerHTML = `
+            <div class="wechat-clean-modal-card">
+                <div class="wechat-clean-modal-title">解散群聊</div>
+                <div style="font-size:13px;color:#666;text-align:center;margin:8px 0 16px;">确定要解散该群聊并清空聊天记录吗？</div>
+                <div class="wechat-clean-modal-btns">
+                    <button type="button" class="wechat-clean-btn-cancel" onclick="this.closest('.wechat-clean-modal-mask').remove()">取消</button>
+                    <button type="button" class="wechat-clean-btn-confirm" style="background:#fa5151;" id="wcleanConfirmDismiss">确定解散</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(mask);
+        mask.querySelector('#wcleanConfirmDismiss').onclick = () => {
+            mask.remove();
+            delete window.G.groups[gid];
+            if (window.G.groupChatHistory) delete window.G.groupChatHistory[gid];
+            if (window.G.currentChatGroup === gid) window.G.currentChatGroup = null;
+            if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+            if (typeof showToast === 'function') showToast('群聊已解散', 'info', 1200);
+            renderChatApp();
+        };
+    };
 
     // ============================================================
     // 🎨 表情包抽屉：移除廉价Emoji加号，改用单色矢量SVG
@@ -1231,7 +1792,7 @@
     };
 
     // ============================================================
-    // 🤖 AI 回复触发与状态反馈（彻底移除沙漏与廉价 Emoji）
+    // 🤖 AI 回复触发与状态反馈
     // ============================================================
     window.triggerAIReplyForSingle = async function(npcId) {
         const npc = window.G.npcs[npcId];
@@ -1262,7 +1823,6 @@
 3. 严禁思维链残留，直接输出对话正文。
 ${behindPrompt}`;
 
-        // 改变按钮为优雅纯色小脉冲，彻底替代沙漏
         const btn = document.getElementById('btnChatLightningTrigger');
         if (btn) {
             btn.innerHTML = `<svg viewBox="0 0 24 24" style="width:15px;height:15px;fill:#ffffff;animation:spin 1s linear infinite;"><circle cx="12" cy="12" r="9" fill="none" stroke="#ffffff" stroke-width="2.5" stroke-dasharray="28" stroke-dashoffset="14"></circle></svg>`;
@@ -1382,7 +1942,7 @@ ${behindPrompt}`;
         if (typeof autoSaveGame === 'function') autoSaveGame();
     };
 
-    // 彻底截获并注销 4 号文件的原生渲染总线，防止原版框中框复现
+    // 微信渲染总线挂载
     window.renderChatApp = renderChatApp;
     window.renderSocialPanel = renderChatApp;
     window.renderSingleChatWindow = renderSingleChatWindow;
@@ -1390,7 +1950,7 @@ ${behindPrompt}`;
     window.renderAvatarBadge = renderAvatarBadge;
 
     window.switchChatTab = function(tab) {
-        window.G.chatActiveTab = tab;
+        window.G.chatActiveTab = (tab === 'direct' ? 'direct' : 'group');
         window.G.currentChatNpc = null;
         window.G.currentChatGroup = null;
         renderChatApp();
