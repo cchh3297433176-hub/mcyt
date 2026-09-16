@@ -4,9 +4,9 @@
  * 
  * 🌟 核心特性：
  * 1. 账号隔离：大号与小号好友列表绝对独立，互不污染共享，小号建好友只在小号可见
- * 2. 自动纠偏：自动修复之前在小号创建却混入大号的联系人归属
- * 3. 角色名片：点击直接编辑长人设 + 全屏大视窗阅读
- * 4. 视觉与防遮挡：无缝全屏置顶，顶栏下移避让灵动岛与状态栏
+ * 2. 自动纠偏与多重防丢持久化：自建联系人独立本地槽持久化，防止杀后台后数据丢失
+ * 3. 角色名片：点击直接编辑长人设 + 纯白视窗阅读 + 点击头像上传更换
+ * 4. 视觉与防遮挡：无缝全屏置顶，仿微信高保真简约矢量表情按钮
  */
 
 (function() {
@@ -15,6 +15,9 @@
     // 预留头像库专属子目录路径
     const AVATAR_SUBDIR = 'assets/avatars/';
     window._MCYT_AVATAR_SUBDIR = AVATAR_SUBDIR;
+
+    // 自建联系人独立备份存储键（防止全局大存档覆写或重置丢失联系人）
+    const CUSTOM_NPCS_BACKUP_KEY = 'mcyt_wechat_custom_npcs';
 
     // 动态头像池
     window._MCYT_AVATARS_POOL = [];
@@ -50,6 +53,48 @@
 
     let _activeBottomTab = 'chats';
     let _stickerDrawerOpen = false;
+
+    // 自建联系人独立备份存取（防杀后台丢失核心机制）
+    function syncCustomNpcsToLocalBackup() {
+        try {
+            if (!window.G || !window.G.npcs) return;
+            const customMap = {};
+            for (const [id, npc] of Object.entries(window.G.npcs)) {
+                if (npc && (npc.isCustom || id.startsWith('custom_') || id.startsWith('npc_'))) {
+                    customMap[id] = npc;
+                }
+            }
+            localStorage.setItem(CUSTOM_NPCS_BACKUP_KEY, JSON.stringify(customMap));
+        } catch (e) {
+            console.error('备份自建联系人失败:', e);
+        }
+    }
+
+    function restoreCustomNpcsFromLocalBackup() {
+        try {
+            const raw = localStorage.getItem(CUSTOM_NPCS_BACKUP_KEY);
+            if (!raw) return;
+            const customMap = JSON.parse(raw);
+            if (customMap && typeof customMap === 'object') {
+                if (!window.G.npcs) window.G.npcs = {};
+                for (const [id, npc] of Object.entries(customMap)) {
+                    if (!window.G.npcs[id]) {
+                        window.G.npcs[id] = npc;
+                    } else {
+                        // 补充可能丢失的字段
+                        if (!window.G.npcs[id].ownerAccountId && npc.ownerAccountId) {
+                            window.G.npcs[id].ownerAccountId = npc.ownerAccountId;
+                        }
+                        if (!window.G.npcs[id].avatarUrl && npc.avatarUrl) {
+                            window.G.npcs[id].avatarUrl = npc.avatarUrl;
+                        }
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('恢复自建联系人失败:', e);
+        }
+    }
 
     // 强制消除外层粉色框中框，真正 100% 满屏微信质感
     function ensureChatShellStyles() {
@@ -135,6 +180,9 @@
         if (!window.G._behindScreenActive) window.G._behindScreenActive = {};
         if (!window.G._chatShowFullHistory) window.G._chatShowFullHistory = {};
 
+        // 优先从持久化备份槽唤醒自建联系人，防止杀后台后被重置
+        restoreCustomNpcsFromLocalBackup();
+
         if (typeof window.restoreWechatProfileData === 'function') {
             window.restoreWechatProfileData();
         }
@@ -143,7 +191,7 @@
             if (!npc.id) npc.id = id;
             if (!npc.name) npc.name = id;
             if (npc.favor === undefined) npc.favor = 50;
-            if (!npc.region) npc.region = (id.includes('dream') || id.includes('george')) ? '美国 - 东部 (US East)' : '中国 (China)';
+            if (!npc.region) npc.region = (id.includes('dream') || id.includes('george')) ? '美国 - 东部' : '中国';
             if (!npc.avatarUrl) npc.avatarUrl = getRandomAvatar();
             
             // 默认历史老 NPC 归属于主号
@@ -337,7 +385,7 @@
                         <span style="color:#07c160;">›</span>
                     </button>
                     <button type="button" onclick="closeModal(); window.openFriendRequestsListModal();" style="border:1px solid #cbd5e1;background:#f8fafc;padding:12px;border-radius:8px;font-size:13px;font-weight:600;color:#1e293b;cursor:pointer;text-align:left;display:flex;justify-content:space-between;align-items:center;">
-                        <span>待处理好友与群邀请 (${totalPending})</span>
+                        <span>待处理好友与群邀请 ${totalPending > 0 ? `(${totalPending})` : ''}</span>
                         <span style="color:#e53e3e;">${totalPending > 0 ? `● ${totalPending}` : '›'}</span>
                     </button>
                 </div>
@@ -348,16 +396,16 @@
         `);
     };
 
-    // 👤 添加新朋友（核心修复：归属当前激活账号）
+    // 👤 添加新朋友（修复初次创建消失与持久化问题）
     window.openCreateCustomNpcModal = function() {
         let currentAssignedAvatar = getRandomAvatar();
-        let selectedNpcRegion = '美国 - 东部 (US East)';
+        let selectedNpcRegion = '美国 - 东部';
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '我' };
 
         openModal(`
             <div style="text-align:left;font-family:-apple-system,sans-serif;">
                 <div style="font-size:15px;font-weight:700;color:#1e3a8a;border-bottom:1.5px solid #eef2f7;padding-bottom:8px;margin-bottom:12px;">
-                    添加新朋友 (${escapeHtml(curAcc.name)} 通讯录)
+                    添加新朋友
                 </div>
 
                 <div style="display:flex;align-items:center;gap:12px;background:#f8fafc;padding:10px;border-radius:8px;border:1px solid #e2e8f0;margin-bottom:12px;">
@@ -385,7 +433,7 @@
                 </div>
 
                 <div class="form-group" style="margin-bottom:14px;">
-                    <label style="font-size:12.5px;color:#475569;font-weight:600;display:block;margin-bottom:3px;">初始好感度 (0~100)</label>
+                    <label style="font-size:12.5px;color:#475569;font-weight:600;display:block;margin-bottom:3px;">初始好感度</label>
                     <input type="number" id="custNpcFavor" value="50" min="0" max="100" style="width:90px;padding:6px 10px;border-radius:6px;border:1px solid #cbd5e1;font-size:13px;">
                 </div>
 
@@ -419,8 +467,7 @@
             const newId = 'custom_' + Date.now();
             ensureNpcIntegrity();
 
-            // 🌟 核心隔离：必须明确打上当前账号的所有权印记！
-            window.G.npcs[newId] = {
+            const newNpcObj = {
                 id: newId,
                 name,
                 persona: '',
@@ -428,9 +475,11 @@
                 avatarUrl: currentAssignedAvatar,
                 favor: parseInt(document.getElementById('custNpcFavor').value) || 50,
                 skills: { building: 50, redstone: 50, pvp: 60, survival: 50, hunting: 50 },
-                ownerAccountId: curAcc.id, // 明确归属于当前账号（大号或对应小号）
+                ownerAccountId: curAcc.id,
                 isCustom: true
             };
+
+            window.G.npcs[newId] = newNpcObj;
 
             pushChatMessageSafe(newId, {
                 from: 'action',
@@ -438,25 +487,28 @@
                 time: new Date().toLocaleTimeString().slice(0, 5)
             }, curAcc.id);
 
+            // 🌟 立即触发全量与专属独立双重持久化
+            syncCustomNpcsToLocalBackup();
+            if (typeof autoSaveGame === 'function') autoSaveGame();
+
             closeModal();
             renderChatApp();
-            if (typeof showToast === 'function') showToast(`🎉 成功添加至 ${curAcc.name} 的通讯录！`, 'success', 2000);
-            if (typeof autoSaveGame === 'function') autoSaveGame();
+            if (typeof showToast === 'function') showToast(`成功添加好友！`, 'success', 2000);
         };
     };
 
     window.openPickNpcRegionModal = function(callback) {
         const PRESET_LIST = [
-            '中国 (China)',
-            '美国 - 东部 (US East)',
-            '美国 - 西部 (US West)',
-            '英国 (United Kingdom)',
-            '日本 (Japan)',
-            '韩国 (South Korea)',
-            '加拿大 (Canada)',
-            '澳大利亚 (Australia)',
-            '德国 (Germany)',
-            '法国 (France)'
+            '中国',
+            '美国 - 东部',
+            '美国 - 西部',
+            '英国',
+            '日本',
+            '韩国',
+            '加拿大',
+            '澳大利亚',
+            '德国',
+            '法国'
         ];
 
         let itemsHtml = PRESET_LIST.map(item => `
@@ -494,10 +546,9 @@
     // 👥 发起群聊
     window.openCreateGroupModal = function() {
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
-        // 只允许拉当前账号通讯录里的好友
         const npcs = Object.entries(window.G.npcs || {}).filter(([id, n]) => (n.ownerAccountId || 'main') === curAcc.id);
         if (!npcs.length) {
-            if (typeof showToast === 'function') showToast('当前账号通讯录暂无好友，无法建群', 'error');
+            if (typeof showToast === 'function') showToast('当前通讯录暂无好友，无法建群', 'error');
             return;
         }
 
@@ -542,7 +593,7 @@
             window.G.groups[gid] = {
                 id: gid,
                 name,
-                desc: '主播自由交流',
+                desc: '自由交流',
                 avatarUrl: getRandomAvatar(),
                 ownerAccountId: curAcc.id,
                 members,
@@ -563,7 +614,6 @@
     // 📬 待处理申请弹窗
     window.openFriendRequestsListModal = function() {
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
-        // 筛选归属于当前账号的申请
         const reqs = (window.G.friendRequests || []).filter(r => (r.targetAltId || 'main') === curAcc.id);
         if (!reqs.length) {
             openModal(`
@@ -608,23 +658,26 @@
         if (action === 'accept') {
             ensureNpcIntegrity();
             const newId = req.npcOfficialId ? `${req.npcOfficialId}_${targetOwnerId}` : ('npc_' + Date.now());
-            window.G.npcs[newId] = {
+            const newNpc = {
                 id: newId,
                 name: req.name || '好友',
                 persona: req.persona || '',
-                region: '美国 - 东部 (US East)',
+                region: '美国 - 东部',
                 avatarUrl: req.avatarUrl || getRandomAvatar(),
                 favor: 50,
-                ownerAccountId: targetOwnerId, // 明确归属目标账号
+                ownerAccountId: targetOwnerId,
+                isCustom: true,
                 skills: { building: 50, redstone: 50, pvp: 50, survival: 50, hunting: 50 }
             };
+            window.G.npcs[newId] = newNpc;
             pushChatMessageSafe(newId, {
                 from: 'npc',
                 text: `你好！我通过了你的好友验证，一起玩MC吧！`,
                 time: new Date().toLocaleTimeString().slice(0, 5)
             }, targetOwnerId);
             window.G.friendRequests.splice(reqIdx, 1);
-            if (typeof showToast === 'function') showToast(`🎉 成功添加好友「${req.name}」！`, 'success', 1500);
+            syncCustomNpcsToLocalBackup();
+            if (typeof showToast === 'function') showToast(`成功添加好友「${req.name}」！`, 'success', 1500);
         } else {
             window.G.friendRequests.splice(reqIdx, 1);
         }
@@ -634,19 +687,24 @@
     };
 
     // ============================================================
-    // 📖 角色名片页：点击直接编辑人设 + 🔍 全屏大视窗查看
+    // 📖 角色名片页：去括号优化 + 纯白放大镜 + 点击更换头像
     // ============================================================
     window.openNpcProfileCardModal = function(npcId) {
         const npc = window.G.npcs[npcId];
         if (!npc) return;
 
         const personaText = npc.persona || '';
-        const previewPersona = personaText ? personaText.slice(0, 85) + (personaText.length > 85 ? '...' : '') : '暂无详细人设档案（点击此处直接输入补充）';
+        const previewPersona = personaText ? personaText.slice(0, 85) + (personaText.length > 85 ? '...' : '') : '暂无详细人设档案，点击此处补充';
 
         openModal(`
             <div style="text-align:left;font-family:-apple-system,sans-serif;">
                 <div style="display:flex;align-items:center;gap:12px;border-bottom:1px solid #f1f5f9;padding-bottom:12px;margin-bottom:12px;">
-                    <img src="${npc.avatarUrl || getRandomAvatar()}" style="width:54px;height:54px;border-radius:6px;object-fit:cover;" onerror="this.src='assets/icons/chat.png';" />
+                    <div style="position:relative;width:58px;height:58px;cursor:pointer;" onclick="window.triggerChangeNpcAvatar('${npcId}')" title="点击更换头像">
+                        <img id="npcCardAvatarDisplay" src="${npc.avatarUrl || getRandomAvatar()}" style="width:100%;height:100%;border-radius:8px;object-fit:cover;box-shadow:0 2px 6px rgba(0,0,0,0.08);" onerror="this.src='assets/icons/chat.png';" />
+                        <div style="position:absolute;bottom:0;right:0;background:rgba(0,0,0,0.55);border-radius:4px 0 8px 0;width:18px;height:18px;display:flex;align-items:center;justify-content:center;">
+                            <svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:#ffffff;"><path d="M4 4h3l2-2h6l2 2h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm8 3a5 5 0 1 0 0 10 5 5 0 0 0 0-10zm0 2a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"/></svg>
+                        </div>
+                    </div>
                     <div style="flex:1;">
                         <div style="font-size:16px;font-weight:700;color:#1e293b;">${escapeHtml(npc.name)}</div>
                         <div style="font-size:12px;color:#64748b;margin-top:2px;">地区：${escapeHtml(npc.region || '未知')} · 好感度：<span style="color:#ef4444;font-weight:600;">${npc.favor || 50}</span>/100</div>
@@ -654,9 +712,12 @@
                 </div>
 
                 <div style="background:#f8fafc;border-radius:8px;border:1px solid #e2e8f0;padding:10px 12px;margin-bottom:14px;cursor:pointer;" onclick="window.openEditNpcPersonaModal('${npcId}')">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                        <span style="font-size:12px;font-weight:600;color:#334155;">角色人设档案 (点击编辑)</span>
-                        <button type="button" onclick="event.stopPropagation(); window.openFullPersonaModal('${npcId}');" style="border:none;background:none;color:#2563eb;font-size:11.5px;cursor:pointer;padding:0;font-weight:600;">🔍 全屏查看</button>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                        <span style="font-size:12.5px;font-weight:600;color:#334155;">角色人设档案</span>
+                        <button type="button" onclick="event.stopPropagation(); window.openFullPersonaModal('${npcId}');" style="border:none;background:#2563eb;color:#ffffff;font-size:11px;cursor:pointer;padding:3px 8px;border-radius:4px;display:inline-flex;align-items:center;gap:4px;font-weight:600;">
+                            <svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:none;stroke:#ffffff;stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round;"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                            <span>全屏查看</span>
+                        </button>
                     </div>
                     <div style="font-size:12px;color:#64748b;line-height:1.5;white-space:pre-wrap;word-break:break-word;max-height:65px;overflow:hidden;">
                         ${escapeHtml(previewPersona)}
@@ -671,6 +732,56 @@
                 </div>
             </div>
         `);
+    };
+
+    // 🖼️ 点击更换头像（图片压缩 + 裁剪转Base64 + 持久化）
+    window.triggerChangeNpcAvatar = function(npcId) {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = 'image/*';
+        fileInput.onchange = (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (re) => {
+                const img = new Image();
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    const size = 180;
+                    canvas.width = size;
+                    canvas.height = size;
+                    const ctx = canvas.getContext('2d');
+
+                    let sx = 0, sy = 0, sWidth = img.width, sHeight = img.height;
+                    if (sWidth > sHeight) {
+                        sx = (sWidth - sHeight) / 2;
+                        sWidth = sHeight;
+                    } else {
+                        sy = (sHeight - sWidth) / 2;
+                        sHeight = sWidth;
+                    }
+
+                    ctx.drawImage(img, sx, sy, sWidth, sHeight, 0, 0, size, size);
+                    const base64Url = canvas.toDataURL('image/jpeg', 0.85);
+
+                    if (window.G.npcs && window.G.npcs[npcId]) {
+                        window.G.npcs[npcId].avatarUrl = base64Url;
+                        syncCustomNpcsToLocalBackup();
+                        if (typeof autoSaveGame === 'function') autoSaveGame();
+
+                        const preview = document.getElementById('npcCardAvatarDisplay');
+                        if (preview) preview.src = base64Url;
+
+                        if (typeof showToast === 'function') showToast('头像更新成功！', 'success', 1500);
+                        if (window.G.currentChatNpc === npcId) renderSingleChatWindow();
+                    }
+                };
+                img.src = re.target.result;
+            };
+            reader.readAsDataURL(file);
+        };
+        fileInput.click();
     };
 
     window.openFullPersonaModal = function(npcId) {
@@ -713,6 +824,7 @@
 
         document.getElementById('btnSaveHugePersona').onclick = () => {
             npc.persona = document.getElementById('editHugePersonaInput').value.trim();
+            syncCustomNpcsToLocalBackup();
             window.openNpcProfileCardModal(npcId);
             if (typeof showToast === 'function') showToast('人设已保存更新！', 'success', 1500);
             if (typeof autoSaveGame === 'function') autoSaveGame();
@@ -720,14 +832,13 @@
     };
 
     // ============================================================
-    // 💬 核心：会话列表（大号与小号绝对物理隔离）
+    // 💬 会话列表（大号与小号绝对物理隔离）
     // ============================================================
     function buildChatListHTML() {
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', isAlt: false };
         const allNpcEntries = Object.entries(window.G.npcs || {});
 
-        // 🌟 核心纠偏与绝对隔离：
-        // 1. 扫描自动修复：如果既有 NPC 之前没记 ownerAccountId，但对话记录仅存在于某个小号名下，则将归属权修正给该小号！
+        // 纠偏与归属归正
         allNpcEntries.forEach(([id, npc]) => {
             if (!npc.ownerAccountId || npc.ownerAccountId === 'main') {
                 const keys = Object.keys(window.G.chatHistory || {});
@@ -742,7 +853,7 @@
             }
         });
 
-        // 2. 绝对隔离过滤：只展示明确归属于当前账号的好友！
+        // 绝对隔离过滤
         const visibleNpcList = allNpcEntries.filter(([id, npc]) => {
             const owner = npc.ownerAccountId || 'main';
             return owner === curAcc.id;
@@ -754,7 +865,7 @@
                 <div style="font-size:36px;margin-bottom:8px;opacity:0.65;">
                     <svg viewBox="0 0 24 24" style="width:36px;height:36px;fill:#b2b2b2;"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
                 </div>
-                <b>${curAcc.isAlt ? `${escapeHtml(curAcc.name)} 通讯录为空` : '主号暂无聊天消息'}</b><br>
+                <b>${curAcc.isAlt ? `${escapeHtml(curAcc.name)} 通讯录为空` : '暂无聊天消息'}</b><br>
                 ${curAcc.isAlt ? '小号拥有独立社交圈，点击右上角 + 添加属于你的专属好友！' : '点击右上角 + 开始交流！'}
             </div>`;
         }
@@ -852,7 +963,7 @@
                         <span>‹</span> <span>微信</span>
                     </button>
                     <div onclick="window.openNpcProfileCardModal('${npcId}')" style="cursor:pointer;font-weight:600;font-size:15px;color:#181818;margin-left:6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-                        ${escapeHtml(npc.name)} <span style="font-size:11px;color:#888;font-weight:normal;">(${escapeHtml(npc.region ? npc.region.split(' ')[0] : '')})</span>
+                        ${escapeHtml(npc.name)} <span style="font-size:11px;color:#888;font-weight:normal;">${escapeHtml(npc.region ? npc.region.split(' ')[0] : '')}</span>
                     </div>
                 </div>
                 <div style="display:flex;gap:8px;align-items:center;">
@@ -875,8 +986,15 @@
             </div>
 
             ${stickerDrawerHtml}
-            <div style="padding:8px 10px;background:#f7f7f7;border-top:0.5px solid #dcdcdc;display:flex;gap:6px;align-items:center;flex-shrink:0;">
-                <button onclick="window.toggleChatStickerDrawer('single','${npcId}')" title="表情包" style="border:none;background:none;font-size:22px;line-height:1;color:#666;cursor:pointer;flex-shrink:0;padding:0 2px;">😺</button>
+            <div style="padding:8px 10px;background:#f7f7f7;border-top:0.5px solid #dcdcdc;display:flex;gap:8px;align-items:center;flex-shrink:0;">
+                <button onclick="window.toggleChatStickerDrawer('single','${npcId}')" title="表情包" style="border:none;background:none;width:28px;height:28px;cursor:pointer;flex-shrink:0;padding:0;display:flex;align-items:center;justify-content:center;">
+                    <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#666666;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">
+                        <circle cx="12" cy="12" r="9.5"></circle>
+                        <path d="M8 14.5c1 1.5 2.5 2.2 4 2.2s3-0.7 4-2.2"></path>
+                        <circle cx="9" cy="9.5" r="1.2" fill="#666666" stroke="none"></circle>
+                        <circle cx="15" cy="9.5" r="1.2" fill="#666666" stroke="none"></circle>
+                    </svg>
+                </button>
                 <textarea id="singleChatInput" rows="1" placeholder="发消息..." style="flex:1;padding:8px 10px;border-radius:5px;border:none;background:#ffffff;font-size:14px;resize:none;outline:none;font-family:inherit;box-shadow:inset 0 0 0 0.5px #dcdcdc;"></textarea>
                 <button onclick="window.doSendSingleChat('${npcId}')" style="border:none;background:#07c160;color:#fff;padding:6px 13px;border-radius:4px;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;">发送</button>
             </div>
@@ -956,7 +1074,7 @@
                         <span>‹</span> <span>微信</span>
                     </button>
                     <div>
-                        <div style="font-weight:600;font-size:15px;color:#181818;margin-left:6px;">${escapeHtml(grp.name)} <span style="font-size:12px;color:#888;">(${(grp.members || []).length})</span></div>
+                        <div style="font-weight:600;font-size:15px;color:#181818;margin-left:6px;">${escapeHtml(grp.name)} <span style="font-size:12px;color:#888;">${(grp.members || []).length}人</span></div>
                     </div>
                 </div>
             </div>
@@ -966,8 +1084,15 @@
             </div>
 
             ${groupStickerDrawerHtml}
-            <div style="padding:8px 10px;background:#f7f7f7;border-top:0.5px solid #dcdcdc;display:flex;gap:6px;align-items:center;flex-shrink:0;">
-                <button onclick="window.toggleChatStickerDrawer('group','${gid}')" title="表情包" style="border:none;background:none;font-size:22px;line-height:1;color:#666;cursor:pointer;flex-shrink:0;padding:0 2px;">😺</button>
+            <div style="padding:8px 10px;background:#f7f7f7;border-top:0.5px solid #dcdcdc;display:flex;gap:8px;align-items:center;flex-shrink:0;">
+                <button onclick="window.toggleChatStickerDrawer('group','${gid}')" title="表情包" style="border:none;background:none;width:28px;height:28px;cursor:pointer;flex-shrink:0;padding:0;display:flex;align-items:center;justify-content:center;">
+                    <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#666666;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">
+                        <circle cx="12" cy="12" r="9.5"></circle>
+                        <path d="M8 14.5c1 1.5 2.5 2.2 4 2.2s3-0.7 4-2.2"></path>
+                        <circle cx="9" cy="9.5" r="1.2" fill="#666666" stroke="none"></circle>
+                        <circle cx="15" cy="9.5" r="1.2" fill="#666666" stroke="none"></circle>
+                    </svg>
+                </button>
                 <textarea id="groupChatInput" rows="1" placeholder="发消息..." style="flex:1;padding:8px 10px;border-radius:5px;border:none;background:#ffffff;font-size:14px;resize:none;outline:none;font-family:inherit;box-shadow:inset 0 0 0 0.5px #dcdcdc;"></textarea>
                 <button onclick="window.doSendGroupChat('${gid}')" style="border:none;background:#07c160;color:#fff;padding:6px 13px;border-radius:4px;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;">发送</button>
             </div>
@@ -990,8 +1115,7 @@
     }
 
     // ============================================================
-    // 🐷 表情包抽屉（新聊天App专用，独立于旧 04-game-core-2.js 实现，
-    //    但复用同一份数据源 G.stickerLibrary / G.stickerCategories）
+    // 🐷 表情包抽屉
     // ============================================================
     function buildChatStickerDrawerHTML(type, id) {
         const cats = window.G.stickerCategories || ['猪猪'];
@@ -1119,11 +1243,11 @@
         if (typeof autoSaveGame === 'function') autoSaveGame();
     };
 
-    // 🤖 真实接入大模型 API：完整提取上下文历史 + 自动消除出戏括号
+    // 🤖 真实接入大模型 API：过滤思维链残留标签与出戏括号动作
     window.triggerAIReplyForSingle = async function(npcId) {
         const npc = window.G.npcs[npcId];
         if (!npc) return;
-        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', region: '中国 (China)', name: '主播' };
+        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', region: '中国', name: '主播' };
 
         if (isAccountBlockedByNpc(npcId, curAcc.id)) {
             if (typeof showToast === 'function') showToast('当前账号已被对方拒收', 'error');
@@ -1131,8 +1255,8 @@
         }
 
         const history = getAccountChatHistory(npcId, curAcc.id);
-        const pRegion = curAcc.region || '中国 (China)';
-        const nRegion = npc.region || '美国 - 东部 (US East)';
+        const pRegion = curAcc.region || '中国';
+        const nRegion = npc.region || '美国 - 东部';
         const isDiffRegion = (pRegion !== nRegion);
 
         const recentDialogue = history.slice(-10).map(m => {
