@@ -811,6 +811,17 @@
                     <div style="font-weight:600;color:#2563eb;margin-bottom:4px;">名片引荐</div>
                     <div>${escapeHtml(msg.text)}</div>
                 </div>`;
+            } else if (msg.type === 'sticker' && msg.stickerUrl) {
+                const isSelf = msg.from === 'player';
+                messagesHtml += `
+                <div class="chat-msg-row" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
+                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${renderAvatarBadge(npc, 38)}</div>` : ''}
+                    <div style="max-width:56%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
+                        <img src="${escapeHtml(msg.stickerUrl)}" alt="${escapeHtml(msg.stickerDesc || '表情')}" style="width:110px;height:110px;object-fit:contain;border-radius:6px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,0.05);">
+                        <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
+                    </div>
+                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
+                </div>`;
             } else {
                 const isSelf = msg.from === 'player';
                 let bubbleContent = isSelf ? escapeHtml(msg.text || '').replace(/\n/g, '<br>') : ((typeof renderContentWithThoughts === 'function') ? renderContentWithThoughts(msg.text || '') : escapeHtml(msg.text || ''));
@@ -830,6 +841,8 @@
         }
 
         const isBehindActive = !!window.G._behindScreenActive[npcId];
+        if (typeof ensureStickersLoaded === 'function') ensureStickersLoaded();
+        const stickerDrawerHtml = _stickerDrawerOpen ? buildChatStickerDrawerHTML('single', npcId) : '';
 
         const html = `
         <div style="background:#ededed;display:flex;flex-direction:column;height:100%;min-height:100%;overflow:hidden;font-family:-apple-system,sans-serif;">
@@ -861,7 +874,9 @@
                 ${messagesHtml || '<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">打个招呼开启畅聊吧！</div>'}
             </div>
 
+            ${stickerDrawerHtml}
             <div style="padding:8px 10px;background:#f7f7f7;border-top:0.5px solid #dcdcdc;display:flex;gap:6px;align-items:center;flex-shrink:0;">
+                <button onclick="window.toggleChatStickerDrawer('single','${npcId}')" title="表情包" style="border:none;background:none;font-size:22px;line-height:1;color:#666;cursor:pointer;flex-shrink:0;padding:0 2px;">😺</button>
                 <textarea id="singleChatInput" rows="1" placeholder="发消息..." style="flex:1;padding:8px 10px;border-radius:5px;border:none;background:#ffffff;font-size:14px;resize:none;outline:none;font-family:inherit;box-shadow:inset 0 0 0 0.5px #dcdcdc;"></textarea>
                 <button onclick="window.doSendSingleChat('${npcId}')" style="border:none;background:#07c160;color:#fff;padding:6px 13px;border-radius:4px;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;">发送</button>
             </div>
@@ -899,6 +914,18 @@
                 <div style="text-align:center;margin:8px 0;">
                     <span style="display:inline-block;background:rgba(0,0,0,0.05);color:#888;padding:3px 10px;border-radius:4px;font-size:11px;">${escapeHtml(msg.text || '')}</span>
                 </div>`;
+            } else if (msg.type === 'sticker' && msg.stickerUrl) {
+                const isSelf = msg.from === 'player';
+                messagesHtml += `
+                <div class="chat-msg-row" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
+                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${renderAvatarBadge({ avatarUrl: msg.senderAvatarUrl }, 38)}</div>` : ''}
+                    <div style="max-width:56%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
+                        ${!isSelf ? `<div style="font-size:11px;color:#888;margin-bottom:2px;">${escapeHtml(msg.senderName || '成员')}</div>` : ''}
+                        <img src="${escapeHtml(msg.stickerUrl)}" alt="${escapeHtml(msg.stickerDesc || '表情')}" style="width:110px;height:110px;object-fit:contain;border-radius:6px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,0.05);">
+                        <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
+                    </div>
+                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
+                </div>`;
             } else {
                 const isSelf = msg.from === 'player';
                 let bubbleContent = isSelf ? escapeHtml(msg.text || '').replace(/\n/g, '<br>') : ((typeof renderContentWithThoughts === 'function') ? renderContentWithThoughts(msg.text || '') : escapeHtml(msg.text || ''));
@@ -918,6 +945,9 @@
             }
         }
 
+        if (typeof ensureStickersLoaded === 'function') ensureStickersLoaded();
+        const groupStickerDrawerHtml = _stickerDrawerOpen ? buildChatStickerDrawerHTML('group', gid) : '';
+
         const html = `
         <div style="background:#ededed;display:flex;flex-direction:column;height:100%;min-height:100%;overflow:hidden;font-family:-apple-system,sans-serif;">
             <div class="wechat-top-header">
@@ -935,7 +965,9 @@
                 ${messagesHtml || '<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">群里很安静，来开启话题吧！</div>'}
             </div>
 
+            ${groupStickerDrawerHtml}
             <div style="padding:8px 10px;background:#f7f7f7;border-top:0.5px solid #dcdcdc;display:flex;gap:6px;align-items:center;flex-shrink:0;">
+                <button onclick="window.toggleChatStickerDrawer('group','${gid}')" title="表情包" style="border:none;background:none;font-size:22px;line-height:1;color:#666;cursor:pointer;flex-shrink:0;padding:0 2px;">😺</button>
                 <textarea id="groupChatInput" rows="1" placeholder="发消息..." style="flex:1;padding:8px 10px;border-radius:5px;border:none;background:#ffffff;font-size:14px;resize:none;outline:none;font-family:inherit;box-shadow:inset 0 0 0 0.5px #dcdcdc;"></textarea>
                 <button onclick="window.doSendGroupChat('${gid}')" style="border:none;background:#07c160;color:#fff;padding:6px 13px;border-radius:4px;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;">发送</button>
             </div>
@@ -958,6 +990,63 @@
     }
 
     // ============================================================
+    // 🐷 表情包抽屉（新聊天App专用，独立于旧 04-game-core-2.js 实现，
+    //    但复用同一份数据源 G.stickerLibrary / G.stickerCategories）
+    // ============================================================
+    function buildChatStickerDrawerHTML(type, id) {
+        const cats = window.G.stickerCategories || ['猪猪'];
+        const active = window.G.activeStickerCategory || cats[0];
+        const list = (window.G.stickerLibrary || []).filter(s => s.category === active);
+
+        const tabsHtml = cats.map(c => `
+            <span onclick="window.switchChatStickerCategory('${escapeHtml(c)}','${type}','${id}')" style="display:inline-block;padding:4px 10px;margin-right:6px;border-radius:12px;font-size:12px;cursor:pointer;flex-shrink:0;background:${c === active ? '#07c160' : '#e8e8e8'};color:${c === active ? '#fff' : '#666'};">${escapeHtml(c)}</span>
+        `).join('');
+
+        const gridHtml = list.length ? list.map(s => `
+            <div onclick="window.sendChatSticker('${type}','${id}','${escapeHtml(s.url)}','${escapeHtml((s.desc || '').replace(/'/g, ''))}')" title="${escapeHtml(s.desc || '')}" style="width:64px;height:64px;cursor:pointer;border-radius:6px;overflow:hidden;background:#fff;display:flex;align-items:center;justify-content:center;">
+                <img src="${escapeHtml(s.url)}" style="width:100%;height:100%;object-fit:contain;" loading="lazy">
+            </div>
+        `).join('') : '<div style="color:#aaa;font-size:12px;padding:20px 0;width:100%;text-align:center;">该分类暂无表情</div>';
+
+        return `
+        <div id="chatStickerDrawer" style="background:#f7f7f7;border-top:0.5px solid #dcdcdc;flex-shrink:0;">
+            <div style="display:flex;overflow-x:auto;padding:8px 10px 0;white-space:nowrap;">${tabsHtml}</div>
+            <div style="display:flex;flex-wrap:wrap;gap:8px;padding:10px;max-height:180px;overflow-y:auto;">${gridHtml}</div>
+        </div>`;
+    }
+
+    window.toggleChatStickerDrawer = function(type, id) {
+        _stickerDrawerOpen = !_stickerDrawerOpen;
+        if (type === 'single') renderSingleChatWindow();
+        else renderGroupChatWindow();
+    };
+
+    window.switchChatStickerCategory = function(cat, type, id) {
+        window.G.activeStickerCategory = cat;
+        if (type === 'single') renderSingleChatWindow();
+        else renderGroupChatWindow();
+    };
+
+    window.sendChatSticker = function(type, id, url, desc) {
+        const time = new Date().toLocaleTimeString().slice(0, 5);
+        if (type === 'single') {
+            const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
+            if (isAccountBlockedByNpc(id, curAcc.id)) {
+                if (typeof showToast === 'function') showToast('对方已拒收你的消息', 'error');
+                return;
+            }
+            pushChatMessageSafe(id, { from: 'player', type: 'sticker', stickerUrl: url, stickerDesc: desc, text: `[表情：${desc}]`, time }, curAcc.id);
+        } else {
+            if (!window.G.groupChatHistory[id]) window.G.groupChatHistory[id] = [];
+            window.G.groupChatHistory[id].push({ from: 'player', type: 'sticker', stickerUrl: url, stickerDesc: desc, text: `[表情：${desc}]`, time });
+        }
+        _stickerDrawerOpen = false;
+        if (type === 'single') renderSingleChatWindow();
+        else renderGroupChatWindow();
+        if (typeof autoSaveGame === 'function') autoSaveGame();
+    };
+
+    // ============================================================
     // 🌐 暴露全局接口
     // ============================================================
     window.renderChatApp = renderChatApp;
@@ -975,11 +1064,13 @@
     window.openChat = function(npcId) {
         if (!window.G.npcs || !window.G.npcs[npcId]) return;
         window.G.currentChatNpc = npcId;
+        _stickerDrawerOpen = false;
         renderChatApp();
     };
 
     window.closeChat = function() {
         window.G.currentChatNpc = null;
+        _stickerDrawerOpen = false;
         renderChatApp();
     };
 
