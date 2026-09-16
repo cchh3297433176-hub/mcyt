@@ -1100,6 +1100,10 @@
         if (appName === 'settings') {
             const modal = document.getElementById('appModal');
             if (modal) {
+                // 兜底清理：防止聊天 App 渲染异常时残留的 wechat-seamless-shell 类
+                // 把设置页顶部的退出按钮也一起隐藏掉（这条分支绕开了 phone-shell.js
+                // 里 openPhoneApp 的同款清理逻辑，所以这里要单独再摘一次）。
+                modal.classList.remove('wechat-seamless-shell');
                 renderSettingsApp();
                 modal.classList.add('opened');
             }
