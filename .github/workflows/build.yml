@@ -20,9 +20,55 @@ jobs:
           repository: 'cchh3297433176-hub/taluo'
           path: 'tarot'
 
-      - name: Clean Tarot Git Cache
+      - name: Checkout Image Assets Repo
+        uses: actions/checkout@v4
+        with:
+          repository: 'cchh3297433176-hub/tttttu'
+          path: 'image_repo'
+
+      - name: Clean Subprojects Git Cache
         run: |
           rm -rf tarot/.git
+          rm -rf image_repo/.git
+
+      - name: Process & Sync Images
+        run: |
+          # 确保主工程 assets 目标目录就绪
+          mkdir -p assets/avatars
+          mkdir -p assets/moments
+
+          # 1. 处理头像库：复制所有格式图片并自动生成 list.json
+          if [ -d "image_repo/avatars" ]; then
+            cp -r image_repo/avatars/* assets/avatars/ 2>/dev/null || true
+          fi
+          python3 -c "
+          import os, json
+          avatar_dir = 'assets/avatars'
+          valid_exts = ('.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.svg')
+          files = [f for f in os.listdir(avatar_dir) if f.lower().endswith(valid_exts) and os.path.isfile(os.path.join(avatar_dir, f))]
+          files.sort()
+          with open(os.path.join(avatar_dir, 'list.json'), 'w', encoding='utf-8') as fp:
+              json.dump(files, fp, ensure_ascii=False)
+          print(f'已生成头像池索引，共计 {len(files)} 张图片')
+          "
+
+          # 2. 处理动态库（预留）：复制所有格式图片并自动生成 list.json
+          if [ -d "image_repo/moments" ]; then
+            cp -r image_repo/moments/* assets/moments/ 2>/dev/null || true
+          fi
+          python3 -c "
+          import os, json
+          moment_dir = 'assets/moments'
+          valid_exts = ('.png', '.jpg', '.jpeg', '.webp', '.gif', '.bmp', '.svg')
+          files = [f for f in os.listdir(moment_dir) if f.lower().endswith(valid_exts) and os.path.isfile(os.path.join(moment_dir, f))]
+          files.sort()
+          with open(os.path.join(moment_dir, 'list.json'), 'w', encoding='utf-8') as fp:
+              json.dump(files, fp, ensure_ascii=False)
+          print(f'已生成动态池索引，共计 {len(files)} 张图片')
+          "
+
+          # 清理临时拉取的图片仓库
+          rm -rf image_repo
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
