@@ -9,24 +9,32 @@ function escapeHtml(str) {
 }
 
 // ============================================================
-// 💭 思维链清洗工具
+// 💭 思维链清洗工具（已强化：绝不遗漏孤立或残留的闭合标签）
 // ============================================================
 function stripThought(text) {
     if (!text) return '';
     let processed = String(text);
-    const tkOpen = '<' + 'think>';
-    const tkClose = '<' + '/think>';
-    if (processed.includes(tkOpen) && !processed.includes(tkClose)) {
-        processed += tkClose;
-    }
-    if (processed.includes('')) {
-        processed += '</thought>';
-    }
-    if (processed.includes('<reasoning>') && !processed.includes('</reasoning>')) {
-        processed += '</reasoning>';
-    }
+    
+    // 1. 补齐常见的单边未闭合思维链标签，防止漏匹配
+    const pairs = [
+        { open: '<' + 'think>', close: '<' + '/think>' },
+        { open: '<' + 'thought>', close: '<' + '/thought>' },
+        { open: '<' + 'reasoning>', close: '<' + '/reasoning>' }
+    ];
+    pairs.forEach(({ open, close }) => {
+        if (processed.includes(open) && !processed.includes(close)) {
+            processed += close;
+        }
+    });
+
+    // 2. 剥离成对的思考标签及其内部的所有思维链碎碎念
     const thinkRegex = /<(think|thought|reasoning)>[\s\S]*?<\/\1>/gi;
-    return processed.replace(thinkRegex, '').trim();
+    processed = processed.replace(thinkRegex, '');
+
+    // 3. 强力清除任何孤立、未闭合或多重残存的思维链标签（例如 </thought></thought>、<thought>、</think> 等）
+    processed = processed.replace(/<\/?(think|thought|reasoning)[^>]*>/gi, '');
+
+    return processed.trim();
 }
 
 function renderContentWithThoughts(text) {
