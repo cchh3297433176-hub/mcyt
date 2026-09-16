@@ -402,6 +402,98 @@
         return [clean];
     }
 
+    // 微信"消息"主列表构建（私聊+群聊二选一，取决于 window.G.chatActiveTab）
+    // ⚠️ 2026-09 排查发现：该函数在从 04-game-core-2.js 拆分/迁移到本文件时被漏掉，
+    // 导致 renderChatApp() 在默认的"聊天"分页下必定抛出 ReferenceError 而提前中断，
+    // 聊天图标点击后表现为“无反应”；同时第413行已提前打上的 wechat-seamless-shell
+    // 类不会被清理，导致之后再打开任意其他 App（如设置）都会缺失顶部退出按钮。
+    // 现补齐本函数，并已在 phone-shell.js 的 openPhoneApp 里加了兜底清理逻辑。
+    function buildChatListHTML() {
+        const isDirect = window.G.chatActiveTab !== 'group';
+
+        if (isDirect) {
+            const npcList = Object.values(window.G.npcs || {});
+            if (npcList.length === 0) {
+                return `
+                <div style="text-align:center;color:#b2b2b2;padding:60px 16px;font-size:13px;line-height:1.8;">
+                    <b>暂无联系人</b><br>
+                    点击右上角「+」添加好友，开始你的第一段对话吧！
+                </div>`;
+            }
+
+            const rows = npcList.map(npc => {
+                const history = getAccountChatHistory(npc.id);
+                const last = history.length ? history[history.length - 1] : null;
+                let preview = '暂无消息，点击开始聊天';
+                if (last) {
+                    if (last.sharedMoment) preview = '[分享了一条动态]';
+                    else if (last.stickerUrl) preview = '[表情]';
+                    else if (last.imageUrl) preview = '[图片]';
+                    else preview = String(last.text || '').replace(/\n+/g, ' ').slice(0, 24) || '[消息]';
+                    if (last.from === 'player') preview = '我：' + preview;
+                }
+                const timeLabel = last ? String(last.time || '').slice(0, 5) : '';
+                const blocked = (typeof isAccountBlockedByNpc === 'function') ? isAccountBlockedByNpc(npc.id) : false;
+                return { npc, last, preview, timeLabel, blocked };
+            }).sort((a, b) => {
+                const ta = a.last ? Number(String(a.last._id || '').split('_')[1]) || 0 : 0;
+                const tb = b.last ? Number(String(b.last._id || '').split('_')[1]) || 0 : 0;
+                return tb - ta;
+            });
+
+            return rows.map(({ npc, preview, timeLabel, blocked }) => `
+                <div class="chat-item" data-npc-id="${npc.id}" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:0.5px solid #ededed;cursor:pointer;background:#fff;">
+                    ${renderAvatarBadge(npc, 46)}
+                    <div style="flex:1;min-width:0;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;">
+                            <span style="font-size:14.5px;font-weight:500;color:#181818;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(npc.name || npc.id)}</span>
+                            <span style="font-size:10.5px;color:#b2b2b2;flex-shrink:0;margin-left:6px;">${timeLabel}</span>
+                        </div>
+                        <div style="font-size:12px;color:${blocked ? '#fa5151' : '#999999'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;">${blocked ? '（已被对方拉黑）' : escapeHtml(preview)}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        const groupList = Object.entries(window.G.groups || {}).map(([gid, g]) => Object.assign({ id: gid }, g));
+        if (groupList.length === 0) {
+            return `
+            <div style="text-align:center;color:#b2b2b2;padding:60px 16px;font-size:13px;line-height:1.8;">
+                <b>暂无群聊</b><br>
+                点击右上角「+」创建或加入一个群聊吧！
+            </div>`;
+        }
+
+        const groupRows = groupList.map(g => {
+            const history = (window.G.groupChatHistory && window.G.groupChatHistory[g.id]) || [];
+            const last = history.length ? history[history.length - 1] : null;
+            let preview = '暂无消息';
+            if (last) {
+                preview = String(last.text || '[消息]').replace(/\n+/g, ' ').slice(0, 24);
+                if (last.senderName) preview = `${last.senderName}：${preview}`;
+            }
+            const timeLabel = last ? String(last.time || '').slice(0, 5) : '';
+            return { g, preview, timeLabel, last };
+        }).sort((a, b) => {
+            const ta = a.last ? Number(String(a.last._id || '').split('_')[1]) || 0 : 0;
+            const tb = b.last ? Number(String(b.last._id || '').split('_')[1]) || 0 : 0;
+            return tb - ta;
+        });
+
+        return groupRows.map(({ g, preview, timeLabel }) => `
+            <div class="group-item" data-group-id="${g.id}" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:0.5px solid #ededed;cursor:pointer;background:#fff;">
+                ${renderAvatarBadge(g, 46)}
+                <div style="flex:1;min-width:0;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <span style="font-size:14.5px;font-weight:500;color:#181818;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(g.name || g.id)}</span>
+                        <span style="font-size:10.5px;color:#b2b2b2;flex-shrink:0;margin-left:6px;">${timeLabel}</span>
+                    </div>
+                    <div style="font-size:12px;color:#999999;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;">${escapeHtml(preview)}</div>
+                </div>
+            </div>
+        `).join('');
+    }
+
     // ============================================================
     // 📱 微信 App 整体调度中枢
     // ============================================================
