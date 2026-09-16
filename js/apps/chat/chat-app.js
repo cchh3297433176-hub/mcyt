@@ -1,31 +1,25 @@
 /**
  * js/apps/chat/chat-app.js
- * 💬 微信独立主应用（彻底绝杀4号旧UI穿透 · 零Emoji高级极简矢量 · 仿微信白灰绿质感 · 发图三模态）
+ * 💬 微信独立主应用（彻底绝杀4号旧UI穿透 · 仿微信白灰绿质感 · 双语即时翻译 · 仿微信拟真语音条 · 发图三模态）
  */
 
 (function() {
     'use strict';
 
-    // 预留头像库专属子目录路径
     const AVATAR_SUBDIR = 'assets/avatars/';
     window._MCYT_AVATAR_SUBDIR = AVATAR_SUBDIR;
 
-    // 自建联系人与聊天记录独立持久化槽
     const CUSTOM_NPCS_BACKUP_KEY = 'mcyt_wechat_custom_npcs';
     const CHAT_HISTORY_BACKUP_KEY = 'mcyt_wechat_chathistory_v2';
 
-    // 动态头像池：多轨保障（动态脚本注入 + XHR 本地文件直读 + Fetch）
     if (!Array.isArray(window._MCYT_AVATARS_POOL)) {
         window._MCYT_AVATARS_POOL = [];
     }
 
     function initAvatarPool() {
-        // 轨1：如果已经在全局或通过构建的 list.js 注入成功，直接使用
         if (Array.isArray(window._MCYT_AVATARS_POOL) && window._MCYT_AVATARS_POOL.length > 0) {
             return;
         }
-
-        // 动态创建 script 标签预加载 list.js（file:// 协议下最稳妥的跨域免疫手段）
         try {
             const script = document.createElement('script');
             script.src = AVATAR_SUBDIR + 'list.js?t=' + Date.now();
@@ -37,28 +31,23 @@
             document.head.appendChild(script);
         } catch (_) {}
 
-        // 轨2：使用兼容 file:// 本地协议的 XMLHttpRequest 读取 list.json
         try {
             const xhr = new XMLHttpRequest();
             xhr.open('GET', AVATAR_SUBDIR + 'list.json', true);
             xhr.onreadystatechange = function() {
-                if (xhr.readyState === 4) {
-                    // 本地 file 协议下 status 可能是 0 或 200
-                    if (xhr.status === 200 || xhr.status === 0) {
-                        try {
-                            const list = JSON.parse(xhr.responseText);
-                            if (Array.isArray(list) && list.length > 0) {
-                                window._MCYT_AVATARS_POOL = list;
-                                console.log('✅ 头像池已通过 XHR 成功装载，数量:', list.length);
-                            }
-                        } catch (e) {}
-                    }
+                if (xhr.readyState === 4 && (xhr.status === 200 || xhr.status === 0)) {
+                    try {
+                        const list = JSON.parse(xhr.responseText);
+                        if (Array.isArray(list) && list.length > 0) {
+                            window._MCYT_AVATARS_POOL = list;
+                            console.log('✅ 头像池已通过 XHR 成功装载，数量:', list.length);
+                        }
+                    } catch (e) {}
                 }
             };
             xhr.send(null);
         } catch (_) {}
 
-        // 轨3：Fetch 异步通道
         fetch(AVATAR_SUBDIR + 'list.json')
             .then(r => r.json())
             .then(list => {
@@ -77,7 +66,6 @@
             if (picked.startsWith('http') || picked.startsWith('data:') || picked.startsWith('assets/')) {
                 return picked;
             }
-            // 路径拼装并做安全编码，兼容中文与特殊文件名
             return `${AVATAR_SUBDIR}${encodeURIComponent(picked).replace(/%2F/g, '/')}`;
         }
         return 'assets/icons/chat.png';
@@ -88,7 +76,6 @@
     let _stickerDrawerOpen = false;
     let _plusDrawerOpen = false;
 
-    // 💾 独立双轨持久化引擎
     function syncCustomNpcsToLocalBackup() {
         try {
             if (!window.G || !window.G.npcs) return;
@@ -170,7 +157,6 @@
         if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
     });
 
-    // 🎨 微信原生极简样式注入：彻底绝杀 4 号旧界面的穿透与框中框
     function ensureChatShellStyles() {
         let styleEl = document.getElementById('wechat-fullscreen-style');
         if (!styleEl) {
@@ -179,7 +165,6 @@
             document.head.appendChild(styleEl);
         }
         styleEl.textContent = `
-            /* 微信无缝宿主层级强制锁死 */
             .app-modal-layer.wechat-seamless-shell {
                 position: absolute !important;
                 top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
@@ -197,7 +182,6 @@
                 border: none !important; border-radius: 0 !important; box-shadow: none !important;
                 background: #ededed !important; overflow: hidden !important;
             }
-            /* 强行抹平 4 号文件历史残留的旧聊天容器，杜绝出现“框中框” */
             .phone-app-wrap, #socialTab .phone-app-wrap, .chat-header {
                 display: none !important;
             }
@@ -214,7 +198,6 @@
                 flex-shrink: 0 !important;
                 box-sizing: border-box !important;
             }
-            /* 微信统一极简原生弹窗体系（彻底替代粉白仿Win弹窗） */
             .wechat-clean-modal-mask {
                 position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 10000;
                 display: flex; align-items: center; justify-content: center; padding: 20px;
@@ -245,7 +228,7 @@
             }
             .wechat-clean-btn-cancel:active { background: #e5e5e5; }
             .wechat-clean-btn-confirm:active { background: #06ad56; }
-            /* 微信操作气泡 ActionSheet */
+
             .wechat-action-sheet-mask {
                 position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 10000;
                 display: flex; align-items: flex-end; justify-content: center;
@@ -261,13 +244,12 @@
                 border-bottom: 0.5px solid #f0f0f0; cursor: pointer; user-select: none;
             }
             .wechat-action-item:active { background: #ececec; }
-            .wechat-action-item.danger { color: #fa5151; }
             .wechat-action-cancel {
                 background: #ffffff; padding: 14px; text-align: center; font-size: 15px; color: #666;
                 margin-top: 6px; cursor: pointer; user-select: none;
             }
             .wechat-action-cancel:active { background: #ececec; }
-            /* 居中表情包抽屉 */
+
             .wechat-sticker-grid {
                 display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px;
                 padding: 12px; max-height: 180px; overflow-y: auto; justify-items: center; align-items: center;
@@ -278,7 +260,7 @@
                 overflow: hidden; box-shadow: 0 1px 2px rgba(0,0,0,0.03);
             }
             .wechat-sticker-card:active { transform: scale(0.95); }
-            /* 扩展功能抽屉面板 */
+
             .wechat-plus-grid {
                 display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
                 padding: 16px 14px; max-height: 190px; overflow-y: auto; justify-items: center;
@@ -292,6 +274,33 @@
             }
             .wechat-plus-item:active .wechat-plus-icon-box { background: #eaeaea; }
             .wechat-plus-label { font-size: 11px; color: #555555; }
+
+            /* 微信拟真语音条样式 */
+            .wechat-voice-bubble {
+                display: flex; align-items: center; gap: 8px; min-height: 38px;
+                padding: 8px 12px; border-radius: 5px; cursor: pointer; user-select: none;
+                transition: background 0.15s, transform 0.1s; box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+            }
+            .wechat-voice-bubble:active { transform: scale(0.98); opacity: 0.9; }
+            .wechat-voice-wave {
+                display: flex; align-items: center; gap: 2px; height: 16px;
+            }
+            .wechat-voice-bar {
+                width: 2.5px; background: currentColor; border-radius: 2px;
+            }
+            .wechat-voice-bar:nth-child(1) { height: 6px; }
+            .wechat-voice-bar:nth-child(2) { height: 12px; }
+            .wechat-voice-bar:nth-child(3) { height: 16px; }
+
+            /* 微信双语即时翻译面板 */
+            .wechat-translation-box {
+                margin-top: 6px; padding-top: 6px; border-top: 0.5px dashed #d5d5d5;
+                font-size: 13.5px; color: #222; line-height: 1.45; animation: wechatFadeIn 0.2s ease-out;
+            }
+            @keyframes wechatFadeIn { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: translateY(0); } }
+            .wechat-trans-tag {
+                font-size: 10px; color: #999; margin-bottom: 2px; display: flex; align-items: center; gap: 4px;
+            }
         `;
     }
     ensureChatShellStyles();
@@ -303,7 +312,6 @@
         if (typeof originalClosePhoneApp === 'function') originalClosePhoneApp();
     };
 
-    // 微信专用原生简约弹窗包装器
     function openWechatCleanModal(title, innerContentHtml, onConfirm = null) {
         let mask = document.createElement('div');
         mask.className = 'wechat-clean-modal-mask';
@@ -342,6 +350,8 @@
         if (!window.G.feed) window.G.feed = [];
         if (!window.G._behindScreenActive) window.G._behindScreenActive = {};
         if (!window.G._chatShowFullHistory) window.G._chatShowFullHistory = {};
+        if (!window.G._activeTranslations) window.G._activeTranslations = {};
+        if (!window.G._voicePlayingDesc) window.G._voicePlayingDesc = {};
 
         restoreCustomNpcsFromLocalBackup();
         restoreChatHistoryFromLocalBackup();
@@ -355,6 +365,7 @@
             if (!npc.name) npc.name = id;
             if (npc.favor === undefined) npc.favor = 50;
             if (!npc.region) npc.region = (id.includes('dream') || id.includes('george')) ? '美国 - 东部' : '中国';
+            if (!npc.relationshipStage) npc.relationshipStage = (npc.isDating ? 'dating' : 'friend');
             if (!npc.avatarUrl || npc.avatarUrl === 'assets/icons/chat.png') {
                 npc.avatarUrl = getRandomAvatar();
             }
@@ -401,6 +412,7 @@
         let charCount = 0;
         for (const m of history) {
             charCount += (m.text ? m.text.length : 0);
+            if (m.originalText) charCount += m.originalText.length;
             if (m.sharedMoment?.body) charCount += m.sharedMoment.body.length;
         }
         return Math.round(charCount * 1.3 + 120);
@@ -411,40 +423,61 @@
         return tokens.toString();
     }
 
-    function splitIntoChatBubbles(rawText) {
+    /**
+     * 高级气泡切分器（支持解析双语 [MSG original="..."] 与拟真语音 [VOICE seconds="..." audio_bg="..."]）
+     */
+    function parseAIReplyEntities(rawText) {
         if (!rawText) return [];
         const clean = (typeof stripThought === 'function') ? stripThought(rawText).trim() : rawText.trim();
         if (!clean) return [];
 
-        const bubbles = [];
-        const msgTagRegex = /\[MSG\]([\s\S]*?)\[\/MSG\]/gi;
-        let match;
-        while ((match = msgTagRegex.exec(clean)) !== null) {
-            const item = match[1].trim();
-            if (item) bubbles.push(item);
+        const entities = [];
+
+        // 1. 匹配拟真语音标签 [VOICE seconds="5" audio_bg="..."]正文[/VOICE]
+        const voiceRegex = /\[VOICE(?:\s+seconds="?(\d+)"?)?(?:\s+audio_bg="?([^"]*)"?)?\]([\s\S]*?)\[\/VOICE\]/gi;
+        let vMatch;
+        let lastIdx = 0;
+        let tempText = clean;
+
+        while ((vMatch = voiceRegex.exec(clean)) !== null) {
+            const sec = parseInt(vMatch[1]) || Math.min(60, Math.max(2, Math.round((vMatch[3] || '').length * 0.4)));
+            const bg = (vMatch[2] || '').trim();
+            const text = (vMatch[3] || '').trim();
+            entities.push({
+                type: 'voice',
+                seconds: sec,
+                audioBg: bg,
+                text: text
+            });
         }
-        if (bubbles.length > 0) return bubbles.slice(0, 4);
 
-        const lines = clean.split(/\n+/).map(l => l.trim()).filter(Boolean);
-        if (lines.length > 1) return lines.slice(0, 4);
-
-        if (lines.length === 1 && lines[0].length > 30) {
-            const sentences = lines[0].split(/([。！？!?~～]+)/).filter(Boolean);
-            let current = '';
-            for (let i = 0; i < sentences.length; i++) {
-                current += sentences[i];
-                if (i % 2 === 1 || current.length > 22) {
-                    if (current.trim()) bubbles.push(current.trim());
-                    current = '';
-                }
+        // 2. 匹配标准微信短消息标签（含双语）
+        const msgRegex = /\[MSG(?:\s+original="([^"]+)")?\]([\s\S]*?)\[\/MSG\]/gi;
+        let mMatch;
+        while ((mMatch = msgRegex.exec(clean)) !== null) {
+            const original = (mMatch[1] || '').trim();
+            const text = (mMatch[2] || '').trim();
+            if (text || original) {
+                entities.push({
+                    type: 'text',
+                    text: text || original,
+                    originalText: original || null
+                });
             }
-            if (current.trim()) bubbles.push(current.trim());
-            if (bubbles.length > 0) return bubbles.slice(0, 4);
         }
-        return [clean];
+
+        if (entities.length > 0) return entities.slice(0, 4);
+
+        // 3. 兜底分段
+        const lines = clean.split(/\n+/).map(l => l.trim()).filter(Boolean);
+        if (lines.length > 0) {
+            return lines.slice(0, 3).map(l => ({ type: 'text', text: l }));
+        }
+
+        return [{ type: 'text', text: clean }];
     }
 
-    // 微信"消息"主列表构建（私聊+群聊二选一，取决于 window.G.chatActiveTab）
+    // 微信"消息"主列表构建
     function buildChatListHTML() {
         const isDirect = window.G.chatActiveTab !== 'group';
 
@@ -454,7 +487,7 @@
                 return `
                 <div style="text-align:center;color:#b2b2b2;padding:60px 16px;font-size:13px;line-height:1.8;">
                     <b>暂无联系人</b><br>
-                    点击右上角「+」添加好友，开始你的第一段对话吧！
+                    点击右上角「+」添加好友，开启活人感对话！
                 </div>`;
             }
 
@@ -463,27 +496,32 @@
                 const last = history.length ? history[history.length - 1] : null;
                 let preview = '暂无消息，点击开始聊天';
                 if (last) {
-                    if (last.sharedMoment) preview = '[分享了一条动态]';
+                    if (last.type === 'voice') preview = `[语音] ${last.seconds || 3}"`;
+                    else if (last.sharedMoment) preview = '[分享了一条动态]';
                     else if (last.stickerUrl) preview = '[表情]';
                     else if (last.imageUrl) preview = '[图片]';
-                    else preview = String(last.text || '').replace(/\n+/g, ' ').slice(0, 24) || '[消息]';
+                    else preview = String(last.originalText || last.text || '').replace(/\n+/g, ' ').slice(0, 24) || '[消息]';
                     if (last.from === 'player') preview = '我：' + preview;
                 }
                 const timeLabel = last ? String(last.time || '').slice(0, 5) : '';
                 const blocked = (typeof isAccountBlockedByNpc === 'function') ? isAccountBlockedByNpc(npc.id) : false;
-                return { npc, last, preview, timeLabel, blocked };
+                const isDating = window.ChatPromptEngine && window.ChatPromptEngine.isNpcInDatingRelationship(npc);
+                return { npc, last, preview, timeLabel, blocked, isDating };
             }).sort((a, b) => {
                 const ta = a.last ? Number(String(a.last._id || '').split('_')[1]) || 0 : 0;
                 const tb = b.last ? Number(String(b.last._id || '').split('_')[1]) || 0 : 0;
                 return tb - ta;
             });
 
-            return rows.map(({ npc, preview, timeLabel, blocked }) => `
+            return rows.map(({ npc, preview, timeLabel, blocked, isDating }) => `
                 <div class="chat-item" data-npc-id="${npc.id}" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:0.5px solid #ededed;cursor:pointer;background:#fff;">
                     ${renderAvatarBadge(npc, 46)}
                     <div style="flex:1;min-width:0;">
                         <div style="display:flex;justify-content:space-between;align-items:center;">
-                            <span style="font-size:14.5px;font-weight:500;color:#181818;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(npc.name || npc.id)}</span>
+                            <div style="display:flex;align-items:center;gap:4px;overflow:hidden;">
+                                <span style="font-size:14.5px;font-weight:500;color:#181818;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(npc.name || npc.id)}</span>
+                                ${isDating ? `<span style="font-size:10px;background:#ffeef0;color:#ff4d4f;padding:1px 5px;border-radius:3px;font-weight:600;flex-shrink:0;">恋人</span>` : ''}
+                            </div>
                             <span style="font-size:10.5px;color:#b2b2b2;flex-shrink:0;margin-left:6px;">${timeLabel}</span>
                         </div>
                         <div style="font-size:12px;color:${blocked ? '#fa5151' : '#999999'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;">${blocked ? '（已被对方拉黑）' : escapeHtml(preview)}</div>
@@ -506,7 +544,8 @@
             const last = history.length ? history[history.length - 1] : null;
             let preview = '暂无消息';
             if (last) {
-                preview = String(last.text || '[消息]').replace(/\n+/g, ' ').slice(0, 24);
+                if (last.type === 'voice') preview = `[语音] ${last.seconds || 3}"`;
+                else preview = String(last.text || '[消息]').replace(/\n+/g, ' ').slice(0, 24);
                 if (last.senderName) preview = `${last.senderName}：${preview}`;
             }
             const timeLabel = last ? String(last.time || '').slice(0, 5) : '';
@@ -531,9 +570,7 @@
         `).join('');
     }
 
-    // ============================================================
-    // 📱 微信 App 整体调度中枢
-    // ============================================================
+    // 微信 App 整体调度中枢
     function renderChatApp(container) {
         if (!container) container = document.getElementById('appModalBody') || document.getElementById('socialTab');
         if (!container) return;
@@ -541,7 +578,6 @@
         const appModal = document.getElementById('appModal');
         if (appModal) appModal.classList.add('wechat-seamless-shell');
 
-        // 清理旧残留
         const legacyWrap = document.querySelector('#socialTab .phone-app-wrap');
         if (legacyWrap) legacyWrap.remove();
 
@@ -664,9 +700,6 @@
         renderChatApp();
     };
 
-    // ============================================================
-    // ➕ 右上角加号微信极简操作菜单
-    // ============================================================
     window.openAddChatTargetModal = function() {
         const reqCount = (window.G.friendRequests || []).length + (window.G.groupInvites || []).length;
         let mask = document.createElement('div');
@@ -682,7 +715,6 @@
         document.body.appendChild(mask);
     };
 
-    // 自建联系人
     window.openCreateCustomNpcModal = function() {
         document.querySelector('.wechat-action-sheet-mask')?.remove();
         openWechatCleanModal('添加自建联系人', `
@@ -701,6 +733,9 @@
                         <option value="日本">日本</option>
                         <option value="韩国">韩国</option>
                         <option value="加拿大">加拿大</option>
+                        <option value="澳大利亚">澳大利亚</option>
+                        <option value="德国">德国</option>
+                        <option value="法国">法国</option>
                     </select>
                 </div>
                 <div>
@@ -726,6 +761,7 @@
                 region: region,
                 persona: persona,
                 favor: 50,
+                relationshipStage: 'friend',
                 avatarUrl: getRandomAvatar(),
                 isCustom: true,
                 ownerAccountId: curAcc.id
@@ -738,7 +774,6 @@
         });
     };
 
-    // 发起群聊
     window.openCreateGroupModal = function() {
         document.querySelector('.wechat-action-sheet-mask')?.remove();
         const npcs = Object.values(window.G.npcs || {});
@@ -789,7 +824,6 @@
         });
     };
 
-    // 新的好友与群邀请
     window.openSocialRequestsModal = function() {
         document.querySelector('.wechat-action-sheet-mask')?.remove();
         const fReqs = window.G.friendRequests || [];
@@ -847,6 +881,7 @@
                     region: '中国',
                     persona: req.persona || '一位热情的游戏粉丝。',
                     favor: 50,
+                    relationshipStage: 'friend',
                     avatarUrl: getRandomAvatar(),
                     isCustom: true
                 };
@@ -882,13 +917,12 @@
         }
     };
 
-    // ============================================================
-    // 📖 角色名片页：彻底告别粉白复古框，纯正微信极简风
-    // ============================================================
+    // 角色名片页
     window.openNpcProfileCardModal = function(npcId) {
         const npc = window.G.npcs[npcId];
         if (!npc) return;
 
+        const isDating = window.ChatPromptEngine && window.ChatPromptEngine.isNpcInDatingRelationship(npc);
         const personaText = npc.persona || '';
         const previewPersona = personaText ? personaText.slice(0, 85) + (personaText.length > 85 ? '...' : '') : '暂无详细人设档案，点击此处补充';
 
@@ -908,15 +942,25 @@
                             <span>${escapeHtml(npc.name)}</span>
                             <span style="font-size:11px;color:#07c160;">✎</span>
                         </div>
-                        <div style="display:flex;align-items:center;gap:8px;font-size:12px;color:#666;margin-top:4px;">
+                        <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#666;margin-top:4px;flex-wrap:wrap;">
                             <span onclick="window.openPickNpcRegionForCard('${npcId}')" style="cursor:pointer;background:#f2f2f2;padding:2px 6px;border-radius:4px;color:#333;">
                                 ${escapeHtml(npc.region || '中国')} ▾
                             </span>
                             <span onclick="window.openEditNpcFavorModal('${npcId}')" style="cursor:pointer;background:#f2f2f2;padding:2px 6px;border-radius:4px;color:#07c160;font-weight:600;">
-                                好感 ${npc.favor || 50}/100 ✎
+                                好感 ${npc.favor || 50} ✎
                             </span>
                         </div>
                     </div>
+                </div>
+
+                <!-- 恋爱状态栏 -->
+                <div style="display:flex;align-items:center;justify-content:space-between;background:#fbfbfb;border:0.5px solid #eaeaea;border-radius:6px;padding:8px 10px;margin-bottom:12px;">
+                    <div style="font-size:12px;color:#444;">
+                        当前关系：<b style="color:${isDating ? '#ff4d4f' : (npc.favor >= 80 ? '#fa8c16' : '#666')};">${isDating ? '恋人（交往中）' : (npc.favor >= 80 ? '暧昧试探期' : '普通朋友')}</b>
+                    </div>
+                    <button type="button" onclick="window.toggleNpcRelationshipStage('${npcId}')" style="border:none;background:${isDating ? '#fff1f0' : '#f0f9eb'};color:${isDating ? '#ff4d4f' : '#07c160'};padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;">
+                        ${isDating ? '解除恋人' : '确立恋爱'}
+                    </button>
                 </div>
 
                 <div style="background:#f8faf8;border-radius:6px;border:1px solid #e8ede8;padding:10px;margin-bottom:14px;cursor:pointer;" onclick="window.openEditNpcPersonaModal('${npcId}')">
@@ -944,6 +988,31 @@
             close();
             window.openChat(npcId);
         };
+    };
+
+    window.toggleNpcRelationshipStage = function(npcId) {
+        const npc = window.G.npcs[npcId];
+        if (!npc) return;
+        const isDating = window.ChatPromptEngine && window.ChatPromptEngine.isNpcInDatingRelationship(npc);
+
+        if (isDating) {
+            npc.relationshipStage = 'friend';
+            npc.isDating = false;
+            if (typeof showToast === 'function') showToast('已恢复为朋友关系，恋人模式关闭', 'info', 1200);
+        } else {
+            if ((npc.favor || 0) < 80) {
+                if (typeof showToast === 'function') showToast('好感度需达到 80 且双方暧昧才可确立恋人', 'error', 1500);
+                return;
+            }
+            npc.relationshipStage = 'dating';
+            npc.isDating = true;
+            if (typeof showToast === 'function') showToast('已正式确立恋爱关系！恋人专属规范生效', 'success', 1500);
+        }
+
+        syncCustomNpcsToLocalBackup();
+        if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+        document.querySelector('.wechat-clean-modal-mask')?.remove();
+        window.openNpcProfileCardModal(npcId);
     };
 
     window.triggerChangeNpcAvatar = function(npcId) {
@@ -989,7 +1058,6 @@
         const npc = window.G.npcs[npcId];
         if (!npc) return;
 
-        // 如果头像池为空，主动重新检查
         if (!Array.isArray(window._MCYT_AVATARS_POOL) || window._MCYT_AVATARS_POOL.length === 0) {
             initAvatarPool();
         }
@@ -1060,6 +1128,10 @@
         `, () => {
             const r = document.getElementById('wcleanFavorRange');
             npc.favor = parseInt(r.value) || 0;
+            if (npc.favor < 60 && npc.relationshipStage === 'dating') {
+                npc.relationshipStage = 'friend';
+                npc.isDating = false;
+            }
             syncCustomNpcsToLocalBackup();
             if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
             window.openNpcProfileCardModal(npcId);
@@ -1086,9 +1158,23 @@
         });
     };
 
-    // ============================================================
-    // 💬 单人私聊窗口渲染
-    // ============================================================
+    // 双语点击即时翻译切换
+    window.toggleMessageTranslation = function(msgId) {
+        if (!window.G._activeTranslations) window.G._activeTranslations = {};
+        window.G._activeTranslations[msgId] = !window.G._activeTranslations[msgId];
+        if (window.G.currentChatNpc) renderSingleChatWindow();
+        else if (window.G.currentChatGroup) renderGroupChatWindow();
+    };
+
+    // 拟真语音条点击展开声学环境与文字
+    window.toggleVoiceMessageDetails = function(msgId) {
+        if (!window.G._voicePlayingDesc) window.G._voicePlayingDesc = {};
+        window.G._voicePlayingDesc[msgId] = !window.G._voicePlayingDesc[msgId];
+        if (window.G.currentChatNpc) renderSingleChatWindow();
+        else if (window.G.currentChatGroup) renderGroupChatWindow();
+    };
+
+    // 单人私聊窗口渲染
     function renderSingleChatWindow(container) {
         if (!container) container = document.getElementById('appModalBody') || document.getElementById('socialTab');
         if (!container) return;
@@ -1100,7 +1186,7 @@
         const npc = window.G.npcs[npcId];
         if (!npc) { window.closeChat(); return; }
 
-        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
+        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', region: '中国' };
         const isBlocked = isAccountBlockedByNpc(npcId, curAcc.id);
         const chatHist = getAccountChatHistory(npcId, curAcc.id);
         const isBehindActive = !!window.G._behindScreenActive[npcId];
@@ -1110,6 +1196,8 @@
 
         let messagesHtml = '';
         for (const msg of chatHist) {
+            const isSelf = msg.from === 'player';
+
             if (msg.from === 'action') {
                 messagesHtml += `
                 <div style="text-align:center;margin:8px 0;">
@@ -1120,8 +1208,42 @@
                 <div style="margin:8px 12px;background:#ffffff;border:1px dashed #dcdcdc;padding:8px 12px;border-radius:6px;font-size:12px;color:#555;line-height:1.5;">
                     <span style="font-weight:600;color:#181818;">动作感知：</span>${escapeHtml(msg.text || '')}
                 </div>`;
+            } else if (msg.type === 'voice') {
+                // 拟真语音条
+                const seconds = Math.min(60, Math.max(1, parseInt(msg.seconds) || 3));
+                const bubbleWidth = Math.min(220, 68 + seconds * 4.5);
+                const isOpenDesc = !!(window.G._voicePlayingDesc && window.G._voicePlayingDesc[msg._id]);
+
+                messagesHtml += `
+                <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
+                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${renderAvatarBadge(npc, 38)}</div>` : ''}
+                    <div style="max-width:74%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
+                        <div class="wechat-voice-bubble" onclick="window.toggleVoiceMessageDetails('${msg._id}')" style="width:${bubbleWidth}px;background:${isSelf ? '#95ec69' : '#ffffff'};color:${isSelf ? '#111' : '#222'};justify-content:${isSelf ? 'flex-end' : 'flex-start'};">
+                            ${!isSelf ? `
+                                <div class="wechat-voice-wave" style="color:#444;">
+                                    <div class="wechat-voice-bar"></div><div class="wechat-voice-bar"></div><div class="wechat-voice-bar"></div>
+                                </div>
+                                <span style="font-size:13px;font-weight:600;margin-left:4px;">${seconds}"</span>
+                            ` : `
+                                <span style="font-size:13px;font-weight:600;margin-right:4px;">${seconds}"</span>
+                                <div class="wechat-voice-wave" style="color:#222;transform:scaleX(-1);">
+                                    <div class="wechat-voice-bar"></div><div class="wechat-voice-bar"></div><div class="wechat-voice-bar"></div>
+                                </div>
+                            `}
+                        </div>
+
+                        ${isOpenDesc ? `
+                        <div style="margin-top:5px;background:#ffffff;border:0.5px solid #e0e0e0;border-radius:6px;padding:7px 10px;font-size:12px;color:#333;line-height:1.45;box-shadow:0 1px 3px rgba(0,0,0,0.04);max-width:240px;">
+                            ${msg.audioBg ? `<div style="color:#888;font-size:11px;margin-bottom:3px;font-style:italic;">（${escapeHtml(msg.audioBg)}）</div>` : ''}
+                            <div><span style="color:#07c160;font-weight:600;">转文字：</span>${escapeHtml(msg.text || '')}</div>
+                        </div>
+                        ` : ''}
+
+                        <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
+                    </div>
+                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
+                </div>`;
             } else if (msg.type === 'image_text_only') {
-                const isSelf = msg.from === 'player';
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
                     ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${renderAvatarBadge(npc, 38)}</div>` : ''}
@@ -1135,7 +1257,6 @@
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
                 </div>`;
             } else if (msg.type === 'image' || msg.imageUrl) {
-                const isSelf = msg.from === 'player';
                 const imgSrc = msg.imageUrl || msg.url;
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
@@ -1150,7 +1271,6 @@
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
                 </div>`;
             } else if (msg.type === 'sticker' && msg.stickerUrl) {
-                const isSelf = msg.from === 'player';
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
                     ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${renderAvatarBadge(npc, 38)}</div>` : ''}
@@ -1161,17 +1281,38 @@
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
                 </div>`;
             } else {
-                const isSelf = msg.from === 'player';
-                let bubbleContent = isSelf ? escapeHtml(msg.text || '').replace(/\n/g, '<br>') : ((typeof renderContentWithThoughts === 'function') ? renderContentWithThoughts(msg.text || '') : escapeHtml(msg.text || ''));
+                // 普通文本气泡（带双语点击折叠翻译支持）
+                const hasOriginal = !!msg.originalText;
+                const isTransOpen = !!(window.G._activeTranslations && window.G._activeTranslations[msg._id]);
+                const displayMainText = hasOriginal ? msg.originalText : msg.text;
+                let bubbleBody = isSelf ? escapeHtml(displayMainText || '').replace(/\n/g, '<br>') : ((typeof renderContentWithThoughts === 'function') ? renderContentWithThoughts(displayMainText || '') : escapeHtml(displayMainText || ''));
 
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
                     ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${renderAvatarBadge(npc, 38)}</div>` : ''}
                     <div style="max-width:74%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                         <div class="chat-bubble ${isSelf ? 'self-bubble' : ''}" data-msgid="${msg._id || ''}" style="width:fit-content;max-width:100%;display:inline-block;background:${isSelf ? '#95ec69' : '#ffffff'};color:#111;padding:8px 12px;border-radius:5px;box-shadow:0 1px 2px rgba(0,0,0,0.05);font-size:14.5px;line-height:1.5;word-break:break-word;cursor:pointer;">
-                            ${bubbleContent}
+                            <div>${bubbleBody}</div>
+
+                            ${hasOriginal && isTransOpen ? `
+                            <div class="wechat-translation-box">
+                                <div class="wechat-trans-tag">
+                                    <svg viewBox="0 0 24 24" style="width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2;"><path d="M5 8l6 6M11 8L5 14M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6"/></svg>
+                                    <span>微信翻译</span>
+                                </div>
+                                <div>${escapeHtml(msg.text || '')}</div>
+                            </div>
+                            ` : ''}
                         </div>
-                        <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
+
+                        <div style="display:flex;align-items:center;gap:6px;margin-top:2px;">
+                            ${hasOriginal ? `
+                            <span onclick="window.toggleMessageTranslation('${msg._id}')" style="font-size:10px;color:#07c160;cursor:pointer;user-select:none;">
+                                ${isTransOpen ? '收起翻译' : '翻译'}
+                            </span>
+                            ` : ''}
+                            <span style="font-size:10px;color:#bbb;">${msg.time || ''}</span>
+                        </div>
                     </div>
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
                 </div>`;
@@ -1196,11 +1337,9 @@
                     </span>
                 </div>
                 <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
-                    <!-- 动作感知按钮 -->
                     <button onclick="window.toggleBehindScreen('${npcId}')" style="border:0.5px solid ${isBehindActive ? '#07c160' : '#ccc'};background:${isBehindActive ? '#d4f5dd' : '#fff'};color:${isBehindActive ? '#07c160' : '#555'};width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="动作感知">
                         <svg viewBox="0 0 24 24" style="width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                     </button>
-                    <!-- 闪电生成按钮 -->
                     <button id="btnChatLightningTrigger" onclick="window.triggerAIReplyForSingle('${npcId}')" style="border:none;background:#07c160;color:#fff;width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="生成回复">
                         <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
                     </button>
@@ -1219,8 +1358,12 @@
             ${stickerDrawerHtml}
             ${plusDrawerHtml}
 
-            <!-- 微信标准输入栏：纯白输入框收纳表情，左侧加号，右侧发送 -->
+            <!-- 微信标准输入栏：支持极简拟真语音与文字输入 -->
             <div style="padding:8px 10px;background:#f7f7f7;border-top:0.5px solid #dcdcdc;display:flex;gap:8px;align-items:center;flex-shrink:0;">
+                <button onclick="window.openVoiceInputModal('single','${npcId}')" title="发送语音" style="border:none;background:none;width:28px;height:28px;cursor:pointer;flex-shrink:0;padding:0;display:flex;align-items:center;justify-content:center;color:#555;">
+                    <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                </button>
+
                 <button onclick="window.toggleChatPlusDrawer('single','${npcId}')" title="更多功能" style="border:none;background:none;width:28px;height:28px;cursor:pointer;flex-shrink:0;padding:0;display:flex;align-items:center;justify-content:center;">
                     <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#555;stroke-width:1.8;stroke-linecap:round;"><circle cx="12" cy="12" r="9.5"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
                 </button>
@@ -1246,14 +1389,6 @@
         const msgArea = document.getElementById('chatMessageArea');
         if (msgArea) setTimeout(() => { msgArea.scrollTop = msgArea.scrollHeight; }, 50);
 
-        container.querySelectorAll('.chat-bubble[data-msgid]').forEach(el => {
-            const mid = el.dataset.msgid;
-            if (!mid) return;
-            if (typeof bindLongPressEvent === 'function') {
-                bindLongPressEvent(el, null, () => { window.showMessageActionSheet(mid, 'single', npcId); });
-            }
-        });
-
         const input = document.getElementById('singleChatInput');
         if (input) {
             input.onkeydown = (e) => {
@@ -1265,9 +1400,43 @@
         }
     }
 
-    // ============================================================
-    // 👥 多人群聊窗口渲染
-    // ============================================================
+    // 拟真语音输入弹窗
+    window.openVoiceInputModal = function(type, id) {
+        openWechatCleanModal('发送模拟语音消息', `
+            <div style="display:flex;flex-direction:column;gap:10px;text-align:left;">
+                <div style="font-size:12px;color:#666;">输入你想以语音说出的话（系统自动换算微信秒数）：</div>
+                <textarea id="wcleanVoiceTextInput" rows="3" placeholder="例如：我刚回到家，今天真是累死我了..." class="wechat-clean-input" style="line-height:1.4;resize:none;"></textarea>
+            </div>
+        `, () => {
+            const text = document.getElementById('wcleanVoiceTextInput').value.trim();
+            if (!text) return false;
+            const seconds = Math.min(60, Math.max(2, Math.round(text.length * 0.45)));
+            const time = new Date().toLocaleTimeString().slice(0, 5);
+            const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '我' };
+
+            const msgObj = {
+                from: 'player',
+                type: 'voice',
+                seconds,
+                text,
+                senderName: curAcc.name,
+                time
+            };
+
+            if (type === 'single') {
+                pushChatMessageSafe(id, msgObj, curAcc.id);
+                renderSingleChatWindow();
+            } else {
+                if (!window.G.groupChatHistory[id]) window.G.groupChatHistory[id] = [];
+                window.G.groupChatHistory[id].push(msgObj);
+                renderGroupChatWindow();
+            }
+
+            if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+        });
+    };
+
+    // 多人群聊窗口渲染
     function renderGroupChatWindow(container) {
         if (!container) container = document.getElementById('appModalBody') || document.getElementById('socialTab');
         if (!container) return;
@@ -1286,7 +1455,35 @@
             const senderName = isSelf ? '我' : (msg.senderName || senderNpc?.name || '群友');
             const avatarObj = isSelf ? { isPlayer: true } : (senderNpc || { avatarUrl: getRandomAvatar() });
 
-            if (msg.type === 'sticker' && msg.stickerUrl) {
+            if (msg.type === 'voice') {
+                const seconds = Math.min(60, Math.max(1, parseInt(msg.seconds) || 3));
+                const bubbleWidth = Math.min(220, 68 + seconds * 4.5);
+                const isOpenDesc = !!(window.G._voicePlayingDesc && window.G._voicePlayingDesc[msg._id]);
+
+                messagesHtml += `
+                <div class="chat-msg-row" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
+                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${renderAvatarBadge(avatarObj, 38)}</div>` : ''}
+                    <div style="max-width:65%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
+                        ${!isSelf ? `<div style="font-size:11px;color:#888;margin-bottom:2px;">${escapeHtml(senderName)}</div>` : ''}
+                        <div class="wechat-voice-bubble" onclick="window.toggleVoiceMessageDetails('${msg._id}')" style="width:${bubbleWidth}px;background:${isSelf ? '#95ec69' : '#ffffff'};color:${isSelf ? '#111' : '#222'};justify-content:${isSelf ? 'flex-end' : 'flex-start'};">
+                            ${!isSelf ? `
+                                <div class="wechat-voice-wave" style="color:#444;"><div class="wechat-voice-bar"></div><div class="wechat-voice-bar"></div><div class="wechat-voice-bar"></div></div>
+                                <span style="font-size:13px;font-weight:600;margin-left:4px;">${seconds}"</span>
+                            ` : `
+                                <span style="font-size:13px;font-weight:600;margin-right:4px;">${seconds}"</span>
+                                <div class="wechat-voice-wave" style="color:#222;transform:scaleX(-1);"><div class="wechat-voice-bar"></div><div class="wechat-voice-bar"></div><div class="wechat-voice-bar"></div></div>
+                            `}
+                        </div>
+                        ${isOpenDesc ? `
+                        <div style="margin-top:5px;background:#ffffff;border:0.5px solid #e0e0e0;border-radius:6px;padding:7px 10px;font-size:12px;color:#333;line-height:1.45;box-shadow:0 1px 3px rgba(0,0,0,0.04);max-width:240px;">
+                            ${msg.audioBg ? `<div style="color:#888;font-size:11px;margin-bottom:3px;font-style:italic;">（${escapeHtml(msg.audioBg)}）</div>` : ''}
+                            <div><span style="color:#07c160;font-weight:600;">转文字：</span>${escapeHtml(msg.text || '')}</div>
+                        </div>` : ''}
+                        <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
+                    </div>
+                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${renderAvatarBadge(avatarObj, 38)}</div>` : ''}
+                </div>`;
+            } else if (msg.type === 'sticker' && msg.stickerUrl) {
                 messagesHtml += `
                 <div class="chat-msg-row" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
                     ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${renderAvatarBadge(avatarObj, 38)}</div>` : ''}
@@ -1344,11 +1541,9 @@
                     </div>
                 </div>
                 <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
-                    <!-- 闪电生成按钮 -->
                     <button id="btnGroupLightningTrigger" onclick="window.triggerGroupAIReply('${gid}')" style="border:none;background:#07c160;color:#fff;width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="生成群聊回复">
                         <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
                     </button>
-                    <!-- 群设置详情 -->
                     <button onclick="window.openGroupSettingsModal('${gid}')" style="border:none;background:none;width:32px;height:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">
                         <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:#181818;stroke-width:2;"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
                     </button>
@@ -1364,6 +1559,10 @@
 
             <!-- 微信标准输入栏 -->
             <div style="padding:8px 10px;background:#f7f7f7;border-top:0.5px solid #dcdcdc;display:flex;gap:8px;align-items:center;flex-shrink:0;">
+                <button onclick="window.openVoiceInputModal('group','${gid}')" title="发送语音" style="border:none;background:none;width:28px;height:28px;cursor:pointer;flex-shrink:0;padding:0;display:flex;align-items:center;justify-content:center;color:#555;">
+                    <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                </button>
+
                 <button onclick="window.toggleChatPlusDrawer('group','${gid}')" title="更多功能" style="border:none;background:none;width:28px;height:28px;cursor:pointer;flex-shrink:0;padding:0;display:flex;align-items:center;justify-content:center;">
                     <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#555;stroke-width:1.8;stroke-linecap:round;"><circle cx="12" cy="12" r="9.5"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
                 </button>
@@ -1417,10 +1616,10 @@
         const recentDialogue = history.slice(-8).map(m => `${m.senderName || '群友'}: ${m.text || ''}`).join('\n');
 
         const sysPrompt = `你正在模拟Minecraft多人微信群聊「${group.name}」。群内NPC成员有：${memberDesc}。
-【输出规范】：
-1. 挑选 1 到 2 位群成员依次发言。
-2. 每条发言格式必须为：[MSG sender="成员名字"]发言正文[/MSG]。
-3. 语气生动自然，贴合群友日常打字风格，严禁出现思维链和括号动作描述！`;
+【微信群聊活人打字准则】：
+1. 挑选 1 到 2 位群成员依次发言，每句用 [MSG sender="成员名字"]发言正文[/MSG]。
+2. 绝对严禁在句尾加句号！句内优先用空格停顿！
+3. 绝对严禁出现任何括号动作描写或思维链！`;
 
         const btn = document.getElementById('btnGroupLightningTrigger');
         if (btn) {
@@ -1482,7 +1681,6 @@
         }
     };
 
-    // 群设置详情弹窗
     window.openGroupSettingsModal = function(gid) {
         const group = window.G.groups && window.G.groups[gid];
         if (!group) return;
@@ -1546,7 +1744,7 @@
                 <div class="wechat-clean-modal-title">解散群聊</div>
                 <div style="font-size:13px;color:#666;text-align:center;margin:8px 0 16px;">确定要解散该群聊并清空聊天记录吗？</div>
                 <div class="wechat-clean-modal-btns">
-                    <button type="button" class="wechat-clean-btn-cancel" onclick="this.closest('.wechat-clean-modal-mask').remove()">取消</button>
+                    <button type="button" class="wechat-clean-btn-cancel" onclick="this.closest('.wechat-action-sheet-mask')?.remove() || this.closest('.wechat-clean-modal-mask')?.remove()">取消</button>
                     <button type="button" class="wechat-clean-btn-confirm" style="background:#fa5151;" id="wcleanConfirmDismiss">确定解散</button>
                 </div>
             </div>
@@ -1563,9 +1761,6 @@
         };
     };
 
-    // ============================================================
-    // 🎨 表情包抽屉：移除廉价Emoji加号，改用单色矢量SVG
-    // ============================================================
     function buildChatStickerDrawerHTML(type, id) {
         if (typeof ensureStickersLoaded === 'function') ensureStickersLoaded();
         const cats = window.G.stickerCategories || ['猪猪'];
@@ -1577,7 +1772,6 @@
         `).join('');
 
         let cardsHtml = `
-            <!-- 极简线性 SVG 加号卡片，绝不使用 Emoji -->
             <div class="wechat-sticker-card" onclick="window.openAddStickerChoiceModal('${type}','${id}')" title="添加新表情" style="border:1px dashed #bbb;background:#fafafa;">
                 <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:none;stroke:#888888;stroke-width:2;stroke-linecap:round;">
                     <line x1="12" y1="5" x2="12" y2="19"></line>
@@ -1679,28 +1873,22 @@
         });
     };
 
-    // ============================================================
-    // ➕ 加号扩展抽屉 & 纯净三模态发送图片（对齐朋友圈）
-    // ============================================================
     function buildChatPlusDrawerHTML(type, id) {
         return `
         <div id="chatPlusDrawer" style="background:#f7f7f7;border-top:0.5px solid #dcdcdc;flex-shrink:0;animation:wechatSlideUp 0.18s ease-out;">
             <div class="wechat-plus-grid">
-                <!-- 发送图片 -->
                 <div class="wechat-plus-item" onclick="window.openChatSendImageModal('${type}','${id}')">
                     <div class="wechat-plus-icon-box">
                         <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#07c160;stroke-width:1.8;stroke-linecap:round;"><rect x="3" y="3" width="18" height="18" rx="3"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
                     </div>
                     <span class="wechat-plus-label">发送图片</span>
                 </div>
-                <!-- 共创视频 -->
                 <div class="wechat-plus-item" onclick="_plusDrawerOpen=false; window.openCollabVideoPublishModal('${type}','${id}')">
                     <div class="wechat-plus-icon-box">
                         <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#ff5252;stroke-width:1.8;stroke-linecap:round;"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2"></rect></svg>
                     </div>
                     <span class="wechat-plus-label">共创视频</span>
                 </div>
-                <!-- 连麦开播 -->
                 <div class="wechat-plus-item" onclick="_plusDrawerOpen=false; window.handleInviteCollabStream('${type}','${id}')">
                     <div class="wechat-plus-icon-box">
                         <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#2563eb;stroke-width:1.8;stroke-linecap:round;"><circle cx="12" cy="12" r="2"></circle><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"></path></svg>
@@ -1718,7 +1906,6 @@
         else renderGroupChatWindow();
     };
 
-    // 📷 发送图片弹窗：严格按发动态三模态设计（彻底移除图床与廉价Emoji）
     window.openChatSendImageModal = function(type, id) {
         let localSelectedImg = null;
 
@@ -1738,7 +1925,6 @@
                 </label>
             </div>
 
-            <!-- 本地相册选图区 -->
             <div id="wchatImgLocalBox" style="display:none;margin-top:12px;background:#f9f9f9;padding:10px;border-radius:6px;border:1px solid #e2e8f0;">
                 <label style="display:inline-block;padding:6px 12px;background:#ffffff;border:1px solid #ccc;border-radius:4px;font-size:12px;cursor:pointer;color:#333;">
                     从相册选择照片
@@ -1749,7 +1935,6 @@
                 </div>
             </div>
 
-            <!-- 文字描绘输入区 -->
             <div id="wchatImgDescBox" style="margin-top:12px;">
                 <div style="font-size:12px;color:#666;margin-bottom:4px;">画面意象/内容描述：</div>
                 <input type="text" id="wchatPicDescInput" placeholder="描述你发给对方的画面内容..." class="wechat-clean-input">
@@ -1840,9 +2025,7 @@
         }, 30);
     };
 
-    // ============================================================
-    // 🤖 AI 回复触发与状态反馈
-    // ============================================================
+    // 🤖 私聊 AI 回复触发（全新装载活人感提示词引擎）
     window.triggerAIReplyForSingle = async function(npcId) {
         const npc = window.G.npcs[npcId];
         if (!npc) return;
@@ -1855,22 +2038,27 @@
 
         const history = getAccountChatHistory(npcId, curAcc.id);
         const isBehindActive = !!window.G._behindScreenActive[npcId];
-        const pRegion = curAcc.region || '中国';
-        const nRegion = npc.region || '美国 - 东部';
 
-        const recentDialogue = history.slice(-10).map(m => {
+        // 整理最近 12 轮真实历史给上下文
+        const recentDialogue = history.slice(-12).map(m => {
             const speaker = (m.from === 'player') ? curAcc.name : npc.name;
+            if (m.type === 'voice') return `${speaker} [语音]: ${m.text || ''}`;
+            if (m.originalText) return `${speaker}: ${m.originalText} (译: ${m.text || ''})`;
             return `${speaker}: ${m.text || ''}`;
         }).join('\n');
 
-        const behindPrompt = isBehindActive ? `\n【动作感知】：已开启动作观察。在回复正文后附带一段 [BEHIND_SCREEN]...[/BEHIND_SCREEN] 描述你在屏幕那一端的动作细节（20~40字）。\n` : '';
-
-        const sysPrompt = `你正在扮演MC好友「${npc.name}」（人设：${npc.persona || '游戏同伴'}，常驻：${nRegion}，好感度：${npc.favor || 50}/100）。对方是「${curAcc.name}」（常驻：${pRegion}）。
-【微信打字规范】：
-1. 发送 1 到 3 句短消息，每句用 [MSG]...[/MSG] 包裹。
-2. 气泡内严禁包含任何括号动作描述！
-3. 严禁思维链残留，直接输出对话正文。
-${behindPrompt}`;
+        // 调用独立的提示词中枢组装纯指令
+        const promptCtx = (window.ChatPromptEngine && typeof window.ChatPromptEngine.buildWechatAIPromptContext === 'function')
+            ? window.ChatPromptEngine.buildWechatAIPromptContext({
+                npc,
+                curAcc,
+                recentDialogueText: recentDialogue,
+                isBehindActive
+            })
+            : {
+                sysPrompt: `扮演MC好友「${npc.name}」，严禁句末加句号，严禁括号动作描写。`,
+                userPrompt: recentDialogue ? `最近对话：\n${recentDialogue}\n\n回复：` : '打个招呼。'
+            };
 
         const btn = document.getElementById('btnChatLightningTrigger');
         if (btn) {
@@ -1880,9 +2068,9 @@ ${behindPrompt}`;
 
         try {
             const raw = await callAI([
-                { role: 'system', content: sysPrompt },
-                { role: 'user', content: recentDialogue ? `【最近对话】：\n${recentDialogue}\n\n请回复「${curAcc.name}」：` : '打个招呼吧。' }
-            ], { maxTokens: 400, temperature: 0.85 });
+                { role: 'system', content: promptCtx.sysPrompt },
+                { role: 'user', content: promptCtx.userPrompt }
+            ], { maxTokens: 450, temperature: 0.86 });
 
             let clean = (typeof stripThought === 'function') ? stripThought(raw.trim()) : raw.trim();
             clean = clean.replace(/\([^)]*\)/g, '').replace(/（[^）]*）/g, '').trim();
@@ -1894,20 +2082,44 @@ ${behindPrompt}`;
                 clean = clean.replace(/\[BEHIND_SCREEN\][\s\S]*?\[\/BEHIND_SCREEN\]/gi, '').trim();
             }
 
-            const bubbles = splitIntoChatBubbles(clean);
-            const finalBubbles = (bubbles && bubbles.length) ? bubbles : ['在呢。'];
+            const entities = parseAIReplyEntities(clean);
+            const finalEntities = (entities && entities.length) ? entities : [{ type: 'text', text: '在呢' }];
 
-            for (let i = 0; i < finalBubbles.length; i++) {
-                const bText = finalBubbles[i];
-                pushChatMessageSafe(npcId, { from: 'npc', text: bText, time: new Date().toLocaleTimeString().slice(0, 5) }, curAcc.id);
+            for (let i = 0; i < finalEntities.length; i++) {
+                const item = finalEntities[i];
+                const time = new Date().toLocaleTimeString().slice(0, 5);
+
+                if (item.type === 'voice') {
+                    pushChatMessageSafe(npcId, {
+                        from: 'npc',
+                        type: 'voice',
+                        seconds: item.seconds || 3,
+                        audioBg: item.audioBg || '',
+                        text: item.text || '',
+                        time
+                    }, curAcc.id);
+                } else {
+                    pushChatMessageSafe(npcId, {
+                        from: 'npc',
+                        type: 'text',
+                        text: item.text || '',
+                        originalText: item.originalText || null,
+                        time
+                    }, curAcc.id);
+                }
+
                 if (window.G.currentChatNpc === npcId) renderSingleChatWindow();
-                if (i < finalBubbles.length - 1) {
-                    await new Promise(r => setTimeout(r, 400));
+                if (i < finalEntities.length - 1) {
+                    await new Promise(r => setTimeout(r, 420));
                 }
             }
 
             if (behindText && isBehindActive) {
-                pushChatMessageSafe(npcId, { from: 'behind_screen', text: behindText, time: new Date().toLocaleTimeString().slice(0, 5) }, curAcc.id);
+                pushChatMessageSafe(npcId, {
+                    from: 'behind_screen',
+                    text: behindText,
+                    time: new Date().toLocaleTimeString().slice(0, 5)
+                }, curAcc.id);
                 if (window.G.currentChatNpc === npcId) renderSingleChatWindow();
             }
 
@@ -1991,7 +2203,6 @@ ${behindPrompt}`;
         if (typeof autoSaveGame === 'function') autoSaveGame();
     };
 
-    // 微信渲染总线挂载
     window.renderChatApp = renderChatApp;
     window.renderSocialPanel = renderChatApp;
     window.renderSingleChatWindow = renderSingleChatWindow;
