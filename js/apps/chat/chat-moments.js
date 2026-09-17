@@ -3,12 +3,12 @@
  * 🌟 微信朋友圈动态流独立模块
  * 职责：
  * 1. 朋友圈动态列表构建（微信极简白灰视觉 · 无彩色Emoji）
- * 2. 拍立得拟真质感画片与真实配图模式（彻底替换违和纯文本框）
+ * 2. 拍立得拟真质感画片与真实图片双轨配图（支持本地相册图片与意象快照）
  * 3. 动态双轨持久化防丢恢复（后台重进不丢动态）
  * 4. 专属群演固定永久头像机制（除非手动刷新否则永久锁定）
  * 5. 点赞、评论、回复、召唤互动（0ms 即刻呼出生成胶囊，绝无卡顿延迟感）
- * 6. 动态转发至私聊/群聊功能（联动 NPC 认知与评论区八卦）
- * 7. 仿微信全屏大图预览弹窗
+ * 6. 动态转发至私聊/群聊功能（修复发送者身份为当前玩家）
+ * 7. 仿微信全屏大图与快照详情预览
  */
 
 (function() {
@@ -109,7 +109,7 @@
                 commentsBoxHtml = `<div style="background:#f4f5f7;border-radius:4px;padding:6px 10px;margin-top:8px;">${comLines}</div>`;
             }
 
-            // 配图渲染：微信拍立得艺术画片或真实大图（拒绝生硬居中文字框）
+            // 配图渲染：支持真实图片与拍立得质感画片
             let mediaHtml = '';
             if (m.image) {
                 mediaHtml = `
@@ -176,7 +176,6 @@
             </div>`;
         });
 
-        // 顶栏附带专属 NPC 池快捷配置按钮
         const npcCount = (window.G.momentsNpcs || []).length;
         const bannerHtml = `
         <div style="background:#f7f7f7;padding:7px 14px;border-bottom:0.5px solid #ebebeb;display:flex;justify-content:space-between;align-items:center;font-size:11.5px;color:#666;">
@@ -221,7 +220,7 @@
         }
     };
 
-    // 📤 转发动态至聊天窗口（角色可获取动态正文与评论八卦）
+    // 📤 转发动态至聊天窗口（确保以 player 身份发送，渲染在右侧）
     window.shareMomentToChat = function(momentId) {
         ensureFeedLoaded();
         const item = window.G.feed.find(f => f.id === momentId);
@@ -229,10 +228,9 @@
 
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '我' };
         
-        // 获取当前账号的好友列表与群聊列表
+        // 过滤当前账号下的好友与群聊
         const candidateTargets = [];
         Object.values(window.G.npcs || {}).forEach(npc => {
-            // 大小号好友隔离判定：只列出当前账号绑定的联系人
             if (!npc.ownerAccountId || npc.ownerAccountId === curAcc.id || npc.ownerAccountId === 'all') {
                 candidateTargets.push({ id: npc.id, name: npc.name, isGroup: false });
             }
@@ -272,8 +270,11 @@
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '我' };
         const commentsSummary = (item.comments || []).map(c => `${c.name}: ${c.text}`).join('；');
 
+        // 核心修复：必须同时标记 from: 'player' 和 isPlayer: true，保证渲染为自己发送
         const shareMsg = {
+            from: 'player',
             isPlayer: true,
+            senderName: curAcc.name,
             type: 'shared_moment',
             text: `[分享了一条动态] ${item.author}: ${item.body}`,
             sharedMoment: {
@@ -285,6 +286,7 @@
                 imageDesc: item.imageDesc || null,
                 commentsSummary: commentsSummary || '暂无评论'
             },
+            time: new Date().toLocaleTimeString().slice(0, 5),
             timestamp: Date.now()
         };
 
@@ -296,29 +298,42 @@
             }
         } else {
             if (typeof pushChatMessageSafe === 'function') {
-                pushChatMessageSafe(targetId, shareMsg);
+                pushChatMessageSafe(targetId, shareMsg, curAcc.id);
             }
         }
 
         document.querySelector('.wechat-clean-modal-mask')?.remove();
         if (typeof showToast === 'function') showToast('已转发到聊天', 'success', 1200);
 
-        // 如果不是群聊，且开启了聊天，触发 NPC 接话与对动态内容的讨论
-        if (!isGroup && typeof window.triggerChatAIReply === 'function') {
-            window.triggerChatAIReply(targetId, false);
+        if (!isGroup && typeof window.triggerAIReplyForSingle === 'function') {
+            window.triggerAIReplyForSingle(targetId);
         }
     };
 
-    // 📷 发布动态弹窗（纯正微信卡片风）
+    // 📷 发布动态弹窗（支持相册选真实图片或写意象快照）
     window.openPostMomentModal = function() {
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { name: '我', avatar: 'assets/icons/chat.png' };
+        let selectedRealImageBase64 = null;
 
         if (typeof openWechatCleanModal === 'function') {
             openWechatCleanModal('发朋友圈', `
                 <div style="text-align:left;">
                     <div style="font-size:12px;color:#888;margin-bottom:6px;">以「${escapeHtml(curAcc.name)}」发布：</div>
                     <textarea id="wpostMomentBody" rows="3" placeholder="分享此刻的MC日常或心情..." class="wechat-clean-input" style="line-height:1.45;resize:none;margin-bottom:10px;"></textarea>
-                    <div style="font-size:12px;color:#666;margin-bottom:4px;">配图快照描绘（拍立得快照质感）：</div>
+
+                    <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
+                        <label style="flex:1;border:1px dashed #07c160;background:#f6fbf8;color:#07c160;padding:8px;border-radius:6px;font-size:12px;font-weight:500;text-align:center;cursor:pointer;display:block;">
+                            <span>📷 从相册选择真实配图</span>
+                            <input type="file" id="wpostRealImageInput" accept="image/*" style="display:none;">
+                        </label>
+                        <button type="button" id="wpostClearImgBtn" style="display:none;border:none;background:#fee2e2;color:#ef4444;padding:8px 10px;border-radius:6px;font-size:12px;cursor:pointer;">清除</button>
+                    </div>
+
+                    <div id="wpostImgPreviewWrap" style="display:none;text-align:center;margin-bottom:10px;">
+                        <img id="wpostImgPreview" src="" style="max-height:100px;border-radius:6px;object-fit:cover;">
+                    </div>
+
+                    <div style="font-size:12px;color:#666;margin-bottom:4px;">或填写快照意象描绘（免图库）：</div>
                     <input type="text" id="wpostMomentImgDesc" placeholder="例如：落日余晖下的小麦农场、手持下界合金剑..." class="wechat-clean-input">
                 </div>
             `, () => {
@@ -337,9 +352,9 @@
                     avatar: curAcc.avatar,
                     isPlayer: true,
                     body,
-                    imageMode: imgDesc ? 'photo_art' : 'none',
-                    image: null,
-                    imageDesc: imgDesc || null,
+                    imageMode: selectedRealImageBase64 ? 'real' : (imgDesc ? 'photo_art' : 'none'),
+                    image: selectedRealImageBase64 || null,
+                    imageDesc: (!selectedRealImageBase64 && imgDesc) ? imgDesc : null,
                     time: '刚刚',
                     liked: false,
                     likes: 0,
@@ -354,6 +369,36 @@
                 if (typeof showToast === 'function') showToast('动态已发布', 'success', 1200);
                 if (typeof autoSaveGame === 'function') autoSaveGame();
             });
+
+            setTimeout(() => {
+                const input = document.getElementById('wpostRealImageInput');
+                const pWrap = document.getElementById('wpostImgPreviewWrap');
+                const pImg = document.getElementById('wpostImgPreview');
+                const clearBtn = document.getElementById('wpostClearImgBtn');
+
+                if (input) {
+                    input.onchange = (e) => {
+                        const file = e.target.files && e.target.files[0];
+                        if (!file) return;
+                        const reader = new FileReader();
+                        reader.onload = (evt) => {
+                            selectedRealImageBase64 = evt.target.result;
+                            if (pImg) pImg.src = selectedRealImageBase64;
+                            if (pWrap) pWrap.style.display = 'block';
+                            if (clearBtn) clearBtn.style.display = 'inline-block';
+                        };
+                        reader.readAsDataURL(file);
+                    };
+                }
+                if (clearBtn) {
+                    clearBtn.onclick = () => {
+                        selectedRealImageBase64 = null;
+                        if (pWrap) pWrap.style.display = 'none';
+                        clearBtn.style.display = 'none';
+                        if (input) input.value = '';
+                    };
+                }
+            }, 30);
         }
     };
 
@@ -415,13 +460,12 @@
         }
     };
 
-    // ⚡️ 召唤 NPC 互动（0ms 即时显示胶囊，绝不假死）
+    // ⚡️ 召唤 NPC 互动
     window.triggerAiCommentForMoment = async function(momentId) {
         ensureFeedLoaded();
         const item = window.G.feed.find(f => f.id === momentId);
         if (!item) return;
 
-        // 优先合并系统联系人与朋友圈专属 NPC 池
         const pool = [];
         Object.values(window.G.npcs || {}).forEach(n => pool.push({ name: n.name, persona: n.persona }));
         (window.G.momentsNpcs || []).forEach(n => pool.push({ name: n.name, persona: n.persona }));
@@ -434,9 +478,7 @@
         const candidates = pool.filter(n => n.name !== item.author);
         const speaker = candidates.length ? candidates[Math.floor(Math.random() * candidates.length)] : pool[0];
 
-        // 0ms 瞬间挂载顶栏胶囊反馈！
         showMomentsGeneratingBanner(`「${speaker.name}」正在赶来评论...`);
-
         let picInfo = item.imageDesc ? ` [配图描述：${item.imageDesc}]` : '';
 
         try {
@@ -460,7 +502,7 @@
         }
     };
 
-    // ⚡️ 刷新好友朋友圈动态（使用固定头像，绝不随机变脸）
+    // ⚡️ 刷新好友朋友圈动态
     window.triggerGenerateFriendsFeed = async function() {
         ensureFeedLoaded();
         const pool = [];
@@ -472,7 +514,7 @@
         (window.G.momentsNpcs || []).forEach(n => pool.push({
             name: n.name,
             persona: n.persona,
-            avatar: n.avatar // 使用锁定的固定头像
+            avatar: n.avatar
         }));
 
         if (!pool.length) {
@@ -531,7 +573,7 @@
         }
     };
 
-    // 👤 朋友圈专属 NPC 池管理弹窗（支持查看与主动刷新指定头像）
+    // 👤 专属 NPC 管理
     window.openMomentsNpcPoolModal = function() {
         ensureFeedLoaded();
         const list = window.G.momentsNpcs || [];
