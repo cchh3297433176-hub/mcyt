@@ -3,11 +3,14 @@
  * 🌟 微信朋友圈动态流独立模块
  * 职责：
  * 1. 朋友圈动态列表构建（微信极简白灰视觉 · 无彩色Emoji）
- * 2. 拍立得拟真质感画片与真实图片双轨配图（支持本地相册图片与意象快照）
+ * 2. 完整恢复三种发动态配图模式：
+ *    - ① 纯文字代替图片（拍立得快照质感）
+ *    - ② 纯真实图片（从本地相册自选）
+ *    - ③ 真实图片 + 文字描绘（界面展示真实图片，AI感知仅提取文字描述以极度节省Token）
  * 3. 动态双轨持久化防丢恢复（后台重进不丢动态）
  * 4. 专属群演固定永久头像机制（除非手动刷新否则永久锁定）
  * 5. 点赞、评论、回复、召唤互动（0ms 即刻呼出生成胶囊，绝无卡顿延迟感）
- * 6. 动态转发至私聊/群聊功能（修复发送者身份为当前玩家）
+ * 6. 动态转发至私聊/群聊功能（正确标记为玩家发送）
  * 7. 仿微信全屏大图与快照详情预览
  */
 
@@ -109,14 +112,17 @@
                 commentsBoxHtml = `<div style="background:#f4f5f7;border-radius:4px;padding:6px 10px;margin-top:8px;">${comLines}</div>`;
             }
 
-            // 配图渲染：支持真实图片与拍立得质感画片
+            // 配图渲染：三种模式自适应呈现
             let mediaHtml = '';
             if (m.image) {
+                // 模式二与模式三：均在界面展示真实图片
                 mediaHtml = `
                 <div style="margin:8px 0;">
-                    <img src="${m.image}" onclick="window.openMomentImagePreview('${m.image}', '${escapeHtml(m.body || '')}')" style="max-width:210px;max-height:220px;border-radius:6px;object-fit:cover;display:block;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.1);" onerror="this.style.display='none';">
+                    <img src="${m.image}" onclick="window.openMomentImagePreview('${m.image}', '${escapeHtml(m.imageDesc || m.body || '')}')" style="max-width:210px;max-height:220px;border-radius:6px;object-fit:cover;display:block;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.1);" onerror="this.style.display='none';">
+                    ${m.imageDesc ? `<div style="font-size:11px;color:#888;margin-top:4px;line-height:1.3;">（意象描绘：${escapeHtml(m.imageDesc)}）</div>` : ''}
                 </div>`;
             } else if (m.imageDesc) {
+                // 模式一：纯文字代替图片（高质感拍立得画片）
                 mediaHtml = `
                 <div style="margin:8px 0;">
                     <div class="wechat-photo-card" onclick="window.openMomentArtCardPreview(${m.id})">
@@ -220,7 +226,7 @@
         }
     };
 
-    // 📤 转发动态至聊天窗口（确保以 player 身份发送，渲染在右侧）
+    // 📤 转发动态至聊天窗口
     window.shareMomentToChat = function(momentId) {
         ensureFeedLoaded();
         const item = window.G.feed.find(f => f.id === momentId);
@@ -228,7 +234,6 @@
 
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '我' };
         
-        // 过滤当前账号下的好友与群聊
         const candidateTargets = [];
         Object.values(window.G.npcs || {}).forEach(npc => {
             if (!npc.ownerAccountId || npc.ownerAccountId === curAcc.id || npc.ownerAccountId === 'all') {
@@ -270,7 +275,6 @@
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '我' };
         const commentsSummary = (item.comments || []).map(c => `${c.name}: ${c.text}`).join('；');
 
-        // 核心修复：必须同时标记 from: 'player' 和 isPlayer: true，保证渲染为自己发送
         const shareMsg = {
             from: 'player',
             isPlayer: true,
@@ -310,39 +314,77 @@
         }
     };
 
-    // 📷 发布动态弹窗（支持相册选真实图片或写意象快照）
+    // 📷 发布动态弹窗（恢复完整三种模式：文字代替 / 纯真实图片 / 真实图片+文字描述）
     window.openPostMomentModal = function() {
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { name: '我', avatar: 'assets/icons/chat.png' };
-        let selectedRealImageBase64 = null;
+        let selectedMode = 'text_only'; // 'text_only' | 'real_only' | 'real_with_desc'
+        let uploadedBase64 = null;
 
         if (typeof openWechatCleanModal === 'function') {
-            openWechatCleanModal('发朋友圈', `
+            openWechatCleanModal('发朋友圈动态', `
                 <div style="text-align:left;">
                     <div style="font-size:12px;color:#888;margin-bottom:6px;">以「${escapeHtml(curAcc.name)}」发布：</div>
-                    <textarea id="wpostMomentBody" rows="3" placeholder="分享此刻的MC日常或心情..." class="wechat-clean-input" style="line-height:1.45;resize:none;margin-bottom:10px;"></textarea>
+                    <textarea id="wpostMomentBody" rows="3" placeholder="分享此刻的MC日常或心情..." class="wechat-clean-input" style="line-height:1.45;resize:none;margin-bottom:12px;"></textarea>
 
-                    <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
-                        <label style="flex:1;border:1px dashed #07c160;background:#f6fbf8;color:#07c160;padding:8px;border-radius:6px;font-size:12px;font-weight:500;text-align:center;cursor:pointer;display:block;">
-                            <span>📷 从相册选择真实配图</span>
-                            <input type="file" id="wpostRealImageInput" accept="image/*" style="display:none;">
-                        </label>
-                        <button type="button" id="wpostClearImgBtn" style="display:none;border:none;background:#fee2e2;color:#ef4444;padding:8px 10px;border-radius:6px;font-size:12px;cursor:pointer;">清除</button>
+                    <div style="font-size:12px;color:#666;margin-bottom:6px;font-weight:600;">选择配图方式：</div>
+                    <div style="display:flex;gap:6px;margin-bottom:12px;">
+                        <button type="button" id="btnModeTextOnly" class="moment-mode-tab-btn active" onclick="window._switchMomentPostMode('text_only')">① 文字代替图片</button>
+                        <button type="button" id="btnModeRealOnly" class="moment-mode-tab-btn" onclick="window._switchMomentPostMode('real_only')">② 纯真实图片</button>
+                        <button type="button" id="btnModeRealDesc" class="moment-mode-tab-btn" onclick="window._switchMomentPostMode('real_with_desc')">③ 真实图+文字描述</button>
                     </div>
 
-                    <div id="wpostImgPreviewWrap" style="display:none;text-align:center;margin-bottom:10px;">
-                        <img id="wpostImgPreview" src="" style="max-height:100px;border-radius:6px;object-fit:cover;">
+                    <!-- 模式一：纯文字意象 -->
+                    <div id="panelTextOnly" style="display:block;">
+                        <div style="font-size:11.5px;color:#888;margin-bottom:4px;">画面意象描绘（免生图/极省Token）：</div>
+                        <input type="text" id="wpostDescOnlyInput" placeholder="例如：落日余晖下的小麦农场、手持下界合金剑..." class="wechat-clean-input">
                     </div>
 
-                    <div style="font-size:12px;color:#666;margin-bottom:4px;">或填写快照意象描绘（免图库）：</div>
-                    <input type="text" id="wpostMomentImgDesc" placeholder="例如：落日余晖下的小麦农场、手持下界合金剑..." class="wechat-clean-input">
+                    <!-- 模式二与三共用图片选择 -->
+                    <div id="panelRealImg" style="display:none;">
+                        <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
+                            <label style="flex:1;border:1px dashed #07c160;background:#f6fbf8;color:#07c160;padding:8px;border-radius:6px;font-size:12px;font-weight:500;text-align:center;cursor:pointer;display:block;">
+                                <span>📷 从相册选择真实配图</span>
+                                <input type="file" id="wpostRealFileInput" accept="image/*" style="display:none;">
+                            </label>
+                            <button type="button" id="wpostClearFileBtn" style="display:none;border:none;background:#fee2e2;color:#ef4444;padding:8px 10px;border-radius:6px;font-size:12px;cursor:pointer;">清除</button>
+                        </div>
+                        <div id="wpostRealPreviewWrap" style="display:none;text-align:center;margin-bottom:8px;">
+                            <img id="wpostRealPreview" src="" style="max-height:100px;border-radius:6px;object-fit:cover;">
+                        </div>
+                    </div>
+
+                    <!-- 模式三独有文字描绘 -->
+                    <div id="panelRealDescExtra" style="display:none;">
+                        <div style="font-size:11.5px;color:#888;margin-bottom:4px;">图片内容文字描述（给AI看以节省Token）：</div>
+                        <input type="text" id="wpostExtraDescInput" placeholder="向AI解释图片里的内容（AI不消耗图片Token）" class="wechat-clean-input">
+                    </div>
                 </div>
             `, () => {
                 const body = document.getElementById('wpostMomentBody').value.trim();
-                const imgDesc = document.getElementById('wpostMomentImgDesc').value.trim();
-
                 if (!body) {
                     if (typeof showToast === 'function') showToast('请填写动态正文', 'error');
                     return false;
+                }
+
+                let finalImg = null;
+                let finalDesc = null;
+                let modeType = selectedMode;
+
+                if (selectedMode === 'text_only') {
+                    finalDesc = document.getElementById('wpostDescOnlyInput').value.trim() || null;
+                } else if (selectedMode === 'real_only') {
+                    if (!uploadedBase64) {
+                        if (typeof showToast === 'function') showToast('请从相册选择图片', 'error');
+                        return false;
+                    }
+                    finalImg = uploadedBase64;
+                } else if (selectedMode === 'real_with_desc') {
+                    if (!uploadedBase64) {
+                        if (typeof showToast === 'function') showToast('请从相册选择图片', 'error');
+                        return false;
+                    }
+                    finalImg = uploadedBase64;
+                    finalDesc = document.getElementById('wpostExtraDescInput').value.trim() || 'MC精彩瞬间';
                 }
 
                 ensureFeedLoaded();
@@ -352,29 +394,63 @@
                     avatar: curAcc.avatar,
                     isPlayer: true,
                     body,
-                    imageMode: selectedRealImageBase64 ? 'real' : (imgDesc ? 'photo_art' : 'none'),
-                    image: selectedRealImageBase64 || null,
-                    imageDesc: (!selectedRealImageBase64 && imgDesc) ? imgDesc : null,
+                    imageMode: modeType,
+                    image: finalImg,
+                    imageDesc: finalDesc,
                     time: '刚刚',
                     liked: false,
                     likes: 0,
                     comments: []
                 });
 
-                if (typeof syncMomentsFeedToLocalBackup === 'function') {
-                    syncMomentsFeedToLocalBackup();
-                }
-
+                if (typeof syncMomentsFeedToLocalBackup === 'function') syncMomentsFeedToLocalBackup();
                 if (typeof renderChatApp === 'function') renderChatApp();
                 if (typeof showToast === 'function') showToast('动态已发布', 'success', 1200);
                 if (typeof autoSaveGame === 'function') autoSaveGame();
             });
 
+            // 模式切换
+            window._switchMomentPostMode = function(mode) {
+                selectedMode = mode;
+                const b1 = document.getElementById('btnModeTextOnly');
+                const b2 = document.getElementById('btnModeRealOnly');
+                const b3 = document.getElementById('btnModeRealDesc');
+                const pText = document.getElementById('panelTextOnly');
+                const pReal = document.getElementById('panelRealImg');
+                const pExtra = document.getElementById('panelRealDescExtra');
+
+                [b1, b2, b3].forEach(b => {
+                    if (b) {
+                        b.style.background = '#f0f0f0';
+                        b.style.color = '#555';
+                    }
+                });
+
+                if (mode === 'text_only') {
+                    if (b1) { b1.style.background = '#07c160'; b1.style.color = '#fff'; }
+                    if (pText) pText.style.display = 'block';
+                    if (pReal) pReal.style.display = 'none';
+                    if (pExtra) pExtra.style.display = 'none';
+                } else if (mode === 'real_only') {
+                    if (b2) { b2.style.background = '#07c160'; b2.style.color = '#fff'; }
+                    if (pText) pText.style.display = 'none';
+                    if (pReal) pReal.style.display = 'block';
+                    if (pExtra) pExtra.style.display = 'none';
+                } else if (mode === 'real_with_desc') {
+                    if (b3) { b3.style.background = '#07c160'; b3.style.color = '#fff'; }
+                    if (pText) pText.style.display = 'none';
+                    if (pReal) pReal.style.display = 'block';
+                    if (pExtra) pExtra.style.display = 'block';
+                }
+            };
+
             setTimeout(() => {
-                const input = document.getElementById('wpostRealImageInput');
-                const pWrap = document.getElementById('wpostImgPreviewWrap');
-                const pImg = document.getElementById('wpostImgPreview');
-                const clearBtn = document.getElementById('wpostClearImgBtn');
+                window._switchMomentPostMode('text_only');
+
+                const input = document.getElementById('wpostRealFileInput');
+                const pWrap = document.getElementById('wpostRealPreviewWrap');
+                const pImg = document.getElementById('wpostRealPreview');
+                const clearBtn = document.getElementById('wpostClearFileBtn');
 
                 if (input) {
                     input.onchange = (e) => {
@@ -382,8 +458,8 @@
                         if (!file) return;
                         const reader = new FileReader();
                         reader.onload = (evt) => {
-                            selectedRealImageBase64 = evt.target.result;
-                            if (pImg) pImg.src = selectedRealImageBase64;
+                            uploadedBase64 = evt.target.result;
+                            if (pImg) pImg.src = uploadedBase64;
                             if (pWrap) pWrap.style.display = 'block';
                             if (clearBtn) clearBtn.style.display = 'inline-block';
                         };
@@ -392,7 +468,7 @@
                 }
                 if (clearBtn) {
                     clearBtn.onclick = () => {
-                        selectedRealImageBase64 = null;
+                        uploadedBase64 = null;
                         if (pWrap) pWrap.style.display = 'none';
                         clearBtn.style.display = 'none';
                         if (input) input.value = '';
@@ -479,7 +555,8 @@
         const speaker = candidates.length ? candidates[Math.floor(Math.random() * candidates.length)] : pool[0];
 
         showMomentsGeneratingBanner(`「${speaker.name}」正在赶来评论...`);
-        let picInfo = item.imageDesc ? ` [配图描述：${item.imageDesc}]` : '';
+        // AI 感知仅提取文字描绘，绝不传长 Base64 图片以节省 Token
+        let picInfo = item.imageDesc ? ` [配图描述：${item.imageDesc}]` : (item.image ? ` [好友发了张自拍/游戏截图]` : '');
 
         try {
             const sys = `你正在扮演MC好友「${speaker.name}」（性格/风格：${speaker.persona || '朋友'}）。好友「${item.author}」发了一条朋友圈：“${item.body}”${picInfo}。请写一句接地气的微信朋友圈评论（20字内），自然吐槽、开玩笑或点赞，严禁任何括号动作描写，句末绝不加句号。`;

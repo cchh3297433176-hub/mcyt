@@ -1,6 +1,6 @@
 /**
  * js/apps/chat/chat-app.js
- * 💬 微信独立主应用（仿微信白灰绿质感 · 双语即时翻译 · 拟真语音条 · 点击翻转卡片/快照框 · 真表情调用 · 撤回单次偷窥脱敏 · 长按引用与编辑 · Token统计 · 动态转发与名片推荐 · 加号5项完整功能 · 大小号好友物理隔离）
+ * 💬 微信独立主应用（仿微信白灰绿质感 · 双语即时翻译 · 拟真语音条 · 三种发图模式完整恢复 · 经典翻转卡片/微信框 · 真表情调用 · 撤回单次偷窥脱敏 · 长按引用与编辑 · Token统计 · 动态转发与名片推荐 · 加号5项完整功能 · 大小号好友物理隔离）
  */
 
 (function() {
@@ -732,7 +732,7 @@
         box.style.display = (box.style.display === 'none' || !box.style.display) ? 'block' : 'none';
     };
 
-    // ⚡️ 点击翻转卡片：切换正面图片与背面描述
+    // ⚡️ 点击翻转卡片：切换正面图片与背面描绘
     window.toggleCardFlipDirect = function(msgId) {
         const card = document.getElementById(`flipCard_${msgId}`);
         if (!card) return;
@@ -876,7 +876,7 @@
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
                 </div>`;
             } else if (msg.type === 'image_flip' || (isSelf && msg.imageDesc && !msg.imageUrl)) {
-                // 玩家经典点击翻转卡片：正面拍立得缩略，点击翻转显示背面文字描绘
+                // 玩家模式一：经典点击翻转卡片
                 const desc = msg.imageDesc || msg.text || '画片内容';
                 const frontImg = msg.imageUrl || 'assets/icons/chat.png';
                 messagesHtml += `
@@ -888,7 +888,7 @@
                             <div class="flip-inner" style="width:190px;height:120px;position:relative;transition:transform 0.4s;transform-style:preserve-3d;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
                                 <div class="flip-front" style="position:absolute;inset:0;backface-visibility:hidden;background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;">
                                     <img src="${frontImg}" style="width:46px;height:46px;object-fit:contain;margin-bottom:6px;opacity:0.85;">
-                                    <div style="font-size:11px;color:#07c160;font-weight:600;">[拍立得照片 · 点击翻转]</div>
+                                    <div style="font-size:11px;color:#07c160;font-weight:600;">[拍立得卡片 · 点击翻转]</div>
                                 </div>
                                 <div class="flip-back" style="position:absolute;inset:0;backface-visibility:hidden;background:linear-gradient(135deg, #1e293b, #334155);color:#fff;border-radius:8px;padding:12px;display:flex;align-items:center;justify-content:center;transform:rotateY(180deg);font-size:12.5px;line-height:1.45;text-align:center;">
                                     “${escapeHtml(desc)}”
@@ -900,7 +900,7 @@
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
                 </div>`;
             } else if (!isSelf && (msg.type === 'image_text_only' || msg.imageDesc)) {
-                // 角色发出的图片：微信质感文字描述框，不用翻转，里面直接清晰陈列内容
+                // NPC发出的照片：微信质感文字描述框
                 const desc = msg.imageDesc || msg.text || '照片内容';
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:flex-start;margin-bottom:12px;align-items:flex-start;">
@@ -915,15 +915,17 @@
                     </div>
                 </div>`;
             } else if (msg.type === 'image' || msg.imageUrl) {
+                // 模式二与模式三：均以真实图片呈现，若包含文字描绘则附带备注
                 const imgSrc = msg.imageUrl || msg.url || 'assets/icons/chat.png';
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
                     ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(npc, 38)}</div>` : ''}
                     <div style="max-width:65%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                         ${quoteHtml}
-                        <div style="background:#fff;padding:3px;border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,0.06);cursor:pointer;" onclick="window.openMomentImagePreview('${imgSrc}', '')">
+                        <div style="background:#fff;padding:3px;border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,0.06);cursor:pointer;" onclick="window.openMomentImagePreview('${imgSrc}', '${escapeHtml(msg.imageDesc || '')}')">
                             <img src="${imgSrc}" style="max-width:180px;max-height:220px;border-radius:4px;object-fit:cover;display:block;" />
                         </div>
+                        ${msg.imageDesc ? `<div style="font-size:11px;color:#888;margin-top:2px;background:#f9f9f9;padding:2px 6px;border-radius:3px;">描绘: ${escapeHtml(msg.imageDesc)}</div>` : ''}
                         <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
                     </div>
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
@@ -1308,7 +1310,7 @@
         });
     };
 
-    // 🤖 单人私聊 AI 回复触发
+    // 🤖 单人私聊 AI 回复触发（将图片文字描述喂给AI，节省Token且杜绝无多模态视觉报错）
     window.triggerAIReplyForSingle = async function(npcId) {
         const npc = window.G.npcs[npcId];
         if (!npc) return;
@@ -1349,7 +1351,9 @@
             if (m.type === 'contact_card') return `${speaker} [向你推荐了名片]: ${m.contactCard?.name}（人设：${m.contactCard?.persona || 'MC同伴'}，身份：${m.contactCard?.isAlt ? '对方的小号' : '新朋友'}）`;
             if (m.type === 'moment_notice') return `[系统提醒]: ${m.author} 刚发了一条新朋友圈动态`;
             if (m.originalText) return `${speaker}: ${m.originalText} (译: ${m.text || ''})`;
-            if (m.type === 'image_flip' || m.type === 'image_text_only' || m.imageDesc) return `${speaker} [发了图片描述]: ${m.imageDesc || m.text || ''}`;
+            // 核心设计：无论哪种图片，只要有文字描绘就只将文字描绘传给AI，省Token且支持任意纯文本大模型！
+            if (m.imageDesc) return `${speaker} [发了张照片，画面描绘]: ${m.imageDesc}`;
+            if (m.type === 'image' || m.imageUrl) return `${speaker} [发了张自拍/游戏截图]`;
             return `${speaker}: ${m.text || ''}`;
         }).join('\n');
 
@@ -1586,7 +1590,7 @@
         });
     };
 
-    // 完整的 5 大功能加号抽屉面板（发送图片、推荐名片、Token统计、共创视频、连麦开播）
+    // 完整的 5 大功能加号抽屉面板
     function buildChatPlusDrawerHTML(type, id) {
         return `
         <div id="chatPlusDrawer" style="background:#f7f7f7;border-top:0.5px solid #dcdcdc;flex-shrink:0;animation:wechatSlideUp 0.18s ease-out;">
@@ -1633,12 +1637,11 @@
         else if (typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
     };
 
-    // 📇 推荐名片选择弹窗（透传各种存储源，百分之百识别大号与小号）
+    // 📇 推荐名片选择弹窗
     window.openRecommendContactModal = function(type, id) {
         window._plusDrawerOpen = false;
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '我' };
         
-        // 汇集所有小号/大号身份列表
         let allAccounts = [];
         if (typeof window.getWechatAccountsList === 'function') {
             allAccounts = window.getWechatAccountsList();
@@ -1651,7 +1654,6 @@
             } catch (_) {}
         }
         
-        // 确保主号在大号池中存在
         const mainAccName = window.G.player?.ytName || '主号';
         const hasMainInList = allAccounts.some(a => a.id === 'main');
         if (!hasMainInList) {
@@ -1663,14 +1665,12 @@
             });
         }
 
-        // 1. 当前账号下的好友列表（排除当前正在聊天的对象）
         const candidateFriends = Object.values(window.G.npcs || {}).filter(n => {
             if (n.id === id) return false;
             if (!n.ownerAccountId || n.ownerAccountId === curAcc.id || n.ownerAccountId === 'all') return true;
             return false;
         });
 
-        // 2. 属于你自己的其他账号（大号看小号，小号看大号及其他小号）
         const otherMyAccounts = allAccounts.filter(a => a.id !== curAcc.id);
 
         let friendsHtml = candidateFriends.map(n => `
@@ -1785,48 +1785,56 @@
         `, () => {});
     };
 
-    // 📷 聊天发图片（支持相册选真实图片与点击翻转意象卡片双轨并行）
+    // 📷 聊天发图片（恢复完整的 3 种模式）
     window.openChatSendImageModal = function(type, id) {
-        let selectedBase64Img = null;
+        let chatSendMode = 'text_only'; // 'text_only' | 'real_only' | 'real_with_desc'
+        let uploadedChatImg = null;
 
-        window.openWechatCleanModal('发送图片或翻转画片', `
+        window.openWechatCleanModal('发送图片消息', `
             <div style="text-align:left;">
-                <div style="margin-bottom:10px;">
-                    <label style="border:1px dashed #07c160;background:#f6fbf8;color:#07c160;padding:10px;border-radius:6px;font-size:13px;font-weight:500;text-align:center;cursor:pointer;display:block;">
-                        <span>📷 从手机相册选择真实图片</span>
-                        <input type="file" id="wchatRealFileInput" accept="image/*" style="display:none;">
-                    </label>
-                    <div id="wchatRealPreviewWrap" style="display:none;text-align:center;margin-top:8px;">
-                        <img id="wchatRealPreview" src="" style="max-height:100px;border-radius:6px;object-fit:cover;">
+                <div style="font-size:12px;color:#666;margin-bottom:6px;font-weight:600;">选择发图模式：</div>
+                <div style="display:flex;gap:6px;margin-bottom:12px;">
+                    <button type="button" id="btnChatModeText" class="moment-mode-tab-btn active" onclick="window._switchChatSendMode('text_only')">① 文字代替图片</button>
+                    <button type="button" id="btnChatModeReal" class="moment-mode-tab-btn" onclick="window._switchChatSendMode('real_only')">② 纯真实图片</button>
+                    <button type="button" id="btnChatModeBoth" class="moment-mode-tab-btn" onclick="window._switchChatSendMode('real_with_desc')">③ 真实图+文字描绘</button>
+                </div>
+
+                <!-- 模式一：文字代替图片（翻转卡片） -->
+                <div id="panelChatTextOnly" style="display:block;">
+                    <div style="font-size:11.5px;color:#888;margin-bottom:4px;">填写卡片背面的画面描绘（点击卡片翻转查看）：</div>
+                    <textarea id="wchatFlipDescInput" rows="3" placeholder="例如：我在平原建造好的两层原木别墅、箱子里的整整一组下界合金锭..." class="wechat-clean-input" style="line-height:1.4;resize:none;"></textarea>
+                </div>
+
+                <!-- 模式二与模式三：图片选择器 -->
+                <div id="panelChatRealImg" style="display:none;">
+                    <div style="margin-bottom:8px;">
+                        <label style="border:1px dashed #07c160;background:#f6fbf8;color:#07c160;padding:10px;border-radius:6px;font-size:13px;font-weight:500;text-align:center;cursor:pointer;display:block;">
+                            <span>📷 从手机相册选择图片</span>
+                            <input type="file" id="wchatFileInput" accept="image/*" style="display:none;">
+                        </label>
+                        <div id="wchatFilePreviewWrap" style="display:none;text-align:center;margin-top:8px;">
+                            <img id="wchatFilePreview" src="" style="max-height:100px;border-radius:6px;object-fit:cover;">
+                        </div>
                     </div>
                 </div>
 
-                <div style="font-size:12px;color:#666;margin-bottom:4px;">或发送<b>经典点击翻转卡片</b>（背面含文字画面描绘）：</div>
-                <textarea id="wchatPicDescInput" rows="3" placeholder="填写卡片背面的画面描绘（例如：我刚建造好的两层原木别墅、箱子里的整整一组下界合金锭...）" class="wechat-clean-input" style="line-height:1.4;resize:none;"></textarea>
+                <!-- 模式三：文字描绘补充 -->
+                <div id="panelChatExtraDesc" style="display:none;">
+                    <div style="font-size:11.5px;color:#888;margin-bottom:4px;">向对方/AI解释图片内容（AI不看真实图片，极度节省Token）：</div>
+                    <textarea id="wchatRealDescInput" rows="2" placeholder="向AI描述图片中的关键画面（如：我的血量只剩半颗心，正在被苦力怕追赶）" class="wechat-clean-input" style="line-height:1.4;resize:none;"></textarea>
+                </div>
             </div>
         `, () => {
-            const desc = document.getElementById('wchatPicDescInput').value.trim();
-            if (!selectedBase64Img && !desc) {
-                if (typeof showToast === 'function') showToast('请选择相册图片或填写卡片描绘', 'error');
-                return false;
-            }
-
             const time = new Date().toLocaleTimeString().slice(0, 5);
             const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '我' };
-
             let msgObj = null;
-            if (selectedBase64Img) {
-                msgObj = {
-                    from: 'player',
-                    isPlayer: true,
-                    type: 'image',
-                    imageUrl: selectedBase64Img,
-                    text: '[图片]',
-                    senderName: curAcc.name,
-                    time,
-                    quote: window._activeQuoteMessage ? Object.assign({}, window._activeQuoteMessage) : null
-                };
-            } else {
+
+            if (chatSendMode === 'text_only') {
+                const desc = document.getElementById('wchatFlipDescInput').value.trim();
+                if (!desc) {
+                    if (typeof showToast === 'function') showToast('请填写画面描绘', 'error');
+                    return false;
+                }
                 msgObj = {
                     from: 'player',
                     isPlayer: true,
@@ -1834,6 +1842,39 @@
                     imageDesc: desc,
                     imageUrl: 'assets/icons/chat.png',
                     text: `[图片描述: ${desc}]`,
+                    senderName: curAcc.name,
+                    time,
+                    quote: window._activeQuoteMessage ? Object.assign({}, window._activeQuoteMessage) : null
+                };
+            } else if (chatSendMode === 'real_only') {
+                if (!uploadedChatImg) {
+                    if (typeof showToast === 'function') showToast('请从相册选择图片', 'error');
+                    return false;
+                }
+                msgObj = {
+                    from: 'player',
+                    isPlayer: true,
+                    type: 'image',
+                    imageUrl: uploadedChatImg,
+                    imageDesc: null,
+                    text: '[图片]',
+                    senderName: curAcc.name,
+                    time,
+                    quote: window._activeQuoteMessage ? Object.assign({}, window._activeQuoteMessage) : null
+                };
+            } else if (chatSendMode === 'real_with_desc') {
+                if (!uploadedChatImg) {
+                    if (typeof showToast === 'function') showToast('请从相册选择图片', 'error');
+                    return false;
+                }
+                const desc = document.getElementById('wchatRealDescInput').value.trim() || 'MC截图';
+                msgObj = {
+                    from: 'player',
+                    isPlayer: true,
+                    type: 'image',
+                    imageUrl: uploadedChatImg,
+                    imageDesc: desc,
+                    text: `[图片] ${desc}`,
                     senderName: curAcc.name,
                     time,
                     quote: window._activeQuoteMessage ? Object.assign({}, window._activeQuoteMessage) : null
@@ -1855,18 +1896,54 @@
             if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
         });
 
+        window._switchChatSendMode = function(mode) {
+            chatSendMode = mode;
+            const b1 = document.getElementById('btnChatModeText');
+            const b2 = document.getElementById('btnChatModeReal');
+            const b3 = document.getElementById('btnChatModeBoth');
+            const pText = document.getElementById('panelChatTextOnly');
+            const pReal = document.getElementById('panelChatRealImg');
+            const pDesc = document.getElementById('panelChatExtraDesc');
+
+            [b1, b2, b3].forEach(b => {
+                if (b) {
+                    b.style.background = '#f0f0f0';
+                    b.style.color = '#555';
+                }
+            });
+
+            if (mode === 'text_only') {
+                if (b1) { b1.style.background = '#07c160'; b1.style.color = '#fff'; }
+                if (pText) pText.style.display = 'block';
+                if (pReal) pReal.style.display = 'none';
+                if (pDesc) pDesc.style.display = 'none';
+            } else if (mode === 'real_only') {
+                if (b2) { b2.style.background = '#07c160'; b2.style.color = '#fff'; }
+                if (pText) pText.style.display = 'none';
+                if (pReal) pReal.style.display = 'block';
+                if (pDesc) pDesc.style.display = 'none';
+            } else if (mode === 'real_with_desc') {
+                if (b3) { b3.style.background = '#07c160'; b3.style.color = '#fff'; }
+                if (pText) pText.style.display = 'none';
+                if (pReal) pReal.style.display = 'block';
+                if (pDesc) pDesc.style.display = 'block';
+            }
+        };
+
         setTimeout(() => {
-            const input = document.getElementById('wchatRealFileInput');
-            const pWrap = document.getElementById('wchatRealPreviewWrap');
-            const pImg = document.getElementById('wchatRealPreview');
+            window._switchChatSendMode('text_only');
+
+            const input = document.getElementById('wchatFileInput');
+            const pWrap = document.getElementById('wchatFilePreviewWrap');
+            const pImg = document.getElementById('wchatFilePreview');
             if (input) {
                 input.onchange = (e) => {
                     const file = e.target.files && e.target.files[0];
                     if (!file) return;
                     const reader = new FileReader();
                     reader.onload = (evt) => {
-                        selectedBase64Img = evt.target.result;
-                        if (pImg) pImg.src = selectedBase64Img;
+                        uploadedChatImg = evt.target.result;
+                        if (pImg) pImg.src = uploadedChatImg;
                         if (pWrap) pWrap.style.display = 'block';
                     };
                     reader.readAsDataURL(file);
