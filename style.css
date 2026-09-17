@@ -372,12 +372,6 @@ body {
 
 /* ============================================================
    ⚠️ 绝对防回归铁律【严禁擅改】：P2 大透气感间距核心控制区！
-   此处的间距经过高精度平衡计算：
-   1. 顶部预留 slot 让塔罗组件保持适度下沉，不顶头。
-   2. 塔罗组件 margin-bottom: 20px，保证塔罗与便签之间留出宽阔大空隙！
-   3. 便签日历 margin-bottom: 22px，保证便签与 App 图标之间留出宽阔大空隙！
-   4. 图标紧凑防护，杜绝第二排文字切断！
-   后来的 AI 或维护者严禁将这些 margin-bottom 缩减，否则立即重现拥挤！
    ============================================================ */
 .desktop-future-slot {
     flex: 0 0 auto;
@@ -390,13 +384,13 @@ body {
     max-height: 36px;
 }
 
-/* 🔮 1. 桌面复古星象塔罗大组件：轻巧高度 + 20px 宽绰底距 */
+/* 🔮 1. 桌面复古星象塔罗大组件 */
 .desktop-tarot-slot {
     width: 100%;
     height: 148px;
     min-height: 148px;
     max-height: 148px;
-    margin-bottom: 20px; /* 🌟 核心透气间距：拉开塔罗与便签之间的距离！ */
+    margin-bottom: 20px;
     flex-shrink: 0;
     position: relative;
     border-radius: 18px;
@@ -420,7 +414,6 @@ body {
     z-index: 1;
 }
 
-/* 待机状态：同比例居中重叠 */
 .tarot-stage-idle {
     position: absolute;
     inset: 0;
@@ -454,7 +447,6 @@ body {
 .tarot-spinning .tarot-ring-galaxy { animation: tarotRingSpin 1.8s cubic-bezier(0.35, 0, 0.25, 1) forwards; }
 .tarot-spinning .tarot-sun-spark { animation: tarotSunDoubleSpin 1.8s cubic-bezier(0.35, 0, 0.25, 1) forwards; }
 
-/* 抽卡结果阶段 */
 .tarot-stage-result {
     position: absolute;
     inset: 0;
@@ -507,14 +499,14 @@ body {
 }
 .tarot-gold-btn:active { transform: scale(0.96); background: #140c06; border-color: #ffd978; }
 
-/* 📝 2. 日历与待办组件挂载插槽：精致微缩 + 22px 宽绰底距 */
+/* 📝 2. 日历与待办组件挂载插槽 */
 .desktop-widgets-slot {
     display: flex;
     gap: 8px;
     width: 100%;
     min-height: 124px;
     height: 124px;
-    margin-bottom: 22px; /* 🌟 核心透气间距：拉开便签与 App 图标之间的距离！ */
+    margin-bottom: 22px;
     flex-shrink: 0;
     align-items: stretch;
     position: relative;
@@ -622,7 +614,7 @@ body {
 }
 .todo-item-row.completed .todo-item-text { color: #a49c95; text-decoration: line-through; }
 
-/* 📱 3. 应用网格：独立紧凑，底部完全不切字 */
+/* 📱 3. 应用网格 */
 .app-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -719,7 +711,7 @@ body {
 }
 
 /* ============================================================ */
-/* ✦ 星轨启示专属黑金神秘弹窗规范（彻底绝杀粉白弹窗） ✦ */
+/* ✦ 星轨启示专属黑金神秘弹窗规范 ✦ */
 /* ============================================================ */
 .modal-box.tarot-mystic-modal-box {
     background: #0f1118 !important;
@@ -782,7 +774,7 @@ body {
 }
 
 /* ============================================================
-   ⚠️防回归标记：设置类App通用组件样式（卡片/按钮/下拉菜单等）
+   ⚠️防回归标记：设置类App通用组件样式
    ============================================================ */
 .theme-setting-card {
     background: var(--card2);
