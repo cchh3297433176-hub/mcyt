@@ -2,11 +2,11 @@
  * js/apps/chat/chat-profile.js
  * 👤 微信身份与人设中枢模块
  * 职责：
- * 1. 玩家三维人设档案（线上主播 / 线下现实作息 / MC游戏皮肤），默认纯净空白
- * 2. 预留 assets/avatars/ 头像子目录架构，支持本地相册选取头像与图库随机
+ * 1. 玩家三维人设档案（线上主播 / 线下现实作息 / MC游戏皮肤）与个性签名
+ * 2. assets/avatars/ 头像子目录架构，支持本地相册选取头像与图库随机
  * 3. 国家与地区实时检索筛选器、时区偏移换算、中国真实时间跟随询问
- * 4. 账号多马甲管理：小号独立空白通讯录、小号注册/改名/换头像
- * 5. 专属双轨防丢持久化引擎（彻底解决冷启动小号与人设丢失问题）
+ * 4. 账号多马甲管理：小号独立通讯录、小号注册/改名/个性签名/换头像
+ * 5. 专属双轨防丢持久化引擎
  */
 
 (function() {
@@ -45,6 +45,7 @@
                     offlinePersona: window.G.player.offlinePersona || '',
                     onlinePersona: window.G.player.onlinePersona || '',
                     gameSkinPersona: window.G.player.gameSkinPersona || '',
+                    signature: window.G.player.signature || '',
                     region: window.G.player.region || '中国 (China)',
                     regionCode: window.G.player.regionCode || 'CN',
                     avatar: window.G.player.avatar || ''
@@ -58,7 +59,7 @@
         if (!window.G) window.G = {};
         if (!window.G.player) window.G.player = {};
 
-        // 1. 恢复三维人设与地区（默认全部为空字符串，绝不强加默认人设）
+        // 1. 恢复三维人设、个性签名与地区
         try {
             const rawPersonas = localStorage.getItem('mcyt_wechat_player_personas');
             if (rawPersonas) {
@@ -66,6 +67,7 @@
                 if (pData.offlinePersona !== undefined) window.G.player.offlinePersona = pData.offlinePersona;
                 if (pData.onlinePersona !== undefined) window.G.player.onlinePersona = pData.onlinePersona;
                 if (pData.gameSkinPersona !== undefined) window.G.player.gameSkinPersona = pData.gameSkinPersona;
+                if (pData.signature !== undefined) window.G.player.signature = pData.signature;
                 if (pData.region) window.G.player.region = pData.region;
                 if (pData.regionCode) window.G.player.regionCode = pData.regionCode;
                 if (pData.avatar) window.G.player.avatar = pData.avatar;
@@ -75,6 +77,7 @@
         if (window.G.player.offlinePersona === undefined) window.G.player.offlinePersona = '';
         if (window.G.player.onlinePersona === undefined) window.G.player.onlinePersona = '';
         if (window.G.player.gameSkinPersona === undefined) window.G.player.gameSkinPersona = '';
+        if (window.G.player.signature === undefined) window.G.player.signature = '';
         if (!window.G.player.region) window.G.player.region = '中国 (China)';
 
         // 2. 恢复小号列表
@@ -111,6 +114,7 @@
                 isAlt: false,
                 name: window.G.player?.ytName || '主播大号',
                 avatar: window.G.player?.avatar || (typeof getRandomAvatar === 'function' ? getRandomAvatar() : 'assets/icons/chat.png'),
+                signature: window.G.player?.signature || '',
                 bio: '官方主账号',
                 region: window.G.player?.region || '中国 (China)'
             };
@@ -122,11 +126,20 @@
                 isAlt: true,
                 name: found.name,
                 avatar: found.avatar || (typeof getRandomAvatar === 'function' ? getRandomAvatar() : 'assets/icons/chat.png'),
-                bio: found.bio || '私密小号',
+                signature: found.signature || '',
+                bio: found.bio || '小号',
                 region: found.region || '中国 (China)'
             };
         }
-        return { id: 'main', isAlt: false, name: window.G.player?.ytName || '主播大号', avatar: window.G.player?.avatar || 'assets/icons/chat.png', bio: '', region: '中国 (China)' };
+        return {
+            id: 'main',
+            isAlt: false,
+            name: window.G.player?.ytName || '主播大号',
+            avatar: window.G.player?.avatar || 'assets/icons/chat.png',
+            signature: '',
+            bio: '',
+            region: '中国 (China)'
+        };
     }
     window.getActiveAccountInfo = getActiveAccountInfo;
 
@@ -142,83 +155,101 @@
         const alts = window.G.altAccounts || [];
         alts.forEach(alt => {
             const isUsing = window.G.currentAccountId === alt.id;
+            const altSig = alt.signature ? escapeHtml(alt.signature) : '未设置个性签名';
             altsListHtml += `
             <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#f9fafb;border-radius:8px;border:0.5px solid #e5e7eb;margin-bottom:6px;">
-                <div style="display:flex;align-items:center;gap:10px;">
-                    <img src="${alt.avatar || 'assets/icons/chat.png'}" style="width:36px;height:36px;border-radius:6px;object-fit:cover;" onerror="this.src='assets/icons/chat.png';" />
-                    <div>
-                        <div style="font-size:13px;font-weight:600;color:#1f2937;">${escapeHtml(alt.name)} <span style="font-size:10px;background:#e5e7eb;padding:1px 4px;border-radius:3px;">小号</span></div>
-                        <div style="font-size:11px;color:#6b7280;">地区：${escapeHtml(alt.region || '中国 (China)')}</div>
+                <div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1;">
+                    <img src="${alt.avatar || 'assets/icons/chat.png'}" style="width:38px;height:38px;border-radius:6px;object-fit:cover;flex-shrink:0;" onerror="this.src='assets/icons/chat.png';" />
+                    <div style="min-width:0;flex:1;">
+                        <div style="font-size:13px;font-weight:600;color:#1f2937;display:flex;align-items:center;gap:4px;">
+                            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px;">${escapeHtml(alt.name)}</span>
+                            <span style="font-size:10px;background:#e5e7eb;color:#4b5563;padding:1px 4px;border-radius:3px;font-weight:normal;">小号</span>
+                        </div>
+                        <div style="font-size:11px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px;">
+                            ${altSig}
+                        </div>
                     </div>
                 </div>
-                <div style="display:flex;gap:6px;align-items:center;">
-                    <button type="button" onclick="window.openChangeAvatarOptionsModal('${alt.id}')" style="border:1px solid #dcdcdc;background:#fff;color:#2563eb;padding:3px 7px;border-radius:4px;font-size:11px;cursor:pointer;">换头像</button>
-                    ${isUsing ? '<span style="font-size:11px;color:#059669;font-weight:600;">使用中</span>' : `<button type="button" onclick="window.switchToAccount('${alt.id}')" style="border:none;background:#07c160;color:#fff;padding:4px 9px;border-radius:4px;font-size:11px;cursor:pointer;">使用</button>`}
-                    <button type="button" onclick="window.deleteAltAccountDirect('${alt.id}')" style="border:none;background:none;color:#ef4444;font-size:13px;cursor:pointer;padding:2px;">✕</button>
+                <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+                    <button type="button" onclick="window.openChangeAvatarOptionsModal('${alt.id}')" style="border:1px solid #dcdcdc;background:#fff;color:#576b95;padding:3px 7px;border-radius:4px;font-size:11px;cursor:pointer;">换头像</button>
+                    <button type="button" onclick="window.openChangeSignatureModal('${alt.id}')" style="border:1px solid #dcdcdc;background:#fff;color:#576b95;padding:3px 7px;border-radius:4px;font-size:11px;cursor:pointer;">签名</button>
+                    ${isUsing ? '<span style="font-size:11px;color:#07c160;font-weight:600;padding:0 4px;">使用中</span>' : `<button type="button" onclick="window.switchToAccount('${alt.id}')" style="border:none;background:#07c160;color:#fff;padding:4px 9px;border-radius:4px;font-size:11px;cursor:pointer;">使用</button>`}
+                    <button type="button" onclick="window.confirmDeleteAltAccount('${alt.id}', '${escapeHtml(alt.name)}')" style="border:none;background:none;color:#fa5151;font-size:14px;cursor:pointer;padding:2px 4px;">✕</button>
                 </div>
             </div>
             `;
         });
 
+        const currentSigText = curAcc.signature ? escapeHtml(curAcc.signature) : '未设置个性签名';
+
         return `
-        <div style="background:#f7f7f7;min-height:100%;padding-bottom:30px;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Helvetica,sans-serif;">
+        <div style="background:#ededed;min-height:100%;padding-bottom:30px;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Helvetica,sans-serif;">
             <!-- 当前激活名片 -->
-            <div style="background:#ffffff;padding:16px;display:flex;align-items:center;gap:14px;border-bottom:0.5px solid #e0e0e0;">
-                <div style="position:relative;flex-shrink:0;cursor:pointer;" onclick="window.openChangeAvatarOptionsModal('${curAcc.id}')">
-                    <img id="myWechatAvatar" src="${curAcc.avatar}" style="width:62px;height:62px;border-radius:8px;object-fit:cover;display:block;" onerror="this.src='assets/icons/chat.png';" />
-                    <span style="position:absolute;bottom:0;right:0;background:rgba(0,0,0,0.6);color:#fff;font-size:9px;padding:1px 4px;border-radius:2px;">修改</span>
-                </div>
-                <div style="flex:1;min-width:0;">
-                    <div style="display:flex;align-items:center;gap:6px;">
-                        <span style="font-size:17px;font-weight:600;color:#181818;">${escapeHtml(curAcc.name)}</span>
-                        <button type="button" onclick="window.openChangeAccountNameModal('${curAcc.id}')" style="border:none;background:none;color:#576b95;font-size:12px;cursor:pointer;padding:0;">[改名]</button>
+            <div style="background:#ffffff;padding:16px;border-bottom:0.5px solid #e0e0e0;">
+                <div style="display:flex;align-items:center;gap:14px;">
+                    <div style="position:relative;flex-shrink:0;cursor:pointer;" onclick="window.openChangeAvatarOptionsModal('${curAcc.id}')">
+                        <img id="myWechatAvatar" src="${curAcc.avatar}" style="width:62px;height:62px;border-radius:8px;object-fit:cover;display:block;" onerror="this.src='assets/icons/chat.png';" />
+                        <span style="position:absolute;bottom:0;right:0;background:rgba(0,0,0,0.55);color:#fff;font-size:9px;padding:1px 4px;border-radius:2px;">修改</span>
                     </div>
-                    <div style="font-size:12px;color:#888888;margin-top:4px;">
-                        地区：${escapeHtml(curAcc.region || '中国 (China)')} · ${isAlt ? '小号模式 (独立通讯录)' : '官方大号'}
+                    <div style="flex:1;min-width:0;">
+                        <div style="display:flex;align-items:center;gap:6px;">
+                            <span style="font-size:17px;font-weight:600;color:#181818;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(curAcc.name)}</span>
+                            <button type="button" onclick="window.openChangeAccountNameModal('${curAcc.id}')" style="border:none;background:none;color:#576b95;font-size:12px;cursor:pointer;padding:0;">[改名]</button>
+                        </div>
+                        <div style="font-size:12px;color:#888888;margin-top:4px;">
+                            地区：${escapeHtml(curAcc.region || '中国 (China)')} · ${isAlt ? '小号模式' : '官方大号'}
+                        </div>
                     </div>
+                    <button type="button" onclick="window.openChangeAvatarOptionsModal('${curAcc.id}')" style="border:1px solid #e0e0e0;background:#f7f7f7;color:#07c160;padding:5px 9px;border-radius:6px;font-size:11.5px;font-weight:600;cursor:pointer;flex-shrink:0;">
+                        换头像
+                    </button>
                 </div>
-                <button type="button" onclick="window.openChangeAvatarOptionsModal('${curAcc.id}')" style="border:1px solid #dcdcdc;background:#f9f9f9;color:#07c160;padding:5px 9px;border-radius:6px;font-size:11.5px;font-weight:600;cursor:pointer;">
-                    更换头像
-                </button>
+
+                <!-- 个性签名展示条 -->
+                <div onclick="window.openChangeSignatureModal('${curAcc.id}')" style="margin-top:12px;padding-top:10px;border-top:0.5px solid #f0f0f0;display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
+                    <div style="font-size:12.5px;color:#555;display:flex;align-items:center;gap:6px;min-width:0;flex:1;">
+                        <span style="color:#999;flex-shrink:0;">签名</span>
+                        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${curAcc.signature ? '#333' : '#aaa'};">${currentSigText}</span>
+                    </div>
+                    <span style="color:#c7c7cc;font-size:13px;flex-shrink:0;margin-left:8px;">›</span>
+                </div>
             </div>
 
             <!-- 常驻地区与时区设定 -->
             <div style="margin-top:10px;background:#ffffff;padding:14px 16px;border-top:0.5px solid #e0e0e0;border-bottom:0.5px solid #e0e0e0;">
-                <div style="font-size:14px;font-weight:600;color:#181818;margin-bottom:6px;">常驻地区与时区设定</div>
-                <div style="display:flex;align-items:center;justify-content:space-between;padding:10px;background:#f9fafb;border-radius:6px;border:1px solid #e5e7eb;">
+                <div style="font-size:14px;font-weight:600;color:#181818;margin-bottom:8px;">常驻地区与时区设定</div>
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#f7f7f7;border-radius:6px;">
                     <div>
                         <div style="font-size:13px;font-weight:600;color:#1f2937;" id="currentSelectedRegionText">${escapeHtml(curAcc.region || '中国 (China)')}</div>
-                        <div style="font-size:11px;color:#6b7280;margin-top:2px;">与异地角色互动时将自动体现现实时差与作息差异</div>
                     </div>
-                    <button type="button" onclick="window.openRegionSearchModal()" style="border:1px solid #cbd5e1;background:#fff;color:#2563eb;padding:5px 10px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:500;">
+                    <button type="button" onclick="window.openRegionSearchModal()" style="border:1px solid #dcdcdc;background:#fff;color:#576b95;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;font-weight:500;">
                         选择地区
                     </button>
                 </div>
             </div>
 
-            <!-- 三位一体人设中枢 -->
+            <!-- 三维人设系统 -->
             <div style="margin-top:10px;background:#ffffff;padding:14px 16px;border-top:0.5px solid #e0e0e0;border-bottom:0.5px solid #e0e0e0;">
-                <div style="font-size:14px;font-weight:600;color:#181818;margin-bottom:4px;">人设档案系统（与全站通用共通）</div>
-                <div style="font-size:11px;color:#888;margin-bottom:12px;">默认为空，完全按照你的设想自由填写</div>
+                <div style="font-size:14px;font-weight:600;color:#181818;margin-bottom:12px;">人设档案系统</div>
 
                 <div class="form-group" style="margin-bottom:10px;">
                     <label style="font-size:12.5px;color:#374151;font-weight:600;display:block;margin-bottom:3px;">1. 线下人设 (现实生活作息/性格习惯)</label>
-                    <textarea id="inpOfflinePersona" rows="2" placeholder="填写你的线下现实身份、日常作息习惯与性格特征..." style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid #dcdcdc;background:#fafafa;font-size:12.5px;line-height:1.5;box-sizing:border-box;resize:none;outline:none;font-family:inherit;">${escapeHtml(p.offlinePersona || '')}</textarea>
+                    <textarea id="inpOfflinePersona" rows="2" placeholder="填写你的线下现实身份、日常作息习惯与性格特征..." style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid #e0e0e0;background:#fafafa;font-size:12.5px;line-height:1.5;box-sizing:border-box;resize:none;outline:none;font-family:inherit;">${escapeHtml(p.offlinePersona || '')}</textarea>
                 </div>
 
                 <div class="form-group" style="margin-bottom:10px;">
                     <label style="font-size:12.5px;color:#374151;font-weight:600;display:block;margin-bottom:3px;">2. 线上人设 (主播风格/皮套/创作赛道)</label>
-                    <textarea id="inpOnlinePersona" rows="2" placeholder="填写你的主播赛道、直播口吻、观众粉丝互动风格..." style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid #dcdcdc;background:#fafafa;font-size:12.5px;line-height:1.5;box-sizing:border-box;resize:none;outline:none;font-family:inherit;">${escapeHtml(p.onlinePersona || '')}</textarea>
+                    <textarea id="inpOnlinePersona" rows="2" placeholder="填写你的主播赛道、直播口吻、观众粉丝互动风格..." style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid #e0e0e0;background:#fafafa;font-size:12.5px;line-height:1.5;box-sizing:border-box;resize:none;outline:none;font-family:inherit;">${escapeHtml(p.onlinePersona || '')}</textarea>
                 </div>
 
                 <div class="form-group" style="margin-bottom:12px;">
                     <label style="font-size:12.5px;color:#374151;font-weight:600;display:block;margin-bottom:3px;">3. 游戏皮肤人设 (MC形象/像素设定/玩法偏好)</label>
-                    <textarea id="inpGameSkinPersona" rows="2" placeholder="填写你在Minecraft中的像素皮肤形象、战斗或红石建筑风格..." style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid #dcdcdc;background:#fafafa;font-size:12.5px;line-height:1.5;box-sizing:border-box;resize:none;outline:none;font-family:inherit;">${escapeHtml(p.gameSkinPersona || '')}</textarea>
+                    <textarea id="inpGameSkinPersona" rows="2" placeholder="填写你在Minecraft中的像素皮肤形象、战斗或红石建筑风格..." style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid #e0e0e0;background:#fafafa;font-size:12.5px;line-height:1.5;box-sizing:border-box;resize:none;outline:none;font-family:inherit;">${escapeHtml(p.gameSkinPersona || '')}</textarea>
                 </div>
 
                 <div style="display:flex;justify-content:flex-end;">
                     <button type="button" onclick="window.saveTriPersonas()" style="border:none;background:#07c160;color:#ffffff;padding:7px 20px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
-                        保存人设设定
+                        保存设定
                     </button>
                 </div>
             </div>
@@ -226,25 +257,28 @@
             <!-- 账号多马甲管理 -->
             <div style="margin-top:10px;background:#ffffff;padding:14px 16px;border-top:0.5px solid #e0e0e0;border-bottom:0.5px solid #e0e0e0;">
                 <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
-                    <div>
-                        <div style="font-size:14px;font-weight:600;color:#181818;">账号多马甲管理</div>
-                        <div style="font-size:11px;color:#888;">小号初始通讯录为空，享有独立对话圈</div>
-                    </div>
-                    <button type="button" onclick="window.openCreateAltAccountModalModern()" style="border:none;background:#eef2ff;color:#2563eb;padding:4px 10px;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;">
+                    <div style="font-size:14px;font-weight:600;color:#181818;">多账号管理</div>
+                    <button type="button" onclick="window.openCreateAltAccountModalModern()" style="border:none;background:#ededed;color:#576b95;padding:4px 10px;border-radius:4px;font-size:12px;font-weight:600;cursor:pointer;">
                         + 注册小号
                     </button>
                 </div>
 
+                <!-- 主号项 -->
                 <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#f9fafb;border-radius:8px;border:0.5px solid #e5e7eb;margin-bottom:6px;">
-                    <div style="display:flex;align-items:center;gap:10px;">
-                        <img src="${p.avatar || 'assets/icons/chat.png'}" style="width:36px;height:36px;border-radius:6px;object-fit:cover;" onerror="this.src='assets/icons/chat.png';" />
-                        <div>
-                            <div style="font-size:13px;font-weight:600;color:#1f2937;">${escapeHtml(p.ytName || '主播大号')} <span style="font-size:10px;background:#d1fae5;color:#065f46;padding:1px 4px;border-radius:3px;">主号</span></div>
-                            <div style="font-size:11px;color:#6b7280;">地区：${escapeHtml(p.region || '中国 (China)')}</div>
+                    <div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1;">
+                        <img src="${p.avatar || 'assets/icons/chat.png'}" style="width:38px;height:38px;border-radius:6px;object-fit:cover;flex-shrink:0;" onerror="this.src='assets/icons/chat.png';" />
+                        <div style="min-width:0;flex:1;">
+                            <div style="font-size:13px;font-weight:600;color:#1f2937;display:flex;align-items:center;gap:4px;">
+                                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px;">${escapeHtml(p.ytName || '主播大号')}</span>
+                                <span style="font-size:10px;background:#e8f8f0;color:#07c160;padding:1px 4px;border-radius:3px;">主号</span>
+                            </div>
+                            <div style="font-size:11px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px;">
+                                ${p.signature ? escapeHtml(p.signature) : '未设置个性签名'}
+                            </div>
                         </div>
                     </div>
                     <div>
-                        ${curAcc.id === 'main' ? '<span style="font-size:11px;color:#059669;font-weight:600;">使用中</span>' : `<button type="button" onclick="window.switchToAccount('main')" style="border:none;background:#07c160;color:#fff;padding:4px 9px;border-radius:4px;font-size:11px;cursor:pointer;">使用</button>`}
+                        ${curAcc.id === 'main' ? '<span style="font-size:11px;color:#07c160;font-weight:600;padding:0 4px;">使用中</span>' : `<button type="button" onclick="window.switchToAccount('main')" style="border:none;background:#07c160;color:#fff;padding:4px 9px;border-radius:4px;font-size:11px;cursor:pointer;">使用</button>`}
                     </div>
                 </div>
                 ${altsListHtml}
@@ -253,6 +287,30 @@
         `;
     }
     window.buildProfileTabHTML = buildProfileTabHTML;
+
+    // ============================================================
+    // 微信拟真通用对话框助手（告别粉白遮罩与丑陋原生弹窗）
+    // ============================================================
+    function showWechatStyleModal(htmlContent) {
+        const exist = document.getElementById('wechatProfileInnerModal');
+        if (exist) exist.remove();
+
+        const mask = document.createElement('div');
+        mask.id = 'wechatProfileInnerModal';
+        mask.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.45);z-index:999999;display:flex;align-items:center;justify-content:center;padding:24px;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Helvetica,sans-serif;';
+        mask.innerHTML = `
+            <div style="background:#ffffff;border-radius:12px;width:100%;max-width:320px;overflow:hidden;box-shadow:0 8px 30px rgba(0,0,0,0.18);animation:wechatPopIn 0.2s cubic-bezier(0.16,1,0.3,1);">
+                ${htmlContent}
+            </div>
+        `;
+        document.body.appendChild(mask);
+    }
+
+    function closeWechatStyleModal() {
+        const exist = document.getElementById('wechatProfileInnerModal');
+        if (exist) exist.remove();
+    }
+    window.closeWechatStyleModal = closeWechatStyleModal;
 
     // 保存三维人设
     window.saveTriPersonas = function() {
@@ -264,20 +322,59 @@
 
         syncAccountsToStorage();
 
-        if (typeof openModal === 'function') {
-            openModal(`
-                <div style="text-align:center;padding:12px 6px;">
-                    <div style="font-size:16px;font-weight:700;color:#1e3a8a;margin-bottom:8px;">设置已保存</div>
-                    <div style="font-size:13px;color:#475569;line-height:1.6;margin-bottom:14px;">
-                        线上人设、线下作息与MC游戏皮肤均已成功写入并持久化，NPC在后续对话与互动中将自然呼应。
-                    </div>
-                    <button type="button" onclick="closeModal()" style="border:none;background:#2563eb;color:#fff;padding:7px 20px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">好的</button>
+        showWechatStyleModal(`
+            <div style="padding:24px 20px 20px;text-align:center;">
+                <div style="font-size:16px;font-weight:600;color:#181818;margin-bottom:8px;">设置已保存</div>
+                <div style="font-size:13px;color:#888;line-height:1.5;margin-bottom:20px;">
+                    人设档案已更新并自动持久化，角色在后续互动中将自然呼应。
                 </div>
-            `);
-        } else if (typeof showToast === 'function') {
-            showToast('设定保存成功！', 'success', 1500);
-        }
+                <button type="button" onclick="window.closeWechatStyleModal()" style="width:100%;padding:10px 0;background:#07c160;color:#fff;border:none;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;">
+                    确定
+                </button>
+            </div>
+        `);
+
         if (typeof autoSaveGame === 'function') autoSaveGame();
+    };
+
+    // ============================================================
+    // ✍️ 修改个性签名弹窗（支持大号与小号）
+    // ============================================================
+    window.openChangeSignatureModal = function(targetAccountId) {
+        const curAcc = getActiveAccountInfo();
+        let oldSig = '';
+        if (targetAccountId === 'main') {
+            oldSig = window.G.player?.signature || '';
+        } else {
+            const alt = (window.G.altAccounts || []).find(a => a.id === targetAccountId);
+            oldSig = alt?.signature || '';
+        }
+
+        showWechatStyleModal(`
+            <div style="padding:20px 18px 16px;">
+                <div style="font-size:15px;font-weight:600;color:#181818;margin-bottom:12px;">设置个性签名</div>
+                <textarea id="wechatSigInput" maxlength="60" rows="3" placeholder="填写个签，展现你的专属特色..." style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid #e0e0e0;background:#f7f7f7;font-size:13px;box-sizing:border-box;outline:none;resize:none;font-family:inherit;line-height:1.4;">${escapeHtml(oldSig)}</textarea>
+                <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px;">
+                    <button type="button" onclick="window.closeWechatStyleModal()" style="padding:7px 16px;border:none;background:#f2f2f2;color:#333;border-radius:6px;font-size:13px;cursor:pointer;">取消</button>
+                    <button type="button" id="btnConfirmSigSave" style="padding:7px 18px;border:none;background:#07c160;color:#fff;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">完成</button>
+                </div>
+            </div>
+        `);
+
+        document.getElementById('btnConfirmSigSave').onclick = () => {
+            const val = document.getElementById('wechatSigInput').value.trim();
+            if (targetAccountId === 'main') {
+                if (!window.G.player) window.G.player = {};
+                window.G.player.signature = val;
+            } else {
+                const alt = (window.G.altAccounts || []).find(a => a.id === targetAccountId);
+                if (alt) alt.signature = val;
+            }
+            syncAccountsToStorage();
+            window.closeWechatStyleModal();
+            if (typeof renderChatApp === 'function') renderChatApp();
+            if (typeof autoSaveGame === 'function') autoSaveGame();
+        };
     };
 
     // ============================================================
@@ -288,29 +385,27 @@
 
         function renderList(list) {
             return list.map(item => `
-                <div class="region-select-item" onclick="window.confirmPickRegion('${item.code}')" style="display:flex;justify-content:space-between;align-items:center;padding:10px 12px;border-bottom:0.5px solid #e2e8f0;cursor:pointer;">
+                <div class="region-select-item" onclick="window.confirmPickRegion('${item.code}')" style="display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:0.5px solid #f0f0f0;cursor:pointer;">
                     <div>
-                        <div style="font-size:13.5px;font-weight:600;color:#1e293b;">${escapeHtml(item.name)}</div>
-                        <div style="font-size:11px;color:#64748b;">时区代码: ${item.tz} (偏移: ${item.offset >= 0 ? '+' : ''}${item.offset}小时)</div>
+                        <div style="font-size:13.5px;font-weight:500;color:#181818;">${escapeHtml(item.name)}</div>
+                        <div style="font-size:11px;color:#888;margin-top:2px;">时区: ${item.tz}</div>
                     </div>
-                    <span style="color:#2563eb;font-size:12px;font-weight:600;">选择</span>
+                    <span style="color:#07c160;font-size:13px;font-weight:600;">选择</span>
                 </div>
             `).join('');
         }
 
-        openModal(`
-            <div style="text-align:left;font-family:-apple-system,sans-serif;">
-                <div style="font-size:15px;font-weight:700;color:#1e3a8a;margin-bottom:8px;border-bottom:1.5px solid #eef2f7;padding-bottom:6px;">
-                    选择常驻地区与时区
+        showWechatStyleModal(`
+            <div style="text-align:left;">
+                <div style="padding:14px 16px;border-bottom:0.5px solid #eee;font-size:15px;font-weight:600;color:#181818;display:flex;align-items:center;justify-content:space-between;">
+                    <span>选择地区</span>
+                    <span onclick="window.closeWechatStyleModal()" style="font-size:14px;color:#888;cursor:pointer;">关闭</span>
                 </div>
-                <div style="margin-bottom:10px;">
-                    <input type="text" id="regionSearchInput" placeholder="输入国家名称或拼音关键词搜索..." style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid #cbd5e1;font-size:13px;box-sizing:border-box;outline:none;">
+                <div style="padding:10px 14px;background:#fff;">
+                    <input type="text" id="regionSearchInput" placeholder="输入国家名称或拼音快速搜索..." style="width:100%;padding:7px 10px;border-radius:6px;border:1px solid #e0e0e0;background:#f7f7f7;font-size:12.5px;box-sizing:border-box;outline:none;">
                 </div>
-                <div id="regionListContainer" style="max-height:260px;overflow-y:auto;border:1px solid #e2e8f0;border-radius:6px;background:#fff;">
+                <div id="regionListContainer" style="max-height:240px;overflow-y:auto;background:#fff;">
                     ${renderList(currentList)}
-                </div>
-                <div style="display:flex;justify-content:flex-end;margin-top:10px;">
-                    <button type="button" onclick="closeModal()" style="border:1px solid #cbd5e1;background:#f8fafc;color:#64748b;padding:5px 14px;border-radius:5px;font-size:12px;cursor:pointer;">关闭</button>
                 </div>
             </div>
         `);
@@ -319,7 +414,7 @@
             const kw = e.target.value.trim().toLowerCase();
             const filtered = PRESET_REGIONS.filter(r => r.name.toLowerCase().includes(kw) || r.keywords.includes(kw));
             const cont = document.getElementById('regionListContainer');
-            if (cont) cont.innerHTML = renderList(filtered) || '<div style="padding:20px;text-align:center;color:#999;font-size:12px;">无匹配国家/地区</div>';
+            if (cont) cont.innerHTML = renderList(filtered) || '<div style="padding:24px;text-align:center;color:#999;font-size:12px;">无匹配结果</div>';
         };
     };
 
@@ -327,7 +422,7 @@
         const item = PRESET_REGIONS.find(r => r.code === code);
         if (!item) return;
 
-        closeModal();
+        window.closeWechatStyleModal();
         const curAcc = getActiveAccountInfo();
         if (curAcc.isAlt) {
             const alt = (window.G.altAccounts || []).find(a => a.id === curAcc.id);
@@ -342,56 +437,52 @@
 
         if (item.code === 'CN') {
             setTimeout(() => {
-                openModal(`
-                    <div style="text-align:center;padding:12px 6px;">
-                        <div style="font-size:15px;font-weight:700;color:#1e3a8a;margin-bottom:8px;">时间跟随提示</div>
-                        <div style="font-size:13px;color:#475569;line-height:1.6;margin-bottom:14px;">
-                            检测到你选择了中国，是否直接跟随手机真实系统时间？
+                showWechatStyleModal(`
+                    <div style="padding:22px 18px 18px;text-align:center;">
+                        <div style="font-size:15px;font-weight:600;color:#181818;margin-bottom:8px;">时间跟随设置</div>
+                        <div style="font-size:13px;color:#888;line-height:1.5;margin-bottom:18px;">
+                            是否让聊天内时间直接跟随现实真实系统时间？
                         </div>
-                        <div style="display:flex;justify-content:center;gap:10px;">
-                            <button type="button" onclick="window.setFollowTimeMode(false)" style="border:1px solid #cbd5e1;background:#f8fafc;color:#64748b;padding:6px 14px;border-radius:6px;font-size:12.5px;cursor:pointer;">保持游戏进度</button>
-                            <button type="button" onclick="window.setFollowTimeMode(true)" style="border:none;background:#2563eb;color:#fff;padding:6px 16px;border-radius:6px;font-size:12.5px;font-weight:600;cursor:pointer;">跟随真实时间</button>
+                        <div style="display:flex;gap:10px;">
+                            <button type="button" onclick="window.setFollowTimeMode(false)" style="flex:1;padding:8px 0;background:#f2f2f2;color:#333;border:none;border-radius:6px;font-size:13px;cursor:pointer;">保持游戏进度</button>
+                            <button type="button" onclick="window.setFollowTimeMode(true)" style="flex:1;padding:8px 0;background:#07c160;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">跟随真实时间</button>
                         </div>
                     </div>
                 `);
-            }, 180);
+            }, 120);
         } else {
             if (typeof renderChatApp === 'function') renderChatApp();
-            if (typeof showToast === 'function') showToast(`地区已设为：${item.name}`, 'success', 1500);
             if (typeof autoSaveGame === 'function') autoSaveGame();
         }
     };
 
     window.setFollowTimeMode = function(followReal) {
-        closeModal();
+        window.closeWechatStyleModal();
         if (!window.G.clockConfig) window.G.clockConfig = {};
         window.G.clockConfig.mode = followReal ? 'real' : 'game';
         if (typeof renderChatApp === 'function') renderChatApp();
-        if (typeof showToast === 'function') showToast(followReal ? '已跟随真实系统时间' : '已保持游戏进度时间', 'success', 1500);
         if (typeof autoSaveGame === 'function') autoSaveGame();
     };
 
     // ============================================================
-    // 🖼️ 头像更换与改名
+    // 🖼️ 头像更换与改名（仿微信 ActionSheet 质感）
     // ============================================================
     window.openChangeAvatarOptionsModal = function(targetAccountId) {
-        openModal(`
-            <div style="text-align:left;font-family:-apple-system,sans-serif;">
-                <div style="font-size:15px;font-weight:700;color:#1e3a8a;margin-bottom:12px;border-bottom:1.5px solid #eef2f7;padding-bottom:6px;">
-                    更换头像
-                </div>
+        showWechatStyleModal(`
+            <div style="text-align:center;padding:18px 16px;">
+                <div style="font-size:15px;font-weight:600;color:#181818;margin-bottom:14px;">更换头像</div>
                 <div style="display:flex;flex-direction:column;gap:8px;">
-                    <label style="display:block;border:1px solid #cbd5e1;background:#f8fafc;padding:10px 12px;border-radius:6px;cursor:pointer;text-align:center;">
-                        <span style="font-size:13px;font-weight:600;color:#1e293b;">从本地相册选取图片</span>
+                    <label style="display:block;background:#f7f7f7;padding:11px 0;border-radius:6px;cursor:pointer;text-align:center;">
+                        <span style="font-size:13.5px;font-weight:500;color:#181818;">从手机相册选取</span>
                         <input type="file" id="localAvatarFileInput" accept="image/*" style="display:none;">
                     </label>
-                    <button type="button" onclick="window.pickFromAvatarLibrary('${targetAccountId}')" style="border:1px solid #cbd5e1;background:#f8fafc;padding:10px 12px;border-radius:6px;font-size:13px;font-weight:600;color:#1e293b;cursor:pointer;">
+                    <button type="button" onclick="window.pickFromAvatarLibrary('${targetAccountId}')" style="border:none;background:#f7f7f7;padding:11px 0;border-radius:6px;font-size:13.5px;font-weight:500;color:#181818;cursor:pointer;">
                         从头像库随机抽取
                     </button>
                 </div>
-                <div style="display:flex;justify-content:flex-end;margin-top:12px;">
-                    <button type="button" onclick="closeModal()" style="border:none;background:none;color:#64748b;font-size:12px;cursor:pointer;">取消</button>
-                </div>
+                <button type="button" onclick="window.closeWechatStyleModal()" style="margin-top:12px;width:100%;border:none;background:none;color:#888;font-size:13px;padding:6px 0;cursor:pointer;">
+                    取消
+                </button>
             </div>
         `);
 
@@ -402,7 +493,7 @@
             reader.onload = function(evt) {
                 const base64 = evt.target.result;
                 window.applyNewAvatar(targetAccountId, base64);
-                closeModal();
+                window.closeWechatStyleModal();
             };
             reader.readAsDataURL(file);
         };
@@ -411,7 +502,7 @@
     window.pickFromAvatarLibrary = function(targetAccountId) {
         const randImg = (typeof getRandomAvatar === 'function') ? getRandomAvatar() : `${AVATAR_SUBDIR}1.png`;
         window.applyNewAvatar(targetAccountId, randImg);
-        closeModal();
+        window.closeWechatStyleModal();
     };
 
     window.applyNewAvatar = function(targetAccountId, imgUrl) {
@@ -424,7 +515,6 @@
         }
         syncAccountsToStorage();
         if (typeof renderChatApp === 'function') renderChatApp();
-        if (typeof showToast === 'function') showToast('头像更新成功！', 'success', 1200);
         if (typeof autoSaveGame === 'function') autoSaveGame();
     };
 
@@ -433,13 +523,13 @@
         const curAcc = getActiveAccountInfo();
         const currentName = (targetAccountId === 'main') ? (window.G.player?.ytName || '') : curAcc.name;
 
-        openModal(`
-            <div style="text-align:left;font-family:-apple-system,sans-serif;">
-                <div style="font-size:15px;font-weight:700;color:#1e3a8a;margin-bottom:10px;">修改名称</div>
-                <input type="text" id="changeNameInput" value="${escapeHtml(currentName)}" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid #cbd5e1;font-size:13px;box-sizing:border-box;outline:none;">
-                <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:12px;">
-                    <button type="button" onclick="closeModal()" style="border:1px solid #cbd5e1;background:#f8fafc;color:#64748b;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;">取消</button>
-                    <button type="button" id="btnConfirmChangeName" style="border:none;background:#2563eb;color:#fff;padding:5px 16px;border-radius:5px;font-size:12px;font-weight:600;cursor:pointer;">保存</button>
+        showWechatStyleModal(`
+            <div style="padding:20px 18px 16px;">
+                <div style="font-size:15px;font-weight:600;color:#181818;margin-bottom:12px;">修改昵称</div>
+                <input type="text" id="changeNameInput" value="${escapeHtml(currentName)}" maxlength="20" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid #e0e0e0;background:#f7f7f7;font-size:13px;box-sizing:border-box;outline:none;">
+                <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:16px;">
+                    <button type="button" onclick="window.closeWechatStyleModal()" style="padding:7px 16px;border:none;background:#f2f2f2;color:#333;border-radius:6px;font-size:13px;cursor:pointer;">取消</button>
+                    <button type="button" id="btnConfirmChangeName" style="padding:7px 18px;border:none;background:#07c160;color:#fff;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">保存</button>
                 </div>
             </div>
         `);
@@ -455,9 +545,8 @@
                 if (alt) alt.name = val;
             }
             syncAccountsToStorage();
-            closeModal();
+            window.closeWechatStyleModal();
             if (typeof renderChatApp === 'function') renderChatApp();
-            if (typeof showToast === 'function') showToast('名称已修改！', 'success', 1200);
             if (typeof autoSaveGame === 'function') autoSaveGame();
         };
     };
@@ -466,36 +555,58 @@
         window.G.currentAccountId = accId;
         syncAccountsToStorage();
         if (typeof renderChatApp === 'function') renderChatApp();
-        if (typeof showToast === 'function') showToast(`已切换至：${getActiveAccountInfo().name}`, 'info', 1200);
         if (typeof autoSaveGame === 'function') autoSaveGame();
     };
 
-    window.deleteAltAccountDirect = function(altId) {
-        if (!confirm('确定注销这个小号吗？')) return;
+    // 优雅注销小号确认窗（告别原生 alert / confirm）
+    window.confirmDeleteAltAccount = function(altId, altName) {
+        showWechatStyleModal(`
+            <div style="padding:22px 18px 18px;text-align:center;">
+                <div style="font-size:15px;font-weight:600;color:#181818;margin-bottom:8px;">注销小号</div>
+                <div style="font-size:13px;color:#888;line-height:1.5;margin-bottom:18px;">
+                    确定注销小号「${altName}」吗？注销后该号的独立通讯录与会话记录将被清空。
+                </div>
+                <div style="display:flex;gap:10px;">
+                    <button type="button" onclick="window.closeWechatStyleModal()" style="flex:1;padding:8px 0;background:#f2f2f2;color:#333;border:none;border-radius:6px;font-size:13px;cursor:pointer;">取消</button>
+                    <button type="button" onclick="window.doExecuteDeleteAlt('${altId}')" style="flex:1;padding:8px 0;background:#fa5151;color:#fff;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">确认注销</button>
+                </div>
+            </div>
+        `);
+    };
+
+    window.doExecuteDeleteAlt = function(altId) {
         window.G.altAccounts = (window.G.altAccounts || []).filter(a => a.id !== altId);
         if (window.G.currentAccountId === altId) window.G.currentAccountId = 'main';
         syncAccountsToStorage();
+        window.closeWechatStyleModal();
         if (typeof renderChatApp === 'function') renderChatApp();
         if (typeof autoSaveGame === 'function') autoSaveGame();
     };
 
+    // 注册小号
     window.openCreateAltAccountModalModern = function() {
         let assignedAvatar = (typeof getRandomAvatar === 'function') ? getRandomAvatar() : `${AVATAR_SUBDIR}1.png`;
-        openModal(`
-            <div style="text-align:left;font-family:-apple-system,sans-serif;">
-                <div style="font-size:15px;font-weight:700;color:#1e3a8a;margin-bottom:10px;">注册新小号</div>
-                <div class="form-group" style="margin-bottom:8px;">
-                    <label style="font-size:12px;color:#475569;display:block;margin-bottom:3px;">小号昵称</label>
-                    <input type="text" id="newAltName" placeholder="输入小号名称..." style="width:100%;padding:7px 9px;border-radius:6px;border:1px solid #cbd5e1;font-size:12.5px;box-sizing:border-box;outline:none;">
+        showWechatStyleModal(`
+            <div style="padding:20px 18px 16px;">
+                <div style="font-size:15px;font-weight:600;color:#181818;margin-bottom:14px;">注册小号</div>
+                <div style="margin-bottom:10px;">
+                    <label style="font-size:12px;color:#666;display:block;margin-bottom:4px;">小号昵称</label>
+                    <input type="text" id="newAltName" placeholder="输入小号昵称..." maxlength="20" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid #e0e0e0;background:#f7f7f7;font-size:13px;box-sizing:border-box;outline:none;">
                 </div>
-                <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:10px;">
-                    <button type="button" onclick="closeModal()" style="border:1px solid #cbd5e1;background:#f8fafc;color:#64748b;padding:5px 12px;border-radius:5px;font-size:12px;cursor:pointer;">取消</button>
-                    <button type="button" id="btnConfirmAlt" style="border:none;background:#2563eb;color:#fff;padding:5px 16px;border-radius:5px;font-size:12px;font-weight:600;cursor:pointer;">创建并使用</button>
+                <div style="margin-bottom:14px;">
+                    <label style="font-size:12px;color:#666;display:block;margin-bottom:4px;">个性签名 (选填)</label>
+                    <input type="text" id="newAltSignature" placeholder="输入个性签名..." maxlength="60" style="width:100%;padding:8px 10px;border-radius:6px;border:1px solid #e0e0e0;background:#f7f7f7;font-size:13px;box-sizing:border-box;outline:none;">
+                </div>
+                <div style="display:flex;justify-content:flex-end;gap:10px;">
+                    <button type="button" onclick="window.closeWechatStyleModal()" style="padding:7px 16px;border:none;background:#f2f2f2;color:#333;border-radius:6px;font-size:13px;cursor:pointer;">取消</button>
+                    <button type="button" id="btnConfirmAlt" style="padding:7px 18px;border:none;background:#07c160;color:#fff;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">创建并使用</button>
                 </div>
             </div>
         `);
+
         document.getElementById('btnConfirmAlt').onclick = () => {
             const name = document.getElementById('newAltName').value.trim();
+            const signature = document.getElementById('newAltSignature').value.trim();
             if (!name) return;
             const newId = 'alt_' + Date.now();
             if (!window.G.altAccounts) window.G.altAccounts = [];
@@ -503,12 +614,13 @@
                 id: newId,
                 name,
                 avatar: assignedAvatar,
+                signature: signature,
                 region: window.G.player?.region || '中国 (China)',
                 contacts: []
             });
             window.G.currentAccountId = newId;
             syncAccountsToStorage();
-            closeModal();
+            window.closeWechatStyleModal();
             if (typeof renderChatApp === 'function') renderChatApp();
             if (typeof autoSaveGame === 'function') autoSaveGame();
         };

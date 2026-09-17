@@ -1,6 +1,6 @@
 /**
  * js/apps/chat/chat-app.js
- * 💬 微信独立主应用（仿微信白灰绿质感 · 双语即时翻译 · 拟真语音条 · 三种发图模式完整恢复 · 经典翻转卡片/微信框 · 真表情调用 · 撤回单次偷窥脱敏 · 长按引用与编辑 · Token统计 · 动态转发与名片推荐 · 加号5项完整功能 · 大小号好友物理隔离）
+ * 💬 微信独立主应用（仿微信白灰绿质感 · 个性签名支持 · 双语即时翻译 · 拟真语音条 · 三种发图模式完整恢复 · 经典翻转卡片/微信框 · 真表情调用 · 撤回单次偷窥脱敏 · 长按引用与编辑 · Token统计 · 动态转发与名片推荐 · 加号5项完整功能 · 大小号好友物理隔离）
  */
 
 (function() {
@@ -27,14 +27,14 @@
                 <div style="text-align:center;color:#b2b2b2;padding:60px 16px;font-size:13px;line-height:1.8;">
                     <b>暂无联系人</b><br>
                     当前账号「${escapeHtml(curAcc.name)}」暂未添加好友<br>
-                    点击右上角「+」添加好友或通过名片交换认识新朋友！
+                    点击右上角「+」添加好友或通过名片认识新朋友
                 </div>`;
             }
 
             const rows = npcList.map(npc => {
                 const history = window.getAccountChatHistory(npc.id, curAcc.id);
                 const last = history.length ? history[history.length - 1] : null;
-                let preview = '暂无消息，点击开始聊天';
+                let preview = npc.signature ? escapeHtml(npc.signature) : '暂无消息，点击开始聊天';
                 if (last) {
                     if (last.from === 'action') preview = String(last.text || '');
                     else if (last.type === 'voice') preview = `[语音] ${last.seconds || 3}"`;
@@ -68,7 +68,7 @@
                             </div>
                             <span style="font-size:10.5px;color:#b2b2b2;flex-shrink:0;margin-left:6px;">${timeLabel}</span>
                         </div>
-                        <div style="font-size:12px;color:${blocked ? '#fa5151' : '#999999'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;">${blocked ? '（已被对方拉黑）' : escapeHtml(preview)}</div>
+                        <div style="font-size:12px;color:${blocked ? '#fa5151' : '#999999'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;">${blocked ? '（已被对方拒收）' : escapeHtml(preview)}</div>
                     </div>
                 </div>
             `).join('');
@@ -79,7 +79,7 @@
             return `
             <div style="text-align:center;color:#b2b2b2;padding:60px 16px;font-size:13px;line-height:1.8;">
                 <b>暂无群聊</b><br>
-                点击右上角「+」发起群聊吧！
+                点击右上角「+」发起群聊
             </div>`;
         }
 
@@ -255,27 +255,32 @@
         mask.className = 'wechat-action-sheet-mask';
         mask.innerHTML = `
             <div class="wechat-action-sheet-box">
-                <div class="wechat-action-item" onclick="window.openCreateCustomNpcModal()">添加 / 自建联系人</div>
+                <div class="wechat-action-item" onclick="window.openCreateCustomNpcModal()">添加联系人</div>
                 <div class="wechat-action-item" onclick="window.openCreateGroupModal()">发起群聊</div>
-                <div class="wechat-action-item" onclick="window.openSocialRequestsModal()">新的朋友与群邀请 ${reqCount > 0 ? `<span style="color:#fa5151;font-weight:600;">(${reqCount})</span>` : ''}</div>
+                <div class="wechat-action-item" onclick="window.openSocialRequestsModal()">朋友与群邀请 ${reqCount > 0 ? `<span style="color:#fa5151;font-weight:600;">(${reqCount})</span>` : ''}</div>
                 <div class="wechat-action-cancel" onclick="this.closest('.wechat-action-sheet-mask').remove()">取消</div>
             </div>
         `;
         document.body.appendChild(mask);
     };
 
+    // 添加联系人（支持个性签名）
     window.openCreateCustomNpcModal = function() {
         document.querySelector('.wechat-action-sheet-mask')?.remove();
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '我' };
 
-        window.openWechatCleanModal(`为「${escapeHtml(curAcc.name)}」添加自建联系人`, `
+        window.openWechatCleanModal(`添加联系人`, `
             <div style="display:flex;flex-direction:column;gap:10px;text-align:left;">
                 <div>
                     <label style="font-size:12px;color:#666;">联系人昵称</label>
-                    <input type="text" id="wcleanNewNpcName" placeholder="例如：Technoblade / 派蒙" class="wechat-clean-input" style="margin-top:3px;">
+                    <input type="text" id="wcleanNewNpcName" placeholder="输入好友名字..." class="wechat-clean-input" style="margin-top:3px;">
                 </div>
                 <div>
-                    <label style="font-size:12px;color:#666;">常驻地区 / 时区</label>
+                    <label style="font-size:12px;color:#666;">个性签名 (选填)</label>
+                    <input type="text" id="wcleanNewNpcSignature" placeholder="输入个性签名..." maxlength="60" class="wechat-clean-input" style="margin-top:3px;">
+                </div>
+                <div>
+                    <label style="font-size:12px;color:#666;">常驻地区</label>
                     <select id="wcleanNewNpcRegion" class="wechat-clean-input" style="margin-top:3px;">
                         <option value="中国">中国</option>
                         <option value="美国 - 东部">美国 - 东部</option>
@@ -291,7 +296,7 @@
                 </div>
                 <div>
                     <label style="font-size:12px;color:#666;">人设档案 / 说话风格</label>
-                    <textarea id="wcleanNewNpcPersona" rows="4" placeholder="例如：性格高冷，Minecraft PVP技术天花板，毒舌但很讲义气..." class="wechat-clean-input" style="margin-top:3px;resize:none;line-height:1.4;"></textarea>
+                    <textarea id="wcleanNewNpcPersona" rows="3" placeholder="填写人设特征、性格习惯与聊天口吻..." class="wechat-clean-input" style="margin-top:3px;resize:none;line-height:1.4;"></textarea>
                 </div>
             </div>
         `, () => {
@@ -300,6 +305,7 @@
                 if (typeof showToast === 'function') showToast('请填写联系人昵称', 'error');
                 return false;
             }
+            const signature = document.getElementById('wcleanNewNpcSignature')?.value.trim() || '';
             const region = document.getElementById('wcleanNewNpcRegion').value;
             const persona = document.getElementById('wcleanNewNpcPersona').value.trim() || 'MC好友同伴。';
             const newId = 'custom_' + Date.now();
@@ -308,6 +314,7 @@
             window.G.npcs[newId] = {
                 id: newId,
                 name: name,
+                signature: signature,
                 region: region,
                 persona: persona,
                 favor: 50,
@@ -319,7 +326,7 @@
 
             window.syncCustomNpcsToLocalBackup();
             if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
-            if (typeof showToast === 'function') showToast('已成功添加联系人', 'success', 1200);
+            if (typeof showToast === 'function') showToast('联系人已添加', 'success', 1200);
             renderChatApp();
         });
     };
@@ -433,6 +440,7 @@
                     name: req.name || '新好友',
                     region: '中国',
                     persona: req.persona || '一位热情的游戏粉丝。',
+                    signature: '',
                     favor: 50,
                     relationshipStage: 'friend',
                     avatarUrl: window.getRandomAvatar(),
@@ -471,14 +479,15 @@
         }
     };
 
-    // 角色名片页
+    // 角色名片页（增加个性签名展示与编辑入口）
     window.openNpcProfileCardModal = function(npcId) {
         const npc = window.G.npcs[npcId];
         if (!npc) return;
 
         const isDating = window.ChatPromptEngine && window.ChatPromptEngine.isNpcInDatingRelationship(npc);
         const personaText = npc.persona || '';
-        const previewPersona = personaText ? personaText.slice(0, 85) + (personaText.length > 85 ? '...' : '') : '暂无详细人设档案，点击此处补充';
+        const previewPersona = personaText ? personaText.slice(0, 85) + (personaText.length > 85 ? '...' : '') : '点击此处补充角色详细人设档案';
+        const sigText = npc.signature ? escapeHtml(npc.signature) : '未设置个性签名';
 
         let mask = document.createElement('div');
         mask.className = 'wechat-clean-modal-mask';
@@ -491,9 +500,9 @@
                             <svg viewBox="0 0 24 24" style="width:10px;height:10px;fill:#ffffff;"><path d="M4 4h3l2-2h6l2 2h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm8 3a5 5 0 1 0 0 10 5 5 0 0 0 0-10zm0 2a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"/></svg>
                         </div>
                     </div>
-                    <div style="flex:1;">
+                    <div style="flex:1;min-width:0;">
                         <div onclick="window.openEditNpcNameModal('${npcId}')" style="font-size:16px;font-weight:600;color:#181818;cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
-                            <span>${escapeHtml(npc.name)}</span>
+                            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px;">${escapeHtml(npc.name)}</span>
                             <span style="font-size:11px;color:#07c160;">✎</span>
                         </div>
                         <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#666;margin-top:4px;flex-wrap:wrap;">
@@ -507,12 +516,21 @@
                     </div>
                 </div>
 
+                <!-- 角色个性签名展示条 -->
+                <div onclick="window.openEditNpcSignatureModal('${npcId}')" style="padding:6px 0 10px;border-bottom:0.5px solid #f0f0f0;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
+                    <div style="font-size:12px;color:#555;display:flex;align-items:center;gap:6px;min-width:0;flex:1;">
+                        <span style="color:#999;flex-shrink:0;">签名</span>
+                        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${npc.signature ? '#333' : '#aaa'};">${sigText}</span>
+                    </div>
+                    <span style="color:#07c160;font-size:11px;flex-shrink:0;margin-left:6px;">✎</span>
+                </div>
+
                 <div style="display:flex;align-items:center;justify-content:space-between;background:#fbfbfb;border:0.5px solid #eaeaea;border-radius:6px;padding:8px 10px;margin-bottom:12px;">
                     <div style="font-size:12px;color:#444;">
-                        当前关系：<b style="color:${isDating ? '#ff4d4f' : (npc.favor >= 80 ? '#fa8c16' : '#666')};">${isDating ? '恋人（交往中）' : (npc.favor >= 80 ? '暧昧试探期' : '普通朋友')}</b>
+                        当前关系：<b style="color:${isDating ? '#ff4d4f' : (npc.favor >= 80 ? '#fa8c16' : '#666')};">${isDating ? '恋人（交往中）' : (npc.favor >= 80 ? '暧昧期' : '朋友')}</b>
                     </div>
                     <button type="button" onclick="window.toggleNpcRelationshipStage('${npcId}')" style="border:none;background:${isDating ? '#fff1f0' : '#f0f9eb'};color:${isDating ? '#ff4d4f' : '#07c160'};padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;">
-                        ${isDating ? '解除恋人' : '确立恋爱'}
+                        ${isDating ? '解除恋爱' : '确立恋爱'}
                     </button>
                 </div>
 
@@ -543,6 +561,22 @@
         };
     };
 
+    // 编辑角色个性签名
+    window.openEditNpcSignatureModal = function(npcId) {
+        const npc = window.G.npcs[npcId];
+        if (!npc) return;
+        window.openWechatCleanModal('设置角色个性签名', `
+            <textarea id="wcleanNpcSigInput" rows="3" maxlength="60" placeholder="填写角色的个性签名..." class="wechat-clean-input" style="line-height:1.4;resize:none;">${escapeHtml(npc.signature || '')}</textarea>
+        `, () => {
+            const val = document.getElementById('wcleanNpcSigInput').value.trim();
+            npc.signature = val;
+            window.syncCustomNpcsToLocalBackup();
+            if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+            window.openNpcProfileCardModal(npcId);
+            if (typeof showToast === 'function') showToast('个性签名已更新', 'success', 1200);
+        });
+    };
+
     window.toggleNpcRelationshipStage = function(npcId) {
         const npc = window.G.npcs[npcId];
         if (!npc) return;
@@ -551,15 +585,15 @@
         if (isDating) {
             npc.relationshipStage = 'friend';
             npc.isDating = false;
-            if (typeof showToast === 'function') showToast('已恢复为朋友关系，恋人模式关闭', 'info', 1200);
+            if (typeof showToast === 'function') showToast('已恢复为朋友关系', 'info', 1200);
         } else {
             if ((npc.favor || 0) < 80) {
-                if (typeof showToast === 'function') showToast('好感度需达到 80 且双方暧昧才可确立恋人', 'error', 1500);
+                if (typeof showToast === 'function') showToast('好感度需达到 80 才可确立恋人', 'error', 1500);
                 return;
             }
             npc.relationshipStage = 'dating';
             npc.isDating = true;
-            if (typeof showToast === 'function') showToast('已正式确立恋爱关系！恋人专属规范生效', 'success', 1500);
+            if (typeof showToast === 'function') showToast('已正式确立恋爱关系！', 'success', 1500);
         }
 
         window.syncCustomNpcsToLocalBackup();
@@ -627,8 +661,8 @@
     window.openEditNpcNameModal = function(npcId) {
         const npc = window.G.npcs[npcId];
         if (!npc) return;
-        window.openWechatCleanModal('更改角色名字', `
-            <input type="text" id="wcleanNameInput" value="${escapeHtml(npc.name)}" class="wechat-clean-input">
+        window.openWechatCleanModal('修改昵称', `
+            <input type="text" id="wcleanNameInput" value="${escapeHtml(npc.name)}" maxlength="20" class="wechat-clean-input">
         `, () => {
             const val = document.getElementById('wcleanNameInput').value.trim();
             if (!val) return false;
@@ -766,7 +800,6 @@
         for (const msg of chatHist) {
             const isSelf = (msg.from === 'player');
 
-            // 引用条 HTML 渲染
             let quoteHtml = '';
             if (msg.quote) {
                 quoteHtml = `
@@ -790,12 +823,13 @@
                 </div>`;
             } else if (msg.type === 'contact_card') {
                 const card = msg.contactCard || {};
+                const sigShow = card.signature ? `<div style="font-size:11px;color:#07c160;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">“${escapeHtml(card.signature)}”</div>` : '';
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
                     ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(npc, 38)}</div>` : ''}
                     <div style="max-width:74%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                         ${quoteHtml}
-                        <div class="wechat-contact-card" onclick="window.openContactCardDetailModal('${escapeHtml(card.id || '')}', '${escapeHtml(card.name || '')}', '${escapeHtml(card.persona || '')}', '${escapeHtml(card.avatar || '')}')">
+                        <div class="wechat-contact-card" onclick="window.openContactCardDetailModal('${escapeHtml(card.id || '')}', '${escapeHtml(card.name || '')}', '${escapeHtml(card.persona || '')}', '${escapeHtml(card.avatar || '')}', '${escapeHtml(card.signature || '')}')">
                             <div style="font-size:11px;color:#888;margin-bottom:6px;border-bottom:0.5px solid #f0f0f0;padding-bottom:4px;">个人名片</div>
                             <div style="display:flex;align-items:center;gap:10px;">
                                 <div style="width:42px;height:42px;border-radius:6px;overflow:hidden;background:#eee;flex-shrink:0;">
@@ -803,6 +837,7 @@
                                 </div>
                                 <div style="flex:1;min-width:0;">
                                     <div style="font-size:14px;font-weight:600;color:#181818;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(card.name || '好友')}</div>
+                                    ${sigShow}
                                     <div style="font-size:11.5px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;">${escapeHtml(card.persona || 'MC同伴')}</div>
                                 </div>
                             </div>
@@ -876,7 +911,6 @@
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
                 </div>`;
             } else if (msg.type === 'image_flip' || (isSelf && msg.imageDesc && !msg.imageUrl)) {
-                // 玩家模式一：经典点击翻转卡片
                 const desc = msg.imageDesc || msg.text || '画片内容';
                 const frontImg = msg.imageUrl || 'assets/icons/chat.png';
                 messagesHtml += `
@@ -900,7 +934,6 @@
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
                 </div>`;
             } else if (!isSelf && (msg.type === 'image_text_only' || msg.imageDesc)) {
-                // NPC发出的照片：微信质感文字描述框
                 const desc = msg.imageDesc || msg.text || '照片内容';
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:flex-start;margin-bottom:12px;align-items:flex-start;">
@@ -915,7 +948,6 @@
                     </div>
                 </div>`;
             } else if (msg.type === 'image' || msg.imageUrl) {
-                // 模式二与模式三：均以真实图片呈现，若包含文字描绘则附带备注
                 const imgSrc = msg.imageUrl || msg.url || 'assets/icons/chat.png';
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
@@ -1083,8 +1115,8 @@
         }
     }
 
-    // 查看名片详情弹窗
-    window.openContactCardDetailModal = function(id, name, persona, avatar) {
+    // 查看名片详情弹窗（支持个性签名）
+    window.openContactCardDetailModal = function(id, name, persona, avatar, signature) {
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
         const exists = !!(window.G.npcs && window.G.npcs[id]);
 
@@ -1094,15 +1126,16 @@
                     <img src="${avatar || 'assets/icons/chat.png'}" style="width:100%;height:100%;object-fit:cover;" onerror="this.src='assets/icons/chat.png';">
                 </div>
                 <div style="font-size:16px;font-weight:600;color:#181818;">${escapeHtml(name)}</div>
-                <div style="font-size:12px;color:#888;margin:6px 0 12px;line-height:1.4;">${escapeHtml(persona || 'MC同伴')}</div>
+                ${signature ? `<div style="font-size:12px;color:#07c160;margin-top:4px;">“${escapeHtml(signature)}”</div>` : ''}
+                <div style="font-size:12px;color:#888;margin:6px 0 14px;line-height:1.4;">${escapeHtml(persona || 'MC同伴')}</div>
                 ${exists ? `<div style="font-size:12px;color:#07c160;font-weight:500;">已在通讯录中</div>` : `
-                <button type="button" onclick="window.addContactFromCard('${escapeHtml(id)}','${escapeHtml(name)}','${escapeHtml(persona)}','${escapeHtml(avatar)}')" style="border:none;background:#07c160;color:#fff;padding:8px 24px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">添加至当前通讯录</button>
+                <button type="button" onclick="window.addContactFromCard('${escapeHtml(id)}','${escapeHtml(name)}','${escapeHtml(persona)}','${escapeHtml(avatar)}','${escapeHtml(signature || '')}')" style="border:none;background:#07c160;color:#fff;padding:8px 24px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">添加至通讯录</button>
                 `}
             </div>
         `, () => {});
     };
 
-    window.addContactFromCard = function(id, name, persona, avatar) {
+    window.addContactFromCard = function(id, name, persona, avatar, signature) {
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
         if (!window.G.npcs) window.G.npcs = {};
         
@@ -1112,6 +1145,7 @@
             name: name,
             region: '中国',
             persona: persona || '名片推荐好友',
+            signature: signature || '',
             favor: 50,
             relationshipStage: 'friend',
             avatarUrl: avatar || window.getRandomAvatar(),
@@ -1122,7 +1156,7 @@
         window.syncCustomNpcsToLocalBackup();
         if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
         document.querySelector('.wechat-clean-modal-mask')?.remove();
-        if (typeof showToast === 'function') showToast('已成功添加联系人', 'success', 1200);
+        if (typeof showToast === 'function') showToast('联系人已添加', 'success', 1200);
         renderChatApp();
     };
 
@@ -1262,7 +1296,7 @@
         });
 
         if (wasPeeked && typeof showToast === 'function') {
-            showToast('已撤回（对方在通知栏不小心瞄到一眼）', 'info', 1500);
+            showToast('已撤回（对方在通知栏瞄到一眼）', 'info', 1500);
         } else if (typeof showToast === 'function') {
             showToast('已撤回', 'info', 1200);
         }
@@ -1274,9 +1308,9 @@
     };
 
     window.openVoiceInputModal = function(type, id) {
-        window.openWechatCleanModal('发送模拟语音消息', `
+        window.openWechatCleanModal('发送语音消息', `
             <div style="display:flex;flex-direction:column;gap:10px;text-align:left;">
-                <div style="font-size:12px;color:#666;">输入你想以语音说出的话（系统自动换算微信秒数）：</div>
+                <div style="font-size:12px;color:#666;">输入你想说出的话（系统自动换算微信秒数）：</div>
                 <textarea id="wcleanVoiceTextInput" rows="3" placeholder="例如：我刚回到家，今天真是累死我了..." class="wechat-clean-input" style="line-height:1.4;resize:none;"></textarea>
             </div>
         `, () => {
@@ -1310,7 +1344,7 @@
         });
     };
 
-    // 🤖 单人私聊 AI 回复触发（将图片文字描述喂给AI，节省Token且杜绝无多模态视觉报错）
+    // 🤖 单人私聊 AI 回复触发
     window.triggerAIReplyForSingle = async function(npcId) {
         const npc = window.G.npcs[npcId];
         if (!npc) return;
@@ -1342,16 +1376,15 @@
         const recentDialogue = history.slice(-14).map(m => {
             const speaker = (m.from === 'player') ? curAcc.name : npc.name;
             if (m.from === 'action' && m.recalledWasPeeked && !m.peekHandled && m.recalledText) {
-                peekNotice += `\n【系统单次提醒】：对方刚才撤回了一条消息：“${m.recalledText}”，你在手机通知栏不经意瞄到了一眼。作为正常活人，你随口调侃一句或吐槽网速即可，严禁在后续多轮对话中反复抓着问。\n`;
+                peekNotice += `\n【系统单次提醒】：对方刚才撤回了一条消息：“${m.recalledText}”，你在手机通知栏不经意瞄到了一眼。随口调侃一句或吐槽网速即可，严禁在后续多轮对话中反复抓着问。\n`;
                 m.peekHandled = true;
                 return `[系统]: 对方撤回了一条消息`;
             }
             if (m.type === 'voice') return `${speaker} [语音]: ${m.text || ''}`;
             if (m.type === 'shared_moment') return `${speaker} [分享了朋友圈动态]: ${m.sharedMoment?.author} 发的 “${m.sharedMoment?.body || ''}”；配图：${m.sharedMoment?.imageDesc || '无'}；评论区八卦：${m.sharedMoment?.commentsSummary || '暂无评论'}`;
-            if (m.type === 'contact_card') return `${speaker} [向你推荐了名片]: ${m.contactCard?.name}（人设：${m.contactCard?.persona || 'MC同伴'}，身份：${m.contactCard?.isAlt ? '对方的小号' : '新朋友'}）`;
+            if (m.type === 'contact_card') return `${speaker} [推荐了名片]: ${m.contactCard?.name}（人设：${m.contactCard?.persona || 'MC同伴'}，签名：“${m.contactCard?.signature || '无'}”，身份：${m.contactCard?.isAlt ? '对方的小号' : '新朋友'}）`;
             if (m.type === 'moment_notice') return `[系统提醒]: ${m.author} 刚发了一条新朋友圈动态`;
             if (m.originalText) return `${speaker}: ${m.originalText} (译: ${m.text || ''})`;
-            // 核心设计：无论哪种图片，只要有文字描绘就只将文字描绘传给AI，省Token且支持任意纯文本大模型！
             if (m.imageDesc) return `${speaker} [发了张照片，画面描绘]: ${m.imageDesc}`;
             if (m.type === 'image' || m.imageUrl) return `${speaker} [发了张自拍/游戏截图]`;
             return `${speaker}: ${m.text || ''}`;
@@ -1530,7 +1563,7 @@
 
     window.openAddStickerChoiceModal = function(type, id) {
         const curCat = window.G.activeStickerCategory || '猪猪';
-        window.openWechatCleanModal(`添加表情包到「${escapeHtml(curCat)}」`, `
+        window.openWechatCleanModal(`添加表情包`, `
             <div style="display:flex;flex-direction:column;gap:8px;">
                 <label style="border:1px solid #dcdcdc;background:#f9f9f9;padding:12px;border-radius:6px;font-size:13px;font-weight:500;color:#333;cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
                     <span>从手机相册导入本地表情</span>
@@ -1568,7 +1601,7 @@
             const desc = document.getElementById('wcleanStickerDescInput').value.trim() || '自定义表情';
             if (!window.G.stickerLibrary) window.G.stickerLibrary = [];
             window.G.stickerLibrary.push({ category: cat, desc, url: base64Url });
-            if (typeof showToast === 'function') showToast('表情已添加并同步AI感知', 'success', 1200);
+            if (typeof showToast === 'function') showToast('表情已添加', 'success', 1200);
             if (type === 'single') renderSingleChatWindow();
             else if (typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
             if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
@@ -1637,7 +1670,7 @@
         else if (typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
     };
 
-    // 📇 推荐名片选择弹窗
+    // 📇 推荐名片选择弹窗（透传个性签名）
     window.openRecommendContactModal = function(type, id) {
         window._plusDrawerOpen = false;
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '我' };
@@ -1661,6 +1694,7 @@
                 id: 'main',
                 name: mainAccName,
                 avatar: window.G.player?.avatar || 'assets/icons/chat.png',
+                signature: window.G.player?.signature || '',
                 personaTag: '主账号'
             });
         }
@@ -1674,47 +1708,53 @@
         const otherMyAccounts = allAccounts.filter(a => a.id !== curAcc.id);
 
         let friendsHtml = candidateFriends.map(n => `
-            <div onclick="window.doSendContactCardDirect('${type}', '${id}', '${n.id}', '${escapeHtml(n.name)}', '${escapeHtml(n.persona || '好友')}', '${escapeHtml(n.avatarUrl || '')}', false)" style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid #f2f2f2;cursor:pointer;">
-                <div style="display:flex;align-items:center;gap:8px;">
-                    <div style="width:32px;height:32px;border-radius:4px;overflow:hidden;background:#eee;">
+            <div onclick="window.doSendContactCardDirect('${type}', '${id}', '${n.id}', '${escapeHtml(n.name)}', '${escapeHtml(n.persona || '好友')}', '${escapeHtml(n.avatarUrl || '')}', false, '${escapeHtml(n.signature || '')}')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid #f2f2f2;cursor:pointer;">
+                <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1;">
+                    <div style="width:34px;height:34px;border-radius:4px;overflow:hidden;background:#eee;flex-shrink:0;">
                         <img src="${n.avatarUrl || 'assets/icons/chat.png'}" style="width:100%;height:100%;object-fit:cover;">
                     </div>
-                    <span style="font-size:13.5px;color:#181818;">${escapeHtml(n.name)}</span>
+                    <div style="min-width:0;flex:1;">
+                        <div style="font-size:13.5px;color:#181818;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(n.name)}</div>
+                        ${n.signature ? `<div style="font-size:11px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(n.signature)}</div>` : ''}
+                    </div>
                 </div>
-                <span style="font-size:12px;color:#07c160;font-weight:600;">发送 ›</span>
+                <span style="font-size:12px;color:#07c160;font-weight:600;flex-shrink:0;margin-left:8px;">发送 ›</span>
             </div>
         `).join('');
 
         let altsHtml = otherMyAccounts.map(a => `
-            <div onclick="window.doSendContactCardDirect('${type}', '${id}', '${a.id}', '${escapeHtml(a.name)}', '我的身份（${escapeHtml(a.personaTag || (a.id === 'main' ? '主号' : '小号'))}）', '${escapeHtml(a.avatar || 'assets/icons/chat.png')}', true)" style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid #f2f2f2;cursor:pointer;">
-                <div style="display:flex;align-items:center;gap:8px;">
-                    <div style="width:32px;height:32px;border-radius:4px;overflow:hidden;background:#eee;">
+            <div onclick="window.doSendContactCardDirect('${type}', '${id}', '${a.id}', '${escapeHtml(a.name)}', '我的身份（${escapeHtml(a.personaTag || (a.id === 'main' ? '主号' : '小号'))}）', '${escapeHtml(a.avatar || 'assets/icons/chat.png')}', true, '${escapeHtml(a.signature || '')}')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid #f2f2f2;cursor:pointer;">
+                <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1;">
+                    <div style="width:34px;height:34px;border-radius:4px;overflow:hidden;background:#eee;flex-shrink:0;">
                         <img src="${a.avatar || 'assets/icons/chat.png'}" style="width:100%;height:100%;object-fit:cover;">
                     </div>
-                    <div>
-                        <span style="font-size:13.5px;color:#181818;">${escapeHtml(a.name)}</span>
-                        <span style="font-size:10px;background:#e0f2fe;color:#0369a1;padding:1px 4px;border-radius:3px;margin-left:4px;">${a.id === 'main' ? '我的主号' : '我的小号'}</span>
+                    <div style="min-width:0;flex:1;">
+                        <div style="display:flex;align-items:center;gap:4px;">
+                            <span style="font-size:13.5px;color:#181818;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(a.name)}</span>
+                            <span style="font-size:10px;background:#e0f2fe;color:#0369a1;padding:1px 4px;border-radius:3px;flex-shrink:0;">${a.id === 'main' ? '我的主号' : '我的小号'}</span>
+                        </div>
+                        ${a.signature ? `<div style="font-size:11px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(a.signature)}</div>` : ''}
                     </div>
                 </div>
-                <span style="font-size:12px;color:#07c160;font-weight:600;">发送 ›</span>
+                <span style="font-size:12px;color:#07c160;font-weight:600;flex-shrink:0;margin-left:8px;">发送 ›</span>
             </div>
         `).join('');
 
-        window.openWechatCleanModal('推荐名片给对方', `
+        window.openWechatCleanModal('推荐名片', `
             <div style="text-align:left;">
-                <div style="font-size:11.5px;color:#888;margin-bottom:6px;font-weight:600;">推荐我的其他身份/小号：</div>
+                <div style="font-size:11.5px;color:#888;margin-bottom:6px;font-weight:600;">推荐我的其他小号：</div>
                 <div style="margin-bottom:12px;">
-                    ${altsHtml || '<div style="color:#bbb;font-size:12px;padding:4px 0;">暂无其他小号，可在「我」中创建小号</div>'}
+                    ${altsHtml || '<div style="color:#bbb;font-size:12px;padding:4px 0;">暂无其他小号</div>'}
                 </div>
                 <div style="font-size:11.5px;color:#888;margin-bottom:6px;font-weight:600;">推荐当前通讯录好友：</div>
                 <div style="max-height:160px;overflow-y:auto;">
-                    ${friendsHtml || '<div style="text-align:center;color:#bbb;padding:16px 0;font-size:12px;">暂无其他好友名片可推荐</div>'}
+                    ${friendsHtml || '<div style="text-align:center;color:#bbb;padding:16px 0;font-size:12px;">暂无可推荐的好友名片</div>'}
                 </div>
             </div>
         `, () => {});
     };
 
-    window.doSendContactCardDirect = function(type, targetId, cardId, name, persona, avatar, isAlt) {
+    window.doSendContactCardDirect = function(type, targetId, cardId, name, persona, avatar, isAlt, signature) {
         document.querySelector('.wechat-clean-modal-mask')?.remove();
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '我' };
         const time = new Date().toLocaleTimeString().slice(0, 5);
@@ -1730,7 +1770,8 @@
                 name: name,
                 persona: persona,
                 avatar: avatar,
-                isAlt: isAlt
+                isAlt: isAlt,
+                signature: signature || ''
             },
             time,
             timestamp: Date.now()
@@ -1758,7 +1799,7 @@
         if (list.length === 0) {
             window.openWechatCleanModal('Token 消耗明细', `
                 <div style="text-align:center;color:#888;padding:24px 0;font-size:13px;">
-                    暂无近期交互记录<br><span style="font-size:11px;color:#bbb;">与好友或群聊产生对话后将自动记录</span>
+                    暂无近期交互记录
                 </div>
             `, () => {});
             return;
@@ -1781,13 +1822,13 @@
             <div style="max-height:260px;overflow-y:auto;padding-right:4px;">
                 ${rowsHtml}
             </div>
-            <div style="font-size:11px;color:#999;text-align:center;margin-top:10px;">仅保留历史最近 10 轮，超过自动剔除</div>
+            <div style="font-size:11px;color:#999;text-align:center;margin-top:10px;">仅保留历史最近 10 轮</div>
         `, () => {});
     };
 
     // 📷 聊天发图片（恢复完整的 3 种模式）
     window.openChatSendImageModal = function(type, id) {
-        let chatSendMode = 'text_only'; // 'text_only' | 'real_only' | 'real_with_desc'
+        let chatSendMode = 'text_only';
         let uploadedChatImg = null;
 
         window.openWechatCleanModal('发送图片消息', `
@@ -1801,7 +1842,7 @@
 
                 <!-- 模式一：文字代替图片（翻转卡片） -->
                 <div id="panelChatTextOnly" style="display:block;">
-                    <div style="font-size:11.5px;color:#888;margin-bottom:4px;">填写卡片背面的画面描绘（点击卡片翻转查看）：</div>
+                    <div style="font-size:11.5px;color:#888;margin-bottom:4px;">填写画面描绘（点击卡片翻转查看）：</div>
                     <textarea id="wchatFlipDescInput" rows="3" placeholder="例如：我在平原建造好的两层原木别墅、箱子里的整整一组下界合金锭..." class="wechat-clean-input" style="line-height:1.4;resize:none;"></textarea>
                 </div>
 
@@ -1820,7 +1861,7 @@
 
                 <!-- 模式三：文字描绘补充 -->
                 <div id="panelChatExtraDesc" style="display:none;">
-                    <div style="font-size:11.5px;color:#888;margin-bottom:4px;">向对方/AI解释图片内容（AI不看真实图片，极度节省Token）：</div>
+                    <div style="font-size:11.5px;color:#888;margin-bottom:4px;">向对方描述图片内容（极省Token）：</div>
                     <textarea id="wchatRealDescInput" rows="2" placeholder="向AI描述图片中的关键画面（如：我的血量只剩半颗心，正在被苦力怕追赶）" class="wechat-clean-input" style="line-height:1.4;resize:none;"></textarea>
                 </div>
             </div>

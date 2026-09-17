@@ -8,9 +8,9 @@
  *    - ② 纯真实图片（从本地相册自选）
  *    - ③ 真实图片 + 文字描绘（界面展示真实图片，AI感知仅提取文字描述以极度节省Token）
  * 3. 动态双轨持久化防丢恢复（后台重进不丢动态）
- * 4. 专属群演固定永久头像机制（除非手动刷新否则永久锁定）
- * 5. 点赞、评论、回复、召唤互动（0ms 即刻呼出生成胶囊，绝无卡顿延迟感）
- * 6. 动态转发至私聊/群聊功能（正确标记为玩家发送）
+ * 4. 专属群演固定永久头像机制（除非手动刷新否则锁定）
+ * 5. 点赞、评论、回复、召唤互动（0ms 即刻呼出生成胶囊）
+ * 6. 动态转发至私聊/群聊功能（置于操作栏右端，紧凑布局）
  * 7. 仿微信全屏大图与快照详情预览
  */
 
@@ -115,14 +115,14 @@
             // 配图渲染：三种模式自适应呈现
             let mediaHtml = '';
             if (m.image) {
-                // 模式二与模式三：均在界面展示真实图片
+                // 模式二与模式三：真实图片展示
                 mediaHtml = `
                 <div style="margin:8px 0;">
                     <img src="${m.image}" onclick="window.openMomentImagePreview('${m.image}', '${escapeHtml(m.imageDesc || m.body || '')}')" style="max-width:210px;max-height:220px;border-radius:6px;object-fit:cover;display:block;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.1);" onerror="this.style.display='none';">
                     ${m.imageDesc ? `<div style="font-size:11px;color:#888;margin-top:4px;line-height:1.3;">（意象描绘：${escapeHtml(m.imageDesc)}）</div>` : ''}
                 </div>`;
             } else if (m.imageDesc) {
-                // 模式一：纯文字代替图片（高质感拍立得画片）
+                // 模式一：纯文字代替图片（拍立得快照）
                 mediaHtml = `
                 <div style="margin:8px 0;">
                     <div class="wechat-photo-card" onclick="window.openMomentArtCardPreview(${m.id})">
@@ -156,8 +156,9 @@
                     </div>
                     ${mediaHtml}
 
+                    <!-- 动态操作栏：转发移至右侧，紧凑排列 -->
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:6px;font-size:12px;">
-                        <div style="display:flex;gap:12px;align-items:center;">
+                        <div style="display:flex;gap:14px;align-items:center;">
                             <button onclick="window.toggleMomentLike(${m.id})" style="border:none;background:none;color:${isLiked ? '#fa5151' : '#576b95'};cursor:pointer;display:flex;align-items:center;gap:3px;font-size:12px;padding:0;">
                                 <span>${isLiked ? '已赞' : '赞'}</span> <span>(${m.likes || 0})</span>
                             </button>
@@ -167,15 +168,16 @@
                             <button onclick="window.triggerAiCommentForMoment(${m.id})" style="border:none;background:none;color:#07c160;cursor:pointer;font-size:12px;padding:0;font-weight:500;">
                                 召唤互动
                             </button>
+                        </div>
+                        <div style="display:flex;gap:10px;align-items:center;">
                             <button onclick="window.shareMomentToChat(${m.id})" style="border:none;background:none;color:#576b95;cursor:pointer;font-size:12px;padding:0;">
                                 转发
                             </button>
-                        </div>
-                        ${isSelf ? `
-                        <div style="display:flex;gap:8px;">
+                            ${isSelf ? `
                             <button onclick="window.recallMoment(${m.id})" style="border:none;background:none;color:#999;font-size:11px;cursor:pointer;padding:0;">撤回</button>
-                            <button onclick="window.deleteMoment(${m.id})" style="border:none;background:none;color:#ef4444;font-size:11px;cursor:pointer;padding:0;">删除</button>
-                        </div>` : ''}
+                            <button onclick="window.confirmDeleteMoment(${m.id})" style="border:none;background:none;color:#ef4444;font-size:11px;cursor:pointer;padding:0;">删除</button>
+                            ` : ''}
+                        </div>
                     </div>
                     ${commentsBoxHtml}
                 </div>
@@ -185,8 +187,8 @@
         const npcCount = (window.G.momentsNpcs || []).length;
         const bannerHtml = `
         <div style="background:#f7f7f7;padding:7px 14px;border-bottom:0.5px solid #ebebeb;display:flex;justify-content:space-between;align-items:center;font-size:11.5px;color:#666;">
-            <span>专属朋友圈群演：${npcCount} 位（头像已锁定）</span>
-            <span onclick="window.openMomentsNpcPoolModal()" style="color:#07c160;cursor:pointer;font-weight:600;">管理圈友/换头像 ›</span>
+            <span>专属圈友 · ${npcCount} 位</span>
+            <span onclick="window.openMomentsNpcPoolModal()" style="color:#07c160;cursor:pointer;font-weight:600;">管理圈友 ›</span>
         </div>`;
 
         return bannerHtml + cardsHtml;
@@ -314,10 +316,10 @@
         }
     };
 
-    // 📷 发布动态弹窗（恢复完整三种模式：文字代替 / 纯真实图片 / 真实图片+文字描述）
+    // 📷 发布动态弹窗
     window.openPostMomentModal = function() {
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { name: '我', avatar: 'assets/icons/chat.png' };
-        let selectedMode = 'text_only'; // 'text_only' | 'real_only' | 'real_with_desc'
+        let selectedMode = 'text_only';
         let uploadedBase64 = null;
 
         if (typeof openWechatCleanModal === 'function') {
@@ -335,7 +337,7 @@
 
                     <!-- 模式一：纯文字意象 -->
                     <div id="panelTextOnly" style="display:block;">
-                        <div style="font-size:11.5px;color:#888;margin-bottom:4px;">画面意象描绘（免生图/极省Token）：</div>
+                        <div style="font-size:11.5px;color:#888;margin-bottom:4px;">画面意象描绘（极省Token）：</div>
                         <input type="text" id="wpostDescOnlyInput" placeholder="例如：落日余晖下的小麦农场、手持下界合金剑..." class="wechat-clean-input">
                     </div>
 
@@ -355,7 +357,7 @@
 
                     <!-- 模式三独有文字描绘 -->
                     <div id="panelRealDescExtra" style="display:none;">
-                        <div style="font-size:11.5px;color:#888;margin-bottom:4px;">图片内容文字描述（给AI看以节省Token）：</div>
+                        <div style="font-size:11.5px;color:#888;margin-bottom:4px;">图片文字描述（给AI看以节省Token）：</div>
                         <input type="text" id="wpostExtraDescInput" placeholder="向AI解释图片里的内容（AI不消耗图片Token）" class="wechat-clean-input">
                     </div>
                 </div>
@@ -555,7 +557,6 @@
         const speaker = candidates.length ? candidates[Math.floor(Math.random() * candidates.length)] : pool[0];
 
         showMomentsGeneratingBanner(`「${speaker.name}」正在赶来评论...`);
-        // AI 感知仅提取文字描绘，绝不传长 Base64 图片以节省 Token
         let picInfo = item.imageDesc ? ` [配图描述：${item.imageDesc}]` : (item.image ? ` [好友发了张自拍/游戏截图]` : '');
 
         try {
@@ -650,7 +651,7 @@
         }
     };
 
-    // 👤 专属 NPC 管理
+    // 👤 专属圈友管理
     window.openMomentsNpcPoolModal = function() {
         ensureFeedLoaded();
         const list = window.G.momentsNpcs || [];
@@ -672,11 +673,11 @@
         `).join('');
 
         if (typeof openWechatCleanModal === 'function') {
-            openWechatCleanModal('朋友圈专属圈友管理', `
+            openWechatCleanModal('专属圈友管理', `
                 <div style="text-align:left;">
-                    <div style="font-size:12px;color:#888;margin-bottom:8px;">圈友头像默认已锁定，仅点击「换头像」才会重新生成：</div>
+                    <div style="font-size:12px;color:#888;margin-bottom:8px;">圈友列表：</div>
                     <div style="max-height:180px;overflow-y:auto;margin-bottom:10px;">
-                        ${rowsHtml || '<div style="text-align:center;color:#bbb;padding:16px 0;font-size:12px;">暂无专属群演，点击下方添加</div>'}
+                        ${rowsHtml || '<div style="text-align:center;color:#bbb;padding:16px 0;font-size:12px;">暂无专属圈友，点击下方添加</div>'}
                     </div>
                     <div style="border-top:0.5px solid #eee;padding-top:8px;">
                         <input type="text" id="waddMomentNpcName" placeholder="圈友名字（如：红石怪人、佛系建筑师）" class="wechat-clean-input" style="margin-bottom:6px;">
@@ -695,7 +696,7 @@
             saveMomentsNpcPool();
             document.querySelector('.wechat-clean-modal-mask')?.remove();
             window.openMomentsNpcPoolModal();
-            if (typeof showToast === 'function') showToast('头像已更新并锁定', 'success', 1000);
+            if (typeof showToast === 'function') showToast('头像已更新', 'success', 1000);
         }
     };
 
@@ -703,7 +704,7 @@
         const name = document.getElementById('waddMomentNpcName')?.value.trim();
         const persona = document.getElementById('waddMomentNpcPersona')?.value.trim() || 'MC好友同伴';
         if (!name) {
-            if (typeof showToast === 'function') showToast('请填写群演名字', 'error');
+            if (typeof showToast === 'function') showToast('请填写圈友名字', 'error');
             return;
         }
 
@@ -711,7 +712,7 @@
         const avatar = (typeof getRandomAvatar === 'function') ? getRandomAvatar() : 'assets/icons/chat.png';
         window.G.momentsNpcs.push({ name, persona, avatar });
         saveMomentsNpcPool();
-        if (typeof showToast === 'function') showToast('圈友已添加并锁定头像', 'success', 1000);
+        if (typeof showToast === 'function') showToast('圈友已添加', 'success', 1000);
         document.querySelector('.wechat-clean-modal-mask')?.remove();
         window.openMomentsNpcPoolModal();
     };
@@ -726,14 +727,25 @@
         }
     };
 
-    // 删除与撤回
+    // 微信风格确认删除动态
+    window.confirmDeleteMoment = function(id) {
+        if (typeof openWechatCleanModal === 'function') {
+            openWechatCleanModal('删除动态', `
+                <div style="text-align:center;padding:8px 0;font-size:13.5px;color:#333;">
+                    确定要删除这条朋友圈动态吗？
+                </div>
+            `, () => {
+                ensureFeedLoaded();
+                window.G.feed = window.G.feed.filter(f => f.id !== id);
+                if (typeof syncMomentsFeedToLocalBackup === 'function') syncMomentsFeedToLocalBackup();
+                if (typeof renderChatApp === 'function') renderChatApp();
+                if (typeof autoSaveGame === 'function') autoSaveGame();
+            });
+        }
+    };
+
     window.deleteMoment = function(id) {
-        if (!confirm('确定删除这条动态吗？')) return;
-        ensureFeedLoaded();
-        window.G.feed = window.G.feed.filter(f => f.id !== id);
-        if (typeof syncMomentsFeedToLocalBackup === 'function') syncMomentsFeedToLocalBackup();
-        if (typeof renderChatApp === 'function') renderChatApp();
-        if (typeof autoSaveGame === 'function') autoSaveGame();
+        window.confirmDeleteMoment(id);
     };
 
     window.recallMoment = function(id) {
