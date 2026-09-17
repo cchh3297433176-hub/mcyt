@@ -1,6 +1,6 @@
 /**
  * js/apps/chat/chat-app.js
- * 💬 微信独立主应用（仿微信白灰绿质感 · 双语即时翻译 · 微信拟真语音条 · 纯文字意象卡片 · 真表情调用 · 撤回单次偷窥脱敏 · 消息长按引用与编辑 · 历史十轮Token统计 · 聊天中触发动态发布）
+ * 💬 微信独立主应用（仿微信白灰绿质感 · 双语即时翻译 · 拟真语音条 · 拍立得画片 · 真表情调用 · 撤回单次偷窥脱敏 · 长按引用与编辑 · Token统计 · 动态转发与名片推荐 · 大小号好友物理隔离）
  */
 
 (function() {
@@ -11,28 +11,37 @@
     window._plusDrawerOpen = false;
     window._activeQuoteMessage = null; // 当前正在引用的消息对象
 
-    // 微信"消息"主列表构建
+    // 微信"消息"主列表构建（严格按照当前账号隔离好友列表）
     function buildChatListHTML() {
         const isDirect = window.G.chatActiveTab !== 'group';
+        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '我' };
 
         if (isDirect) {
-            const npcList = Object.values(window.G.npcs || {});
+            // 大小号好友物理隔离：小号没加的好友，小号通讯录绝不显示
+            const npcList = Object.values(window.G.npcs || {}).filter(npc => {
+                if (!npc.ownerAccountId || npc.ownerAccountId === 'all') return true;
+                return npc.ownerAccountId === curAcc.id;
+            });
+
             if (npcList.length === 0) {
                 return `
                 <div style="text-align:center;color:#b2b2b2;padding:60px 16px;font-size:13px;line-height:1.8;">
                     <b>暂无联系人</b><br>
-                    点击右上角「+」添加好友，开启活人感对话！
+                    当前账号「${escapeHtml(curAcc.name)}」暂未添加好友<br>
+                    点击右上角「+」添加好友或通过名片交换认识新朋友！
                 </div>`;
             }
 
             const rows = npcList.map(npc => {
-                const history = window.getAccountChatHistory(npc.id);
+                const history = window.getAccountChatHistory(npc.id, curAcc.id);
                 const last = history.length ? history[history.length - 1] : null;
                 let preview = '暂无消息，点击开始聊天';
                 if (last) {
                     if (last.from === 'action') preview = String(last.text || '');
                     else if (last.type === 'voice') preview = `[语音] ${last.seconds || 3}"`;
-                    else if (last.sharedMoment) preview = '[分享了一条动态]';
+                    else if (last.type === 'shared_moment') preview = '[分享了一条朋友圈动态]';
+                    else if (last.type === 'contact_card') preview = '[推荐了名片]';
+                    else if (last.type === 'moment_notice') preview = '[朋友圈更新提醒]';
                     else if (last.stickerUrl || last.type === 'sticker') preview = `[动画表情]`;
                     else if (last.type === 'image_text_only' || last.imageDesc) preview = `[图片描述: ${last.imageDesc || '图片'}]`;
                     else if (last.imageUrl || last.type === 'image') preview = '[图片]';
@@ -40,7 +49,7 @@
                     if (last.from === 'player') preview = '我：' + preview;
                 }
                 const timeLabel = last ? String(last.time || '').slice(0, 5) : '';
-                const blocked = (typeof window.isAccountBlockedByNpc === 'function') ? window.isAccountBlockedByNpc(npc.id) : false;
+                const blocked = (typeof window.isAccountBlockedByNpc === 'function') ? window.isAccountBlockedByNpc(npc.id, curAcc.id) : false;
                 const isDating = window.ChatPromptEngine && window.ChatPromptEngine.isNpcInDatingRelationship(npc);
                 return { npc, last, preview, timeLabel, blocked, isDating };
             }).sort((a, b) => {
@@ -82,6 +91,8 @@
             if (last) {
                 if (last.from === 'action') preview = String(last.text || '');
                 else if (last.type === 'voice') preview = `[语音] ${last.seconds || 3}"`;
+                else if (last.type === 'shared_moment') preview = '[分享了一条朋友圈动态]';
+                else if (last.type === 'contact_card') preview = '[推荐了名片]';
                 else preview = String(last.text || '[消息]').replace(/\n+/g, ' ').slice(0, 24);
                 if (last.senderName) preview = `${last.senderName}：${preview}`;
             }
@@ -256,7 +267,9 @@
 
     window.openCreateCustomNpcModal = function() {
         document.querySelector('.wechat-action-sheet-mask')?.remove();
-        window.openWechatCleanModal('添加自建联系人', `
+        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '我' };
+
+        window.openWechatCleanModal(`为「${escapeHtml(curAcc.name)}」添加自建联系人`, `
             <div style="display:flex;flex-direction:column;gap:10px;text-align:left;">
                 <div>
                     <label style="font-size:12px;color:#666;">联系人昵称</label>
@@ -290,7 +303,6 @@
             }
             const region = document.getElementById('wcleanNewNpcRegion').value;
             const persona = document.getElementById('wcleanNewNpcPersona').value.trim() || 'MC好友同伴。';
-            const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
             const newId = 'custom_' + Date.now();
 
             if (!window.G.npcs) window.G.npcs = {};
@@ -303,7 +315,7 @@
                 relationshipStage: 'friend',
                 avatarUrl: window.getRandomAvatar(),
                 isCustom: true,
-                ownerAccountId: curAcc.id
+                ownerAccountId: curAcc.id // 严格绑定当前添加该联系人的账号！
             };
 
             window.syncCustomNpcsToLocalBackup();
@@ -315,9 +327,12 @@
 
     window.openCreateGroupModal = function() {
         document.querySelector('.wechat-action-sheet-mask')?.remove();
-        const npcs = Object.values(window.G.npcs || {});
+        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
+        // 只能从当前账号的好友列表中挑选群成员
+        const npcs = Object.values(window.G.npcs || {}).filter(n => !n.ownerAccountId || n.ownerAccountId === curAcc.id || n.ownerAccountId === 'all');
+        
         if (npcs.length === 0) {
-            if (typeof showToast === 'function') showToast('暂无可选联系人，请先添加', 'info');
+            if (typeof showToast === 'function') showToast('当前账号暂无可拉入群聊的好友', 'info');
             return;
         }
 
@@ -409,6 +424,7 @@
 
     window.handleFriendRequestAction = function(idx, accept) {
         document.querySelector('.wechat-clean-modal-mask')?.remove();
+        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
         const req = (window.G.friendRequests || [])[idx];
         if (req) {
             if (accept) {
@@ -422,7 +438,8 @@
                     favor: 50,
                     relationshipStage: 'friend',
                     avatarUrl: window.getRandomAvatar(),
-                    isCustom: true
+                    isCustom: true,
+                    ownerAccountId: curAcc.id
                 };
                 window.syncCustomNpcsToLocalBackup();
                 if (typeof showToast === 'function') showToast('已添加新好友', 'success', 1200);
@@ -696,7 +713,7 @@
         });
     };
 
-    // ⚡️ 局部 DOM 微操作：双语点击即时翻译，绝不整体重绘闪动！
+    // ⚡️ 局部 DOM 微操作：双语点击即时翻译
     window.toggleMessageTranslationDirect = function(el, msgId) {
         const box = document.getElementById(`transBox_${msgId}`);
         const btn = document.getElementById(`transBtn_${msgId}`);
@@ -758,6 +775,67 @@
                 <div style="text-align:center;margin:8px 0;">
                     <span style="display:inline-block;background:rgba(0,0,0,0.05);color:#888;padding:3px 10px;border-radius:4px;font-size:11.5px;max-width:85%;">${escapeHtml(msg.text || '')}</span>
                 </div>`;
+            } else if (msg.type === 'moment_notice') {
+                // 对方发表朋友圈动态系统居中提醒
+                messagesHtml += `
+                <div style="text-align:center;margin:10px 0;">
+                    <div class="wechat-sys-notice-pill" onclick="window.openMomentArtCardPreview(${msg.momentId})">
+                        <span>${escapeHtml(msg.author || '对方')} 发表了一条朋友圈动态</span>
+                        <span class="link">查看 ›</span>
+                    </div>
+                </div>`;
+            } else if (msg.type === 'contact_card') {
+                // 微信名片卡片
+                const card = msg.contactCard || {};
+                messagesHtml += `
+                <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
+                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(npc, 38)}</div>` : ''}
+                    <div style="max-width:74%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
+                        ${quoteHtml}
+                        <div class="wechat-contact-card" onclick="window.openContactCardDetailModal('${escapeHtml(card.id || '')}', '${escapeHtml(card.name || '')}', '${escapeHtml(card.persona || '')}', '${escapeHtml(card.avatar || '')}')">
+                            <div style="font-size:11px;color:#888;margin-bottom:6px;border-bottom:0.5px solid #f0f0f0;padding-bottom:4px;">个人名片</div>
+                            <div style="display:flex;align-items:center;gap:10px;">
+                                <div style="width:42px;height:42px;border-radius:6px;overflow:hidden;background:#eee;flex-shrink:0;">
+                                    <img src="${card.avatar || 'assets/icons/chat.png'}" style="width:100%;height:100%;object-fit:cover;" onerror="this.src='assets/icons/chat.png';">
+                                </div>
+                                <div style="flex:1;min-width:0;">
+                                    <div style="font-size:14px;font-weight:600;color:#181818;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(card.name || '好友')}</div>
+                                    <div style="font-size:11.5px;color:#888;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;">${escapeHtml(card.persona || 'MC同伴')}</div>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
+                    </div>
+                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
+                </div>`;
+            } else if (msg.type === 'shared_moment') {
+                // 转发的朋友圈图文分享卡片
+                const moment = msg.sharedMoment || {};
+                messagesHtml += `
+                <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
+                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(npc, 38)}</div>` : ''}
+                    <div style="max-width:74%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
+                        ${quoteHtml}
+                        <div class="wechat-share-moment-card" onclick="window.openMomentArtCardPreview(${moment.id})">
+                            <div style="font-size:11px;color:#888;margin-bottom:5px;display:flex;justify-content:space-between;">
+                                <span>朋友圈分享</span>
+                                <span style="color:#07c160;">查看详情 ›</span>
+                            </div>
+                            <div style="display:flex;gap:8px;align-items:center;">
+                                <div style="width:38px;height:38px;border-radius:4px;overflow:hidden;background:#eee;flex-shrink:0;">
+                                    <img src="${moment.avatar || 'assets/icons/chat.png'}" style="width:100%;height:100%;object-fit:cover;" onerror="this.src='assets/icons/chat.png';">
+                                </div>
+                                <div style="flex:1;min-width:0;">
+                                    <div style="font-size:12px;font-weight:600;color:#576b95;">${escapeHtml(moment.author || '好友')}</div>
+                                    <div style="font-size:12.5px;color:#222;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px;">${escapeHtml(moment.body || '')}</div>
+                                </div>
+                            </div>
+                            ${moment.imageDesc ? `<div style="font-size:11px;color:#666;margin-top:5px;background:#f9f9f9;padding:3px 6px;border-radius:3px;">[快照] ${escapeHtml(moment.imageDesc)}</div>` : ''}
+                        </div>
+                        <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
+                    </div>
+                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
+                </div>`;
             } else if (msg.from === 'behind_screen') {
                 messagesHtml += `
                 <div style="margin:8px 12px;background:#ffffff;border:1px dashed #dcdcdc;padding:8px 12px;border-radius:6px;font-size:12px;color:#555;line-height:1.5;">
@@ -796,16 +874,19 @@
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
                 </div>`;
             } else if (msg.type === 'image_text_only' || (!msg.imageUrl && (msg.type === 'image' || msg.imageDesc))) {
-                // 纯文字意象卡片（无需翻转）
+                // 拍立得画片快照预览
                 const desc = msg.imageDesc || msg.text || '画片内容';
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
                     ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(npc, 38)}</div>` : ''}
                     <div style="max-width:72%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                         ${quoteHtml}
-                        <div class="wechat-desc-card">
-                            <div style="font-size:10.5px;color:#07c160;font-weight:600;margin-bottom:3px;">📷 配图画面描述</div>
-                            <div style="font-size:13px;color:#2c3e50;line-height:1.45;word-break:break-word;">${escapeHtml(desc)}</div>
+                        <div class="wechat-photo-card" onclick="window.openSnapshotTextModal('${escapeHtml(desc)}')">
+                            <div class="wechat-photo-art-box">
+                                <span class="wechat-photo-art-badge">快照画面</span>
+                                <div class="wechat-photo-art-text">“${escapeHtml(desc)}”</div>
+                            </div>
+                            <div style="font-size:10px;color:#888;margin-top:4px;text-align:right;">拍立得快照 · 点击查看</div>
                         </div>
                         <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
                     </div>
@@ -958,7 +1039,7 @@
         const msgArea = document.getElementById('chatMessageArea');
         if (msgArea) setTimeout(() => { msgArea.scrollTop = msgArea.scrollHeight; }, 50);
 
-        // 绑定气泡交互（长按弹出操作菜单）
+        // 绑定气泡长按交互
         container.querySelectorAll('.chat-msg-row[data-msgid]').forEach(row => {
             const mid = row.dataset.msgid;
             if (!mid) return;
@@ -980,6 +1061,61 @@
         }
     }
 
+    // 快照文字详情全屏弹窗
+    window.openSnapshotTextModal = function(desc) {
+        window.openWechatCleanModal('拍立得画片快照', `
+            <div style="text-align:center;">
+                <div style="width:100%;min-height:160px;border-radius:8px;background:linear-gradient(135deg, #1e293b 0%, #334155 50%, #0f172a 100%);padding:20px 14px;box-sizing:border-box;color:#ffffff;display:flex;flex-direction:column;justify-content:center;align-items:center;box-shadow:0 6px 20px rgba(0,0,0,0.2);">
+                    <div style="font-size:10px;letter-spacing:1px;color:#07c160;margin-bottom:6px;font-weight:600;">IMAGE SNAPSHOT</div>
+                    <div style="font-size:14px;line-height:1.5;font-weight:500;">“${escapeHtml(desc)}”</div>
+                </div>
+            </div>
+        `, () => {});
+    };
+
+    // 查看名片详情弹窗（支持直接加好友）
+    window.openContactCardDetailModal = function(id, name, persona, avatar) {
+        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
+        const exists = !!(window.G.npcs && window.G.npcs[id]);
+
+        window.openWechatCleanModal('名片详情', `
+            <div style="text-align:center;padding:10px 0;">
+                <div style="width:60px;height:60px;border-radius:8px;overflow:hidden;margin:0 auto 10px;background:#eee;">
+                    <img src="${avatar || 'assets/icons/chat.png'}" style="width:100%;height:100%;object-fit:cover;" onerror="this.src='assets/icons/chat.png';">
+                </div>
+                <div style="font-size:16px;font-weight:600;color:#181818;">${escapeHtml(name)}</div>
+                <div style="font-size:12px;color:#888;margin:6px 0 12px;line-height:1.4;">${escapeHtml(persona || 'MC同伴')}</div>
+                ${exists ? `<div style="font-size:12px;color:#07c160;font-weight:500;">已在通讯录中</div>` : `
+                <button type="button" onclick="window.addContactFromCard('${escapeHtml(id)}','${escapeHtml(name)}','${escapeHtml(persona)}','${escapeHtml(avatar)}')" style="border:none;background:#07c160;color:#fff;padding:8px 24px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">添加至当前通讯录</button>
+                `}
+            </div>
+        `, () => {});
+    };
+
+    window.addContactFromCard = function(id, name, persona, avatar) {
+        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
+        if (!window.G.npcs) window.G.npcs = {};
+        
+        const newNpcId = id || ('contact_' + Date.now());
+        window.G.npcs[newNpcId] = {
+            id: newNpcId,
+            name: name,
+            region: '中国',
+            persona: persona || '名片推荐好友',
+            favor: 50,
+            relationshipStage: 'friend',
+            avatarUrl: avatar || window.getRandomAvatar(),
+            isCustom: true,
+            ownerAccountId: curAcc.id
+        };
+
+        window.syncCustomNpcsToLocalBackup();
+        if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+        document.querySelector('.wechat-clean-modal-mask')?.remove();
+        if (typeof showToast === 'function') showToast('已成功添加联系人', 'success', 1200);
+        renderChatApp();
+    };
+
     // ============================================================
     // 气泡长按操作菜单（引用、编辑、撤回）
     // ============================================================
@@ -993,9 +1129,7 @@
         mask.className = 'wechat-action-sheet-mask';
 
         let itemsHtml = '';
-        // 引用功能向所有消息开放
         itemsHtml += `<div class="wechat-action-item" onclick="window.triggerQuoteMessage('${msgId}','${type}','${targetId}')">引用</div>`;
-        // 编辑功能向所有消息开放，方便对 AI 内容或自己发言进行润色
         itemsHtml += `<div class="wechat-action-item" onclick="window.doEditMessageContent('${msgId}','${type}','${targetId}')">编辑消息</div>`;
 
         if (isSelf) {
@@ -1030,7 +1164,9 @@
 
         let summaryText = msg.text || '';
         if (msg.type === 'voice') summaryText = `[语音 ${msg.seconds || 3}"] ${msg.text || ''}`;
-        else if (msg.type === 'image_text_only' || msg.imageDesc) summaryText = `[图片] ${msg.imageDesc || msg.text || ''}`;
+        else if (msg.type === 'shared_moment') summaryText = `[朋友圈分享]`;
+        else if (msg.type === 'contact_card') summaryText = `[名片] ${msg.contactCard?.name || ''}`;
+        else if (msg.type === 'image_text_only' || msg.imageDesc) summaryText = `[快照画片] ${msg.imageDesc || msg.text || ''}`;
         else if (msg.type === 'sticker') summaryText = `[表情]`;
 
         window._activeQuoteMessage = {
@@ -1054,7 +1190,7 @@
         else if (typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
     };
 
-    // 编辑消息文本（支持所有消息）
+    // 编辑消息文本
     window.doEditMessageContent = function(msgId, type, targetId) {
         document.querySelector('.wechat-action-sheet-mask')?.remove();
         const history = (type === 'single') ? window.getAccountChatHistory(targetId) : (window.G.groupChatHistory[targetId] || []);
@@ -1089,7 +1225,7 @@
         }
     };
 
-    // 撤回消息（真随机判定对方是否在通知栏瞄到，但后续严格降噪）
+    // 撤回消息
     window.doRecallMessageWithRandomPeek = function(msgId, type, targetId) {
         document.querySelector('.wechat-action-sheet-mask')?.remove();
         const history = (type === 'single') ? window.getAccountChatHistory(targetId) : (window.G.groupChatHistory[targetId] || []);
@@ -1115,9 +1251,9 @@
             _id: 'action_' + Date.now(),
             from: 'action',
             text: '你撤回了一条消息',
-            recalledText: targetMsg.imageDesc ? `[图片描述: ${targetMsg.imageDesc}]` : (targetMsg.text || ''),
+            recalledText: targetMsg.imageDesc ? `[快照描述: ${targetMsg.imageDesc}]` : (targetMsg.text || ''),
             recalledWasPeeked: wasPeeked,
-            peekHandled: false, // 标记为尚未被 AI 消费，消费一次后即失效
+            peekHandled: false,
             time: new Date().toLocaleTimeString().slice(0, 5)
         });
 
@@ -1205,12 +1341,15 @@
             const speaker = (m.from === 'player') ? curAcc.name : npc.name;
             if (m.from === 'action' && m.recalledWasPeeked && !m.peekHandled && m.recalledText) {
                 peekNotice += `\n【系统单次提醒】：对方刚才撤回了一条消息：“${m.recalledText}”，你在手机通知栏不经意瞄到了一眼。作为正常活人，你随口调侃一句或吐槽网速即可，严禁在后续多轮对话中反复抓着问。\n`;
-                m.peekHandled = true; // 立即消费，后续不再注入
+                m.peekHandled = true;
                 return `[系统]: 对方撤回了一条消息`;
             }
             if (m.type === 'voice') return `${speaker} [语音]: ${m.text || ''}`;
+            if (m.type === 'shared_moment') return `${speaker} [分享了朋友圈动态]: ${m.sharedMoment?.author} 发的 “${m.sharedMoment?.body || ''}”；配图：${m.sharedMoment?.imageDesc || '无'}；评论区八卦：${m.sharedMoment?.commentsSummary || '暂无评论'}`;
+            if (m.type === 'contact_card') return `${speaker} [向你推荐了名片]: ${m.contactCard?.name}（人设：${m.contactCard?.persona || 'MC同伴'}，身份：${m.contactCard?.isAlt ? '对方的小号' : '新朋友'}）`;
+            if (m.type === 'moment_notice') return `[系统提醒]: ${m.author} 刚发了一条新朋友圈动态`;
             if (m.originalText) return `${speaker}: ${m.originalText} (译: ${m.text || ''})`;
-            if (m.type === 'image_text_only' || m.imageDesc) return `${speaker} [发了图片描述]: ${m.imageDesc || m.text || ''}`;
+            if (m.type === 'image_text_only' || m.imageDesc) return `${speaker} [发了快照画面描述]: ${m.imageDesc || m.text || ''}`;
             return `${speaker}: ${m.text || ''}`;
         }).join('\n');
 
@@ -1261,7 +1400,17 @@
                 const item = finalEntities[i];
                 const time = new Date().toLocaleTimeString().slice(0, 5);
 
-                if (item.type === 'voice') {
+                if (item.type === 'moment_notice') {
+                    // 派发动态系统通知
+                    window.pushChatMessageSafe(npcId, {
+                        from: 'action',
+                        type: 'moment_notice',
+                        momentId: item.momentId,
+                        author: item.author,
+                        text: item.text,
+                        time
+                    }, curAcc.id);
+                } else if (item.type === 'voice') {
                     window.pushChatMessageSafe(npcId, {
                         from: 'npc',
                         type: 'voice',
@@ -1447,7 +1596,13 @@
                     <div class="wechat-plus-icon-box">
                         <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#07c160;stroke-width:1.8;stroke-linecap:round;"><rect x="3" y="3" width="18" height="18" rx="3"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
                     </div>
-                    <span class="wechat-plus-label">发送图片</span>
+                    <span class="wechat-plus-label">发送快照</span>
+                </div>
+                <div class="wechat-plus-item" onclick="window.openRecommendContactModal('${type}','${id}')">
+                    <div class="wechat-plus-icon-box">
+                        <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#0284c7;stroke-width:1.8;stroke-linecap:round;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
+                    </div>
+                    <span class="wechat-plus-label">推荐名片</span>
                 </div>
                 <div class="wechat-plus-item" onclick="window._plusDrawerOpen=false; window.openTokenMonitorModal()">
                     <div class="wechat-plus-icon-box">
@@ -1461,12 +1616,6 @@
                     </div>
                     <span class="wechat-plus-label">共创视频</span>
                 </div>
-                <div class="wechat-plus-item" onclick="window._plusDrawerOpen=false; window.handleInviteCollabStream('${type}','${id}')">
-                    <div class="wechat-plus-icon-box">
-                        <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#2563eb;stroke-width:1.8;stroke-linecap:round;"><circle cx="12" cy="12" r="2"></circle><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"></path></svg>
-                    </div>
-                    <span class="wechat-plus-label">连麦开播</span>
-                </div>
             </div>
         </div>`;
     }
@@ -1479,7 +1628,98 @@
         else if (typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
     };
 
-    // 📊 最近 10 轮 Token 统计弹窗（仿微信原生卡片）
+    // 📇 推荐名片选择弹窗（支持推荐好友与自己的小号）
+    window.openRecommendContactModal = function(type, id) {
+        window._plusDrawerOpen = false;
+        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '我' };
+        const allAccounts = (typeof window.getWechatAccountsList === 'function') ? window.getWechatAccountsList() : [];
+
+        // 1. 好友列表（排除自身与当前对话目标）
+        const candidateFriends = Object.values(window.G.npcs || {}).filter(n => {
+            if (n.id === id) return false;
+            if (!n.ownerAccountId || n.ownerAccountId === curAcc.id || n.ownerAccountId === 'all') return true;
+            return false;
+        });
+
+        // 2. 自己的其他小号列表
+        const altAccs = allAccounts.filter(a => a.id !== curAcc.id);
+
+        let friendsHtml = candidateFriends.map(n => `
+            <div onclick="window.doSendContactCardDirect('${type}', '${id}', '${n.id}', '${escapeHtml(n.name)}', '${escapeHtml(n.persona || '好友')}', '${escapeHtml(n.avatarUrl || '')}', false)" style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid #f2f2f2;cursor:pointer;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <div style="width:32px;height:32px;border-radius:4px;overflow:hidden;background:#eee;">
+                        <img src="${n.avatarUrl || 'assets/icons/chat.png'}" style="width:100%;height:100%;object-fit:cover;">
+                    </div>
+                    <span style="font-size:13.5px;color:#181818;">${escapeHtml(n.name)}</span>
+                </div>
+                <span style="font-size:12px;color:#07c160;font-weight:600;">发送 ›</span>
+            </div>
+        `).join('');
+
+        let altsHtml = altAccs.map(a => `
+            <div onclick="window.doSendContactCardDirect('${type}', '${id}', '${a.id}', '${escapeHtml(a.name)}', '我的小号身份（${escapeHtml(a.personaTag || '副身份')}）', '${escapeHtml(a.avatar || '')}', true)" style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid #f2f2f2;cursor:pointer;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <div style="width:32px;height:32px;border-radius:4px;overflow:hidden;background:#eee;">
+                        <img src="${a.avatar || 'assets/icons/chat.png'}" style="width:100%;height:100%;object-fit:cover;">
+                    </div>
+                    <div>
+                        <span style="font-size:13.5px;color:#181818;">${escapeHtml(a.name)}</span>
+                        <span style="font-size:10px;background:#e0f2fe;color:#0369a1;padding:1px 4px;border-radius:3px;margin-left:4px;">我绑定的小号</span>
+                    </div>
+                </div>
+                <span style="font-size:12px;color:#07c160;font-weight:600;">发送 ›</span>
+            </div>
+        `).join('');
+
+        window.openWechatCleanModal('推荐名片给对方', `
+            <div style="text-align:left;">
+                ${altsHtml ? `<div style="font-size:11.5px;color:#888;margin-bottom:6px;font-weight:600;">推荐我的小号：</div><div style="margin-bottom:10px;">${altsHtml}</div>` : ''}
+                <div style="font-size:11.5px;color:#888;margin-bottom:6px;font-weight:600;">推荐好友：</div>
+                <div style="max-height:160px;overflow-y:auto;">
+                    ${friendsHtml || '<div style="text-align:center;color:#bbb;padding:16px 0;font-size:12px;">暂无其他好友名片可推荐</div>'}
+                </div>
+            </div>
+        `, () => {});
+    };
+
+    window.doSendContactCardDirect = function(type, targetId, cardId, name, persona, avatar, isAlt) {
+        document.querySelector('.wechat-clean-modal-mask')?.remove();
+        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '我' };
+        const time = new Date().toLocaleTimeString().slice(0, 5);
+
+        const cardMsg = {
+            from: 'player',
+            type: 'contact_card',
+            text: `[推荐了名片: ${name}]`,
+            contactCard: {
+                id: cardId,
+                name: name,
+                persona: persona,
+                avatar: avatar,
+                isAlt: isAlt
+            },
+            time,
+            timestamp: Date.now()
+        };
+
+        if (type === 'single') {
+            window.pushChatMessageSafe(targetId, cardMsg, curAcc.id);
+            renderSingleChatWindow();
+            // 触发对方对名片的好奇与反馈
+            if (typeof window.triggerAIReplyForSingle === 'function') {
+                window.triggerAIReplyForSingle(targetId);
+            }
+        } else {
+            if (!window.G.groupChatHistory[targetId]) window.G.groupChatHistory[targetId] = [];
+            window.G.groupChatHistory[targetId].push(cardMsg);
+            if (typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
+        }
+
+        if (typeof showToast === 'function') showToast('名片已发送', 'success', 1200);
+        if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+    };
+
+    // 📊 最近 10 轮 Token 统计弹窗
     window.openTokenMonitorModal = function() {
         const list = window.getTokenHistoryList();
         if (list.length === 0) {
@@ -1512,11 +1752,11 @@
         `, () => {});
     };
 
-    // 纯文字意象卡片发送弹窗（彻底移除生图与翻转要求）
+    // 拍立得画片快照发送弹窗（拍立得快照质感）
     window.openChatSendImageModal = function(type, id) {
-        window.openWechatCleanModal('发送画面文字描述', `
+        window.openWechatCleanModal('发送拍立得快照画面', `
             <div style="text-align:left;font-size:12.5px;color:#666;line-height:1.5;margin-bottom:8px;">
-                由于无需调用外部生图，系统将以<b>纯文字画片</b>形式将意象传递给对方（极度节省 Token）：
+                以<b>拍立得快照画片</b>形式将意象传递给对方（极度节省 Token）：
             </div>
             <textarea id="wchatPicDescInput" rows="3" placeholder="描述你发给对方的照片画面内容（例如：我在平原建好的两层原木小屋、刚挖到8颗钻石的手部截图...）" class="wechat-clean-input" style="line-height:1.4;resize:none;"></textarea>
         `, () => {
@@ -1533,7 +1773,7 @@
                 from: 'player',
                 type: 'image_text_only',
                 imageDesc: desc,
-                text: `[图片描述: ${desc}]`,
+                text: `[快照画面描述: ${desc}]`,
                 senderName: curAcc.name,
                 time,
                 quote: window._activeQuoteMessage ? Object.assign({}, window._activeQuoteMessage) : null

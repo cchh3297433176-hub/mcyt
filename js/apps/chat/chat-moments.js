@@ -2,11 +2,13 @@
  * js/apps/chat/chat-moments.js
  * 🌟 微信朋友圈动态流独立模块
  * 职责：
- * 1. 朋友圈动态列表构建（微信极简黑白灰视觉 · 无彩色Emoji）
- * 2. 纯文字意象卡片配图模式（无需外接生图，无翻转，极轻量）
- * 3. 点赞、评论、回复、召唤互动（0ms 即刻呼出生成胶囊，绝无卡顿延迟感）
- * 4. 专属朋友圈 NPC 池管理（支持设定名字与说话风格，随机抽取互动）
- * 5. 仿微信弹窗体系与全屏滑入微动画
+ * 1. 朋友圈动态列表构建（微信极简白灰视觉 · 无彩色Emoji）
+ * 2. 拍立得拟真质感画片与真实配图模式（彻底替换违和纯文本框）
+ * 3. 动态双轨持久化防丢恢复（后台重进不丢动态）
+ * 4. 专属群演固定永久头像机制（除非手动刷新否则永久锁定）
+ * 5. 点赞、评论、回复、召唤互动（0ms 即刻呼出生成胶囊，绝无卡顿延迟感）
+ * 6. 动态转发至私聊/群聊功能（联动 NPC 认知与评论区八卦）
+ * 7. 仿微信全屏大图预览弹窗
  */
 
 (function() {
@@ -17,6 +19,12 @@
     function ensureFeedLoaded() {
         if (!window.G) window.G = {};
         if (!window.G.feed) window.G.feed = [];
+        
+        // 双轨恢复已存储的朋友圈动态
+        if (typeof restoreMomentsFeedFromLocalBackup === 'function') {
+            restoreMomentsFeedFromLocalBackup();
+        }
+
         if (!window.G.momentsNpcs) {
             try {
                 const raw = localStorage.getItem(MOMENTS_NPC_POOL_KEY);
@@ -29,6 +37,14 @@
                 window.G.momentsNpcs = [];
             }
         }
+
+        // 为群演 NPC 固定头像，避免每次刷新动态都随机换脸
+        window.G.momentsNpcs.forEach(n => {
+            if (!n.avatar) {
+                n.avatar = (typeof getRandomAvatar === 'function') ? getRandomAvatar() : 'assets/icons/chat.png';
+            }
+        });
+        saveMomentsNpcPool();
     }
 
     function saveMomentsNpcPool() {
@@ -93,17 +109,26 @@
                 commentsBoxHtml = `<div style="background:#f4f5f7;border-radius:4px;padding:6px 10px;margin-top:8px;">${comLines}</div>`;
             }
 
-            // 配图模式：纯文字意象卡片，无需翻转，极度轻巧
+            // 配图渲染：微信拍立得艺术画片或真实大图（拒绝生硬居中文字框）
             let mediaHtml = '';
-            if (m.imageDesc) {
+            if (m.image) {
                 mediaHtml = `
-                <div style="margin:6px 0;background:#f8fafc;border-left:2.5px solid #07c160;padding:6px 10px;border-radius:3px;font-size:12px;color:#334155;line-height:1.45;">
-                    <span style="font-weight:600;color:#07c160;">[配图画面]</span> ${escapeHtml(m.imageDesc)}
+                <div style="margin:8px 0;">
+                    <img src="${m.image}" onclick="window.openMomentImagePreview('${m.image}', '${escapeHtml(m.body || '')}')" style="max-width:210px;max-height:220px;border-radius:6px;object-fit:cover;display:block;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.1);" onerror="this.style.display='none';">
                 </div>`;
-            } else if (m.image) {
+            } else if (m.imageDesc) {
                 mediaHtml = `
-                <div style="margin:6px 0;">
-                    <img src="${m.image}" style="max-width:100%;max-height:220px;border-radius:4px;object-fit:cover;display:block;" onerror="this.style.display='none';">
+                <div style="margin:8px 0;">
+                    <div class="wechat-photo-card" onclick="window.openMomentArtCardPreview(${m.id})">
+                        <div class="wechat-photo-art-box">
+                            <span class="wechat-photo-art-badge">快照画片</span>
+                            <div class="wechat-photo-art-text">“${escapeHtml(m.imageDesc)}”</div>
+                        </div>
+                        <div style="font-size:10.5px;color:#888;margin-top:5px;display:flex;justify-content:space-between;align-items:center;">
+                            <span>拍立得快照 · 点击放大</span>
+                            <span style="color:#07c160;">查看 ›</span>
+                        </div>
+                    </div>
                 </div>`;
             }
 
@@ -136,6 +161,9 @@
                             <button onclick="window.triggerAiCommentForMoment(${m.id})" style="border:none;background:none;color:#07c160;cursor:pointer;font-size:12px;padding:0;font-weight:500;">
                                 召唤互动
                             </button>
+                            <button onclick="window.shareMomentToChat(${m.id})" style="border:none;background:none;color:#576b95;cursor:pointer;font-size:12px;padding:0;">
+                                转发
+                            </button>
                         </div>
                         ${isSelf ? `
                         <div style="display:flex;gap:8px;">
@@ -152,13 +180,134 @@
         const npcCount = (window.G.momentsNpcs || []).length;
         const bannerHtml = `
         <div style="background:#f7f7f7;padding:7px 14px;border-bottom:0.5px solid #ebebeb;display:flex;justify-content:space-between;align-items:center;font-size:11.5px;color:#666;">
-            <span>专属朋友圈群演：${npcCount} 位</span>
-            <span onclick="window.openMomentsNpcPoolModal()" style="color:#07c160;cursor:pointer;font-weight:600;">管理圈友人设 ›</span>
+            <span>专属朋友圈群演：${npcCount} 位（头像已锁定）</span>
+            <span onclick="window.openMomentsNpcPoolModal()" style="color:#07c160;cursor:pointer;font-weight:600;">管理圈友/换头像 ›</span>
         </div>`;
 
         return bannerHtml + cardsHtml;
     }
     window.buildMomentsHTML = buildMomentsHTML;
+
+    // 🖼 查看意象画片全屏细节
+    window.openMomentArtCardPreview = function(momentId) {
+        ensureFeedLoaded();
+        const item = window.G.feed.find(f => f.id === momentId);
+        if (!item) return;
+
+        if (typeof openWechatCleanModal === 'function') {
+            openWechatCleanModal('朋友圈画片快照', `
+                <div style="text-align:center;">
+                    <div style="width:100%;min-height:180px;border-radius:10px;background:linear-gradient(135deg, #1e293b 0%, #334155 50%, #0f172a 100%);padding:24px 16px;box-sizing:border-box;color:#ffffff;display:flex;flex-direction:column;justify-content:center;align-items:center;box-shadow:0 8px 24px rgba(0,0,0,0.25);">
+                        <div style="font-size:11px;letter-spacing:1px;color:#07c160;margin-bottom:8px;font-weight:600;">SNAPSHOT IMAGE MEMORY</div>
+                        <div style="font-size:15px;line-height:1.6;font-weight:500;text-shadow:0 2px 4px rgba(0,0,0,0.5);">${escapeHtml(item.imageDesc || '无详细描述')}</div>
+                    </div>
+                    <div style="font-size:12px;color:#666;margin-top:12px;line-height:1.5;">
+                        发布者：<b>${escapeHtml(item.author)}</b><br>
+                        “${escapeHtml(item.body)}”
+                    </div>
+                </div>
+            `, () => {});
+        }
+    };
+
+    window.openMomentImagePreview = function(imgSrc, caption) {
+        if (typeof openWechatCleanModal === 'function') {
+            openWechatCleanModal('查看图片', `
+                <div style="text-align:center;">
+                    <img src="${imgSrc}" style="max-width:100%;max-height:320px;border-radius:6px;object-fit:contain;" />
+                    ${caption ? `<div style="font-size:12px;color:#666;margin-top:8px;">${escapeHtml(caption)}</div>` : ''}
+                </div>
+            `, () => {});
+        }
+    };
+
+    // 📤 转发动态至聊天窗口（角色可获取动态正文与评论八卦）
+    window.shareMomentToChat = function(momentId) {
+        ensureFeedLoaded();
+        const item = window.G.feed.find(f => f.id === momentId);
+        if (!item) return;
+
+        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '我' };
+        
+        // 获取当前账号的好友列表与群聊列表
+        const candidateTargets = [];
+        Object.values(window.G.npcs || {}).forEach(npc => {
+            // 大小号好友隔离判定：只列出当前账号绑定的联系人
+            if (!npc.ownerAccountId || npc.ownerAccountId === curAcc.id || npc.ownerAccountId === 'all') {
+                candidateTargets.push({ id: npc.id, name: npc.name, isGroup: false });
+            }
+        });
+        Object.values(window.G.groups || {}).forEach(grp => {
+            candidateTargets.push({ id: grp.id, name: `[群] ${grp.name}`, isGroup: true });
+        });
+
+        if (!candidateTargets.length) {
+            if (typeof showToast === 'function') showToast('当前账号暂无可转发的好友或群聊', 'info');
+            return;
+        }
+
+        const optionsHtml = candidateTargets.map(t => `
+            <div onclick="window.doSendSharedMomentDirect('${t.id}', ${t.isGroup}, ${momentId})" style="display:flex;align-items:center;justify-content:space-between;padding:10px 8px;border-bottom:0.5px solid #eee;cursor:pointer;">
+                <span style="font-size:14px;color:#181818;font-weight:500;">${escapeHtml(t.name)}</span>
+                <span style="font-size:12px;color:#07c160;font-weight:600;">发送 ›</span>
+            </div>
+        `).join('');
+
+        if (typeof openWechatCleanModal === 'function') {
+            openWechatCleanModal('转发这条动态', `
+                <div style="text-align:left;">
+                    <div style="font-size:12px;color:#888;margin-bottom:8px;">选择接收的好友或群聊：</div>
+                    <div style="max-height:220px;overflow-y:auto;">
+                        ${optionsHtml}
+                    </div>
+                </div>
+            `, () => {});
+        }
+    };
+
+    window.doSendSharedMomentDirect = function(targetId, isGroup, momentId) {
+        const item = window.G.feed.find(f => f.id === momentId);
+        if (!item) return;
+
+        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '我' };
+        const commentsSummary = (item.comments || []).map(c => `${c.name}: ${c.text}`).join('；');
+
+        const shareMsg = {
+            isPlayer: true,
+            type: 'shared_moment',
+            text: `[分享了一条动态] ${item.author}: ${item.body}`,
+            sharedMoment: {
+                id: item.id,
+                author: item.author,
+                avatar: item.avatar,
+                body: item.body,
+                image: item.image || null,
+                imageDesc: item.imageDesc || null,
+                commentsSummary: commentsSummary || '暂无评论'
+            },
+            timestamp: Date.now()
+        };
+
+        if (isGroup) {
+            if (typeof window.doSendGroupChat === 'function') {
+                if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
+                if (!window.G.groupChatHistory[targetId]) window.G.groupChatHistory[targetId] = [];
+                window.G.groupChatHistory[targetId].push(shareMsg);
+            }
+        } else {
+            if (typeof pushChatMessageSafe === 'function') {
+                pushChatMessageSafe(targetId, shareMsg);
+            }
+        }
+
+        document.querySelector('.wechat-clean-modal-mask')?.remove();
+        if (typeof showToast === 'function') showToast('已转发到聊天', 'success', 1200);
+
+        // 如果不是群聊，且开启了聊天，触发 NPC 接话与对动态内容的讨论
+        if (!isGroup && typeof window.triggerChatAIReply === 'function') {
+            window.triggerChatAIReply(targetId, false);
+        }
+    };
 
     // 📷 发布动态弹窗（纯正微信卡片风）
     window.openPostMomentModal = function() {
@@ -168,9 +317,9 @@
             openWechatCleanModal('发朋友圈', `
                 <div style="text-align:left;">
                     <div style="font-size:12px;color:#888;margin-bottom:6px;">以「${escapeHtml(curAcc.name)}」发布：</div>
-                    <textarea id="wpostMomentBody" rows="3" placeholder="分享此刻的MC创作心情或趣事..." class="wechat-clean-input" style="line-height:1.45;resize:none;margin-bottom:10px;"></textarea>
-                    <div style="font-size:12px;color:#666;margin-bottom:4px;">配图画面描述（纯文字意象，免图库）：</div>
-                    <input type="text" id="wpostMomentImgDesc" placeholder="例如：黄昏下的原木小屋、刚挖出8颗钻石..." class="wechat-clean-input">
+                    <textarea id="wpostMomentBody" rows="3" placeholder="分享此刻的MC日常或心情..." class="wechat-clean-input" style="line-height:1.45;resize:none;margin-bottom:10px;"></textarea>
+                    <div style="font-size:12px;color:#666;margin-bottom:4px;">配图快照描绘（拍立得快照质感）：</div>
+                    <input type="text" id="wpostMomentImgDesc" placeholder="例如：落日余晖下的小麦农场、手持下界合金剑..." class="wechat-clean-input">
                 </div>
             `, () => {
                 const body = document.getElementById('wpostMomentBody').value.trim();
@@ -188,7 +337,7 @@
                     avatar: curAcc.avatar,
                     isPlayer: true,
                     body,
-                    imageMode: imgDesc ? 'text_only' : 'none',
+                    imageMode: imgDesc ? 'photo_art' : 'none',
                     image: null,
                     imageDesc: imgDesc || null,
                     time: '刚刚',
@@ -196,6 +345,10 @@
                     likes: 0,
                     comments: []
                 });
+
+                if (typeof syncMomentsFeedToLocalBackup === 'function') {
+                    syncMomentsFeedToLocalBackup();
+                }
 
                 if (typeof renderChatApp === 'function') renderChatApp();
                 if (typeof showToast === 'function') showToast('动态已发布', 'success', 1200);
@@ -211,6 +364,7 @@
         if (!item) return;
         item.liked = !item.liked;
         item.likes = (item.likes || 0) + (item.liked ? 1 : -1);
+        if (typeof syncMomentsFeedToLocalBackup === 'function') syncMomentsFeedToLocalBackup();
         if (typeof renderChatApp === 'function') renderChatApp();
         if (typeof autoSaveGame === 'function') autoSaveGame();
     };
@@ -230,6 +384,7 @@
                 if (item) {
                     if (!item.comments) item.comments = [];
                     item.comments.push({ name: curAcc.name, text, time: '刚刚' });
+                    if (typeof syncMomentsFeedToLocalBackup === 'function') syncMomentsFeedToLocalBackup();
                     if (typeof renderChatApp === 'function') renderChatApp();
                     if (typeof autoSaveGame === 'function') autoSaveGame();
                 }
@@ -252,6 +407,7 @@
                 if (item) {
                     if (!item.comments) item.comments = [];
                     item.comments.push({ name: curAcc.name, text: `回复 @${replyToName} : ${text}`, time: '刚刚' });
+                    if (typeof syncMomentsFeedToLocalBackup === 'function') syncMomentsFeedToLocalBackup();
                     if (typeof renderChatApp === 'function') renderChatApp();
                     if (typeof autoSaveGame === 'function') autoSaveGame();
                 }
@@ -293,6 +449,7 @@
                 if (!item.comments) item.comments = [];
                 item.comments.push({ name: speaker.name, text: clean, time: '刚刚' });
                 item.likes = (item.likes || 0) + 1;
+                if (typeof syncMomentsFeedToLocalBackup === 'function') syncMomentsFeedToLocalBackup();
                 if (typeof renderChatApp === 'function') renderChatApp();
                 if (typeof autoSaveGame === 'function') autoSaveGame();
             }
@@ -303,12 +460,20 @@
         }
     };
 
-    // ⚡️ 刷新好友朋友圈动态（0ms 即时响应）
+    // ⚡️ 刷新好友朋友圈动态（使用固定头像，绝不随机变脸）
     window.triggerGenerateFriendsFeed = async function() {
         ensureFeedLoaded();
         const pool = [];
-        Object.values(window.G.npcs || {}).forEach(n => pool.push({ name: n.name, persona: n.persona, avatar: n.avatarUrl }));
-        (window.G.momentsNpcs || []).forEach(n => pool.push({ name: n.name, persona: n.persona, avatar: (typeof getRandomAvatar === 'function') ? getRandomAvatar() : 'assets/icons/chat.png' }));
+        Object.values(window.G.npcs || {}).forEach(n => pool.push({
+            name: n.name,
+            persona: n.persona,
+            avatar: n.avatarUrl
+        }));
+        (window.G.momentsNpcs || []).forEach(n => pool.push({
+            name: n.name,
+            persona: n.persona,
+            avatar: n.avatar // 使用锁定的固定头像
+        }));
 
         if (!pool.length) {
             if (typeof showToast === 'function') showToast('暂无好友，先在通讯录或人设池添加好友吧！', 'info', 2000);
@@ -322,7 +487,7 @@
             for (const n of picked) {
                 const sys = `你正在扮演MC玩家好友「${n.name}」（人设风格：${n.persona || '开朗MC同伴'}）。
 写一条接地气的游戏生活朋友圈动态（30字内）。可以涉及MC挖矿遇险、被苦力怕偷袭、剪视频爆肝等。
-格式：[BODY]动态正文[/BODY][IMG_DESC]配图画面描绘（可选，20字内）[/IMG_DESC]
+格式：[BODY]动态正文[/BODY][IMG_DESC]配图快照描绘（可选，20字内）[/IMG_DESC]
 严禁句尾加句号，严禁任何动作括号描写。`;
                 const raw = await callAI([{ role: 'system', content: sys }, { role: 'user', content: '发一条动态' }], { maxTokens: 140, temperature: 0.9, silent: true });
                 let clean = (typeof stripThought === 'function') ? stripThought(raw.trim()) : raw.trim();
@@ -345,7 +510,7 @@
                         avatar: n.avatar || 'assets/icons/chat.png',
                         isPlayer: false,
                         body: bodyText,
-                        imageMode: imgDesc ? 'text_only' : 'none',
+                        imageMode: imgDesc ? 'photo_art' : 'none',
                         image: null,
                         imageDesc: imgDesc || null,
                         time: '刚刚',
@@ -355,6 +520,7 @@
                     });
                 }
             }
+            if (typeof syncMomentsFeedToLocalBackup === 'function') syncMomentsFeedToLocalBackup();
             if (typeof renderChatApp === 'function') renderChatApp();
             if (typeof showToast === 'function') showToast('朋友圈已更新', 'success', 1200);
             if (typeof autoSaveGame === 'function') autoSaveGame();
@@ -365,35 +531,52 @@
         }
     };
 
-    // 👤 朋友圈专属 NPC 池管理弹窗
+    // 👤 朋友圈专属 NPC 池管理弹窗（支持查看与主动刷新指定头像）
     window.openMomentsNpcPoolModal = function() {
         ensureFeedLoaded();
         const list = window.G.momentsNpcs || [];
 
         let rowsHtml = list.map((npc, idx) => `
-            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px;background:#f9f9f9;border-radius:6px;margin-bottom:6px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:#f9f9f9;border-radius:6px;margin-bottom:6px;">
+                <div style="width:36px;height:36px;border-radius:4px;overflow:hidden;background:#e2e8f0;flex-shrink:0;margin-right:10px;">
+                    <img src="${npc.avatar || 'assets/icons/chat.png'}" style="width:100%;height:100%;object-fit:cover;display:block;" onerror="this.src='assets/icons/chat.png';" />
+                </div>
                 <div style="flex:1;min-width:0;padding-right:6px;">
                     <div style="font-size:13px;font-weight:600;color:#181818;">${escapeHtml(npc.name)}</div>
                     <div style="font-size:11px;color:#666;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px;">${escapeHtml(npc.persona || '日常互动好友')}</div>
                 </div>
-                <button type="button" onclick="window.removeMomentsNpc(${idx})" style="border:none;background:#ffebee;color:#ef4444;padding:3px 7px;border-radius:4px;font-size:11px;cursor:pointer;">删除</button>
+                <div style="display:flex;gap:6px;align-items:center;">
+                    <button type="button" onclick="window.refreshMomentsNpcAvatar(${idx})" style="border:none;background:#e6f7ef;color:#07c160;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;">换头像</button>
+                    <button type="button" onclick="window.removeMomentsNpc(${idx})" style="border:none;background:#ffebee;color:#ef4444;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;">删除</button>
+                </div>
             </div>
         `).join('');
 
         if (typeof openWechatCleanModal === 'function') {
-            openWechatCleanModal('朋友圈专属群演池', `
+            openWechatCleanModal('朋友圈专属圈友管理', `
                 <div style="text-align:left;">
-                    <div style="font-size:12px;color:#888;margin-bottom:8px;">刷新动态或召唤互动时将随机从以下人设中抽取：</div>
-                    <div style="max-height:160px;overflow-y:auto;margin-bottom:10px;">
+                    <div style="font-size:12px;color:#888;margin-bottom:8px;">圈友头像默认已锁定，仅点击「换头像」才会重新生成：</div>
+                    <div style="max-height:180px;overflow-y:auto;margin-bottom:10px;">
                         ${rowsHtml || '<div style="text-align:center;color:#bbb;padding:16px 0;font-size:12px;">暂无专属群演，点击下方添加</div>'}
                     </div>
                     <div style="border-top:0.5px solid #eee;padding-top:8px;">
-                        <input type="text" id="waddMomentNpcName" placeholder="群演名字（如：暴躁老哥、红石天才）" class="wechat-clean-input" style="margin-bottom:6px;">
-                        <input type="text" id="waddMomentNpcPersona" placeholder="说话风格标签（如：说话毒舌爱吐槽、热心萌新）" class="wechat-clean-input" style="margin-bottom:8px;">
+                        <input type="text" id="waddMomentNpcName" placeholder="圈友名字（如：红石怪人、佛系建筑师）" class="wechat-clean-input" style="margin-bottom:6px;">
+                        <input type="text" id="waddMomentNpcPersona" placeholder="人设标签（如：高冷爱吐槽、热心呆萌）" class="wechat-clean-input" style="margin-bottom:8px;">
                         <button type="button" onclick="window.addMomentsNpcDirect()" style="width:100%;border:none;background:#f0f0f0;color:#07c160;padding:7px;border-radius:6px;font-size:12.5px;font-weight:600;cursor:pointer;">+ 添加专属圈友</button>
                     </div>
                 </div>
             `, () => {});
+        }
+    };
+
+    window.refreshMomentsNpcAvatar = function(idx) {
+        ensureFeedLoaded();
+        if (window.G.momentsNpcs[idx]) {
+            window.G.momentsNpcs[idx].avatar = (typeof getRandomAvatar === 'function') ? getRandomAvatar() : 'assets/icons/chat.png';
+            saveMomentsNpcPool();
+            document.querySelector('.wechat-clean-modal-mask')?.remove();
+            window.openMomentsNpcPoolModal();
+            if (typeof showToast === 'function') showToast('头像已更新并锁定', 'success', 1000);
         }
     };
 
@@ -406,9 +589,10 @@
         }
 
         ensureFeedLoaded();
-        window.G.momentsNpcs.push({ name, persona });
+        const avatar = (typeof getRandomAvatar === 'function') ? getRandomAvatar() : 'assets/icons/chat.png';
+        window.G.momentsNpcs.push({ name, persona, avatar });
         saveMomentsNpcPool();
-        if (typeof showToast === 'function') showToast('圈友已添加', 'success', 1000);
+        if (typeof showToast === 'function') showToast('圈友已添加并锁定头像', 'success', 1000);
         document.querySelector('.wechat-clean-modal-mask')?.remove();
         window.openMomentsNpcPoolModal();
     };
@@ -428,6 +612,7 @@
         if (!confirm('确定删除这条动态吗？')) return;
         ensureFeedLoaded();
         window.G.feed = window.G.feed.filter(f => f.id !== id);
+        if (typeof syncMomentsFeedToLocalBackup === 'function') syncMomentsFeedToLocalBackup();
         if (typeof renderChatApp === 'function') renderChatApp();
         if (typeof autoSaveGame === 'function') autoSaveGame();
     };
@@ -437,6 +622,7 @@
         const idx = window.G.feed.findIndex(f => f.id === id);
         if (idx !== -1) {
             window.G.feed.splice(idx, 1);
+            if (typeof syncMomentsFeedToLocalBackup === 'function') syncMomentsFeedToLocalBackup();
             if (typeof renderChatApp === 'function') renderChatApp();
             if (typeof showToast === 'function') showToast('动态已撤回', 'info', 1200);
             if (typeof autoSaveGame === 'function') autoSaveGame();

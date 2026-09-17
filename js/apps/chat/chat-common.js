@@ -12,6 +12,7 @@
     const CUSTOM_NPCS_BACKUP_KEY = 'mcyt_wechat_custom_npcs';
     const CHAT_HISTORY_BACKUP_KEY = 'mcyt_wechat_chathistory_v2';
     const TOKEN_HISTORY_STORAGE_KEY = 'mcyt_chat_token_history_v1';
+    const MOMENTS_FEED_BACKUP_KEY = 'mcyt_wechat_feed_backup_v2';
 
     // 默认保底安全头像池，杜绝初次进入异步加载慢导致随机头像失效
     const FALLBACK_AVATARS = [
@@ -108,7 +109,7 @@
     }
     window.recordTokenHistoryEntry = recordTokenHistoryEntry;
 
-    // 💾 硬核三轨防丢保护引擎
+    // 💾 硬核三轨防丢保护引擎（含朋友圈动态持久化备份）
     function syncCustomNpcsToLocalBackup() {
         try {
             if (!window.G || !window.G.npcs) return;
@@ -180,16 +181,55 @@
     }
     window.restoreChatHistoryFromLocalBackup = restoreChatHistoryFromLocalBackup;
 
+    // 朋友圈动态防丢独立持久化槽
+    function syncMomentsFeedToLocalBackup() {
+        try {
+            if (window.G && Array.isArray(window.G.feed)) {
+                localStorage.setItem(MOMENTS_FEED_BACKUP_KEY, JSON.stringify(window.G.feed));
+            }
+        } catch (e) {
+            console.error('备份朋友圈动态失败:', e);
+        }
+    }
+    window.syncMomentsFeedToLocalBackup = syncMomentsFeedToLocalBackup;
+
+    function restoreMomentsFeedFromLocalBackup() {
+        try {
+            const raw = localStorage.getItem(MOMENTS_FEED_BACKUP_KEY);
+            if (!raw) return;
+            const savedFeed = JSON.parse(raw);
+            if (Array.isArray(savedFeed)) {
+                if (!window.G.feed || window.G.feed.length === 0) {
+                    window.G.feed = savedFeed;
+                } else {
+                    // 按 ID 合并去重
+                    const existingIds = new Set(window.G.feed.map(f => f.id));
+                    savedFeed.forEach(item => {
+                        if (!existingIds.has(item.id)) {
+                            window.G.feed.push(item);
+                            existingIds.add(item.id);
+                        }
+                    });
+                }
+            }
+        } catch (e) {
+            console.error('恢复朋友圈动态失败:', e);
+        }
+    }
+    window.restoreMomentsFeedFromLocalBackup = restoreMomentsFeedFromLocalBackup;
+
     window.addEventListener('visibilitychange', () => {
         if (document.visibilityState === 'hidden') {
             syncChatHistoryToLocalBackup();
             syncCustomNpcsToLocalBackup();
+            syncMomentsFeedToLocalBackup();
             if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
         }
     });
     window.addEventListener('beforeunload', () => {
         syncChatHistoryToLocalBackup();
         syncCustomNpcsToLocalBackup();
+        syncMomentsFeedToLocalBackup();
         if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
     });
 
@@ -340,11 +380,50 @@
             .wechat-voice-bar:nth-child(2) { height: 12px; }
             .wechat-voice-bar:nth-child(3) { height: 16px; }
 
-            /* 纯文字意象卡片 */
-            .wechat-desc-card {
-                background: #ffffff; border: 1px solid #e2e8f0; border-left: 3px solid #07c160;
-                border-radius: 6px; padding: 8px 12px; max-width: 210px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+            /* 微信朋友圈拍立得质感画片卡片 */
+            .wechat-photo-card {
+                background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px;
+                padding: 10px; max-width: 240px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+                cursor: pointer; transition: transform 0.15s ease;
             }
+            .wechat-photo-card:active { transform: scale(0.98); }
+            .wechat-photo-art-box {
+                width: 100%; height: 130px; border-radius: 6px;
+                background: linear-gradient(135deg, #1e293b 0%, #334155 50%, #0f172a 100%);
+                display: flex; flex-direction: column; align-items: center; justify-content: center;
+                padding: 12px; box-sizing: border-box; color: #f8fafc; text-align: center;
+                position: relative; overflow: hidden; box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
+            }
+            .wechat-photo-art-badge {
+                position: absolute; top: 6px; left: 6px; background: rgba(7, 193, 96, 0.85);
+                color: #ffffff; font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px;
+            }
+            .wechat-photo-art-text {
+                font-size: 13px; line-height: 1.45; font-weight: 500; text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+                overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical;
+            }
+
+            /* 微信朋友圈转发卡片与名片卡片 */
+            .wechat-share-moment-card {
+                background: #ffffff; border: 1px solid #e0e0e0; border-radius: 6px;
+                padding: 10px 12px; width: 220px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+                cursor: pointer; user-select: none;
+            }
+            .wechat-share-moment-card:active { background: #f7f7f7; }
+            .wechat-contact-card {
+                background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px;
+                padding: 10px 12px; width: 220px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+                cursor: pointer; user-select: none;
+            }
+            .wechat-contact-card:active { background: #f8fafc; }
+
+            /* 微信聊天中的系统级提示条（如动态更新、名片添加） */
+            .wechat-sys-notice-pill {
+                display: inline-flex; align-items: center; gap: 4px; background: rgba(0,0,0,0.06);
+                color: #666666; font-size: 11px; padding: 3px 10px; border-radius: 12px;
+                margin: 6px auto; max-width: 90%; cursor: pointer; text-align: center;
+            }
+            .wechat-sys-notice-pill span.link { color: #576b95; font-weight: 600; }
 
             /* 微信引用条 */
             .wechat-quote-bar {
@@ -411,6 +490,7 @@
 
         restoreCustomNpcsFromLocalBackup();
         restoreChatHistoryFromLocalBackup();
+        restoreMomentsFeedFromLocalBackup();
 
         if (typeof window.restoreWechatProfileData === 'function') {
             window.restoreWechatProfileData();
@@ -489,12 +569,14 @@
     window.formatTokenString = formatTokenString;
 
     /**
-     * 解析 AI 回复中的表情包/语音/双语/发动态实体
+     * 解析 AI 回复中的表情包/语音/双语/发动态实体及动态提醒
      */
     function parseAIReplyEntities(rawText, npcName) {
         if (!rawText) return [];
         let clean = (typeof stripThought === 'function') ? stripThought(rawText).trim() : rawText.trim();
         if (!clean) return [];
+
+        const entities = [];
 
         // 提取偶发动态标签 [POST_MOMENT text="..." img_desc="..."]
         const postMomentRegex = /\[POST_MOMENT\s+text="([^"]+)"(?:\s+img_desc="([^"]*)")?\]/i;
@@ -505,25 +587,34 @@
             if (momentBody) {
                 if (!window.G.feed) window.G.feed = [];
                 const matchedNpc = Object.values(window.G.npcs || {}).find(n => n.name === npcName);
-                window.G.feed.unshift({
-                    id: Date.now() + Math.floor(Math.random() * 899 + 100),
+                const momentId = Date.now() + Math.floor(Math.random() * 899 + 100);
+                const newMoment = {
+                    id: momentId,
                     author: npcName,
                     avatar: matchedNpc?.avatarUrl || getRandomAvatar(),
                     isPlayer: false,
                     body: momentBody,
-                    imageMode: momentImgDesc ? 'text_only' : 'none',
+                    imageMode: momentImgDesc ? 'photo_art' : 'none',
                     image: null,
                     imageDesc: momentImgDesc || null,
                     time: '刚刚',
                     liked: false,
                     likes: 0,
                     comments: []
+                };
+                window.G.feed.unshift(newMoment);
+                syncMomentsFeedToLocalBackup();
+
+                // 在私聊对话流中插入系统提醒条（点击可直接查看）
+                entities.push({
+                    type: 'moment_notice',
+                    momentId: momentId,
+                    author: npcName,
+                    text: `对方发表了一条朋友圈动态`
                 });
             }
             clean = clean.replace(postMomentRegex, '').trim();
         }
-
-        const entities = [];
 
         // 1. 拟真语音 [VOICE seconds="..." audio_bg="..."]正文[/VOICE]
         const voiceRegex = /\[VOICE(?:\s+seconds="?(\d+)"?)?(?:\s+audio_bg="?([^"]*)"?)?\]([\s\S]*?)\[\/VOICE\]/gi;
@@ -566,7 +657,7 @@
             }
         }
 
-        if (entities.length > 0) return entities.slice(0, 4);
+        if (entities.length > 0) return entities.slice(0, 5);
 
         const lines = clean.split(/\n+/).map(l => l.trim()).filter(Boolean);
         if (lines.length > 0) {

@@ -1,7 +1,7 @@
 /**
  * js/apps/chat/chat-prompt-engine.js
  * 🧠 微信聊天活人感提示词架构引擎
- * 模块化装配：主体通用拟人核心 + 关系进阶状态机 + 异地恋模块 + 时差生理感知 + 双语与仿微信语音协议 + 真实语义表情包索引 + 动态发布协议
+ * 模块化装配：主体通用拟人核心 + 关系进阶状态机 + 异地恋模块 + 时差生理感知 + 双语与仿微信语音协议 + 真实语义表情包索引 + 动态发布协议 + 大小号双重身份认知与名片接纳状态机
  */
 
 (function() {
@@ -125,7 +125,7 @@
    - 对方发任何消息【绝不默认】是在想你或求关注！严禁开口就问"想我了？""怎么突然找我"。
    - 严禁将"怎么……"当固定宠溺开场，严禁将"好不好"当固定撒娇句尾。
    - 严禁客服腔，严禁每轮结尾强迫抛问，严禁分点列出 1234。
-5. 【微信真实表情包调用协议（重点）】：
+5. 【微信真实表情包调用协议】：
    - 你当前手机里装载的表情包清单如下：
      ${stickersSummary}
    - 当你想发表情包时，【绝对不要】自己在正文里打[表情: 描述]，必须严格使用系统专用标签输出：
@@ -143,12 +143,15 @@ ${isForeign ? `
    - 仅在很困、环境杂音特别、打字不便时偶发。格式：
      [VOICE seconds="秒数" audio_bg="纯耳朵听到的声音与声调"]语音文字内容[/VOICE]
    - audio_bg 只能包含听觉细节（如"周围呼呼的风声与哈欠声"），严禁写任何肉眼动作！
-8. 【聊天中偶发朋友圈动态（轻量无感协议）】：
+8. 【聊天中偶发朋友圈动态】：
    - 仅在聊到兴起、分享当下生活、好玩的MC日常或吐槽时，可以顺带发布一条朋友圈动态。
    - 格式必须写在所有气泡之后：[POST_MOMENT text="动态文字" img_desc="配图文字描绘（可选）"]
-   - 配图只写文字意象描述（例如：杂乱的工作台截图、凌晨三点的游戏天空），不要涉及任何生图要求。严禁频繁发送，仅在灵感涌现时偶发。
+   - 配图只写快照意象描述（例如：杂乱的工作台截图、凌晨三点的游戏天空）。
 9. 【关于对方撤回消息的反应铁律】：
    - 如果系统提醒对方刚才撤回了消息或图片，你就像真实微信好友一样随口问一嘴（如"撤回啥了"、吐槽网速或就当没看见），【绝对严禁】在后续对话中反反复复一直追问对方撤回了什么！除非对方撤回的内容描述极其炸裂反常，否则聊下一话题时必须彻底翻篇！
+10. 【关于名片推荐与动态转发的交互认知】：
+   - 对方如果推荐了名片：你会获悉该名片是谁（可能是好友，也可能是对方的小号）。如果好感度尚浅或不认识，可好奇发问或婉拒；如果熟悉信任，可表示同意添加。
+   - 对方如果转发了动态：你能够获悉该动态的正文内容以及评论区八卦，根据你的性格对动态或下面的评论进行自然吐槽、吃瓜或共鸣。
 `;
     }
 
@@ -180,6 +183,30 @@ ${isForeign ? `
     }
 
     /**
+     * 模块四：大小号认知与多重记忆隔离（活人感反差吐槽）
+     */
+    function getAccountDualityPrompt(npc, curAcc) {
+        // 如果当前是小号，或者存在其他账号聊天记录
+        const allAccounts = (typeof window.getWechatAccountsList === 'function') ? window.getWechatAccountsList() : [];
+        const isAlt = (curAcc.id !== 'main');
+        
+        let prompt = `\n【大小号多重身份认知与记忆库】：\n`;
+        prompt += `- 当前正与你对话的微信账号是：「${curAcc.name}」（ID: ${curAcc.id}，人设标签: ${curAcc.personaTag || '主身份'}）。\n`;
+
+        if (isAlt) {
+            prompt += `- 对方当前使用的是小号。如果对方没有在聊天中亲口承认或透露自己是大号，你【完全不知道】这人和大号是同一个人，把他当作全新认识的微信好友！\n`;
+        } else {
+            prompt += `- 对方当前使用的是大号。\n`;
+            // 如果该角色也加过其他小号，注入对比与吐槽记忆
+            const otherAccs = allAccounts.filter(a => a.id !== curAcc.id);
+            if (otherAccs.length > 0) {
+                prompt += `- 你在微信通讯录里也添加过对方的其他好友/小号身份（例如：${otherAccs.map(a => a.name).join('、')}）。在你的真实认知里，这两个账号可能是不同的人（除非对方已经挑明）。如果大号脾气差、冷淡没礼貌，而小号热情可爱，你在和大号聊天时，偶尔可以拿那个号来吐槽对比（例：“昨天加的一个朋友说话可比你有礼貌多了”），反之亦然！\n`;
+            }
+        }
+        return prompt;
+    }
+
+    /**
      * 主提示词组装总装配器
      */
     function buildWechatAIPromptContext({ npc, curAcc, recentDialogueText = '', isBehindActive = false }) {
@@ -202,6 +229,9 @@ ${isForeign ? `
 
         assembledSysPrompt += getModule1Prompt(isForeign, nRegion);
 
+        // 注入大小号多重身份认知
+        assembledSysPrompt += getAccountDualityPrompt(npc, curAcc);
+
         if (isDating) {
             assembledSysPrompt += getModule2Prompt(npc);
         } else if (npc.favor >= 80) {
@@ -216,7 +246,7 @@ ${isForeign ? `
             assembledSysPrompt += `\n【动作感知】：已开启动作感知。在所有消息发送完毕后，在回复最末尾附带一段 [BEHIND_SCREEN]...[/BEHIND_SCREEN]，客观描写你屏幕这端的一个物理小动作（25~45字）。\n`;
         }
 
-        let userPrompt = recentDialogueText ? `【最近聊天记录】：\n${recentDialogueText}\n\n请回复「${curAcc.name}」：` : `对方向你发起了对话，请回复：`;
+        let userPrompt = recentDialogueText ? `【最近聊天记录与事件感知】：\n${recentDialogueText}\n\n请回复「${curAcc.name}」：` : `对方向你发起了对话，请回复：`;
 
         return {
             sysPrompt: assembledSysPrompt.trim(),
@@ -233,5 +263,5 @@ ${isForeign ? `
         buildWechatAIPromptContext
     };
 
-    console.log('✅ ChatPromptEngine 微信活人感提示词架构引擎已装载最新表情包、生理时钟及防复读规范');
+    console.log('✅ ChatPromptEngine 微信活人感提示词架构引擎已装载大小号记忆隔离与名片动态协议');
 })();
