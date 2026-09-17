@@ -103,7 +103,7 @@ body {
     height: 18px;
     background: #000000;
     border-radius: 14px;
-    z-index: 1000;
+    z-index: 1250;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -117,7 +117,7 @@ body {
     box-shadow: inset 0 0 2px #39527f;
 }
 
-/* 状态栏 */
+/* 状态栏：层级提至 1200，确保始终透出 */
 .status-bar {
     position: absolute;
     top: 0;
@@ -132,7 +132,8 @@ body {
     font-size: 13px;
     font-weight: 500;
     letter-spacing: -0.2px;
-    z-index: 950;
+    z-index: 1200;
+    pointer-events: none;
     transition: color 0.3s ease, background-color 0.3s ease, border 0.3s ease;
     border-bottom: var(--status-bar-stroke);
     background-color: var(--status-bar-fill);
@@ -144,12 +145,19 @@ body {
     display: flex;
     align-items: center;
     gap: 6px;
+    pointer-events: auto;
 }
 .status-bar-svg {
     fill: var(--status-svg-fill);
     width: 14px;
     height: 14px;
     transition: fill 0.3s ease, opacity 0.3s ease;
+}
+
+/* 微信 App 沉浸外壳安全预留顶栏 */
+.wechat-seamless-shell {
+    padding-top: 38px !important;
+    box-sizing: border-box !important;
 }
 
 /* 电池指示组件 */
