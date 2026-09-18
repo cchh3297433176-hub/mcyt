@@ -1,7 +1,7 @@
 /**
  * js/apps/chat/chat-prompt-engine.js
  * 🧠 微信聊天活人感提示词架构引擎
- * 模块化装配：主体通用拟人核心 + 关系进阶状态机 + 异地恋模块 + 时差生理感知 + 双时间戳隔夜作息感知 + 双语与仿微信语音协议 + 真实语义表情包索引 + 动态发布协议 + 大小号双重身份认知与名片接纳状态机
+ * 模块化装配：主体通用拟人核心 + 关系进阶状态机 + 异地恋模块 + 时差生理感知 + 双时间戳隔夜作息感知 + 双语与仿微信语音协议 + 真实语义表情包索引 + 动态发布协议 + 大小号双重身份认知与名片接纳状态机 + 🌟 Rememori 忆海向量长效记忆挂载
  */
 
 (function() {
@@ -220,7 +220,6 @@ ${isForeign ? `
             const isDifferentDay = (now.getDate() !== prev.getDate()) || (diffHours >= 6);
             if (isDifferentDay) {
                 const prevHour = prev.getHours();
-                const nowHour = now.getHours();
                 gapDesc = `【真实微信隔夜回复感知】：\n` +
                           `- 对方上一条消息发出时间为昨夜或数小时前（约 ${prevHour.toString().padStart(2, '0')}:${prev.getMinutes().toString().padStart(2, '0')}）。\n` +
                           `- 当前你回复的时间为：${timeCtx.nPeriod} ${timeCtx.nTime}（已相隔约 ${diffHours} 小时）。\n` +
@@ -232,6 +231,26 @@ ${isForeign ? `
             gapDesc = `【上一条消息时间参考】：对方上一句在 ${lastMsgTime} 发出，当前你回复的时间是 ${timeCtx.nTime}。\n`;
         }
         return gapDesc;
+    }
+
+    /**
+     * 🌟 Rememori 忆海证据检索与记忆挂载模块
+     * 读取由 Rememori 系统或持久层沉淀的历史证据与切片
+     */
+    function getRememoriContextForNpc(npcId, curAccId) {
+        if (!window._rememoriStore) {
+            try {
+                const raw = localStorage.getItem('mcyt_rememori_cache_v1');
+                if (raw) window._rememoriStore = JSON.parse(raw);
+            } catch (_) {}
+        }
+        const store = window._rememoriStore || {};
+        const key = `${curAccId || 'main'}_${npcId}`;
+        const records = store[key] || store[npcId] || [];
+        if (!records.length) return '';
+
+        const lines = records.slice(-6).map(r => `• [${r.time || '往事'}]: ${r.content || r.text || r}`);
+        return `\n【🧠 忆海 (Rememori) 长期证据与深层记忆】：\n` + lines.join('\n') + `\n【指引】：以上是你在与对方交往中真切沉淀的深层记忆与承诺证据，请在对话中自然贯彻这一背景认知，不可遗忘冲突。\n\n`;
     }
 
     /**
@@ -254,6 +273,12 @@ ${isForeign ? `
         assembledSysPrompt += `- 对方所在地(${pRegion})时间：${timeCtx.pPeriod} ${timeCtx.pTime}\n`;
         assembledSysPrompt += `- 时差情况：${timeCtx.diffDesc}\n`;
         assembledSysPrompt += `【要求】：必须体现出你当下的生理时间与困意状态！\n\n`;
+
+        // 🌟 挂载 Rememori 忆海深层证据切片
+        const rememoriMem = getRememoriContextForNpc(npc.id, curAcc.id);
+        if (rememoriMem) {
+            assembledSysPrompt += rememoriMem;
+        }
 
         // 注入隔夜作息感知
         const gapContext = analyzeMessageTimeGapContext(lastMsgTime, lastMsgTimestamp, Date.now(), timeCtx);
@@ -294,8 +319,9 @@ ${isForeign ? `
         calculateTimeAndZoneContext,
         isNpcInDatingRelationship,
         getAvailableStickersSummary,
-        buildWechatAIPromptContext
+        buildWechatAIPromptContext,
+        getRememoriContextForNpc
     };
 
-    console.log('✅ ChatPromptEngine 微信活人感提示词架构引擎已装载隔夜作息感知与名片状态机');
+    console.log('✅ ChatPromptEngine 微信活人感提示词架构引擎已装载 Rememori 忆海证据挂载接口');
 })();

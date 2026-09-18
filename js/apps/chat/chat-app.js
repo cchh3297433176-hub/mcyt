@@ -1,6 +1,6 @@
 /**
  * js/apps/chat/chat-app.js
- * 💬 微信独立主应用（瘦身减负版 · 仿微信白灰绿质感 · 角色左滑删除与简约确认 · 双语即时翻译 · 拟真语音条 · 三种发图模式 · 经典翻转卡片/微信框 · 真表情调用 · 撤回单次偷窥脱敏 · 长按引用与编辑 · Token统计 · 动态转发与名片推荐 · 加号聊天折叠设置与长消息折叠渲染 · 大小号好友物理隔离与申请红点 · 导入角色卡与私聊智能重说系统）
+ * 💬 微信独立主应用（瘦身减负版 · 仿微信白灰绿质感 · 角色左滑删除与简约确认 · 双语即时翻译 · 拟真语音条 · 三种发图模式 · 经典翻转卡片/微信框 · 真表情调用 · 撤回单次偷窥脱敏 · 长按引用与编辑 · Token统计 · 动态转发与名片推荐 · 加号聊天折叠设置与长消息折叠渲染 · 大小号好友物理隔离与申请红点 · 导入角色卡与私聊智能重说系统 · 🌟 接入 Rememori 忆海证据沉淀闭环）
  * ⚠️ 注：角色名片卡、资料设置、人设导出及头像更换等功能已完全拆分解耦至 chat-card.js
  */
 
@@ -13,6 +13,28 @@
     window._activeQuoteMessage = null;
     window._chatExpandAllMap = {}; // 记录哪些会话被用户主动临时展开了历史记录
     let _activeSwipedItem = null;  // 记录当前处于左滑展开状态的行
+
+    // 🌟 辅助函数：将高价值对话证据沉淀写入 Rememori 存储池
+    function depositRememoriEvidence(npcId, curAccId, content) {
+        if (!content || content.length < 5) return;
+        try {
+            if (!window._rememoriStore) {
+                const raw = localStorage.getItem('mcyt_rememori_cache_v1');
+                window._rememoriStore = raw ? JSON.parse(raw) : {};
+            }
+            const key = `${curAccId || 'main'}_${npcId}`;
+            if (!window._rememoriStore[key]) window._rememoriStore[key] = [];
+            window._rememoriStore[key].push({
+                time: new Date().toLocaleTimeString().slice(0, 5),
+                content: content.trim(),
+                timestamp: Date.now()
+            });
+            if (window._rememoriStore[key].length > 25) {
+                window._rememoriStore[key].shift();
+            }
+            localStorage.setItem('mcyt_rememori_cache_v1', JSON.stringify(window._rememoriStore));
+        } catch (_) {}
+    }
 
     // 读取或初始化折叠配置
     function getChatCollapseConfig() {
@@ -171,7 +193,6 @@
                 isSwiping = true;
                 isHorizontal = null;
 
-                // 若之前有展开的其他项，先自动收起
                 if (_activeSwipedItem && _activeSwipedItem !== content) {
                     _activeSwipedItem.style.transform = 'translateX(0px)';
                     _activeSwipedItem = null;
@@ -192,12 +213,10 @@
                 if (!isHorizontal) return;
 
                 if (deltaX < 0) {
-                    // 向左拉，最大位移限制
                     const move = Math.max(-72, deltaX);
                     content.style.transform = `translateX(${move}px)`;
                     currentX = move;
                 } else if (_activeSwipedItem === content) {
-                    // 处于展开态向右回弹
                     const move = Math.min(0, -72 + deltaX);
                     content.style.transform = `translateX(${move}px)`;
                     currentX = move;
@@ -246,10 +265,8 @@
     window.doDeleteContactNpc = function(npcId) {
         if (!window.G || !window.G.npcs) return;
 
-        // 1. 从角色字典删除
         delete window.G.npcs[npcId];
 
-        // 2. 清理所有账号下与该角色的聊天记录
         if (window.G.chatHistory) {
             for (const key of Object.keys(window.G.chatHistory)) {
                 if (key.endsWith(`_${npcId}`) || key === npcId) {
@@ -258,12 +275,10 @@
             }
         }
 
-        // 3. 清理好友申请列表
         if (Array.isArray(window.G.friendRequests)) {
             window.G.friendRequests = window.G.friendRequests.filter(r => r.applicantNpcId !== npcId);
         }
 
-        // 4. 清理群聊成员中的该NPC
         if (window.G.groups) {
             for (const g of Object.values(window.G.groups)) {
                 if (Array.isArray(g.members)) {
@@ -278,7 +293,6 @@
 
         _activeSwipedItem = null;
 
-        // 同步持久化与自动存档
         if (typeof window.syncCustomNpcsToLocalBackup === 'function') window.syncCustomNpcsToLocalBackup();
         if (typeof window.syncChatHistoryToLocalBackup === 'function') window.syncChatHistoryToLocalBackup();
         if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
@@ -405,7 +419,6 @@
                 const id = item.dataset.npcId;
                 if (typeof bindLongPressEvent === 'function') {
                     bindLongPressEvent(item, () => {
-                        // 如果当前该项处于左滑删除状态，点击内容区域先收回滑块
                         if (_activeSwipedItem && _activeSwipedItem.contains(item)) {
                             _activeSwipedItem.style.transform = 'translateX(0px)';
                             _activeSwipedItem = null;
@@ -789,7 +802,6 @@
 
         const topHeaderTitle = (npc.remark && npc.remark.trim()) ? `${npc.remark.trim()} (${npc.name})` : (npc.name || npc.id);
 
-        // 判定最新对话状态：若最新一条是角色回复则显示重说图标，若是用户发言则显示生成回复闪电图标
         let lastDialogueMsg = null;
         for (let i = chatHist.length - 1; i >= 0; i--) {
             const m = chatHist[i];
@@ -800,7 +812,6 @@
         }
         const canRedo = !!(lastDialogueMsg && lastDialogueMsg.from === 'npc');
 
-        // 聊天记录折叠逻辑处理
         const collapseCfg = getChatCollapseConfig();
         const chatKey = `single_${npcId}_${curAcc.id}`;
         const isExpanded = !!window._chatExpandAllMap[chatKey];
@@ -1059,7 +1070,6 @@
             </div>`;
         }
 
-        // 顶栏按钮渲染：根据最新一条发言者状态动态决定展示【重说】还是【生成回复闪电】
         let triggerBtnHtml = '';
         if (isGenerating) {
             triggerBtnHtml = `
@@ -1067,7 +1077,6 @@
                 <div class="wechat-spin-ring"></div>
             </button>`;
         } else if (canRedo) {
-            // 角色回复后呈现简约重说图标
             triggerBtnHtml = `
             <button id="btnChatLightningTrigger" onclick="window.confirmRetryLastAIReply('${npcId}')" style="border:none;background:#07c160;color:#fff;width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="重新生成回复">
                 <svg viewBox="0 0 24 24" style="width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round;">
@@ -1075,7 +1084,6 @@
                 </svg>
             </button>`;
         } else {
-            // 用户发言后呈现标准生成闪电
             triggerBtnHtml = `
             <button id="btnChatLightningTrigger" onclick="window.triggerAIReplyForSingle('${npcId}')" style="border:none;background:#07c160;color:#fff;width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="生成回复">
                 <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
@@ -1192,7 +1200,6 @@
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
         const hist = window.getAccountChatHistory(npcId, curAcc.id);
 
-        // 回溯剔除末尾属于 NPC 该轮的所有消息（包括偶发动态提醒或动作感知）
         while (hist.length > 0) {
             const last = hist[hist.length - 1];
             if (last.from === 'player') break;
@@ -1203,7 +1210,6 @@
         if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
         renderSingleChatWindow();
 
-        // 重新调用生成
         window.triggerAIReplyForSingle(npcId);
     };
 
@@ -1316,7 +1322,7 @@
         document.querySelector('.wechat-action-sheet-mask')?.remove();
         const history = (type === 'single') ? window.getAccountChatHistory(targetId) : (window.G.groupChatHistory[targetId] || []);
         const idx = history.findIndex(m => m._id === msgId);
-        if (idx === -1) return;
+        if (idx !== -1) return;
 
         const targetMsg = history[idx];
         const now = Date.now();
@@ -1383,6 +1389,7 @@
 
             if (type === 'single') {
                 window.pushChatMessageSafe(id, msgObj, curAcc.id);
+                depositRememoriEvidence(id, curAcc.id, `${curAcc.name}[语音]: ${text}`);
                 renderSingleChatWindow();
             } else {
                 if (!window.G.groupChatHistory[id]) window.G.groupChatHistory[id] = [];
@@ -1394,7 +1401,7 @@
         });
     };
 
-    // 🤖 单人私聊 AI 回复触发（带跨时段与隔夜双时间戳感知）
+    // 🤖 单人私聊 AI 回复触发（带跨时段、隔夜双时间戳感知与 Rememori 证据链沉淀）
     window.triggerAIReplyForSingle = async function(npcId) {
         const npc = window.G.npcs[npcId];
         if (!npc) return;
@@ -1525,6 +1532,9 @@
             const entities = window.parseAIReplyEntities(clean, npc.name);
             const finalEntities = (entities && entities.length) ? entities : [{ type: 'text', text: '在呢' }];
 
+            // 🌟 将角色本轮核心答复作为证据切片回流写入 Rememori 引擎
+            let collectedPureReply = '';
+
             for (let i = 0; i < finalEntities.length; i++) {
                 const item = finalEntities[i];
                 const time = new Date().toLocaleTimeString().slice(0, 5);
@@ -1549,6 +1559,7 @@
                         time,
                         timestamp: Date.now()
                     }, curAcc.id);
+                    collectedPureReply += ` [语音: ${item.text || ''}]`;
                 } else if (item.type === 'sticker_entity') {
                     const resolved = window.resolveStickerImageUrl(item.category, item.desc);
                     if (resolved) {
@@ -1579,12 +1590,17 @@
                         time,
                         timestamp: Date.now()
                     }, curAcc.id);
+                    collectedPureReply += ' ' + (item.originalText || item.text || '');
                 }
 
                 if (window.G.currentChatNpc === npcId) renderSingleChatWindow();
                 if (i < finalEntities.length - 1) {
                     await new Promise(r => setTimeout(r, 420));
                 }
+            }
+
+            if (collectedPureReply.trim()) {
+                depositRememoriEvidence(npcId, curAcc.id, `${npc.name}: ${collectedPureReply.trim()}`);
             }
 
             if (behindText && isBehindActive) {
@@ -1923,6 +1939,7 @@
 
         if (type === 'single') {
             window.pushChatMessageSafe(targetId, cardMsg, curAcc.id);
+            depositRememoriEvidence(targetId, curAcc.id, `${curAcc.name}[推荐了名片: ${name}]`);
             renderSingleChatWindow();
         } else {
             if (!window.G.groupChatHistory[targetId]) window.G.groupChatHistory[targetId] = [];
@@ -2067,6 +2084,9 @@
 
             if (type === 'single') {
                 window.pushChatMessageSafe(id, msgObj, curAcc.id);
+                if (msgObj.imageDesc) {
+                    depositRememoriEvidence(id, curAcc.id, `${curAcc.name}[发送了图片]: ${msgObj.imageDesc}`);
+                }
             } else {
                 if (!window.G.groupChatHistory[id]) window.G.groupChatHistory[id] = [];
                 window.G.groupChatHistory[id].push(msgObj);
@@ -2185,6 +2205,7 @@
         }
 
         window.pushChatMessageSafe(npcId, { from: 'player', isPlayer: true, text, time: new Date().toLocaleTimeString().slice(0, 5), timestamp: Date.now(), quote }, curAcc.id);
+        depositRememoriEvidence(npcId, curAcc.id, `${curAcc.name}: ${text}`);
         input.value = '';
         renderSingleChatWindow();
         if (typeof autoSaveGame === 'function') autoSaveGame();
