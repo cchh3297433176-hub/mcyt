@@ -97,13 +97,16 @@
                                 <div class="app-title-label">聊天中心</div>
                             </div>
 
-                            <div class="app-slot" id="appSlotMoments" onclick="openPhoneApp('moments')">
-                                <div class="app-icon-box" style="background: linear-gradient(135deg, #ff8787, #e03131);">
-                                    <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
-                                        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                            <!-- 🌟 独立记忆中枢：忆海 (Rememori) 替换原有朋友圈位置 -->
+                            <div class="app-slot" id="appSlotRememori" onclick="openPhoneApp('rememori')">
+                                <div class="app-icon-box" style="background: linear-gradient(135deg, #7048e8, #4c1d95);">
+                                    <img src="assets/icons/app_rememori.png" alt="忆海" draggable="false" style="display:none;" onload="this.style.display='block';if(this.nextElementSibling)this.nextElementSibling.style.display='none';this.parentElement.style.background='none';" onerror="this.style.display='none';" />
+                                    <svg class="app-icon-svg" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04z"/>
+                                        <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04z"/>
                                     </svg>
                                 </div>
-                                <div class="app-title-label">朋友圈</div>
+                                <div class="app-title-label">忆海</div>
                             </div>
 
                             <div class="app-slot" id="appSlotYoutube" onclick="openPhoneApp('youtube')">
