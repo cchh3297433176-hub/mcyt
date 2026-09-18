@@ -5,7 +5,8 @@
  *       手势解锁与 App 调度、桌面双页平滑滑屏手势、组件流动态宿主系统（日历/待办）、
  *       桌面 App 图标与小组件全自由长按晃动编辑态、粉白仿Windows甜心弹窗、
  *       🌟 4 格宽专属复古星象塔罗大组件驱动引擎、
- *       🌟 桌面层级自由手拖微调引擎（锁定屏幕条、塔罗、日历、便签、App网格分别手拖并持久化保存与一键重置）。
+ *       🌟 桌面层级自由手拖微调引擎（锁定屏幕条、塔罗、日历、便签、App网格分别手拖并持久化保存与一键重置）、
+ *       🌟 独立 App 路由中枢（接通微信、个性主题、系统设置、塔罗牌、忆海 Rememori）。
  */
 
 (function () {
@@ -1215,9 +1216,19 @@
             return;
         }
 
+        // 🌟 独立记忆中枢：忆海 (Rememori) 独立沙盒 App
+        if (appKey === 'rememori') {
+            try {
+                sessionStorage.setItem('mcyt_skip_lock_screen', 'true');
+                sessionStorage.setItem('mcyt_return_desktop_page', currentDesktopPage.toString());
+            } catch (_) {}
+            window.location.href = 'rememori/index.html';
+            return;
+        }
+
         const appMap = {
             chat: { title: '💬 聊天中心', desc: '单人私聊与多人群聊系统。' },
-            moments: { title: '🌸 朋友圈', desc: '主播与 NPC 动态互动流。' },
+            rememori: { title: '🧠 忆海', desc: '基于向量检索与证据链的独立记忆中枢。' },
             youtube: { title: '▶️ 油管视频', desc: '视频推荐流与发布共创。' },
             ao3: { title: '🎨 AO3 同人站', desc: '自建同人文与读者互动。' },
             streaming: { title: '🔴 直播推流', desc: '开播互动与弹幕分成。' },
