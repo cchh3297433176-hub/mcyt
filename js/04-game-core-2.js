@@ -1,6 +1,6 @@
 // js/04-game-core-2.js
-// 成就系统、商店、数据面板、主页Dashboard、多层长时记忆中枢、朋友圈Moments、好友申请处理、时区时钟、回忆录
-// （聊天界面与输入交互已完全剥离至 js/apps/chat/chat-app.js）
+// 成就系统、商店、数据面板、主页Dashboard、朋友圈Moments、好友申请处理、时区时钟、回忆录
+// （旧版大模型硬性记忆总结系统已全面剔除，统一交由独立 App 忆海 Rememori 接管）
 // ============================================================
 
 // 🐷 表情包底层数据字典与兼容初始化
@@ -602,23 +602,8 @@ function renderDataPanel() {
 window.renderDataPanel = renderDataPanel;
 
 // ============================================================
-// 🧠 记忆系统核心、副模型接口与账号拉黑持久化
+// 🧠 记忆系统适配桩（旧代码兼容与事件转接）
 // ============================================================
-if (!G.memoryConfig) {
-    G.memoryConfig = {
-        enabled: true,
-        useSeparateAI: false,
-        baseUrl: '',
-        apiKey: '',
-        model: 'deepseek-chat',
-        globalThreshold: 10,
-        chatThreshold: 10,
-        defaultKeepRecent: 5
-    };
-}
-if (!G.memorySummaries) G.memorySummaries = [];
-if (!G.groupMemories) G.groupMemories = {};
-
 function ensureNpcIntegrity() {
     if (!G.npcs) G.npcs = {};
     if (!G.chatHistory) G.chatHistory = {};
@@ -626,55 +611,23 @@ function ensureNpcIntegrity() {
         if (!npc.id) npc.id = id;
         if (!npc.name) npc.name = id;
         if (npc.favor === undefined) npc.favor = 50;
-        if (!npc.summaryThreshold) npc.summaryThreshold = 10;
-        if (!npc.keepRecent) npc.keepRecent = 5;
     }
 }
 
-async function callMemoryAI(messages, options = {}) {
-    const cfg = G.memoryConfig || {};
-    
-    if (cfg.useSeparateAI && cfg.apiKey && cfg.baseUrl) {
-        const baseUrl = cfg.baseUrl.replace(/\/+$/, '');
-        const targetUrl = baseUrl.endsWith('/chat/completions') ? baseUrl : baseUrl + '/chat/completions';
-        
-        const resp = await fetch(targetUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${cfg.apiKey}` },
-            body: JSON.stringify({
-                model: cfg.model || 'deepseek-chat',
-                messages,
-                temperature: options.temperature !== undefined ? options.temperature : 0.35,
-                max_tokens: options.maxTokens || 650
-            })
-        });
-        if (!resp.ok) throw new Error(`副 AI 记忆接口异常 [HTTP ${resp.status}]`);
-        const data = await resp.json();
-        return (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
-    }
-    
-    return await callAI(messages, { temperature: options.temperature !== undefined ? options.temperature : 0.35, maxTokens: options.maxTokens || 650 });
-}
-
-function showMemoryFailNoticeModal(moduleName, errorMsg) {
-    openModal(`
-        <div style="text-align:center;padding:10px 0;">
-            <div style="font-size:36px;margin-bottom:8px;">⚠️</div>
-            <h3 style="color:#d32f2f;margin-bottom:6px;">记忆总结未完成</h3>
-            <div style="font-size:13px;color:#555;margin:10px 0;background:#fff8f8;padding:10px 12px;border-radius:8px;text-align:left;">
-                <div><b>失败模块：</b>${escapeHtml(moduleName)}</div>
-                <div style="font-size:11px;color:#888;margin-top:4px;"><b>原因提示：</b>${escapeHtml(errorMsg || '网络或模型异常')}</div>
-            </div>
-            <div class="btn-row"><button class="btn-primary" onclick="window.closeModal()" style="width:100%;">我知道了，关闭提示</button></div>
-        </div>
-    `);
-}
-
+// 轻量事件钩子：保留接口，便于全局成就与赞助商调用，不阻断旧代码
 function addGlobalMemoryRecord(text) {
     if (!text) return;
-    if (!G.memorySummaries) G.memorySummaries = [];
-    G.memorySummaries.push({ id: 'gm_' + Date.now() + '_' + rand(100, 999), day: G.day, text: text.trim(), time: new Date().toLocaleTimeString().slice(0, 5) });
+    if (!window._recentGlobalEvents) window._recentGlobalEvents = [];
+    window._recentGlobalEvents.push({ text: text.trim(), time: Date.now() });
+    if (window._recentGlobalEvents.length > 30) window._recentGlobalEvents.shift();
 }
+
+// 平滑重定向：将旧有的 openMemoryModal 统一引导至全新的忆海 (Rememori) 独立 App
+window.openMemoryModal = function() {
+    if (typeof window.openPhoneApp === 'function') {
+        window.openPhoneApp('rememori');
+    }
+};
 
 function getChatStorageKey(npcId, accId = null) {
     return `${accId || G.currentAccountId || 'main'}_${npcId}`;
@@ -1318,327 +1271,6 @@ window.triggerAiCommentForMoment = async function(momentId) {
 };
 
 // ============================================================
-// 🧠 游戏多层长时记忆中枢
-// ============================================================
-let _currentMemoryTab = 'global';
-
-window.openMemoryModal = function() {
-    renderMemoryMainModal();
-};
-
-function renderMemoryMainModal() {
-    openModal(`
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-            <h3 style="margin:0;display:flex;align-items:center;gap:6px;">🧠 游戏长时记忆中枢</h3>
-            <button class="btn-secondary small" onclick="window.openMemorySettingsModal()" style="padding:3px 8px;font-size:11px;">⚙️ 模型与轮数设置</button>
-        </div>
-        <p style="font-size:11.5px;color:#666;line-height:1.5;margin-bottom:8px;">
-            本系统立体保存全盘历史与NPC专属记忆。<b>规范</b>：全篇强制使用【第三人称具体姓名】留存，杜绝模糊代词！
-        </p>
-
-        <div style="display:flex;gap:6px;background:#e9f2e9;padding:3px;border-radius:8px;margin-bottom:8px;">
-            <button type="button" id="memTabGlobalBtn" onclick="window.switchMemoryTabView('global')" style="flex:1;border:none;padding:6px 0;border-radius:6px;font-size:12.5px;font-weight:700;cursor:pointer;background:${_currentMemoryTab === 'global' ? '#fff' : 'transparent'};color:${_currentMemoryTab === 'global' ? 'var(--primary)' : '#666'};">
-                📅 每日全局纪实 (${(G.memorySummaries || []).length})
-            </button>
-            <button type="button" id="memTabNpcBtn" onclick="window.switchMemoryTabView('npc')" style="flex:1;border:none;padding:6px 0;border-radius:6px;font-size:12.5px;font-weight:700;cursor:pointer;background:${_currentMemoryTab === 'npc' ? '#fff' : 'transparent'};color:${_currentMemoryTab === 'npc' ? 'var(--primary)' : '#666'};">
-                👤 角色专属记忆 (${Object.keys(G.npcs || {}).length})
-            </button>
-        </div>
-
-        <div id="memoryModalContentArea" style="max-height:340px;overflow-y:auto;padding-right:2px;">
-            ${renderMemoryModalView()}
-        </div>
-
-        <div class="btn-row" style="flex-direction:column;gap:6px;margin-top:10px;">
-            ${_currentMemoryTab === 'global' ? `
-                <button class="btn-primary" onclick="window.openManualMemoryInputModal('global')" style="width:100%;">➕ 手动添加一条核心记忆</button>
-                <button class="btn-primary" onclick="window.executeManualAiSummary('global')" style="width:100%;background:#388e3c;">🤖 召唤小模型整理全局核心记忆</button>
-            ` : `
-                <button class="btn-secondary" onclick="window.openPhoneApp('chat')" style="width:100%;">👤 查看微信联系人</button>
-            `}
-            <button class="btn-secondary" onclick="closeModal()" style="width:100%;">关 闭</button>
-        </div>
-    `);
-}
-
-window.switchMemoryTabView = function(tab) {
-    _currentMemoryTab = tab;
-    renderMemoryMainModal();
-};
-
-function renderMemoryModalView() {
-    if (_currentMemoryTab === 'global') {
-        const gmList = G.memorySummaries || [];
-        if (!gmList.length) {
-            return '<div style="font-size:12px;color:#999;padding:30px 0;text-align:center;">暂无每日全局记忆，随着游戏推进自动累加。</div>';
-        }
-
-        return gmList.map((gm, idx) => {
-            const rawText = stripThought(gm.text || gm);
-            const mDay = gm.day || 1;
-            return `
-            <div class="mem-entry-card" id="memCard_g_${idx}" style="background:#fff;border-radius:8px;padding:8px 10px;margin-bottom:6px;border:1px solid #e0ede0;box-shadow:0 1px 3px rgba(0,0,0,0.03);">
-                <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <span style="font-weight:700;font-size:12px;color:#166534;">📅 第 ${mDay} 天纪实</span>
-                    <div style="display:flex;gap:6px;">
-                        <button onclick="window.toggleMemoryEditMode('g', ${idx})" style="border:none;background:none;color:#1565c0;font-size:11px;cursor:pointer;">✏️ 编辑</button>
-                        <button onclick="window.deleteGlobalMemoryItem(${idx})" style="border:none;background:none;color:#e53935;font-size:11px;cursor:pointer;">🗑️</button>
-                    </div>
-                </div>
-                <div id="memText_g_${idx}" style="font-size:12.5px;color:#333;margin-top:4px;line-height:1.5;cursor:pointer;" onclick="window.toggleMemoryEditMode('g', ${idx})">
-                    ${escapeHtml(rawText)}
-                </div>
-                <div id="memEditBox_g_${idx}" style="display:none;margin-top:6px;">
-                    <textarea id="memInput_g_${idx}" rows="3" style="width:100%;padding:6px;border-radius:6px;border:1px solid #90caf9;font-size:12.5px;box-sizing:border-box;">${escapeHtml(rawText)}</textarea>
-                    <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:4px;">
-                        <button class="btn-secondary small" onclick="window.toggleMemoryEditMode('g', ${idx})" style="padding:3px 8px;font-size:11px;">取消</button>
-                        <button class="btn-primary small" onclick="window.saveGlobalMemoryItem(${idx})" style="padding:3px 10px;font-size:11px;">保存</button>
-                    </div>
-                </div>
-            </div>`;
-        }).reverse().join('');
-    } else {
-        const npcs = Object.entries(G.npcs || {});
-        if (!npcs.length) {
-            return '<div style="font-size:12px;color:#999;padding:30px 0;text-align:center;">暂无通讯录角色。</div>';
-        }
-
-        return npcs.map(([id, n]) => {
-            const rawText = stripThought(n.memorySummary || '');
-            const chatTh = n.summaryThreshold || G.memoryConfig?.chatThreshold || 10;
-            return `
-            <div class="mem-entry-card" id="memCard_npc_${id}" style="background:#fff;border-radius:8px;padding:8px 10px;margin-bottom:6px;border:1px solid #e0ede0;box-shadow:0 1px 3px rgba(0,0,0,0.03);">
-                <div style="display:flex;justify-content:space-between;align-items:center;">
-                    <span style="font-weight:700;font-size:12.5px;color:#1e293b;">${n.avatarEmoji || '👤'} ${escapeHtml(n.name)} <span style="font-size:10px;color:#888;font-weight:normal;">(每${chatTh}轮提炼)</span></span>
-                    <div style="display:flex;gap:6px;">
-                        <button onclick="window.executeManualAiSummary('npc', '${id}')" style="border:none;background:#e8f5e9;color:#2e7d32;padding:2px 6px;border-radius:4px;font-size:10.5px;cursor:pointer;">🤖 提炼</button>
-                        <button onclick="window.toggleMemoryEditMode('npc', '${id}')" style="border:none;background:none;color:#1565c0;font-size:11px;cursor:pointer;">✏️ 编辑</button>
-                    </div>
-                </div>
-                <div id="memText_npc_${id}" style="font-size:12px;color:#555;margin-top:4px;line-height:1.5;cursor:pointer;" onclick="window.toggleMemoryEditMode('npc', '${id})">
-                    ${rawText ? escapeHtml(rawText) : '<i style="color:#aaa;">暂无专属提炼记忆，点击编辑或在私聊中积累互动...</i>'}
-                </div>
-                <div id="memEditBox_npc_${id}" style="display:none;margin-top:6px;">
-                    <textarea id="memInput_npc_${id}" rows="3" style="width:100%;padding:6px;border-radius:6px;border:1px solid #90caf9;font-size:12px;box-sizing:border-box;">${escapeHtml(rawText)}</textarea>
-                    <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:4px;">
-                        <button class="btn-secondary small" onclick="window.toggleMemoryEditMode('npc', '${id}')" style="padding:3px 8px;font-size:11px;">取消</button>
-                        <button class="btn-primary small" onclick="window.saveNpcMemoryItem('${id}')" style="padding:3px 10px;font-size:11px;">保存</button>
-                    </div>
-                </div>
-            </div>`;
-        }).join('');
-    }
-}
-
-window.toggleMemoryEditMode = function(type, id) {
-    const textEl = document.getElementById(`memText_${type}_${id}`);
-    const editBox = document.getElementById(`memEditBox_${type}_${id}`);
-    if (textEl && editBox) {
-        const isEditing = editBox.style.display !== 'none';
-        editBox.style.display = isEditing ? 'none' : 'block';
-        textEl.style.display = isEditing ? 'block' : 'none';
-    }
-};
-
-window.saveGlobalMemoryItem = function(idx) {
-    const input = document.getElementById(`memInput_g_${idx}`);
-    if (!input) return;
-    const newText = input.value.trim();
-    if (!newText) { if (typeof showToast === 'function') showToast('⚠️ 记忆内容不能为空', 'error'); return; }
-    if (G.memorySummaries && G.memorySummaries[idx]) {
-        if (typeof G.memorySummaries[idx] === 'string') {
-            G.memorySummaries[idx] = newText;
-        } else {
-            G.memorySummaries[idx].text = newText;
-        }
-        if (typeof showToast === 'function') showToast('✅ 每日纪实记忆已更新！', 'success', 1200);
-        renderMemoryMainModal();
-        if (typeof autoSaveGame === 'function') autoSaveGame();
-    }
-};
-
-window.saveNpcMemoryItem = function(npcId) {
-    const input = document.getElementById(`memInput_npc_${npcId}`);
-    if (!input) return;
-    const newText = input.value.trim();
-    const npc = G.npcs[npcId];
-    if (npc) {
-        npc.memorySummary = newText;
-        if (typeof showToast === 'function') showToast(`✅ ${npc.name} 专属记忆已更新！`, 'success', 1200);
-        renderMemoryMainModal();
-        if (typeof autoSaveGame === 'function') autoSaveGame();
-    }
-};
-
-window.deleteGlobalMemoryItem = function(idx) {
-    if (confirm('确定删除这条全局记忆吗？')) {
-        G.memorySummaries.splice(idx, 1);
-        renderMemoryMainModal();
-        if (typeof showToast === 'function') showToast('🗑️ 该条记忆已删除', 'info', 1200);
-        if (typeof autoSaveGame === 'function') autoSaveGame();
-    }
-};
-
-window.openMemorySettingsModal = function() {
-    const cfg = G.memoryConfig || {};
-    const useSep = !!cfg.useSeparateAI;
-
-    openModal(`
-        <h3>⚙️ 记忆副模型与总结频率设置</h3>
-        <p style="font-size:12px;color:#666;line-height:1.5;">
-            主模型专注写长剧情，副模型选用低成本小模型专门压缩记忆。
-        </p>
-
-        <div style="background:#f9fbf9;border:1px solid #dce8dc;padding:10px;border-radius:10px;margin-bottom:12px;">
-            <div style="font-weight:700;font-size:13px;color:#1e4620;margin-bottom:8px;">⏱️ 记忆总结触发频率设置</div>
-            <div class="form-group" style="margin-bottom:8px;">
-                <label>全局主线剧情：每隔多少轮自动总结一次？</label>
-                <div style="display:flex;align-items:center;gap:8px;">
-                    <input type="number" id="memSettingGlobalThreshold" value="${cfg.globalThreshold || 10}" min="3" max="50" style="width:80px;padding:6px;border-radius:6px;border:1px solid #ccc;">
-                    <span style="font-size:12px;color:#666;">轮主线推进自动归档</span>
-                </div>
-            </div>
-            <div class="form-group" style="margin-bottom:0;">
-                <label>角色私聊：默认每隔多少轮自动提炼一次？</label>
-                <div style="display:flex;align-items:center;gap:8px;">
-                    <input type="number" id="memSettingChatThreshold" value="${cfg.chatThreshold || 10}" min="3" max="50" style="width:80px;padding:6px;border-radius:6px;border:1px solid #ccc;">
-                    <span style="font-size:12px;color:#666;">轮私聊消息自动提炼承诺</span>
-                </div>
-            </div>
-        </div>
-
-        <div style="background:#fff;border:1px solid #e0e0e0;padding:10px;border-radius:10px;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                <span style="font-weight:700;font-size:13px;color:#333;">🤖 独立副 AI 模型通道</span>
-                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-                    <input type="checkbox" id="memSettingUseSepCheck" ${useSep ? 'checked' : ''} style="width:16px;height:16px;accent-color:var(--primary);">
-                    <span style="font-size:12px;font-weight:700;color:${useSep ? 'var(--primary)' : '#777'};">${useSep ? '已启用独立副AI' : '使用主AI'}</span>
-                </label>
-            </div>
-
-            <div id="memSepConfigArea" style="display:${useSep ? 'block' : 'none'};">
-                <div class="form-group" style="margin-bottom:6px;">
-                    <label style="font-size:12px;">副 AI Base URL</label>
-                    <input type="text" id="memBaseUrlInput" value="${escapeHtml(cfg.baseUrl || '')}" placeholder="如 https://api.deepseek.com/v1">
-                </div>
-                <div class="form-group" style="margin-bottom:6px;">
-                    <label style="font-size:12px;">副 AI API Key</label>
-                    <input type="password" id="memApiKeyInput" value="${escapeHtml(cfg.apiKey || '')}" placeholder="sk-...">
-                </div>
-                <div class="form-group" style="margin-bottom:6px;">
-                    <label style="font-size:12px;">副 AI 模型名称</label>
-                    <input type="text" id="memModelInput" value="${escapeHtml(cfg.model || 'deepseek-chat')}" placeholder="例如 deepseek-chat">
-                </div>
-            </div>
-        </div>
-
-        <div class="btn-row" style="margin-top:14px;">
-            <button class="btn-secondary" onclick="window.openMemoryModal()">返回记忆中枢</button>
-            <button class="btn-primary" id="btnSaveMemorySettings">💾 保存配置</button>
-        </div>
-    `);
-
-    const sepCheck = document.getElementById('memSettingUseSepCheck');
-    const sepArea = document.getElementById('memSepConfigArea');
-    sepCheck.onchange = () => {
-        sepArea.style.display = sepCheck.checked ? 'block' : 'none';
-    };
-
-    document.getElementById('btnSaveMemorySettings').onclick = () => {
-        G.memoryConfig = {
-            enabled: true,
-            useSeparateAI: document.getElementById('memSettingUseSepCheck').checked,
-            baseUrl: document.getElementById('memBaseUrlInput').value.trim(),
-            apiKey: document.getElementById('memApiKeyInput').value.trim(),
-            model: document.getElementById('memModelInput').value.trim() || 'deepseek-chat',
-            globalThreshold: parseInt(document.getElementById('memSettingGlobalThreshold').value) || 10,
-            chatThreshold: parseInt(document.getElementById('memSettingChatThreshold').value) || 10,
-            defaultKeepRecent: 5
-        };
-
-        if (typeof showToast === 'function') showToast('✅ 记忆配置已保存！', 'success', 1800);
-        window.openMemoryModal();
-        if (typeof autoSaveGame === 'function') autoSaveGame();
-    };
-};
-
-window.openManualMemoryInputModal = function() {
-    const pName = G.player.ytName || '主角';
-    openModal(`
-        <h3>➕ 手动写入核心记忆</h3>
-        <p style="font-size:12px;color:#666;"><b>书写规范</b>：请使用具体名字（如【${pName} 与 Dream 约定……】），严禁使用代词！</p>
-        <div class="form-group">
-            <textarea id="manualMemoryInput" rows="4" placeholder="例如：第3天，${pName} 在下界堡垒救下了 Dream..." style="width:100%;padding:8px;font-size:13px;"></textarea>
-        </div>
-        <div class="btn-row">
-            <button class="btn-secondary" onclick="window.openMemoryModal()">返回</button>
-            <button class="btn-primary" id="btnConfirmManualMemory">写入记忆</button>
-        </div>
-    `);
-
-    document.getElementById('btnConfirmManualMemory').onclick = () => {
-        const text = document.getElementById('manualMemoryInput').value.trim();
-        if (!text) { if (typeof showToast === 'function') showToast('内容不能为空', 'error'); return; }
-        addGlobalMemoryRecord(text);
-        if (typeof showToast === 'function') showToast('🧠 核心记忆已写入！', 'success', 1500);
-        window.openMemoryModal();
-        if (typeof autoSaveGame === 'function') autoSaveGame();
-    };
-};
-
-window.executeManualAiSummary = async function(type, targetId) {
-    if (typeof showToast === 'function') showToast('🤖 AI 正在归纳提炼记忆...', 'info', 2000);
-    const pName = G.player.ytName || '主角';
-    try {
-        if (type === 'global') {
-            const stories = (G.storyHistory || []).slice(-10).map(s => s.text).join('\n');
-            const sys = `你是资深游戏纪事整理助手。记忆总结中【必须且只能严格使用具体名字】！玩家的主播名是「${pName}」！严禁使用代词！浓缩为一条不超过 120 字的核心历史大事件。直接输出纯正文。`;
-
-            const raw = await callMemoryAI([{ role: 'system', content: sys }, { role: 'user', content: stories || '暂无剧情' }], { maxTokens: 250 });
-            const clean = stripThought(raw.trim());
-            if (clean) addGlobalMemoryRecord(clean);
-            if (typeof showToast === 'function') showToast('✅ 全局记忆已按实体名提炼完成！', 'success', 2000);
-        } else if (type === 'npc') {
-            await checkNpcMemorySummarize(targetId);
-        }
-        renderMemoryMainModal();
-    } catch(e) {
-        if (typeof showToast === 'function') showToast('❌ 记忆整理失败: ' + e.message, 'error');
-    }
-};
-
-// 🧠 角色私聊记忆提炼函数
-async function checkNpcMemorySummarize(npcId) {
-    const memCfg = G.memoryConfig || {};
-    if (memCfg.enabled === false) return;
-    const npc = G.npcs[npcId];
-    if (!npc) return;
-    const history = getAccountChatHistory(npcId);
-    const threshold = npc.summaryThreshold || memCfg.chatThreshold || 10;
-    const keepRecent = npc.keepRecent || memCfg.defaultKeepRecent || 5;
-
-    if (history.length >= threshold && !npc._summarizing) {
-        npc._summarizing = true;
-        const pName = G.player.ytName || '主角';
-        try {
-            const toSummarize = history.slice(0, Math.max(1, history.length - keepRecent));
-            const textToSummarize = toSummarize.map(m => `${m.from === 'player' ? pName : npc.name}: ${stripThought(m.text || '')}`).join('\n');
-            const prior = npc.memorySummary ? `【此前已有记忆】：\n${npc.memorySummary}\n\n` : '';
-            const sys = `你是精炼的角色长期记忆整理助手。记忆总结中严禁使用代词，必须指名道姓（主角：「${pName}」，好友：「${npc.name}」）。输出不超过180字的精炼摘要。直接输出正文。`;
-
-            const summary = await callMemoryAI([{ role: 'system', content: sys }, { role: 'user', content: `${prior}【需归纳的新对话】：\n${textToSummarize}` }], { maxTokens: 400, temperature: 0.35 });
-            npc.memorySummary = stripThought(summary.trim());
-            if (typeof autoSaveGame === 'function') autoSaveGame();
-            if (typeof showToast === 'function') showToast(`🧠 已自动整理与 ${npc.name} 的实体记忆！`, 'info', 2000);
-        } catch (e) {
-            showMemoryFailNoticeModal(`角色「${npc.name}」私聊记忆`, e.message);
-        } finally {
-            npc._summarizing = false;
-        }
-    }
-}
-
-// ============================================================
 // 🎬 共创与连麦弹窗
 // ============================================================
 window.openCollabVideoPublishModal = function(targetType, targetId) {
@@ -1708,7 +1340,6 @@ window.openCollabVideoPublishModal = function(targetType, targetId) {
             const n = G.npcs[id];
             if (n) {
                 n.favor = Math.min(100, (n.favor || 0) + rand(3, 7));
-                n.memorySummary = (n.memorySummary || '') + `\n【合作拍摄】：${G.player.ytName} 与 ${n.name} 合拍了共创视频《${fullTitle}》。`;
             }
         });
 
@@ -1911,11 +1542,6 @@ window.openShareMomentModal = openShareMomentModal;
 window.addMomentComment = addMomentComment;
 window.replyMomentComment = replyMomentComment;
 window.openMemoryModal = openMemoryModal;
-window.renderMemoryMainModal = renderMemoryMainModal;
-window.renderMemoryModalView = renderMemoryModalView;
-window.executeManualAiSummary = executeManualAiSummary;
-window.openManualMemoryInputModal = openManualMemoryInputModal;
-window.openMemorySettingsModal = openMemorySettingsModal;
 window.renderDashboard = renderDashboard;
 window.sendReply = sendReply;
 window.renderAvatarBadge = renderAvatarBadge;

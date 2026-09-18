@@ -1,5 +1,6 @@
 // js/06-video-story.js
-// 视频制作（评论由 AI 实时生成）与多层级记忆联动的核心叙事引擎（纯粹AI内容编辑、按天数结构化、更名追踪、高自由度人设尊重）
+// 视频制作（评论由 AI 实时生成）与核心叙事引擎（纯粹AI内容编辑、按天数结构化、更名追踪、高自由度人设尊重）
+// （已剥离旧版大模型硬性记忆总结，记忆中枢交由独立 App 忆海 Rememori 接管）
 // ============================================================
 function openVideoModal() {
     const availableAP = G.actionPoints;
@@ -290,7 +291,7 @@ async function createVideo(title, style, duration, collectionName, collectionInd
 }
 
 // ============================================================
-// 通用剧情生成与多层记忆构建（高自由度人设尊重）
+// 通用剧情生成引擎（高自由度人设尊重）
 // ============================================================
 function buildSystemPrompt() {
     const p = G.player;
@@ -302,18 +303,6 @@ function buildSystemPrompt() {
             : `[第${h.day}天 · ${getTimeSlotName(h.time)}] ${stripThought(h.text).slice(0, 130)}...`
     ).join('\n');
 
-    const memoryByDays = {};
-    (G.memorySummaries || []).forEach(m => {
-        const d = m.day || 1;
-        if (!memoryByDays[d]) memoryByDays[d] = [];
-        const cleanTxt = stripThought(m.text || m);
-        memoryByDays[d].push(cleanTxt);
-    });
-
-    const formattedDayMemories = Object.keys(memoryByDays).sort((a, b) => Number(a) - Number(b)).map(d => {
-        return `【📅 游戏第 ${d} 天纪事档案】：\n` + memoryByDays[d].map(txt => `• ${txt}`).join('\n');
-    }).join('\n\n');
-
     let nameHistoryNotice = '';
     if (p._nameHistory && Array.isArray(p._nameHistory) && p._nameHistory.length > 0) {
         nameHistoryNotice = `【核心姓名与更名履历档案】：
@@ -321,18 +310,6 @@ function buildSystemPrompt() {
 历史曾用名记录：${p._nameHistory.join(' → ')}。
 【极其重要】：历史记忆中记载的曾用名指的均是主角「${p.ytName}」本人，严禁误认为这是不同的角色！\n`;
     }
-
-    const npcDetailedMemories = Object.values(G.npcs || {}).map(n => {
-        let mem = `【${n.name}】(好感度: ${n.favor||0}${n._relationship === 'dating' ? ' 💕恋人' : ''})`;
-        if (n.memorySummary) mem += `\n  - 专属承诺与互动记忆: ${stripThought(n.memorySummary)}`;
-        if (n.knownGroupEvents) mem += `\n  - 群聊获悉事件: ${stripThought(n.knownGroupEvents)}`;
-        return mem;
-    }).join('\n');
-
-    const groupMemoriesList = Object.entries(G.groupMemories || {}).map(([gid, text]) => {
-        const grp = G.groups[gid];
-        return `[群聊「${grp ? grp.name : gid}」纪要]: ${stripThought(text)}`;
-    }).join('\n');
 
     const memoirRecent = (G.memoir || []).slice(-12).map(m =>
         `[第${m.day}天]: ${m.event} (${m.details})`
@@ -365,15 +342,6 @@ ${nameHistoryNotice}
 - 主播频道：${p.ytName} | 身份：${p.identity === 'new' ? '新主播' : p.identity === 'fans' ? '小有名气主播' : '老牌主播'} | 赛道：${p.category} | 人设风格：${p.persona || '自然由用户自定义'}
 - 数据统计：粉丝 ${p.followers} | 金币 ${p.money} | 点赞 ${p.likes}
 
-【🌐 统一全局长效记忆档案（已按游戏天数清晰归档）】
-${formattedDayMemories || '暂无全局历史摘要'}
-
-【👥 群聊公开话题与纪要】
-${groupMemoriesList || '暂无群聊大事件'}
-
-【👤 NPC 关系与专属记忆】
-${npcDetailedMemories || '暂无NPC'}
-
 【最近时段行动回顾】
 ${historySummary || '暂无'}
 
@@ -381,10 +349,9 @@ ${historySummary || '暂无'}
 ${memoirRecent || '暂无'}
 
 【核心叙事铁律】
-1. 必须精准继承【统一全局长效记忆档案】与【NPC关系与专属记忆】中的所有历史设定与承诺。
-2. 密切注意【当前游戏天数：第 ${G.day} 天 · ${getTimeSlotName(G.timeSlot)}】，严格依照时间先后顺序推进。
-3. 每次生成剧情不少于 800 字，皮上游戏实况（走位、红石、追杀博弈、反杀高光）与皮下生活（日常互动、微信消息联动、主播八卦）巧妙交织。
-4. 行文生动写实，代入感强烈。只输出剧情正文，禁止角色扮演外的额外说明。
+1. 密切注意【当前游戏天数：第 ${G.day} 天 · ${getTimeSlotName(G.timeSlot)}】，严格依照时间先后顺序推进。
+2. 每次生成剧情不少于 800 字，皮上游戏实况（走位、红石、追杀博弈、反杀高光）与皮下生活（日常互动、微信消息联动、主播八卦）巧妙交织。
+3. 行文生动写实，代入感强烈。只输出剧情正文，禁止角色扮演外的额外说明。
 `;
 }
 
@@ -498,7 +465,6 @@ async function generateStory(tag, userPrompt, useSearch = false, replaceBlock = 
         };
 
         extractThemes(stripThought(newText));
-        maybeAutoSummarize();
     } catch (err) {
         hideLoading();
         console.error(err);
@@ -761,72 +727,11 @@ function openEditContentModal() {
 }
 $('editContentBtn')?.addEventListener('click', () => openEditContentModal());
 
-async function maybeAutoSummarize() {
-    const s = G.memoryConfig || {};
-    if (s.enabled === false) return;
-    const active = (G.storyHistory || []).filter(h => !h.archived);
-    const threshold = s.globalThreshold || s.defaultThreshold || 10;
-    const keepRecent = s.defaultKeepRecent || 5;
-
-    if (active.length < threshold || G._autoSummarizing) return;
-    G._autoSummarizing = true;
-    const pName = G.player.ytName || '主角';
-
-    try {
-        const toSummarize = active.slice(0, Math.max(0, active.length - keepRecent));
-        if (!toSummarize.length) return;
-
-        const startDay = toSummarize[0]?.day || G.day;
-        const endDay = toSummarize[toSummarize.length - 1]?.day || G.day;
-        const daySpanLabel = (startDay === endDay) ? `第${startDay}天` : `第${startDay}~${endDay}天`;
-
-        const priorSummaries = (G.memorySummaries || []).map(m => `[第${m.day||1}天]: ${stripThought(m.text || m)}`).join('\n');
-        const combinedText = toSummarize.map(h => `[第${h.day}天 · ${getTimeSlotName(h.time)}] ${stripThought(h.text)}`).join('\n\n');
-
-        const sys = `你是 MC 主播养成历史纪实归档系统。
-【🌟 上帝视角纯实体全称铁律（最高优先级）】：
-1. 你的总结必须使用【客观公正的第三人称上帝视角】！
-2. 绝对严禁使用任何代词（严禁使用“我”、“你”、“他”、“她”、“它”、“二人”、“双方”）！
-3. 主角的名字是「${pName}」！所有事件必须严格写出主角与各个NPC的具体名字！
-   ❎ 绝对错误：“她和Dream联机，他救了她。”
-   ❎ 绝对错误：“主角在末地击败了末影龙，随后他开播了。”
-   ✔️ 绝对正确：“${pName} 与 Dream 联机，Dream 协助 ${pName} 击败了末影龙；随后 ${pName} 开启了直播。”
-4. 请将此阶段（${daySpanLabel}）的剧情浓缩为精炼客观的总结（200字以内），保留核心游戏成就、重要人际进展与重大转折。直接输出正文。`;
-
-        const userMsg = `${priorSummaries ? `【此前历史归档纪实】\n${priorSummaries}\n\n` : ''}【本阶段待归纳剧情（${daySpanLabel}）】\n${combinedText}`;
-
-        const summaryText = await callMemoryAI([
-            { role: 'system', content: sys },
-            { role: 'user', content: userMsg },
-        ], { maxTokens: 600, temperature: 0.35 });
-
-        const cleanSummary = stripThought(summaryText.trim());
-        if (cleanSummary) {
-            if (!G.memorySummaries) G.memorySummaries = [];
-            G.memorySummaries.push({
-                id: 'gm_' + Date.now() + '_' + rand(100, 999),
-                day: endDay,
-                text: cleanSummary,
-                time: new Date().toLocaleTimeString().slice(0, 5)
-            });
-        }
-
-        const idsToArchive = new Set(toSummarize.map(h => h._id));
-        G.storyHistory.forEach(h => {
-            if (idsToArchive.has(h._id)) {
-                h.archived = true;
-                refreshStoryBlockDOM(h);
-            }
-        });
-        showToast(`🧠 已将${daySpanLabel}的经历按实体全名归档入长效记忆库！`, 'info', 2200);
-        autoSaveGame();
-    } catch (e) {
-        console.warn('剧情后台自动总结跳过:', e);
-    } finally {
-        G._autoSummarizing = false;
-    }
-}
-
+// 点击主屏旧记忆总结按钮，平滑唤起全新独立 App 忆海 (Rememori)
 $('memorySummaryBtn')?.addEventListener('click', () => {
-    if (typeof openMemoryModal === 'function') openMemoryModal();
+    if (typeof window.openPhoneApp === 'function') {
+        window.openPhoneApp('rememori');
+    } else if (typeof openMemoryModal === 'function') {
+        openMemoryModal();
+    }
 });
