@@ -20,14 +20,30 @@ jobs:
           repository: 'cchh3297433176-hub/taluo'
           path: 'tarot'
 
+      - name: Checkout Rememori Subproject
+        uses: actions/checkout@v4
+        with:
+          repository: 'cchh3297433176-hub/mcyt-rememori'
+          path: 'temp_rememori'
+
       - name: Checkout Image Assets Repo
         uses: actions/checkout@v4
         with:
           repository: 'cchh3297433176-hub/tttttu'
           path: 'image_repo'
 
-      - name: Clean Subprojects Git Cache
+      - name: Deploy Subprojects & Clean Git Cache
         run: |
+          # 1. 部署 Rememori 独立 App（拷贝 site 前端并命名为 rememori 目录）
+          mkdir -p rememori
+          if [ -d "temp_rememori/site" ]; then
+            cp -r temp_rememori/site/* rememori/
+          else
+            cp -r temp_rememori/* rememori/
+          fi
+          rm -rf temp_rememori
+
+          # 2. 清理各子工程的 Git 缓存文件
           rm -rf tarot/.git
           rm -rf image_repo/.git
 
@@ -89,9 +105,8 @@ jobs:
         run: |
           mkdir -p proj/app/src/main/assets proj/app/src/main/res/values proj/app/src/main/res/xml proj/app/src/main/res/mipmap proj/app/src/main/java/com/mcyt/simulator
           # ⚠️ 这里必须列出所有需要打进 WebView 资源目录的顶层文件/文件夹。
-          # 以后仓库根目录新增任何文件夹（图片、字体、音频等），务必同步加到下面这一行，
-          # 否则该资源在 APK 里会 404（历史教训：assets/ 曾被漏掉过一次）。
-          cp -r index.html style.css js assets tarot icon.png proj/app/src/main/assets/ 2>/dev/null || cp -r * proj/app/src/main/assets/
+          # 已将独立 App 目录 tarot 与 rememori 均打包进 assets 中。
+          cp -r index.html style.css js assets tarot rememori icon.png proj/app/src/main/assets/ 2>/dev/null || cp -r * proj/app/src/main/assets/
 
           if [ -f "icon.png" ]; then
             cp icon.png proj/app/src/main/res/mipmap/ic_launcher.png
@@ -109,9 +124,9 @@ jobs:
           }
           EOF
 
-          # 自动从 08-save-load.js 中提取当前版本号（实现单文件发版控制）
-          APP_VER=$(grep -oE "CURRENT_APP_VERSION = '([0-9\.]+)'" js/08-save-load.js | cut -d"'" -f2 || echo "1.600")
-          if [ -z "$APP_VER" ]; then APP_VER="1.600"; fi
+          # 自动从 settings-app.js 中提取当前版本号（若未找到则降级匹配）
+          APP_VER=$(grep -oE "CURRENT_APP_VERSION = '([0-9\.]+)'" js/apps/settings/settings-app.js | cut -d"'" -f2 || grep -oE "CURRENT_APP_VERSION = '([0-9\.]+)'" js/08-save-load.js | cut -d"'" -f2 || echo "1.611")
+          if [ -z "$APP_VER" ]; then APP_VER="1.611"; fi
           VER_CODE=$(echo "$APP_VER" | tr -d '.')
           echo "APP_VER=$APP_VER" >> $GITHUB_ENV
           echo "VER_CODE=$VER_CODE" >> $GITHUB_ENV
