@@ -1,6 +1,6 @@
 /**
  * js/apps/chat/chat-common.js
- * 💬 微信基础公共库：头像池加载 · 持久化双轨防丢备份 · 微信通用样式注入 · 原生对话框/操作表 · Token监控池 · AI实体解析器 · 酒馆 PNG 人设卡封装与导入解析引擎
+ * 💬 微信基础公共库：头像池加载 · 持久化双轨防丢备份（防空冲刷保护） · 微信通用样式注入 · 原生对话框/操作表 · Token监控池 · AI实体解析器 · 酒馆 PNG 人设卡封装与导入解析引擎
  */
 
 (function() {
@@ -109,10 +109,21 @@
     }
     window.recordTokenHistoryEntry = recordTokenHistoryEntry;
 
-    // 💾 硬核三轨防丢保护引擎（增设 Quota 防爆降级保护，绝不丢数据）
+    // 💾 硬核三轨防丢保护引擎（增设 Quota 防爆降级与防空覆盖回写门禁）
     function syncCustomNpcsToLocalBackup() {
         try {
-            if (!window.G || !window.G.npcs) return;
+            if (!window.G || !window.G.npcs || typeof window.G.npcs !== 'object') return;
+            const keys = Object.keys(window.G.npcs);
+            
+            // 🛡️ 核心防丢保护：如果当前内存为空，但本地备份有数据，严禁用空数据覆盖已有存档！
+            if (keys.length === 0) {
+                const existing = localStorage.getItem(CUSTOM_NPCS_BACKUP_KEY);
+                if (existing && existing.length > 10) {
+                    console.warn('检测到当前角色内存为空，阻止空冲刷覆盖联系人备份');
+                    return;
+                }
+            }
+
             const customMap = {};
             for (const [id, npc] of Object.entries(window.G.npcs)) {
                 if (npc) {
@@ -166,12 +177,22 @@
 
     function syncChatHistoryToLocalBackup() {
         try {
-            if (window.G && window.G.chatHistory) {
-                try {
-                    localStorage.setItem(CHAT_HISTORY_BACKUP_KEY, JSON.stringify(window.G.chatHistory));
-                } catch (quotaErr) {
-                    console.warn('聊天记录体积过大，尝试做轻量保护保存');
+            if (!window.G || !window.G.chatHistory || typeof window.G.chatHistory !== 'object') return;
+            const keys = Object.keys(window.G.chatHistory);
+            
+            // 🛡️ 核心防丢保护：防止空冲刷
+            if (keys.length === 0) {
+                const existing = localStorage.getItem(CHAT_HISTORY_BACKUP_KEY);
+                if (existing && existing.length > 10) {
+                    console.warn('检测到当前聊天记录内存为空，阻止空冲刷覆盖记录备份');
+                    return;
                 }
+            }
+
+            try {
+                localStorage.setItem(CHAT_HISTORY_BACKUP_KEY, JSON.stringify(window.G.chatHistory));
+            } catch (quotaErr) {
+                console.warn('聊天记录体积过大，尝试做轻量保护保存');
             }
         } catch (e) {
             console.error('备份聊天记录失败:', e);
@@ -198,10 +219,20 @@
     }
     window.restoreChatHistoryFromLocalBackup = restoreChatHistoryFromLocalBackup;
 
-    // 朋友圈动态防丢独立持久化槽（增设容量上限与配额防爆机制）
+    // 朋友圈动态防丢独立持久化槽（增设容量上限、配额防爆与空覆盖防护）
     function syncMomentsFeedToLocalBackup() {
         try {
             if (!window.G || !Array.isArray(window.G.feed)) return;
+
+            // 🛡️ 核心防丢保护：防止动态空冲刷
+            if (window.G.feed.length === 0) {
+                const existing = localStorage.getItem(MOMENTS_FEED_BACKUP_KEY);
+                if (existing && existing.length > 10) {
+                    console.warn('检测到当前动态内存为空，阻止空冲刷覆盖朋友圈备份');
+                    return;
+                }
+            }
+
             const cappedFeed = window.G.feed.slice(0, 100);
             try {
                 localStorage.setItem(MOMENTS_FEED_BACKUP_KEY, JSON.stringify(cappedFeed));
@@ -228,7 +259,7 @@
             const raw = localStorage.getItem(MOMENTS_FEED_BACKUP_KEY);
             if (!raw) return;
             const savedFeed = JSON.parse(raw);
-            if (Array.isArray(savedFeed)) {
+            if (Array.isArray(savedFeed) && savedFeed.length > 0) {
                 if (!window.G.feed || window.G.feed.length === 0) {
                     window.G.feed = savedFeed;
                 } else {
@@ -472,6 +503,50 @@
             }
             .moment-mode-tab-btn.active {
                 background: #07c160 !important; color: #ffffff !important; font-weight: 600;
+            }
+
+            /* 聊天列表原生左滑删除项样式 */
+            .chat-swipe-item {
+                position: relative;
+                width: 100%;
+                overflow: hidden;
+                background: #fff;
+                user-select: none;
+            }
+            .chat-swipe-content {
+                position: relative;
+                z-index: 2;
+                background: #fff;
+                transition: transform 0.2s cubic-bezier(0.1, 0.9, 0.2, 1);
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 10px 14px;
+                border-bottom: 0.5px solid #ededed;
+                cursor: pointer;
+            }
+            .chat-swipe-actions {
+                position: absolute;
+                top: 0;
+                right: 0;
+                bottom: 0;
+                z-index: 1;
+                display: flex;
+                height: 100%;
+            }
+            .chat-swipe-delete-btn {
+                background: #fa5151;
+                color: #ffffff;
+                width: 72px;
+                height: 100%;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 14.5px;
+                font-weight: 500;
+                cursor: pointer;
+                border: none;
+                padding: 0;
             }
         `;
     }
@@ -744,7 +819,7 @@
     function crc32(buf) {
         let table = window._crc32Table;
         if (!table) {
-            table = new Uint32Array(256);
+            table = new Uint8Array(256);
             for (let i = 0; i < 256; i++) {
                 let c = i;
                 for (let k = 0; k < 8; k++) {
@@ -919,7 +994,13 @@
         out.set(srcBytes.subarray(insertPos), insertPos + textChunk.length);
 
         const outBlob = new Blob([out], { type: 'image/png' });
-        const finalFilename = (customFilename || `${npc.name || 'character'}_人设卡`).replace(/[\\/:*?"<>|]/g, '_') + '.png';
+        
+        // 支持自定义命名，去除非法文件名字符
+        let baseName = (customFilename && customFilename.trim()) ? customFilename.trim() : `${npc.name || 'character'}_人设卡`;
+        if (!baseName.toLowerCase().endsWith('.png')) {
+            baseName += '.png';
+        }
+        const finalFilename = baseName.replace(/[\\/:*?"<>|]/g, '_');
 
         // 1. 优先将图片转为 DataURL（兼容 Android WebView 保存）
         const reader = new FileReader();

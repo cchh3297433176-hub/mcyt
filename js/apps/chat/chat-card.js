@@ -4,7 +4,7 @@
  * 职责：
  * 1. 角色极简原生名片卡（仅保留头像、姓名/备注、个性签名、地区与好感度）
  * 2. 独立齿轮“资料设置”白灰拟真弹窗（备注名、原名、签名、地区、恋爱状态、人设Prompt修改）
- * 3. 角色卡 PNG 导出入口、换头像与角色卡导入
+ * 3. 角色卡 PNG 导出入口（支持自定义文件名）、换头像与角色卡导入
  * 4. 推荐名片详情弹窗与添加通讯录
  */
 
@@ -88,7 +88,7 @@
     }
     window.openNpcProfileCardModal = openNpcProfileCardModal;
 
-    // ⚙️ 角色资料设置弹窗（内含人设导出 PNG 按钮）
+    // ⚙️ 角色资料设置弹窗（内含人设导出 PNG 按钮及命名弹窗）
     function openNpcSettingsModal(npcId) {
         if (!window.G || !window.G.npcs) return;
         const npc = window.G.npcs[npcId];
@@ -217,19 +217,36 @@
 
                 const exportBtn = document.getElementById('btnExportTavernPngCard');
                 if (exportBtn) {
-                    exportBtn.onclick = async () => {
-                        if (typeof window.exportTavernCharacterPng === 'function') {
-                            if (typeof showToast === 'function') showToast('正在生成角色卡...', 'info', 1000);
-                            await window.exportTavernCharacterPng(npc);
-                        } else {
-                            if (typeof showToast === 'function') showToast('导出引擎未装载', 'error');
-                        }
+                    exportBtn.onclick = () => {
+                        // 弹出简约命名弹窗
+                        promptExportFilename(npc);
                     };
                 }
             }, 30);
         }
     }
     window.openNpcSettingsModal = openNpcSettingsModal;
+
+    // 命名并执行导出
+    function promptExportFilename(npc) {
+        const defaultName = (npc.remark && npc.remark.trim()) ? npc.remark.trim() : (npc.name || 'NPC');
+        if (typeof openWechatCleanModal === 'function') {
+            openWechatCleanModal('导出角色卡命名', `
+                <div style="text-align:left;">
+                    <div style="font-size:12px;color:#666;margin-bottom:6px;">请设置导出文件名：</div>
+                    <input type="text" id="wcleanExportCardFilename" value="${escapeHtml(defaultName)}_人设卡" placeholder="输入文件名称..." class="wechat-clean-input" maxlength="40">
+                </div>
+            `, async () => {
+                const fname = document.getElementById('wcleanExportCardFilename')?.value.trim() || `${defaultName}_人设卡`;
+                if (typeof window.exportTavernCharacterPng === 'function') {
+                    if (typeof showToast === 'function') showToast('正在生成角色卡...', 'info', 1000);
+                    await window.exportTavernCharacterPng(npc, fname);
+                } else {
+                    if (typeof showToast === 'function') showToast('导出引擎未装载', 'error');
+                }
+            });
+        }
+    }
 
     // 换头像
     function triggerChangeNpcAvatar(npcId) {

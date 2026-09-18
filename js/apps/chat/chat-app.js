@@ -1,6 +1,6 @@
 /**
  * js/apps/chat/chat-app.js
- * 💬 微信独立主应用（瘦身减负版 · 仿微信白灰绿质感 · 双语即时翻译 · 拟真语音条 · 三种发图模式 · 经典翻转卡片/微信框 · 真表情调用 · 撤回单次偷窥脱敏 · 长按引用与编辑 · Token统计 · 动态转发与名片推荐 · 加号聊天折叠设置与长消息折叠渲染 · 大小号好友物理隔离与申请红点 · 导入角色卡与私聊智能重说系统）
+ * 💬 微信独立主应用（瘦身减负版 · 仿微信白灰绿质感 · 角色左滑删除与简约确认 · 双语即时翻译 · 拟真语音条 · 三种发图模式 · 经典翻转卡片/微信框 · 真表情调用 · 撤回单次偷窥脱敏 · 长按引用与编辑 · Token统计 · 动态转发与名片推荐 · 加号聊天折叠设置与长消息折叠渲染 · 大小号好友物理隔离与申请红点 · 导入角色卡与私聊智能重说系统）
  * ⚠️ 注：角色名片卡、资料设置、人设导出及头像更换等功能已完全拆分解耦至 chat-card.js
  */
 
@@ -12,6 +12,7 @@
     window._plusDrawerOpen = false;
     window._activeQuoteMessage = null;
     window._chatExpandAllMap = {}; // 记录哪些会话被用户主动临时展开了历史记录
+    let _activeSwipedItem = null;  // 记录当前处于左滑展开状态的行
 
     // 读取或初始化折叠配置
     function getChatCollapseConfig() {
@@ -35,7 +36,7 @@
         } catch (_) {}
     }
 
-    // 微信"消息"主列表构建（严格按照当前账号隔离好友列表，支持备注名展示）
+    // 微信"消息"主列表构建（支持左滑删除结构与样式）
     function buildChatListHTML() {
         const isDirect = window.G.chatActiveTab !== 'group';
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '我' };
@@ -84,17 +85,22 @@
             return rows.map(({ npc, preview, timeLabel, blocked, isDating }) => {
                 const displayName = npc.remark ? npc.remark : (npc.name || npc.id);
                 return `
-                <div class="chat-item" data-npc-id="${npc.id}" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:0.5px solid #ededed;cursor:pointer;background:#fff;">
-                    ${window.renderAvatarBadge(npc, 46)}
-                    <div style="flex:1;min-width:0;">
-                        <div style="display:flex;justify-content:space-between;align-items:center;">
-                            <div style="display:flex;align-items:center;gap:4px;overflow:hidden;">
-                                <span style="font-size:14.5px;font-weight:500;color:#181818;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(displayName)}</span>
-                                ${isDating ? `<span style="font-size:10px;background:#ffeef0;color:#ff4d4f;padding:1px 5px;border-radius:3px;font-weight:600;flex-shrink:0;">恋人</span>` : ''}
+                <div class="chat-swipe-item" data-npc-id="${npc.id}">
+                    <div class="chat-swipe-content chat-item" data-npc-id="${npc.id}">
+                        ${window.renderAvatarBadge(npc, 46)}
+                        <div style="flex:1;min-width:0;">
+                            <div style="display:flex;justify-content:space-between;align-items:center;">
+                                <div style="display:flex;align-items:center;gap:4px;overflow:hidden;">
+                                    <span style="font-size:14.5px;font-weight:500;color:#181818;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(displayName)}</span>
+                                    ${isDating ? `<span style="font-size:10px;background:#ffeef0;color:#ff4d4f;padding:1px 5px;border-radius:3px;font-weight:600;flex-shrink:0;">恋人</span>` : ''}
+                                </div>
+                                <span style="font-size:10.5px;color:#b2b2b2;flex-shrink:0;margin-left:6px;">${timeLabel}</span>
                             </div>
-                            <span style="font-size:10.5px;color:#b2b2b2;flex-shrink:0;margin-left:6px;">${timeLabel}</span>
+                            <div style="font-size:12px;color:${blocked ? '#fa5151' : '#999999'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;">${blocked ? '（已被对方拒收）' : escapeHtml(preview)}</div>
                         </div>
-                        <div style="font-size:12px;color:${blocked ? '#fa5151' : '#999999'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;">${blocked ? '（已被对方拒收）' : escapeHtml(preview)}</div>
+                    </div>
+                    <div class="chat-swipe-actions">
+                        <button type="button" class="chat-swipe-delete-btn" onclick="window.confirmDeleteContactNpc('${npc.id}', event)">删除</button>
                     </div>
                 </div>
                 `;
@@ -143,6 +149,143 @@
             </div>
         `).join('');
     }
+
+    // 绑定左滑交互引擎
+    function bindSwipeToDeleteEngine(container) {
+        const swipeItems = container.querySelectorAll('.chat-swipe-item');
+        swipeItems.forEach(item => {
+            const content = item.querySelector('.chat-swipe-content');
+            if (!content) return;
+
+            let startX = 0;
+            let startY = 0;
+            let currentX = 0;
+            let isSwiping = false;
+            let isHorizontal = null;
+
+            content.addEventListener('touchstart', (e) => {
+                if (e.touches.length > 1) return;
+                startX = e.touches[0].clientX;
+                startY = e.touches[0].clientY;
+                currentX = 0;
+                isSwiping = true;
+                isHorizontal = null;
+
+                // 若之前有展开的其他项，先自动收起
+                if (_activeSwipedItem && _activeSwipedItem !== content) {
+                    _activeSwipedItem.style.transform = 'translateX(0px)';
+                    _activeSwipedItem = null;
+                }
+            }, { passive: true });
+
+            content.addEventListener('touchmove', (e) => {
+                if (!isSwiping) return;
+                const deltaX = e.touches[0].clientX - startX;
+                const deltaY = e.touches[0].clientY - startY;
+
+                if (isHorizontal === null) {
+                    if (Math.abs(deltaX) > 8 || Math.abs(deltaY) > 8) {
+                        isHorizontal = Math.abs(deltaX) > Math.abs(deltaY);
+                    }
+                }
+
+                if (!isHorizontal) return;
+
+                if (deltaX < 0) {
+                    // 向左拉，最大位移限制
+                    const move = Math.max(-72, deltaX);
+                    content.style.transform = `translateX(${move}px)`;
+                    currentX = move;
+                } else if (_activeSwipedItem === content) {
+                    // 处于展开态向右回弹
+                    const move = Math.min(0, -72 + deltaX);
+                    content.style.transform = `translateX(${move}px)`;
+                    currentX = move;
+                }
+            }, { passive: true });
+
+            const endSwipe = () => {
+                if (!isSwiping) return;
+                isSwiping = false;
+                if (!isHorizontal) return;
+
+                if (currentX < -36) {
+                    content.style.transform = 'translateX(-72px)';
+                    _activeSwipedItem = content;
+                } else {
+                    content.style.transform = 'translateX(0px)';
+                    if (_activeSwipedItem === content) _activeSwipedItem = null;
+                }
+            };
+
+            content.addEventListener('touchend', endSwipe);
+            content.addEventListener('touchcancel', endSwipe);
+        });
+    }
+
+    // 确认删除角色弹窗（微信简约风格）
+    window.confirmDeleteContactNpc = function(npcId, event) {
+        if (event) event.stopPropagation();
+        if (!window.G || !window.G.npcs || !window.G.npcs[npcId]) return;
+
+        const npc = window.G.npcs[npcId];
+        const displayName = npc.remark ? npc.remark : (npc.name || npc.id);
+
+        if (typeof window.openWechatCleanModal === 'function') {
+            window.openWechatCleanModal('删除联系人', `
+                <div style="text-align:center;padding:12px 0 6px;font-size:14px;color:#222;line-height:1.5;">
+                    将联系人「<b>${escapeHtml(displayName)}</b>」删除，将同时删除该角色的所有聊天记录。
+                </div>
+            `, () => {
+                window.doDeleteContactNpc(npcId);
+            });
+        }
+    };
+
+    // 执行彻底删除角色
+    window.doDeleteContactNpc = function(npcId) {
+        if (!window.G || !window.G.npcs) return;
+
+        // 1. 从角色字典删除
+        delete window.G.npcs[npcId];
+
+        // 2. 清理所有账号下与该角色的聊天记录
+        if (window.G.chatHistory) {
+            for (const key of Object.keys(window.G.chatHistory)) {
+                if (key.endsWith(`_${npcId}`) || key === npcId) {
+                    delete window.G.chatHistory[key];
+                }
+            }
+        }
+
+        // 3. 清理好友申请列表
+        if (Array.isArray(window.G.friendRequests)) {
+            window.G.friendRequests = window.G.friendRequests.filter(r => r.applicantNpcId !== npcId);
+        }
+
+        // 4. 清理群聊成员中的该NPC
+        if (window.G.groups) {
+            for (const g of Object.values(window.G.groups)) {
+                if (Array.isArray(g.members)) {
+                    g.members = g.members.filter(m => m !== npcId);
+                }
+            }
+        }
+
+        if (window.G.currentChatNpc === npcId) {
+            window.G.currentChatNpc = null;
+        }
+
+        _activeSwipedItem = null;
+
+        // 同步持久化与自动存档
+        if (typeof window.syncCustomNpcsToLocalBackup === 'function') window.syncCustomNpcsToLocalBackup();
+        if (typeof window.syncChatHistoryToLocalBackup === 'function') window.syncChatHistoryToLocalBackup();
+        if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+
+        if (typeof showToast === 'function') showToast('联系人已删除', 'success', 1200);
+        renderChatApp();
+    };
 
     // 微信 App 整体调度中枢
     function renderChatApp(container) {
@@ -256,14 +399,31 @@
         `;
 
         if (_activeBottomTab === 'chats') {
+            bindSwipeToDeleteEngine(container);
+
             container.querySelectorAll('.chat-item[data-npc-id]').forEach(item => {
                 const id = item.dataset.npcId;
                 if (typeof bindLongPressEvent === 'function') {
-                    bindLongPressEvent(item, () => { window.openChat(id); }, () => {
+                    bindLongPressEvent(item, () => {
+                        // 如果当前该项处于左滑删除状态，点击内容区域先收回滑块
+                        if (_activeSwipedItem && _activeSwipedItem.contains(item)) {
+                            _activeSwipedItem.style.transform = 'translateX(0px)';
+                            _activeSwipedItem = null;
+                            return;
+                        }
+                        window.openChat(id);
+                    }, () => {
                         if (typeof window.openNpcProfileCardModal === 'function') window.openNpcProfileCardModal(id);
                     });
                 } else {
-                    item.onclick = () => window.openChat(id);
+                    item.onclick = () => {
+                        if (_activeSwipedItem && _activeSwipedItem.contains(item)) {
+                            _activeSwipedItem.style.transform = 'translateX(0px)';
+                            _activeSwipedItem = null;
+                            return;
+                        }
+                        window.openChat(id);
+                    };
                 }
             });
             container.querySelectorAll('.group-item[data-group-id]').forEach(item => {
@@ -1156,7 +1316,7 @@
         document.querySelector('.wechat-action-sheet-mask')?.remove();
         const history = (type === 'single') ? window.getAccountChatHistory(targetId) : (window.G.groupChatHistory[targetId] || []);
         const idx = history.findIndex(m => m._id === msgId);
-        if (idx !== -1) return;
+        if (idx === -1) return;
 
         const targetMsg = history[idx];
         const now = Date.now();
