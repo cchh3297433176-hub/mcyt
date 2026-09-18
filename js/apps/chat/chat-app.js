@@ -1,6 +1,6 @@
 /**
  * js/apps/chat/chat-app.js
- * 💬 微信独立主应用（仿微信白灰绿质感 · 个性签名支持 · 双语即时翻译 · 拟真语音条 · 三种发图模式完整恢复 · 经典翻转卡片/微信框 · 真表情调用 · 撤回单次偷窥脱敏 · 长按引用与编辑 · Token统计 · 动态转发与名片推荐 · 加号5项完整功能 · 大小号好友物理隔离）
+ * 💬 微信独立主应用（仿微信白灰绿质感 · 个性签名支持 · 双语即时翻译 · 拟真语音条 · 三种发图模式完整恢复 · 经典翻转卡片/微信框 · 真表情调用 · 撤回单次偷窥脱敏 · 长按引用与编辑 · Token统计 · 动态转发与名片推荐 · 加号5项完整功能 · 大小号好友物理隔离 · 极简名片与角色独立备注齿轮设置）
  */
 
 (function() {
@@ -11,7 +11,7 @@
     window._plusDrawerOpen = false;
     window._activeQuoteMessage = null;
 
-    // 微信"消息"主列表构建（严格按照当前账号隔离好友列表）
+    // 微信"消息"主列表构建（严格按照当前账号隔离好友列表，支持备注名展示）
     function buildChatListHTML() {
         const isDirect = window.G.chatActiveTab !== 'group';
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '我' };
@@ -57,13 +57,16 @@
                 return tb - ta;
             });
 
-            return rows.map(({ npc, preview, timeLabel, blocked, isDating }) => `
+            return rows.map(({ npc, preview, timeLabel, blocked, isDating }) => {
+                // 聊天主列表：优先显示备注名
+                const displayName = npc.remark ? npc.remark : (npc.name || npc.id);
+                return `
                 <div class="chat-item" data-npc-id="${npc.id}" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:0.5px solid #ededed;cursor:pointer;background:#fff;">
                     ${window.renderAvatarBadge(npc, 46)}
                     <div style="flex:1;min-width:0;">
                         <div style="display:flex;justify-content:space-between;align-items:center;">
                             <div style="display:flex;align-items:center;gap:4px;overflow:hidden;">
-                                <span style="font-size:14.5px;font-weight:500;color:#181818;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(npc.name || npc.id)}</span>
+                                <span style="font-size:14.5px;font-weight:500;color:#181818;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(displayName)}</span>
                                 ${isDating ? `<span style="font-size:10px;background:#ffeef0;color:#ff4d4f;padding:1px 5px;border-radius:3px;font-weight:600;flex-shrink:0;">恋人</span>` : ''}
                             </div>
                             <span style="font-size:10.5px;color:#b2b2b2;flex-shrink:0;margin-left:6px;">${timeLabel}</span>
@@ -71,7 +74,8 @@
                         <div style="font-size:12px;color:${blocked ? '#fa5151' : '#999999'};white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:2px;">${blocked ? '（已被对方拒收）' : escapeHtml(preview)}</div>
                     </div>
                 </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
         const groupList = Object.entries(window.G.groups || {}).map(([gid, g]) => Object.assign({ id: gid }, g));
@@ -264,7 +268,7 @@
         document.body.appendChild(mask);
     };
 
-    // 添加联系人（支持个性签名）
+    // 添加联系人（支持个性签名与备注）
     window.openCreateCustomNpcModal = function() {
         document.querySelector('.wechat-action-sheet-mask')?.remove();
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '我' };
@@ -272,8 +276,12 @@
         window.openWechatCleanModal(`添加联系人`, `
             <div style="display:flex;flex-direction:column;gap:10px;text-align:left;">
                 <div>
-                    <label style="font-size:12px;color:#666;">联系人昵称</label>
-                    <input type="text" id="wcleanNewNpcName" placeholder="输入好友名字..." class="wechat-clean-input" style="margin-top:3px;">
+                    <label style="font-size:12px;color:#666;">联系人真实名字</label>
+                    <input type="text" id="wcleanNewNpcName" placeholder="输入真实名字..." class="wechat-clean-input" style="margin-top:3px;">
+                </div>
+                <div>
+                    <label style="font-size:12px;color:#666;">备注名 (选填)</label>
+                    <input type="text" id="wcleanNewNpcRemark" placeholder="输入你想称呼的备注名..." maxlength="20" class="wechat-clean-input" style="margin-top:3px;">
                 </div>
                 <div>
                     <label style="font-size:12px;color:#666;">个性签名 (选填)</label>
@@ -302,9 +310,10 @@
         `, () => {
             const name = document.getElementById('wcleanNewNpcName').value.trim();
             if (!name) {
-                if (typeof showToast === 'function') showToast('请填写联系人昵称', 'error');
+                if (typeof showToast === 'function') showToast('请填写联系人名字', 'error');
                 return false;
             }
+            const remark = document.getElementById('wcleanNewNpcRemark')?.value.trim() || '';
             const signature = document.getElementById('wcleanNewNpcSignature')?.value.trim() || '';
             const region = document.getElementById('wcleanNewNpcRegion').value;
             const persona = document.getElementById('wcleanNewNpcPersona').value.trim() || 'MC好友同伴。';
@@ -314,6 +323,7 @@
             window.G.npcs[newId] = {
                 id: newId,
                 name: name,
+                remark: remark,
                 signature: signature,
                 region: region,
                 persona: persona,
@@ -341,13 +351,16 @@
             return;
         }
 
-        const listHtml = npcs.map(n => `
+        const listHtml = npcs.map(n => {
+            const showTitle = n.remark ? `${n.remark} (${n.name})` : n.name;
+            return `
             <label style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:0.5px solid #f2f2f2;cursor:pointer;">
                 <input type="checkbox" class="wclean-grp-chk" value="${n.id}" style="accent-color:#07c160;width:16px;height:16px;">
                 ${window.renderAvatarBadge(n, 32)}
-                <span style="font-size:13.5px;color:#181818;">${escapeHtml(n.name)}</span>
+                <span style="font-size:13.5px;color:#181818;">${escapeHtml(showTitle)}</span>
             </label>
-        `).join('');
+        `;
+        }).join('');
 
         window.openWechatCleanModal('发起群聊', `
             <div style="display:flex;flex-direction:column;gap:8px;text-align:left;">
@@ -438,6 +451,7 @@
                 window.G.npcs[nid] = {
                     id: nid,
                     name: req.name || '新好友',
+                    remark: '',
                     region: '中国',
                     persona: req.persona || '一位热情的游戏粉丝。',
                     signature: '',
@@ -479,127 +493,212 @@
         }
     };
 
-    // 角色名片页（增加个性签名展示与编辑入口）
+    // ============================================================
+    // 📇 角色名片页（微信极简原生UI · 仅头像名字签名好感地区 · 右上角齿轮）
+    // ============================================================
     window.openNpcProfileCardModal = function(npcId) {
         const npc = window.G.npcs[npcId];
         if (!npc) return;
 
         const isDating = window.ChatPromptEngine && window.ChatPromptEngine.isNpcInDatingRelationship(npc);
-        const personaText = npc.persona || '';
-        const previewPersona = personaText ? personaText.slice(0, 85) + (personaText.length > 85 ? '...' : '') : '点击此处补充角色详细人设档案';
         const sigText = npc.signature ? escapeHtml(npc.signature) : '未设置个性签名';
+
+        // 名字展示规则：若有备注，大字显示备注名，下方括号注明原名；若无备注，直接显示原名
+        const hasRemark = !!(npc.remark && npc.remark.trim());
+        const primaryName = hasRemark ? escapeHtml(npc.remark.trim()) : escapeHtml(npc.name || npc.id);
+        const subNameHtml = hasRemark ? `<div style="font-size:12px;color:#888888;margin-top:2px;">原名：${escapeHtml(npc.name || '')}</div>` : '';
+
+        // 好感度状态文字
+        const favorText = `${npc.favor || 50} (${isDating ? '恋人' : (npc.favor >= 80 ? '暧昧期' : '朋友')})`;
 
         let mask = document.createElement('div');
         mask.className = 'wechat-clean-modal-mask';
         mask.innerHTML = `
-            <div class="wechat-clean-modal-card" style="max-width:340px;padding:20px;">
-                <div style="display:flex;align-items:center;gap:12px;border-bottom:1px solid #f0f0f0;padding-bottom:14px;margin-bottom:12px;">
-                    <div style="position:relative;width:56px;height:56px;cursor:pointer;" onclick="window.triggerChangeNpcAvatar('${npcId}')" title="点击更换头像">
-                        <img id="npcCardAvatarDisplay" src="${npc.avatarUrl || window.getRandomAvatar()}" style="width:100%;height:100%;border-radius:6px;object-fit:cover;" onerror="this.src='assets/icons/chat.png';" />
-                        <div style="position:absolute;bottom:0;right:0;background:rgba(0,0,0,0.5);border-radius:2px 0 6px 0;width:16px;height:16px;display:flex;align-items:center;justify-content:center;">
-                            <svg viewBox="0 0 24 24" style="width:10px;height:10px;fill:#ffffff;"><path d="M4 4h3l2-2h6l2 2h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm8 3a5 5 0 1 0 0 10 5 5 0 0 0 0-10zm0 2a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"/></svg>
+            <div class="wechat-clean-modal-card" style="max-width:320px;padding:20px 18px;position:relative;background:#ffffff;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.12);box-sizing:border-box;">
+                <!-- 右上角简约矢量齿轮按钮 -->
+                <button type="button" id="btnNpcCardGear" title="资料设置" style="position:absolute;top:14px;right:14px;border:none;background:none;width:30px;height:30px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;color:#707070;">
+                    <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                </button>
+
+                <!-- 头像与姓名区域 -->
+                <div style="display:flex;align-items:center;gap:14px;padding-bottom:16px;border-bottom:0.5px solid #f0f0f0;margin-bottom:14px;padding-right:28px;">
+                    <div style="position:relative;width:56px;height:56px;flex-shrink:0;cursor:pointer;" onclick="window.triggerChangeNpcAvatar('${npcId}')" title="点击更换头像">
+                        <img id="npcCardAvatarDisplay" src="${npc.avatarUrl || window.getRandomAvatar()}" style="width:100%;height:100%;border-radius:8px;object-fit:cover;" onerror="this.src='assets/icons/chat.png';" />
+                        <div style="position:absolute;bottom:0;right:0;background:rgba(0,0,0,0.45);border-radius:2px 0 8px 0;width:16px;height:16px;display:flex;align-items:center;justify-content:center;">
+                            <svg viewBox="0 0 24 24" style="width:9px;height:9px;fill:#ffffff;"><path d="M4 4h3l2-2h6l2 2h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm8 3a5 5 0 1 0 0 10 5 5 0 0 0 0-10zm0 2a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"/></svg>
                         </div>
                     </div>
                     <div style="flex:1;min-width:0;">
-                        <div onclick="window.openEditNpcNameModal('${npcId}')" style="font-size:16px;font-weight:600;color:#181818;cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
-                            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px;">${escapeHtml(npc.name)}</span>
-                            <span style="font-size:11px;color:#07c160;">✎</span>
+                        <div style="font-size:16.5px;font-weight:600;color:#181818;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                            ${primaryName}
                         </div>
-                        <div style="display:flex;align-items:center;gap:6px;font-size:12px;color:#666;margin-top:4px;flex-wrap:wrap;">
-                            <span onclick="window.openPickNpcRegionForCard('${npcId}')" style="cursor:pointer;background:#f2f2f2;padding:2px 6px;border-radius:4px;color:#333;">
-                                ${escapeHtml(npc.region || '中国')} ▾
-                            </span>
-                            <span onclick="window.openEditNpcFavorModal('${npcId}')" style="cursor:pointer;background:#f2f2f2;padding:2px 6px;border-radius:4px;color:#07c160;font-weight:600;">
-                                好感 ${npc.favor || 50} ✎
-                            </span>
-                        </div>
+                        ${subNameHtml}
                     </div>
                 </div>
 
-                <!-- 角色个性签名展示条 -->
-                <div onclick="window.openEditNpcSignatureModal('${npcId}')" style="padding:6px 0 10px;border-bottom:0.5px solid #f0f0f0;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
-                    <div style="font-size:12px;color:#555;display:flex;align-items:center;gap:6px;min-width:0;flex:1;">
-                        <span style="color:#999;flex-shrink:0;">签名</span>
-                        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:${npc.signature ? '#333' : '#aaa'};">${sigText}</span>
+                <!-- 极简信息列表：个性签名、地区、好感度 -->
+                <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:18px;font-size:13px;color:#222;">
+                    <div style="display:flex;align-items:flex-start;gap:10px;">
+                        <span style="color:#888;flex-shrink:0;min-width:44px;">签名</span>
+                        <span style="color:${npc.signature ? '#333' : '#aaa'};line-height:1.45;word-break:break-word;flex:1;">${sigText}</span>
                     </div>
-                    <span style="color:#07c160;font-size:11px;flex-shrink:0;margin-left:6px;">✎</span>
-                </div>
-
-                <div style="display:flex;align-items:center;justify-content:space-between;background:#fbfbfb;border:0.5px solid #eaeaea;border-radius:6px;padding:8px 10px;margin-bottom:12px;">
-                    <div style="font-size:12px;color:#444;">
-                        当前关系：<b style="color:${isDating ? '#ff4d4f' : (npc.favor >= 80 ? '#fa8c16' : '#666')};">${isDating ? '恋人（交往中）' : (npc.favor >= 80 ? '暧昧期' : '朋友')}</b>
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <span style="color:#888;flex-shrink:0;min-width:44px;">地区</span>
+                        <span style="color:#333;font-weight:500;">${escapeHtml(npc.region || '中国')}</span>
                     </div>
-                    <button type="button" onclick="window.toggleNpcRelationshipStage('${npcId}')" style="border:none;background:${isDating ? '#fff1f0' : '#f0f9eb'};color:${isDating ? '#ff4d4f' : '#07c160'};padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;">
-                        ${isDating ? '解除恋爱' : '确立恋爱'}
-                    </button>
-                </div>
-
-                <div style="background:#f8faf8;border-radius:6px;border:1px solid #e8ede8;padding:10px;margin-bottom:14px;cursor:pointer;" onclick="window.openEditNpcPersonaModal('${npcId}')">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                        <span style="font-size:12px;font-weight:600;color:#333;">角色人设档案</span>
-                        <span style="font-size:11px;color:#07c160;font-weight:500;">点击修改 ›</span>
-                    </div>
-                    <div style="font-size:12px;color:#666;line-height:1.5;white-space:pre-wrap;word-break:break-word;max-height:60px;overflow:hidden;">
-                        ${escapeHtml(previewPersona)}
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <span style="color:#888;flex-shrink:0;min-width:44px;">好感</span>
+                        <span style="color:#07c160;font-weight:600;">${favorText}</span>
                     </div>
                 </div>
 
+                <!-- 底部操作按钮 -->
                 <div style="display:flex;flex-direction:column;gap:8px;">
                     <button type="button" id="btnNpcCardSendMsg" style="border:none;background:#07c160;color:#fff;padding:9px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;text-align:center;">
                         发消息
                     </button>
-                    <button type="button" id="btnNpcCardBack" style="border:none;background:#f0f0f0;color:#555;padding:8px;border-radius:6px;font-size:13px;cursor:pointer;">关闭</button>
+                    <button type="button" id="btnNpcCardBack" style="border:none;background:#f2f2f2;color:#555;padding:8px;border-radius:6px;font-size:13px;cursor:pointer;">关闭</button>
                 </div>
             </div>
         `;
         document.body.appendChild(mask);
         const close = () => { if (mask && mask.parentNode) mask.parentNode.removeChild(mask); };
+
         mask.querySelector('#btnNpcCardBack').onclick = close;
         mask.querySelector('#btnNpcCardSendMsg').onclick = () => {
             close();
             window.openChat(npcId);
         };
+        mask.querySelector('#btnNpcCardGear').onclick = () => {
+            close();
+            window.openNpcSettingsModal(npcId);
+        };
     };
 
-    // 编辑角色个性签名
-    window.openEditNpcSignatureModal = function(npcId) {
+    // ============================================================
+    // ⚙️ 角色资料设置弹窗（点击齿轮呼出 · 仿微信白灰极简风格）
+    // ============================================================
+    window.openNpcSettingsModal = function(npcId) {
         const npc = window.G.npcs[npcId];
         if (!npc) return;
-        window.openWechatCleanModal('设置角色个性签名', `
-            <textarea id="wcleanNpcSigInput" rows="3" maxlength="60" placeholder="填写角色的个性签名..." class="wechat-clean-input" style="line-height:1.4;resize:none;">${escapeHtml(npc.signature || '')}</textarea>
+
+        const isDating = window.ChatPromptEngine && window.ChatPromptEngine.isNpcInDatingRelationship(npc);
+        const regionList = ['中国', '美国 - 东部', '美国 - 西部', '英国', '日本', '韩国', '加拿大', '澳大利亚', '德国', '法国'];
+
+        const regionOptionsHtml = regionList.map(r => `
+            <option value="${r}" ${npc.region === r ? 'selected' : ''}>${r}</option>
+        `).join('');
+
+        window.openWechatCleanModal('资料设置', `
+            <div style="display:flex;flex-direction:column;gap:11px;text-align:left;max-height:68vh;overflow-y:auto;padding-right:2px;">
+                <div>
+                    <label style="font-size:11.5px;color:#777;font-weight:500;">备注名（仅自己在聊天与列表中显示）</label>
+                    <input type="text" id="wcleanSetNpcRemark" value="${escapeHtml(npc.remark || '')}" placeholder="添加备注名..." maxlength="20" class="wechat-clean-input" style="margin-top:3px;">
+                </div>
+                <div>
+                    <label style="font-size:11.5px;color:#777;font-weight:500;">角色真实名字</label>
+                    <input type="text" id="wcleanSetNpcName" value="${escapeHtml(npc.name || '')}" placeholder="输入角色真实名字..." maxlength="20" class="wechat-clean-input" style="margin-top:3px;">
+                </div>
+                <div>
+                    <label style="font-size:11.5px;color:#777;font-weight:500;">个性签名</label>
+                    <input type="text" id="wcleanSetNpcSignature" value="${escapeHtml(npc.signature || '')}" placeholder="角色的个性签名..." maxlength="60" class="wechat-clean-input" style="margin-top:3px;">
+                </div>
+                <div>
+                    <label style="font-size:11.5px;color:#777;font-weight:500;">常驻地区</label>
+                    <select id="wcleanSetNpcRegion" class="wechat-clean-input" style="margin-top:3px;">
+                        ${regionOptionsHtml}
+                    </select>
+                </div>
+                <div>
+                    <div style="display:flex;justify-content:space-between;align-items:center;">
+                        <label style="font-size:11.5px;color:#777;font-weight:500;">好感度 (0~100)</label>
+                        <span id="wcleanSetFavorDisplay" style="font-size:13.5px;font-weight:700;color:#07c160;">${npc.favor || 50}</span>
+                    </div>
+                    <input type="range" id="wcleanSetFavorRange" min="0" max="100" value="${npc.favor || 50}" style="width:100%;margin-top:5px;accent-color:#07c160;">
+                </div>
+                <div style="display:flex;align-items:center;justify-content:space-between;background:#f9f9f9;padding:8px 10px;border-radius:6px;border:0.5px solid #eee;">
+                    <span style="font-size:12px;color:#444;">恋爱关系：<b style="color:${isDating ? '#ff4d4f' : '#666'};">${isDating ? '恋人（交往中）' : '普通关系'}</b></span>
+                    <button type="button" id="btnToggleDatingInSettings" style="border:none;background:${isDating ? '#fff1f0' : '#f0f9eb'};color:${isDating ? '#ff4d4f' : '#07c160'};padding:3px 8px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;">
+                        ${isDating ? '解除恋爱' : '确立恋爱'}
+                    </button>
+                </div>
+                <div>
+                    <label style="font-size:11.5px;color:#777;font-weight:500;">人设档案 / 说话风格</label>
+                    <textarea id="wcleanSetNpcPersona" rows="4" placeholder="填写人设特征、性格习惯与聊天口吻..." class="wechat-clean-input" style="margin-top:3px;resize:none;line-height:1.45;">${escapeHtml(npc.persona || '')}</textarea>
+                </div>
+            </div>
         `, () => {
-            const val = document.getElementById('wcleanNpcSigInput').value.trim();
-            npc.signature = val;
+            const remarkVal = document.getElementById('wcleanSetNpcRemark')?.value.trim() || '';
+            const nameVal = document.getElementById('wcleanSetNpcName')?.value.trim();
+            if (!nameVal) {
+                if (typeof showToast === 'function') showToast('角色名字不能为空', 'error');
+                return false;
+            }
+            const sigVal = document.getElementById('wcleanSetNpcSignature')?.value.trim() || '';
+            const regVal = document.getElementById('wcleanSetNpcRegion')?.value || '中国';
+            const personaVal = document.getElementById('wcleanSetNpcPersona')?.value.trim() || 'MC好友同伴。';
+            const favorVal = parseInt(document.getElementById('wcleanSetFavorRange')?.value) || 0;
+
+            npc.remark = remarkVal;
+            npc.name = nameVal;
+            npc.signature = sigVal;
+            npc.region = regVal;
+            npc.persona = personaVal;
+            npc.favor = favorVal;
+
+            if (npc.favor < 60 && npc.relationshipStage === 'dating') {
+                npc.relationshipStage = 'friend';
+                npc.isDating = false;
+            }
+
             window.syncCustomNpcsToLocalBackup();
             if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+            if (typeof showToast === 'function') showToast('资料已保存', 'success', 1200);
+
+            // 重新刷新名片及聊天界面
             window.openNpcProfileCardModal(npcId);
-            if (typeof showToast === 'function') showToast('个性签名已更新', 'success', 1200);
-        });
-    };
-
-    window.toggleNpcRelationshipStage = function(npcId) {
-        const npc = window.G.npcs[npcId];
-        if (!npc) return;
-        const isDating = window.ChatPromptEngine && window.ChatPromptEngine.isNpcInDatingRelationship(npc);
-
-        if (isDating) {
-            npc.relationshipStage = 'friend';
-            npc.isDating = false;
-            if (typeof showToast === 'function') showToast('已恢复为朋友关系', 'info', 1200);
-        } else {
-            if ((npc.favor || 0) < 80) {
-                if (typeof showToast === 'function') showToast('好感度需达到 80 才可确立恋人', 'error', 1500);
-                return;
+            if (window.G.currentChatNpc === npcId) {
+                renderSingleChatWindow();
+            } else {
+                renderChatApp();
             }
-            npc.relationshipStage = 'dating';
-            npc.isDating = true;
-            if (typeof showToast === 'function') showToast('已正式确立恋爱关系！', 'success', 1500);
-        }
+        });
 
-        window.syncCustomNpcsToLocalBackup();
-        if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
-        document.querySelector('.wechat-clean-modal-mask')?.remove();
-        window.openNpcProfileCardModal(npcId);
+        setTimeout(() => {
+            const range = document.getElementById('wcleanSetFavorRange');
+            const display = document.getElementById('wcleanSetFavorDisplay');
+            if (range && display) {
+                range.oninput = () => { display.textContent = range.value; };
+            }
+
+            const datingBtn = document.getElementById('btnToggleDatingInSettings');
+            if (datingBtn) {
+                datingBtn.onclick = () => {
+                    const currentlyDating = window.ChatPromptEngine && window.ChatPromptEngine.isNpcInDatingRelationship(npc);
+                    if (currentlyDating) {
+                        npc.relationshipStage = 'friend';
+                        npc.isDating = false;
+                        if (typeof showToast === 'function') showToast('已恢复为朋友关系', 'info', 1000);
+                    } else {
+                        const curF = parseInt(document.getElementById('wcleanSetFavorRange')?.value) || npc.favor || 0;
+                        if (curF < 80) {
+                            if (typeof showToast === 'function') showToast('好感度需达到 80 才可确立恋人', 'error', 1500);
+                            return;
+                        }
+                        npc.relationshipStage = 'dating';
+                        npc.isDating = true;
+                        if (typeof showToast === 'function') showToast('已确立恋爱关系！', 'success', 1200);
+                    }
+                    window.syncCustomNpcsToLocalBackup();
+                    if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+                    document.querySelector('.wechat-clean-modal-mask')?.remove();
+                    window.openNpcSettingsModal(npcId);
+                };
+            }
+        }, 30);
     };
 
     window.triggerChangeNpcAvatar = function(npcId) {
@@ -658,93 +757,6 @@
         if (typeof showToast === 'function') showToast('已更换头像', 'success', 1000);
     };
 
-    window.openEditNpcNameModal = function(npcId) {
-        const npc = window.G.npcs[npcId];
-        if (!npc) return;
-        window.openWechatCleanModal('修改昵称', `
-            <input type="text" id="wcleanNameInput" value="${escapeHtml(npc.name)}" maxlength="20" class="wechat-clean-input">
-        `, () => {
-            const val = document.getElementById('wcleanNameInput').value.trim();
-            if (!val) return false;
-            npc.name = val;
-            window.syncCustomNpcsToLocalBackup();
-            if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
-            window.openNpcProfileCardModal(npcId);
-            if (typeof showToast === 'function') showToast('名字已更新', 'success', 1200);
-        });
-    };
-
-    window.openPickNpcRegionForCard = function(npcId) {
-        const npc = window.G.npcs[npcId];
-        if (!npc) return;
-        const list = ['中国', '美国 - 东部', '美国 - 西部', '英国', '日本', '韩国', '加拿大', '澳大利亚', '德国', '法国'];
-        let optionsHtml = list.map(item => `
-            <div class="wechat-action-item" onclick="window._setNpcRegionDirect('${npcId}', '${item}')">${item}</div>
-        `).join('');
-
-        let mask = document.createElement('div');
-        mask.className = 'wechat-action-sheet-mask';
-        mask.innerHTML = `
-            <div class="wechat-action-sheet-box">
-                <div style="max-height:260px;overflow-y:auto;">${optionsHtml}</div>
-                <div class="wechat-action-cancel" onclick="this.closest('.wechat-action-sheet-mask').remove()">取消</div>
-            </div>
-        `;
-        document.body.appendChild(mask);
-    };
-
-    window._setNpcRegionDirect = function(npcId, region) {
-        document.querySelector('.wechat-action-sheet-mask')?.remove();
-        const npc = window.G.npcs[npcId];
-        if (npc) {
-            npc.region = region;
-            window.syncCustomNpcsToLocalBackup();
-            if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
-            window.openNpcProfileCardModal(npcId);
-        }
-    };
-
-    window.openEditNpcFavorModal = function(npcId) {
-        const npc = window.G.npcs[npcId];
-        if (!npc) return;
-        window.openWechatCleanModal('修改好感度 (0~100)', `
-            <div style="display:flex;align-items:center;gap:12px;padding:6px 0;">
-                <input type="range" id="wcleanFavorRange" min="0" max="100" value="${npc.favor || 50}" style="flex:1;">
-                <span id="wcleanFavorDisplay" style="font-size:15px;font-weight:700;color:#07c160;min-width:32px;text-align:right;">${npc.favor || 50}</span>
-            </div>
-        `, () => {
-            const r = document.getElementById('wcleanFavorRange');
-            npc.favor = parseInt(r.value) || 0;
-            if (npc.favor < 60 && npc.relationshipStage === 'dating') {
-                npc.relationshipStage = 'friend';
-                npc.isDating = false;
-            }
-            window.syncCustomNpcsToLocalBackup();
-            if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
-            window.openNpcProfileCardModal(npcId);
-            if (typeof showToast === 'function') showToast('好感度已调整', 'success', 1200);
-        });
-        setTimeout(() => {
-            const r = document.getElementById('wcleanFavorRange');
-            const d = document.getElementById('wcleanFavorDisplay');
-            if (r && d) r.oninput = () => { d.textContent = r.value; };
-        }, 30);
-    };
-
-    window.openEditNpcPersonaModal = function(npcId) {
-        const npc = window.G.npcs[npcId];
-        if (!npc) return;
-        window.openWechatCleanModal('编辑角色人设', `
-            <textarea id="wcleanPersonaInput" rows="7" class="wechat-clean-input" style="line-height:1.5;resize:none;">${escapeHtml(npc.persona || '')}</textarea>
-        `, () => {
-            npc.persona = document.getElementById('wcleanPersonaInput').value.trim();
-            window.syncCustomNpcsToLocalBackup();
-            if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
-            window.openNpcProfileCardModal(npcId);
-            if (typeof showToast === 'function') showToast('人设已更新', 'success', 1200);
-        });
-    };
-
     // ⚡️ 局部 DOM 微操作：双语点击即时翻译
     window.toggleMessageTranslationDirect = function(el, msgId) {
         const box = document.getElementById(`transBox_${msgId}`);
@@ -774,7 +786,7 @@
     };
 
     // ============================================================
-    // 💬 单人私聊窗口渲染
+    // 💬 单人私聊窗口渲染（顶栏支持备注名与小括号原名）
     // ============================================================
     function renderSingleChatWindow(container) {
         if (!container) container = document.getElementById('appModalBody') || document.getElementById('socialTab');
@@ -795,6 +807,9 @@
         const tokensCount = window.calculateHistoryTokens(chatHist);
         const tokenDisplay = window.formatTokenString(tokensCount);
         const isGenerating = !!window._MCYT_CHAT_GENERATING[npcId];
+
+        // 顶栏名字规则：有备注显示「备注名 (原名)」，无备注显示「原名」
+        const topHeaderTitle = (npc.remark && npc.remark.trim()) ? `${npc.remark.trim()} (${npc.name})` : (npc.name || npc.id);
 
         let messagesHtml = '';
         for (const msg of chatHist) {
@@ -1034,7 +1049,7 @@
                         <span>‹</span> <span>微信</span>
                     </button>
                     <div onclick="window.openNpcProfileCardModal('${npcId}')" style="cursor:pointer;font-weight:600;font-size:15px;color:#181818;margin-left:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-                        ${escapeHtml(npc.name)}
+                        ${escapeHtml(topHeaderTitle)}
                     </div>
                     <span style="background:#e0e0e0;color:#666;font-size:10px;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:normal;white-space:nowrap;">
                         ${tokenDisplay}t
@@ -1115,7 +1130,7 @@
         }
     }
 
-    // 查看名片详情弹窗（支持个性签名）
+    // 查看名片详情弹窗（支持个性签名与备注名）
     window.openContactCardDetailModal = function(id, name, persona, avatar, signature) {
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
         const exists = !!(window.G.npcs && window.G.npcs[id]);
@@ -1143,6 +1158,7 @@
         window.G.npcs[newNpcId] = {
             id: newNpcId,
             name: name,
+            remark: '',
             region: '中国',
             persona: persona || '名片推荐好友',
             signature: signature || '',
@@ -1197,7 +1213,8 @@
         let author = '我';
         if (msg.from !== 'player') {
             if (type === 'single') {
-                author = window.G.npcs[targetId]?.name || '好友';
+                const n = window.G.npcs[targetId];
+                author = (n && n.remark) ? n.remark : (n?.name || '好友');
             } else {
                 author = msg.senderName || '群友';
             }
@@ -1365,7 +1382,7 @@
 
         let bannerTimer = setTimeout(() => {
             if (window._MCYT_CHAT_GENERATING[npcId]) {
-                window.showGeneratingBanner(npc.name);
+                window.showGeneratingBanner(npc.remark || npc.name);
             }
         }, 3000);
 
@@ -1374,7 +1391,7 @@
 
         let peekNotice = '';
         const recentDialogue = history.slice(-14).map(m => {
-            const speaker = (m.from === 'player') ? curAcc.name : npc.name;
+            const speaker = (m.from === 'player') ? curAcc.name : (npc.name);
             if (m.from === 'action' && m.recalledWasPeeked && !m.peekHandled && m.recalledText) {
                 peekNotice += `\n【系统单次提醒】：对方刚才撤回了一条消息：“${m.recalledText}”，你在手机通知栏不经意瞄到了一眼。随口调侃一句或吐槽网速即可，严禁在后续多轮对话中反复抓着问。\n`;
                 m.peekHandled = true;
@@ -1415,7 +1432,7 @@
             const estOutputTokens = Math.round(clean.length * 1.35);
             window.recordTokenHistoryEntry({
                 time: new Date().toLocaleTimeString().slice(0, 5),
-                targetName: npc.name,
+                targetName: npc.remark || npc.name,
                 type: '私聊',
                 inTokens: estInputTokens,
                 outTokens: estOutputTokens,
@@ -1670,7 +1687,7 @@
         else if (typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
     };
 
-    // 📇 推荐名片选择弹窗（透传个性签名）
+    // 📇 推荐名片选择弹窗（透传个性签名与备注名优先展示）
     window.openRecommendContactModal = function(type, id) {
         window._plusDrawerOpen = false;
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '我' };
@@ -1707,20 +1724,23 @@
 
         const otherMyAccounts = allAccounts.filter(a => a.id !== curAcc.id);
 
-        let friendsHtml = candidateFriends.map(n => `
+        let friendsHtml = candidateFriends.map(n => {
+            const cardDisplayName = n.remark ? `${n.remark} (${n.name})` : n.name;
+            return `
             <div onclick="window.doSendContactCardDirect('${type}', '${id}', '${n.id}', '${escapeHtml(n.name)}', '${escapeHtml(n.persona || '好友')}', '${escapeHtml(n.avatarUrl || '')}', false, '${escapeHtml(n.signature || '')}')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid #f2f2f2;cursor:pointer;">
                 <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1;">
                     <div style="width:34px;height:34px;border-radius:4px;overflow:hidden;background:#eee;flex-shrink:0;">
                         <img src="${n.avatarUrl || 'assets/icons/chat.png'}" style="width:100%;height:100%;object-fit:cover;">
                     </div>
                     <div style="min-width:0;flex:1;">
-                        <div style="font-size:13.5px;color:#181818;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(n.name)}</div>
+                        <div style="font-size:13.5px;color:#181818;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(cardDisplayName)}</div>
                         ${n.signature ? `<div style="font-size:11px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(n.signature)}</div>` : ''}
                     </div>
                 </div>
                 <span style="font-size:12px;color:#07c160;font-weight:600;flex-shrink:0;margin-left:8px;">发送 ›</span>
             </div>
-        `).join('');
+        `;
+        }).join('');
 
         let altsHtml = otherMyAccounts.map(a => `
             <div onclick="window.doSendContactCardDirect('${type}', '${id}', '${a.id}', '${escapeHtml(a.name)}', '我的身份（${escapeHtml(a.personaTag || (a.id === 'main' ? '主号' : '小号'))}）', '${escapeHtml(a.avatar || 'assets/icons/chat.png')}', true, '${escapeHtml(a.signature || '')}')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid #f2f2f2;cursor:pointer;">
