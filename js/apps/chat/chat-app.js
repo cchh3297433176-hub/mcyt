@@ -1,6 +1,6 @@
 /**
  * js/apps/chat/chat-app.js
- * 💬 微信独立主应用（瘦身减负版 · 仿微信白灰绿质感 · 角色左滑删除与简约确认 · 双语即时翻译 · 拟真语音条 · 三种发图模式 · 经典翻转卡片/微信框 · 真表情调用 · 撤回单次偷窥脱敏 · 长按引用与编辑 · Token统计 · 动态转发与名片推荐 · 加号聊天折叠设置与长消息折叠渲染 · 大小号好友物理隔离与申请红点 · 导入角色卡与私聊智能重说系统 · 🌟 接入 Rememori 忆海证据沉淀闭环 · 🧠 角色独立上下文记忆凝练设置与非阻塞后台调度）
+ * 💬 微信独立主应用（瘦身减负版 · 仿微信白灰绿质感 · 角色左滑删除与简约确认 · 双语即时翻译 · 拟真语音条 · 三种发图模式 · 经典翻转卡片/微信框 · 真表情调用 · 撤回单次偷窥脱敏 · 长按引用与编辑 · Token统计 · 动态转发与名片推荐 · 🔮 塔罗牌阵卡片渲染与个性解读支持 · 加号聊天折叠设置与长消息折叠渲染 · 大小号好友物理隔离与申请红点 · 导入角色卡与私聊智能重说系统 · 🌟 接入 Rememori 忆海证据沉淀闭环 · 🧠 角色独立上下文记忆凝练设置与非阻塞后台调度）
  * ⚠️ 注：角色名片卡、资料设置、人设导出及头像更换等功能已完全拆分解耦至 chat-card.js
  */
 
@@ -88,6 +88,7 @@
         const dialogueLines = sliceToSummarize.map(m => {
             const speaker = (m.from === 'player') ? playerName : npcName;
             if (m.type === 'voice') return `${speaker}: [语音] ${m.text || ''}`;
+            if (m.type === 'shared_tarot') return `${speaker}: [塔罗牌阵] ${m.sharedTarot?.spreadName || ''} - 问题: ${m.sharedTarot?.question || ''}`;
             if (m.imageDesc) return `${speaker}: [图片] ${m.imageDesc}`;
             return `${speaker}: ${m.text || ''}`;
         }).join('\n');
@@ -164,6 +165,7 @@
                 if (last) {
                     if (last.from === 'action') preview = String(last.text || '');
                     else if (last.type === 'voice') preview = `[语音] ${last.seconds || 3}"`;
+                    else if (last.type === 'shared_tarot') preview = `[分享了塔罗牌阵: ${last.sharedTarot?.spreadName || '占卜'}]`;
                     else if (last.type === 'shared_moment') preview = '[分享了一条朋友圈动态]';
                     else if (last.type === 'contact_card') preview = '[推荐了名片]';
                     else if (last.type === 'moment_notice') preview = '[朋友圈更新提醒]';
@@ -224,6 +226,7 @@
             if (last) {
                 if (last.from === 'action') preview = String(last.text || '');
                 else if (last.type === 'voice') preview = `[语音] ${last.seconds || 3}"`;
+                else if (last.type === 'shared_tarot') preview = `[分享了塔罗牌阵: ${last.sharedTarot?.spreadName || '占卜'}]`;
                 else if (last.type === 'shared_moment') preview = '[分享了一条朋友圈动态]';
                 else if (last.type === 'contact_card') preview = '[推荐了名片]';
                 else preview = String(last.text || '[消息]').replace(/\n+/g, ' ').slice(0, 24);
@@ -856,6 +859,37 @@
         renderSingleChatWindow();
     };
 
+    // 🔮 塔罗牌阵卡片预览弹窗（仿微信居中白灰微绿弹窗）
+    window.openSharedTarotDetailModal = function(msgId, targetId, isGroup) {
+        const history = isGroup ? (window.G.groupChatHistory[targetId] || []) : window.getAccountChatHistory(targetId);
+        const msg = history.find(m => m._id === msgId);
+        if (!msg || !msg.sharedTarot) return;
+
+        const st = msg.sharedTarot;
+        const cardsHtml = (st.cards || []).map((c, i) => `
+            <div style="background:#f9f9f9;border:0.5px solid #eee;border-radius:6px;padding:8px 10px;margin-bottom:6px;text-align:left;">
+                <div style="display:flex;justify-content:space-between;align-items:center;">
+                    <span style="font-size:12.5px;font-weight:600;color:#222;">${i + 1}. 【${escapeHtml(c.position || '牌位')}】 ${escapeHtml(c.name)}</span>
+                    <span style="font-size:11px;font-weight:600;color:${c.reversed ? '#e85d75' : '#07c160'};">${c.reversed ? '▼ 逆位' : '▲ 正位'}</span>
+                </div>
+                <div style="font-size:11.5px;color:#666;margin-top:3px;line-height:1.4;">${escapeHtml(c.meaning || '')}</div>
+            </div>
+        `).join('');
+
+        if (typeof window.openWechatCleanModal === 'function') {
+            window.openWechatCleanModal('塔罗牌阵详情', `
+                <div style="text-align:left;">
+                    <div style="font-size:12px;color:#888;margin-bottom:4px;">问卜者提问：</div>
+                    <div style="font-size:13.5px;color:#181818;font-weight:600;margin-bottom:10px;line-height:1.4;">“${escapeHtml(st.question || '每日能量探索')}”</div>
+                    <div style="font-size:12px;color:#888;margin-bottom:6px;">牌阵形式：<b>${escapeHtml(st.spreadName || '三张牌阵')}</b></div>
+                    <div style="max-height:220px;overflow-y:auto;padding-right:2px;">
+                        ${cardsHtml}
+                    </div>
+                </div>
+            `, () => {});
+        }
+    };
+
     // ============================================================
     // 💬 单人私聊窗口渲染（带消息折叠、防卡顿优化与智能重说切换）
     // ============================================================
@@ -943,6 +977,41 @@
                         <span>${escapeHtml(msg.author || '对方')} 发表了一条朋友圈动态</span>
                         <span class="link">查看 ›</span>
                     </div>
+                </div>`;
+            } else if (msg.type === 'shared_tarot') {
+                // 🔮 塔罗牌阵微信质感卡片
+                const st = msg.sharedTarot || {};
+                const cardPills = (st.cards || []).map(c => `
+                    <div style="display:flex;justify-content:space-between;font-size:11.5px;padding:3px 0;border-bottom:0.5px dashed #f0f0f0;">
+                        <span style="color:#333;">${escapeHtml(c.name)}</span>
+                        <span style="font-weight:600;color:${c.reversed ? '#e85d75' : '#07c160'};">${c.reversed ? '逆位' : '正位'}</span>
+                    </div>
+                `).join('');
+
+                messagesHtml += `
+                <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
+                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(npc, 38)}</div>` : ''}
+                    <div style="max-width:76%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
+                        ${quoteHtml}
+                        <div class="wechat-share-tarot-card" onclick="window.openSharedTarotDetailModal('${msg._id}', '${npcId}', false)" style="background:#ffffff;border:0.5px solid #e0e0e0;border-left:3px solid #b98eff;border-radius:8px;padding:10px 12px;box-shadow:0 1px 3px rgba(0,0,0,0.06);cursor:pointer;width:220px;box-sizing:border-box;">
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                                <span style="font-size:11px;font-weight:600;color:#7b4ec8;">✦ 塔罗牌阵分享 ✦</span>
+                                <span style="font-size:10.5px;color:#999;">${escapeHtml(st.spreadName || '牌阵')}</span>
+                            </div>
+                            <div style="font-size:12.5px;font-weight:600;color:#181818;margin-bottom:8px;line-height:1.35;word-break:break-word;">
+                                “${escapeHtml(st.question || '综合每日能量探索')}”
+                            </div>
+                            <div style="background:#fafafa;border-radius:4px;padding:4px 8px;margin-bottom:6px;">
+                                ${cardPills}
+                            </div>
+                            <div style="display:flex;justify-content:space-between;align-items:center;font-size:10.5px;color:#888;">
+                                <span>轻触查看牌位解析</span>
+                                <span style="color:#07c160;font-weight:600;">查看 ›</span>
+                            </div>
+                        </div>
+                        <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
+                    </div>
+                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
                 </div>`;
             } else if (msg.type === 'contact_card') {
                 const card = msg.contactCard || {};
@@ -1338,6 +1407,7 @@
 
         let summaryText = msg.text || '';
         if (msg.type === 'voice') summaryText = `[语音 ${msg.seconds || 3}"] ${msg.text || ''}`;
+        else if (msg.type === 'shared_tarot') summaryText = `[塔罗牌阵: ${msg.sharedTarot?.spreadName || '占卜'}]`;
         else if (msg.type === 'shared_moment') summaryText = `[朋友圈分享]`;
         else if (msg.type === 'contact_card') summaryText = `[名片] ${msg.contactCard?.name || ''}`;
         else if (msg.type === 'image_flip' || msg.type === 'image_text_only' || msg.imageDesc) summaryText = `[图片] ${msg.imageDesc || msg.text || ''}`;
@@ -1480,7 +1550,7 @@
         });
     };
 
-    // 🤖 单人私聊 AI 回复触发（带跨时段、隔夜双时间戳感知与 Rememori 证据链沉淀）
+    // 🤖 单人私聊 AI 回复触发（带跨时段、隔夜双时间戳感知、塔罗牌解读感知与 Rememori 证据链沉淀）
     window.triggerAIReplyForSingle = async function(npcId) {
         const npc = window.G.npcs[npcId];
         if (!npc) return;
@@ -1529,6 +1599,11 @@
                 return `[系统]: 对方撤回了一条消息`;
             }
             if (m.type === 'voice') return `${speaker} [语音]: ${m.text || ''}`;
+            if (m.type === 'shared_tarot') {
+                const st = m.sharedTarot || {};
+                const cardsDesc = (st.cards || []).map((c, i) => `${i + 1}.【${c.position}】${c.name} (${c.reversed ? '逆位' : '正位'}，牌意暗示：${c.meaning || ''})`).join('；');
+                return `${speaker} [转发了塔罗牌阵，寻求你的解读/看法]:\n- 问卜者心中的困惑/提问: “${st.question || '综合每日能量'}”\n- 牌阵形式: ${st.spreadName || '三张牌阵'}\n- 牌面详情: ${cardsDesc}\n【提示】：请根据你的人设性格、立场与对玄学/塔罗的了解程度给出符合你角色的真实微信回复（可以专业解答、瞎猜胡扯、调侃迷信、毒舌挑剔或直接拒绝）。`;
+            }
             if (m.type === 'shared_moment') return `${speaker} [分享了朋友圈动态]: ${m.sharedMoment?.author} 发的 “${m.sharedMoment?.body || ''}”；配图：${m.sharedMoment?.imageDesc || '无'}；评论区八卦：${m.sharedMoment?.commentsSummary || '暂无评论'}`;
             if (m.type === 'contact_card') {
                 if (m.contactCard && m.contactCard.isAlt) {
