@@ -11,7 +11,7 @@
  * 4. 指定角色发布动态：可自选大号/小号、通讯录好友或专属群演发动态
  * 5. 刷新动态：支持智能随机抽取或用户指定具体角色接话生成
  * 6. 专属群演固定永久头像机制（锁定不变脸）
- * 7. 点赞、评论、回复、转发至聊天（右侧紧凑布局）
+ * 7. 点赞、评论、回复、转发至聊天（右侧紧凑布局，转发后静止不自动触发回复）
  */
 
 (function() {
@@ -332,9 +332,7 @@
         document.querySelector('.wechat-clean-modal-mask')?.remove();
         if (typeof showToast === 'function') showToast('已转发到聊天', 'success', 1200);
 
-        if (!isGroup && typeof window.triggerAIReplyForSingle === 'function') {
-            window.triggerAIReplyForSingle(targetId);
-        }
+        // 优化规范：转发动态后保持静止，不再自动调用 triggerAIReplyForSingle，由用户手动点闪电生成
     };
 
     // 📷 发布动态弹窗（增添自选指定角色/身份发布功能）

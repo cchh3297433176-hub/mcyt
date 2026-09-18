@@ -1,7 +1,7 @@
 /**
  * js/apps/chat/chat-app.js
- * 💬 微信独立主应用（瘦身减负版 · 仿微信白灰绿质感 · 双语即时翻译 · 拟真语音条 · 三种发图模式 · 经典翻转卡片/微信框 · 真表情调用 · 撤回单次偷窥脱敏 · 长按引用与编辑 · Token统计 · 动态转发与名片推荐 · 加号聊天折叠设置与长消息折叠渲染 · 大小号好友物理隔离与申请红点）
- * ⚠️ 注：角色名片卡、资料设置、酒馆人设导出及头像更换等功能已完全拆分解耦至 chat-card.js
+ * 💬 微信独立主应用（瘦身减负版 · 仿微信白灰绿质感 · 双语即时翻译 · 拟真语音条 · 三种发图模式 · 经典翻转卡片/微信框 · 真表情调用 · 撤回单次偷窥脱敏 · 长按引用与编辑 · Token统计 · 动态转发与名片推荐 · 加号聊天折叠设置与长消息折叠渲染 · 大小号好友物理隔离与申请红点 · 导入角色卡与私聊智能重说系统）
+ * ⚠️ 注：角色名片卡、资料设置、人设导出及头像更换等功能已完全拆分解耦至 chat-card.js
  */
 
 (function() {
@@ -51,7 +51,7 @@
                 <div style="text-align:center;color:#b2b2b2;padding:60px 16px;font-size:13px;line-height:1.8;">
                     <b>暂无联系人</b><br>
                     当前账号「${escapeHtml(curAcc.name)}」暂未添加好友<br>
-                    点击右上角「+」添加好友或通过名片认识新朋友
+                    点击右上角「+」添加好友或导入角色卡认识新朋友
                 </div>`;
             }
 
@@ -294,12 +294,45 @@
         mask.innerHTML = `
             <div class="wechat-action-sheet-box">
                 <div class="wechat-action-item" onclick="window.openCreateCustomNpcModal()">添加联系人</div>
+                <div class="wechat-action-item" onclick="window.openImportCardEntry()">导入角色卡</div>
                 <div class="wechat-action-item" onclick="window.openCreateGroupModal()">发起群聊</div>
                 <div class="wechat-action-item" onclick="window.openSocialRequestsModal()">朋友与群邀请 ${reqCount > 0 ? `<span style="color:#fa5151;font-weight:600;">(${reqCount})</span>` : ''}</div>
                 <div class="wechat-action-cancel" onclick="this.closest('.wechat-action-sheet-mask').remove()">取消</div>
             </div>
         `;
         document.body.appendChild(mask);
+    };
+
+    window.openImportCardEntry = function() {
+        document.querySelector('.wechat-action-sheet-mask')?.remove();
+        document.querySelector('.wechat-clean-modal-mask')?.remove();
+        if (typeof window.openImportCharacterCardModal === 'function') {
+            window.openImportCharacterCardModal((profile) => {
+                const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
+                if (!window.G) window.G = {};
+                if (!window.G.npcs) window.G.npcs = {};
+                const newId = 'custom_' + Date.now();
+                window.G.npcs[newId] = {
+                    id: newId,
+                    name: profile.name,
+                    remark: '',
+                    region: profile.region || '中国',
+                    persona: profile.persona || 'MC同伴玩家。',
+                    signature: profile.signature || '',
+                    favor: 50,
+                    relationshipStage: 'friend',
+                    avatarUrl: profile.avatarUrl || (typeof getRandomAvatar === 'function' ? getRandomAvatar() : 'assets/icons/chat.png'),
+                    isCustom: true,
+                    ownerAccountId: curAcc.id
+                };
+                if (typeof window.syncCustomNpcsToLocalBackup === 'function') window.syncCustomNpcsToLocalBackup();
+                if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+                if (typeof showToast === 'function') showToast(`已导入角色「${profile.name}」`, 'success', 1500);
+                renderChatApp();
+            });
+        } else {
+            if (typeof showToast === 'function') showToast('导入功能模块尚未加载', 'error');
+        }
     };
 
     // 添加联系人
@@ -310,6 +343,12 @@
         if (typeof window.openWechatCleanModal === 'function') {
             window.openWechatCleanModal(`添加联系人`, `
                 <div style="display:flex;flex-direction:column;gap:10px;text-align:left;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;padding-bottom:6px;border-bottom:0.5px solid #eee;">
+                        <span style="font-size:11.5px;color:#888;">已有角色卡文件？</span>
+                        <button type="button" onclick="window.openImportCardEntry()" style="border:none;background:#f0f9eb;color:#07c160;padding:4px 10px;border-radius:4px;font-size:11.5px;font-weight:600;cursor:pointer;">
+                            导入角色卡
+                        </button>
+                    </div>
                     <div>
                         <label style="font-size:12px;color:#666;">联系人真实名字</label>
                         <input type="text" id="wcleanNewNpcName" placeholder="输入真实名字..." class="wechat-clean-input" style="margin-top:3px;">
@@ -566,7 +605,7 @@
     };
 
     // ============================================================
-    // 💬 单人私聊窗口渲染（带消息折叠与防卡顿优化）
+    // 💬 单人私聊窗口渲染（带消息折叠、防卡顿优化与智能重说切换）
     // ============================================================
     function renderSingleChatWindow(container) {
         if (!container) container = document.getElementById('appModalBody') || document.getElementById('socialTab');
@@ -589,6 +628,17 @@
         const isGenerating = !!window._MCYT_CHAT_GENERATING[npcId];
 
         const topHeaderTitle = (npc.remark && npc.remark.trim()) ? `${npc.remark.trim()} (${npc.name})` : (npc.name || npc.id);
+
+        // 判定最新对话状态：若最新一条是角色回复则显示重说图标，若是用户发言则显示生成回复闪电图标
+        let lastDialogueMsg = null;
+        for (let i = chatHist.length - 1; i >= 0; i--) {
+            const m = chatHist[i];
+            if (m.from === 'player' || m.from === 'npc') {
+                lastDialogueMsg = m;
+                break;
+            }
+        }
+        const canRedo = !!(lastDialogueMsg && lastDialogueMsg.from === 'npc');
 
         // 聊天记录折叠逻辑处理
         const collapseCfg = getChatCollapseConfig();
@@ -849,6 +899,29 @@
             </div>`;
         }
 
+        // 顶栏按钮渲染：根据最新一条发言者状态动态决定展示【重说】还是【生成回复闪电】
+        let triggerBtnHtml = '';
+        if (isGenerating) {
+            triggerBtnHtml = `
+            <button id="btnChatLightningTrigger" style="border:none;background:#07c160;color:#fff;width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="正在输入...">
+                <div class="wechat-spin-ring"></div>
+            </button>`;
+        } else if (canRedo) {
+            // 角色回复后呈现简约重说图标
+            triggerBtnHtml = `
+            <button id="btnChatLightningTrigger" onclick="window.confirmRetryLastAIReply('${npcId}')" style="border:none;background:#07c160;color:#fff;width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="重新生成回复">
+                <svg viewBox="0 0 24 24" style="width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round;">
+                    <path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                </svg>
+            </button>`;
+        } else {
+            // 用户发言后呈现标准生成闪电
+            triggerBtnHtml = `
+            <button id="btnChatLightningTrigger" onclick="window.triggerAIReplyForSingle('${npcId}')" style="border:none;background:#07c160;color:#fff;width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="生成回复">
+                <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+            </button>`;
+        }
+
         const html = `
         <div style="background:#ededed;display:flex;flex-direction:column;height:100%;min-height:100%;overflow:hidden;font-family:-apple-system,sans-serif;">
             <div class="wechat-top-header">
@@ -867,9 +940,7 @@
                     <button onclick="window.toggleBehindScreen('${npcId}')" style="border:0.5px solid ${isBehindActive ? '#07c160' : '#ccc'};background:${isBehindActive ? '#d4f5dd' : '#fff'};color:${isBehindActive ? '#07c160' : '#555'};width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="动作感知">
                         <svg viewBox="0 0 24 24" style="width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                     </button>
-                    <button id="btnChatLightningTrigger" onclick="window.triggerAIReplyForSingle('${npcId}')" style="border:none;background:#07c160;color:#fff;width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="生成回复">
-                        ${isGenerating ? `<div class="wechat-spin-ring"></div>` : `<svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`}
-                    </button>
+                    ${triggerBtnHtml}
                 </div>
             </div>
 
@@ -937,6 +1008,44 @@
             };
         }
     }
+
+    // 重新生成回复确认弹窗
+    window.confirmRetryLastAIReply = function(npcId) {
+        if (window._MCYT_CHAT_GENERATING[npcId]) {
+            if (typeof showToast === 'function') showToast('对方正在回复中，请稍候', 'info', 1000);
+            return;
+        }
+
+        if (typeof window.openWechatCleanModal === 'function') {
+            window.openWechatCleanModal('重新生成', `
+                <div style="text-align:center;padding:10px 0;font-size:13.5px;color:#333;">
+                    确定要让对方重新生成上一条回复吗？
+                </div>
+            `, () => {
+                window.doRetryLastAIReply(npcId);
+            });
+        }
+    };
+
+    // 执行回溯并重新生成回复
+    window.doRetryLastAIReply = function(npcId) {
+        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
+        const hist = window.getAccountChatHistory(npcId, curAcc.id);
+
+        // 回溯剔除末尾属于 NPC 该轮的所有消息（包括偶发动态提醒或动作感知）
+        while (hist.length > 0) {
+            const last = hist[hist.length - 1];
+            if (last.from === 'player') break;
+            hist.pop();
+        }
+
+        window.syncChatHistoryToLocalBackup();
+        if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+        renderSingleChatWindow();
+
+        // 重新调用生成
+        window.triggerAIReplyForSingle(npcId);
+    };
 
     // 气泡长按操作菜单
     window.openBubbleActionSheet = function(msgId, type, targetId) {

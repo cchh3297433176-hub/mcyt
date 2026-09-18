@@ -1,6 +1,6 @@
 /**
  * js/apps/chat/chat-common.js
- * 💬 微信基础公共库：头像池加载 · 持久化双轨防丢备份 · 微信通用样式注入 · 原生对话框/操作表 · Token监控池 · AI实体解析器 · 酒馆 PNG 人设卡封装引擎
+ * 💬 微信基础公共库：头像池加载 · 持久化双轨防丢备份 · 微信通用样式注入 · 原生对话框/操作表 · Token监控池 · AI实体解析器 · 酒馆 PNG 人设卡封装与导入解析引擎
  */
 
 (function() {
@@ -122,7 +122,6 @@
             try {
                 localStorage.setItem(CUSTOM_NPCS_BACKUP_KEY, JSON.stringify(customMap));
             } catch (quotaErr) {
-                // 配额超出时的降级保存：剔除超大 Base64 头像，保留核心属性，防止整盘数据丢失
                 console.warn('自建联系人包含大尺寸图片导致配额不足，启用轻量降级备份:', quotaErr);
                 const safeMap = {};
                 for (const [id, npc] of Object.entries(customMap)) {
@@ -203,7 +202,6 @@
     function syncMomentsFeedToLocalBackup() {
         try {
             if (!window.G || !Array.isArray(window.G.feed)) return;
-            // 保留最近 100 条动态以防存储超载
             const cappedFeed = window.G.feed.slice(0, 100);
             try {
                 localStorage.setItem(MOMENTS_FEED_BACKUP_KEY, JSON.stringify(cappedFeed));
@@ -740,7 +738,7 @@
     window.hideGeneratingBanner = hideGeneratingBanner;
 
     // ============================================================
-    // 📇 酒馆（Tavern）规范角色卡 PNG 导出引擎
+    // 📇 酒馆（Tavern）规范角色卡 PNG 导出与解析引擎
     // 特性：底图采用头像，将静态人设编码至 PNG tEXt 数据块，绝不含聊天记录与好感度
     // ============================================================
     function crc32(buf) {
@@ -785,10 +783,42 @@
         return chunk;
     }
 
+    // 弹出角色卡预览与长按保存弹窗（解决移动端 WebView 无法触发 a.download 的问题）
+    function showExportedCardModal(dataUrl, filename) {
+        let mask = document.createElement('div');
+        mask.className = 'wechat-clean-modal-mask';
+        mask.style.zIndex = '10006';
+        mask.innerHTML = `
+            <div class="wechat-clean-modal-card" style="max-width:300px;text-align:center;padding:18px 16px;">
+                <div class="wechat-clean-modal-title" style="margin-bottom:8px;">角色卡已生成</div>
+                <div style="font-size:12px;color:#888;margin-bottom:12px;line-height:1.4;">
+                    若未自动下载，可长按下方图片保存至相册
+                </div>
+                <div style="width:160px;height:160px;margin:0 auto 14px;border-radius:10px;overflow:hidden;box-shadow:0 3px 12px rgba(0,0,0,0.12);background:#f2f2f2;border:1px solid #e8e8e8;">
+                    <img src="${dataUrl}" alt="角色卡" style="width:100%;height:100%;object-fit:cover;display:block;" />
+                </div>
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                    <a href="${dataUrl}" download="${escapeHtml(filename)}" id="btnForceDownloadLink" style="display:block;text-decoration:none;border:none;background:#07c160;color:#fff;padding:8px 0;border-radius:6px;font-size:13.5px;font-weight:600;text-align:center;">
+                        保存到设备
+                    </a>
+                    <button type="button" id="btnCloseCardExportModal" style="border:none;background:#f2f2f2;color:#555;padding:7px 0;border-radius:6px;font-size:13px;cursor:pointer;">
+                        完成
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(mask);
+        const close = () => { if (mask && mask.parentNode) mask.parentNode.removeChild(mask); };
+        mask.querySelector('#btnCloseCardExportModal').onclick = close;
+        mask.querySelector('#btnForceDownloadLink').onclick = () => {
+            setTimeout(close, 400);
+        };
+    }
+
     async function exportTavernCharacterPng(npc, customFilename = null) {
         if (!npc) return;
 
-        // 严格过滤静态人设档案，绝不导出聊天记录与好感度
+        // 严格过滤静态人设档案，绝不导出私聊记录与好感度
         const tavernData = {
             name: npc.name || 'NPC',
             description: npc.persona || '',
@@ -822,18 +852,21 @@
         const jsonStr = JSON.stringify(tavernData);
         const base64Json = btoa(unescape(encodeURIComponent(jsonStr)));
 
-        // 获取底图并转为 PNG ArrayBuffer
+        // 获取底图并转为 PNG ArrayBuffer（增加防 Tainted 保护）
         const avatarUrl = npc.avatarUrl || getRandomAvatar();
         const img = new Image();
-        img.crossOrigin = 'anonymous';
+        if (!avatarUrl.startsWith('data:')) {
+            img.crossOrigin = 'anonymous';
+        }
         img.src = avatarUrl;
 
-        await new Promise((resolve, reject) => {
+        await new Promise((resolve) => {
             img.onload = resolve;
             img.onerror = () => {
+                img.removeAttribute('crossOrigin');
                 img.src = 'assets/icons/chat.png';
                 img.onload = resolve;
-                img.onerror = reject;
+                img.onerror = resolve;
             };
         });
 
@@ -841,17 +874,42 @@
         canvas.width = img.naturalWidth || 400;
         canvas.height = img.naturalHeight || 400;
         const ctx = canvas.getContext('2d');
-        ctx.drawImage(img, 0, 0);
+        
+        let arrayBuf;
+        try {
+            ctx.drawImage(img, 0, 0);
+            const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+            if (blob) {
+                arrayBuf = await blob.arrayBuffer();
+            }
+        } catch (canvasErr) {
+            console.warn('Canvas 导出受阻，采用纯净离线头像重绘:', canvasErr);
+        }
 
-        const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
-        const arrayBuf = await blob.arrayBuffer();
+        // 若 Canvas 被跨域污染，改用内建纯色极简兜底底图
+        if (!arrayBuf) {
+            const fallbackCanvas = document.createElement('canvas');
+            fallbackCanvas.width = 400;
+            fallbackCanvas.height = 400;
+            const fCtx = fallbackCanvas.getContext('2d');
+            fCtx.fillStyle = '#07c160';
+            fCtx.fillRect(0, 0, 400, 400);
+            fCtx.fillStyle = '#ffffff';
+            fCtx.font = 'bold 64px sans-serif';
+            fCtx.textAlign = 'center';
+            fCtx.textBaseline = 'middle';
+            fCtx.fillText((npc.name || 'MC').substring(0, 4), 200, 200);
+            const fBlob = await new Promise(res => fallbackCanvas.toBlob(res, 'image/png'));
+            arrayBuf = await fBlob.arrayBuffer();
+        }
+
         const srcBytes = new Uint8Array(arrayBuf);
 
         // 寻找 IHDR 之后的位置注入 tEXt chunk
         let insertPos = 8;
         const view = new DataView(srcBytes.buffer);
         const ihdrLen = view.getUint32(8);
-        insertPos = 8 + 4 + 4 + ihdrLen + 4; // 8 byte magic + 4 len + 4 type + data + 4 crc
+        insertPos = 8 + 4 + 4 + ihdrLen + 4; // 8 magic + 4 len + 4 type + ihdr data + 4 crc
 
         const textChunk = createPngTextChunk('chara', base64Json);
 
@@ -861,15 +919,174 @@
         out.set(srcBytes.subarray(insertPos), insertPos + textChunk.length);
 
         const outBlob = new Blob([out], { type: 'image/png' });
-        const downloadUrl = URL.createObjectURL(outBlob);
-        const a = document.createElement('a');
-        a.href = downloadUrl;
-        a.download = (customFilename || `${npc.name || 'character'}_人设卡`).replace(/[\\/:*?"<>|]/g, '_') + '.png';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        setTimeout(() => URL.revokeObjectURL(downloadUrl), 2000);
+        const finalFilename = (customFilename || `${npc.name || 'character'}_人设卡`).replace(/[\\/:*?"<>|]/g, '_') + '.png';
+
+        // 1. 优先将图片转为 DataURL（兼容 Android WebView 保存）
+        const reader = new FileReader();
+        reader.onloadend = () => {
+            const dataUrl = reader.result;
+
+            // 2. 尝试触发浏览器下载
+            try {
+                const a = document.createElement('a');
+                a.href = dataUrl;
+                a.download = finalFilename;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+            } catch (_) {}
+
+            // 3. 弹出极简预览弹窗（支持长按保存，杜绝手机端下载无反应）
+            showExportedCardModal(dataUrl, finalFilename);
+        };
+        reader.readAsDataURL(outBlob);
     }
     window.exportTavernCharacterPng = exportTavernCharacterPng;
+
+    // ============================================================
+    // 📥 酒馆规范角色卡 PNG / JSON 解析导入引擎
+    // 支持直接从 PNG 提取 chara/ccv3 文本块与底图头像，或直接读取 JSON 文件
+    // ============================================================
+    function parsePngTextChunks(arrayBuffer) {
+        const view = new DataView(arrayBuffer);
+        // PNG 签名验证 89 50 4E 47 0D 0A 1A 0A
+        if (view.getUint32(0) !== 0x89504E47 || view.getUint32(4) !== 0x0D0A1A0A) {
+            return null;
+        }
+
+        let offset = 8;
+        const chunks = {};
+
+        while (offset < arrayBuffer.byteLength) {
+            if (offset + 8 > arrayBuffer.byteLength) break;
+            const length = view.getUint32(offset);
+            const typeCode = [
+                String.fromCharCode(view.getUint8(offset + 4)),
+                String.fromCharCode(view.getUint8(offset + 5)),
+                String.fromCharCode(view.getUint8(offset + 6)),
+                String.fromCharCode(view.getUint8(offset + 7))
+            ].join('');
+
+            const chunkDataOffset = offset + 8;
+            if (chunkDataOffset + length > arrayBuffer.byteLength) break;
+
+            if (typeCode === 'tEXt') {
+                const dataBytes = new Uint8Array(arrayBuffer, chunkDataOffset, length);
+                let nullIdx = -1;
+                for (let i = 0; i < dataBytes.length; i++) {
+                    if (dataBytes[i] === 0) {
+                        nullIdx = i;
+                        break;
+                    }
+                }
+                if (nullIdx !== -1) {
+                    const key = new TextDecoder('latin1').decode(dataBytes.subarray(0, nullIdx));
+                    const val = new TextDecoder('utf-8').decode(dataBytes.subarray(nullIdx + 1));
+                    chunks[key] = val;
+                }
+            }
+
+            offset += 4 + 4 + length + 4; // len + type + data + crc
+        }
+        return chunks;
+    }
+
+    async function parseTavernCardFromFile(file) {
+        if (!file) return null;
+        const fileName = file.name || '';
+        const isPng = file.type === 'image/png' || fileName.toLowerCase().endsWith('.png');
+        const isJson = file.type === 'application/json' || fileName.toLowerCase().endsWith('.json');
+
+        if (isJson) {
+            const text = await file.text();
+            let parsed = null;
+            try {
+                parsed = JSON.parse(text);
+            } catch (_) {
+                throw new Error('JSON 文件格式无效');
+            }
+            return extractTavernCardProfile(parsed, null);
+        }
+
+        if (isPng) {
+            const buf = await file.arrayBuffer();
+            const chunks = parsePngTextChunks(buf);
+            if (!chunks) {
+                throw new Error('不是标准的 PNG 格式图片');
+            }
+
+            let rawDataStr = chunks['chara'] || chunks['ccv3'];
+            if (!rawDataStr) {
+                throw new Error('未在图片中检测到酒馆角色卡数据');
+            }
+
+            // 尝试 Base64 解码
+            let jsonStr = '';
+            try {
+                jsonStr = decodeURIComponent(escape(atob(rawDataStr)));
+            } catch (_) {
+                try {
+                    jsonStr = atob(rawDataStr);
+                } catch (_) {
+                    jsonStr = rawDataStr;
+                }
+            }
+
+            let parsed = null;
+            try {
+                parsed = JSON.parse(jsonStr);
+            } catch (_) {
+                throw new Error('角色卡数据解析失败');
+            }
+
+            // 将 PNG 文件转为 Base64 DataURL 作为头像
+            const avatarDataUrl = await new Promise((res) => {
+                const r = new FileReader();
+                r.onload = () => res(r.result);
+                r.onerror = () => res(null);
+                r.readAsDataURL(file);
+            });
+
+            return extractTavernCardProfile(parsed, avatarDataUrl);
+        }
+
+        throw new Error('请选择 .png 角色卡或 .json 文件');
+    }
+    window.parseTavernCardFromFile = parseTavernCardFromFile;
+
+    function extractTavernCardProfile(dataObj, avatarUrl = null) {
+        if (!dataObj || typeof dataObj !== 'object') return null;
+
+        const data = dataObj.data || dataObj;
+        const name = (data.name || dataObj.name || '新角色').trim();
+        const persona = (data.description || dataObj.description || data.persona || dataObj.persona || '').trim();
+        const personality = data.personality || dataObj.personality || '';
+
+        // 提取地区与个性签名
+        let region = '中国';
+        if (personality.includes('美国 - 东部') || personality.includes('美国东部')) region = '美国 - 东部';
+        else if (personality.includes('美国 - 西部') || personality.includes('美国西部')) region = '美国 - 西部';
+        else if (personality.includes('英国')) region = '英国';
+        else if (personality.includes('日本')) region = '日本';
+        else if (personality.includes('韩国')) region = '韩国';
+        else if (personality.includes('加拿大')) region = '加拿大';
+        else if (personality.includes('澳大利亚')) region = '澳大利亚';
+        else if (personality.includes('德国')) region = '德国';
+        else if (personality.includes('法国')) region = '法国';
+
+        let signature = '';
+        const sigMatch = personality.match(/个性签名[:：\s]*([^；;\n]+)/i) || personality.match(/签名[:：\s]*([^；;\n]+)/i);
+        if (sigMatch && sigMatch[1]) {
+            signature = sigMatch[1].trim();
+        }
+
+        return {
+            name: name,
+            persona: persona || 'MC同伴玩家。',
+            region: region,
+            signature: signature,
+            avatarUrl: avatarUrl || (typeof getRandomAvatar === 'function' ? getRandomAvatar() : 'assets/icons/chat.png')
+        };
+    }
 
 })();

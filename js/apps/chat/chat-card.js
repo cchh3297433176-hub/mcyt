@@ -4,7 +4,7 @@
  * 职责：
  * 1. 角色极简原生名片卡（仅保留头像、姓名/备注、个性签名、地区与好感度）
  * 2. 独立齿轮“资料设置”白灰拟真弹窗（备注名、原名、签名、地区、恋爱状态、人设Prompt修改）
- * 3. 仿酒馆（Tavern）角色卡 PNG 导出入口与换头像
+ * 3. 角色卡 PNG 导出入口、换头像与角色卡导入
  * 4. 推荐名片详情弹窗与添加通讯录
  */
 
@@ -139,11 +139,11 @@
                         <label style="font-size:11.5px;color:#777;font-weight:500;">人设档案 / 说话风格</label>
                         <textarea id="wcleanSetNpcPersona" rows="4" placeholder="填写人设特征、性格习惯与聊天口吻..." class="wechat-clean-input" style="margin-top:3px;resize:none;line-height:1.45;">${escapeHtml(npc.persona || '')}</textarea>
                     </div>
-                    <!-- 酒馆 PNG 人设卡导出 -->
+                    <!-- 极简人设卡导出 -->
                     <div style="border-top:0.5px solid #f0f0f0;padding-top:10px;margin-top:4px;">
                         <button type="button" id="btnExportTavernPngCard" style="width:100%;border:1px solid #dcdcdc;background:#ffffff;color:#181818;padding:8px 10px;border-radius:6px;font-size:12.5px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
                             <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:#07c160;stroke-width:2;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                            <span>导出人设卡 (酒馆规范 PNG)</span>
+                            <span>导出人设卡</span>
                         </button>
                     </div>
                 </div>
@@ -219,9 +219,8 @@
                 if (exportBtn) {
                     exportBtn.onclick = async () => {
                         if (typeof window.exportTavernCharacterPng === 'function') {
-                            if (typeof showToast === 'function') showToast('正在生成酒馆人设卡...', 'info', 1000);
+                            if (typeof showToast === 'function') showToast('正在生成角色卡...', 'info', 1000);
                             await window.exportTavernCharacterPng(npc);
-                            if (typeof showToast === 'function') showToast('人设卡导出成功', 'success', 1500);
                         } else {
                             if (typeof showToast === 'function') showToast('导出引擎未装载', 'error');
                         }
@@ -342,5 +341,67 @@
         if (typeof window.renderChatApp === 'function') window.renderChatApp();
     }
     window.addContactFromCard = addContactFromCard;
+
+    // 📥 导入角色卡弹窗处理
+    function openImportCharacterCardModal(onSuccess = null) {
+        const fileInput = document.createElement('input');
+        fileInput.type = 'file';
+        fileInput.accept = '.png,image/png,.json,application/json';
+        fileInput.style.display = 'none';
+        document.body.appendChild(fileInput);
+
+        fileInput.onchange = async (e) => {
+            const file = e.target.files && e.target.files[0];
+            fileInput.remove();
+            if (!file) return;
+
+            if (typeof showToast === 'function') showToast('正在解析角色卡...', 'info', 1000);
+
+            try {
+                if (typeof window.parseTavernCardFromFile !== 'function') {
+                    throw new Error('解析引擎未装载');
+                }
+                const profile = await window.parseTavernCardFromFile(file);
+                if (!profile || !profile.name) {
+                    throw new Error('角色卡未能成功识别');
+                }
+
+                if (typeof onSuccess === 'function') {
+                    onSuccess(profile);
+                } else {
+                    // 默认直接实例化自建角色
+                    const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
+                    if (!window.G) window.G = {};
+                    if (!window.G.npcs) window.G.npcs = {};
+
+                    const newId = 'custom_' + Date.now();
+                    window.G.npcs[newId] = {
+                        id: newId,
+                        name: profile.name,
+                        remark: '',
+                        region: profile.region || '中国',
+                        persona: profile.persona || 'MC同伴玩家。',
+                        signature: profile.signature || '',
+                        favor: 50,
+                        relationshipStage: 'friend',
+                        avatarUrl: profile.avatarUrl || (typeof getRandomAvatar === 'function' ? getRandomAvatar() : 'assets/icons/chat.png'),
+                        isCustom: true,
+                        ownerAccountId: curAcc.id
+                    };
+
+                    if (typeof window.syncCustomNpcsToLocalBackup === 'function') window.syncCustomNpcsToLocalBackup();
+                    if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+                    if (typeof showToast === 'function') showToast(`已成功导入角色「${profile.name}」`, 'success', 1500);
+                    if (typeof window.renderChatApp === 'function') window.renderChatApp();
+                }
+            } catch (err) {
+                console.error('导入角色卡失败:', err);
+                if (typeof showToast === 'function') showToast(err.message || '导入失败', 'error', 2000);
+            }
+        };
+
+        fileInput.click();
+    }
+    window.openImportCharacterCardModal = openImportCharacterCardModal;
 
 })();
