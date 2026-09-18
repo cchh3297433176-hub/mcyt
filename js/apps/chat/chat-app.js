@@ -1,6 +1,6 @@
 /**
  * js/apps/chat/chat-app.js
- * 💬 微信独立主应用（瘦身减负版 · 仿微信白灰绿质感 · 角色左滑删除与简约确认 · 双语即时翻译 · 拟真语音条 · 三种发图模式 · 经典翻转卡片/微信框 · 真表情调用 · 撤回单次偷窥脱敏 · 长按引用与编辑 · Token统计 · 动态转发与名片推荐 · 加号聊天折叠设置与长消息折叠渲染 · 大小号好友物理隔离与申请红点 · 导入角色卡与私聊智能重说系统 · 🌟 接入 Rememori 忆海证据沉淀闭环）
+ * 💬 微信独立主应用（瘦身减负版 · 仿微信白灰绿质感 · 角色左滑删除与简约确认 · 双语即时翻译 · 拟真语音条 · 三种发图模式 · 经典翻转卡片/微信框 · 真表情调用 · 撤回单次偷窥脱敏 · 长按引用与编辑 · Token统计 · 动态转发与名片推荐 · 加号聊天折叠设置与长消息折叠渲染 · 大小号好友物理隔离与申请红点 · 导入角色卡与私聊智能重说系统 · 🌟 接入 Rememori 忆海证据沉淀闭环 · 🧠 角色独立上下文记忆凝练设置与非阻塞后台调度）
  * ⚠️ 注：角色名片卡、资料设置、人设导出及头像更换等功能已完全拆分解耦至 chat-card.js
  */
 
@@ -34,6 +34,85 @@
             }
             localStorage.setItem('mcyt_rememori_cache_v1', JSON.stringify(window._rememoriStore));
         } catch (_) {}
+    }
+
+    // 🧠 读取角色的独立记忆总结配置
+    function getNpcMemoryConfig(npcId) {
+        if (!window.G) window.G = {};
+        if (!window.G.npcMemoryConfigs) {
+            try {
+                const raw = localStorage.getItem('mcyt_npc_memory_configs');
+                window.G.npcMemoryConfigs = raw ? JSON.parse(raw) : {};
+            } catch (_) {
+                window.G.npcMemoryConfigs = {};
+            }
+        }
+        return window.G.npcMemoryConfigs[npcId] || {
+            enabled: false,
+            keepRecent: 8,       // 供 AI 实时读的最新上下文条数
+            triggerCount: 20     // 满多少条时触发总结
+        };
+    }
+
+    function saveNpcMemoryConfig(npcId, cfg) {
+        if (!window.G) window.G = {};
+        if (!window.G.npcMemoryConfigs) window.G.npcMemoryConfigs = {};
+        window.G.npcMemoryConfigs[npcId] = cfg;
+        try {
+            localStorage.setItem('mcyt_npc_memory_configs', JSON.stringify(window.G.npcMemoryConfigs));
+        } catch (_) {}
+    }
+
+    // 🧠 检查并派发给忆海（Rememori）后台静默总结
+    function checkAndTriggerAutoMemorySummary(npcId, curAccId) {
+        const cfg = getNpcMemoryConfig(npcId);
+        if (!cfg || !cfg.enabled) return;
+
+        const hist = window.getAccountChatHistory(npcId, curAccId);
+        const triggerLimit = Math.max(10, parseInt(cfg.triggerCount) || 20);
+        const keepCount = Math.max(4, parseInt(cfg.keepRecent) || 8);
+
+        if (hist.length < triggerLimit) return;
+
+        // 计算需要总结的前段消息条数
+        const sliceCount = hist.length - keepCount;
+        if (sliceCount < 4) return; // 条数太少无需浪费总结
+
+        const sliceToSummarize = hist.slice(0, sliceCount);
+        const npc = window.G.npcs ? window.G.npcs[npcId] : null;
+        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '玩家' };
+        const npcName = (npc && npc.remark) ? npc.remark : (npc ? npc.name : '对方');
+        const playerName = curAcc.name || '玩家';
+
+        // 拼接对话文本
+        const dialogueLines = sliceToSummarize.map(m => {
+            const speaker = (m.from === 'player') ? playerName : npcName;
+            if (m.type === 'voice') return `${speaker}: [语音] ${m.text || ''}`;
+            if (m.imageDesc) return `${speaker}: [图片] ${m.imageDesc}`;
+            return `${speaker}: ${m.text || ''}`;
+        }).join('\n');
+
+        // 1. 本地立即截断已总结的对话，保留指定条数供上下文读取（玩家端零卡顿）
+        const remaining = hist.slice(sliceCount);
+        const historyKey = `${curAccId || 'main'}_${npcId}`;
+        if (window.G.chatHistory) {
+            window.G.chatHistory[historyKey] = remaining;
+        }
+
+        if (typeof window.syncChatHistoryToLocalBackup === 'function') window.syncChatHistoryToLocalBackup();
+        if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+
+        // 2. 向忆海后台派发非阻塞总结任务（由忆海沙盒与独立总结模型处理）
+        window.postMessage({
+            type: 'TRIGGER_REMEMORI_SUMMARY',
+            scene: 'chat',
+            dialogues: dialogueLines,
+            playerName,
+            npcName,
+            npcId
+        }, '*');
+
+        if (window.G.currentChatNpc === npcId) renderSingleChatWindow();
     }
 
     // 读取或初始化折叠配置
@@ -1613,6 +1692,9 @@
                 if (window.G.currentChatNpc === npcId) renderSingleChatWindow();
             }
 
+            // 检查并派发后台静默总结
+            checkAndTriggerAutoMemorySummary(npcId, curAcc.id);
+
             if (typeof autoSaveGame === 'function') autoSaveGame();
         } catch(e) {
             console.error('API 回复失败:', e);
@@ -1738,7 +1820,7 @@
         });
     };
 
-    // 完整的 6 大功能加号抽屉面板
+    // 完整的 7 大功能加号抽屉面板（“记忆设置”）
     function buildChatPlusDrawerHTML(type, id) {
         return `
         <div id="chatPlusDrawer" style="background:#f7f7f7;border-top:0.5px solid #dcdcdc;flex-shrink:0;animation:wechatSlideUp 0.18s ease-out;">
@@ -1754,6 +1836,12 @@
                         <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#0284c7;stroke-width:1.8;stroke-linecap:round;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
                     </div>
                     <span class="wechat-plus-label">推荐名片</span>
+                </div>
+                <div class="wechat-plus-item" onclick="window._plusDrawerOpen=false; window.openNpcMemorySettingsModal('${type}','${id}')">
+                    <div class="wechat-plus-icon-box">
+                        <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#10b981;stroke-width:1.8;stroke-linecap:round;"><path d="M12 2a9 9 0 0 0-9 9c0 3.6 2.1 6.7 5.2 8.1l.8 2.9 3-1.5c0 .3.5.5.8.5a9 9 0 0 0 9-9 9 9 0 0 0-9-9z"/><path d="M9.5 9h5"/><path d="M9.5 13h5"/></svg>
+                    </div>
+                    <span class="wechat-plus-label">记忆设置</span>
                 </div>
                 <div class="wechat-plus-item" onclick="window._plusDrawerOpen=false; window.openChatCollapseSettingsModal('${type}','${id}')">
                     <div class="wechat-plus-icon-box">
@@ -1789,6 +1877,80 @@
         window._stickerDrawerOpen = false;
         if (type === 'single') renderSingleChatWindow();
         else if (typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
+    };
+
+    // 🧠 角色独立记忆总结设置弹窗（带微绿问号科普）
+    window.openNpcMemorySettingsModal = function(type, id) {
+        if (type !== 'single') {
+            if (typeof showToast === 'function') showToast('记忆设置目前支持专属好友单人私聊', 'info', 1500);
+            return;
+        }
+
+        const cfg = getNpcMemoryConfig(id);
+        const npc = window.G.npcs ? window.G.npcs[id] : null;
+        const npcDisplayName = npc ? (npc.remark || npc.name) : '当前好友';
+
+        const modalBody = `
+            <div style="text-align:left;font-size:13px;color:#333;">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:10px;border-bottom:0.5px solid #f0f0f0;margin-bottom:12px;">
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <span style="font-weight:600;color:#181818;">长效记忆自动凝练</span>
+                        <button type="button" onclick="window.showMemoryIntroTooltip()" style="border:none;background:#e8f7ed;color:#07c160;width:18px;height:18px;border-radius:50%;font-size:11px;font-weight:bold;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;">?</button>
+                    </div>
+                    <input type="checkbox" id="wcleanMemToggle" ${cfg.enabled ? 'checked' : ''} style="width:18px;height:18px;accent-color:#07c160;cursor:pointer;">
+                </div>
+
+                <div style="display:flex;flex-direction:column;gap:12px;">
+                    <div>
+                        <label style="font-size:12px;color:#666;font-weight:600;display:block;margin-bottom:4px;">保留最新对话条数：</label>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <input type="number" id="wcleanMemKeepRecent" value="${cfg.keepRecent || 8}" min="4" max="30" step="1" class="wechat-clean-input" style="width:90px;">
+                            <span style="font-size:11.5px;color:#888;">条（供 AI 读最新上下文，推荐 8~12 条）</span>
+                        </div>
+                    </div>
+
+                    <div>
+                        <label style="font-size:12px;color:#666;font-weight:600;display:block;margin-bottom:4px;">触发总结阈值：</label>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <input type="number" id="wcleanMemTriggerCount" value="${cfg.triggerCount || 20}" min="10" max="60" step="2" class="wechat-clean-input" style="width:90px;">
+                            <span style="font-size:11.5px;color:#888;">条（满额自动提炼早期消息为客观事实）</span>
+                        </div>
+                    </div>
+
+                    <div style="font-size:11px;color:#999;background:#f9f9f9;padding:6px 10px;border-radius:4px;line-height:1.45;">
+                        目标角色：<b>${escapeHtml(npcDisplayName)}</b><br>
+                        规则：将早期消息静默交由忆海提炼为第三人称具名事实，留足最新对话供 AI 保持连贯。
+                    </div>
+                </div>
+            </div>
+        `;
+
+        window.openWechatCleanModal('记忆设置', modalBody, () => {
+            const enabled = document.getElementById('wcleanMemToggle')?.checked ?? false;
+            let keepRecent = parseInt(document.getElementById('wcleanMemKeepRecent')?.value) || 8;
+            let triggerCount = parseInt(document.getElementById('wcleanMemTriggerCount')?.value) || 20;
+
+            if (keepRecent < 4) keepRecent = 4;
+            if (triggerCount <= keepRecent) triggerCount = keepRecent + 6;
+
+            saveNpcMemoryConfig(id, { enabled, keepRecent, triggerCount });
+            if (typeof showToast === 'function') showToast('记忆设置已更新', 'success', 1200);
+            if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+        });
+    };
+
+    // 💡 记忆科普提示（严格控制在 50 字以内）
+    window.showMemoryIntroTooltip = function() {
+        const text = "满额自动将早期对白凝练为第三人称客观事实，留足最新上下文，兼顾长期记忆与对话连贯。";
+        if (typeof window.openWechatCleanModal === 'function') {
+            window.openWechatCleanModal('记忆总结机制', `
+                <div style="text-align:center;padding:12px 6px;font-size:13.5px;color:#333;line-height:1.6;">
+                    ${escapeHtml(text)}
+                </div>
+            `, () => {});
+        } else if (typeof showToast === 'function') {
+            showToast(text, 'info', 3000);
+        }
     };
 
     // 🗂️ 聊天记录自动折叠设置弹窗
