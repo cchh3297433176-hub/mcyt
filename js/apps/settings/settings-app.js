@@ -1,6 +1,10 @@
 // js/apps/settings/settings-app.js
-// 📱 系统设置中心 App（微信原生白灰极简质感、模型弹窗点选、小手机全量记忆卡导出/导入、备份周期提醒）
+// 📱 系统设置中心 App（全站版本号唯一定义源 · 微信原生白灰微绿设计 · 小手机记忆卡原生直接下载 · 备份周期提醒）
 // ============================================================
+
+// 🌟【全项目版本号唯一真源】：以后打包发新软件，直接在此修改此常量即可！
+const CURRENT_APP_VERSION = '1.611';
+window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
 
 (function(window) {
     'use strict';
@@ -45,7 +49,7 @@
             baseUrl: 'https://api.openai.com/v1',
             apiKey: '',
             model: 'gpt-4o-mini',
-            agentProfileName: 'follow_global', // 'follow_global' | 或指定具体的配置方案备注名称
+            agentProfileName: 'follow_global',
             modelsList: [...DEFAULT_MODEL_PRESETS]
         };
         try {
@@ -134,9 +138,7 @@
         if (confirmBtn) {
             confirmBtn.onclick = () => {
                 const val = input ? input.value.trim() : '';
-                if (typeof onConfirm === 'function') {
-                    onConfirm(val);
-                }
+                if (typeof onConfirm === 'function') onConfirm(val);
                 closeModal();
             };
         }
@@ -172,7 +174,7 @@
         }
     }
 
-    // 仿微信纯白单选弹窗：选择主模型（彻底消灭原生丑陋 select 下拉列表）
+    // 仿微信纯白单选弹窗：选择主模型
     function openModelPickerModal(currentModel, availableModels, onSelected) {
         const modal = document.getElementById('modal');
         const modalBody = document.getElementById('modalBody');
@@ -294,7 +296,52 @@
         });
     }
 
-    // 🌟 全新【小手机全量记忆备份卡】生成与导出弹窗
+    // ============================================================
+    // 📇 PNG 底层 tEXt 块编码与 CRC32 校验工具（与角色卡相同规范）
+    // ============================================================
+    function calculateCrc32(buf) {
+        let table = window._mcytCrcTable;
+        if (!table) {
+            table = new Uint8Array(256);
+            for (let i = 0; i < 256; i++) {
+                let c = i;
+                for (let k = 0; k < 8; k++) {
+                    c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+                }
+                table[i] = c;
+            }
+            window._mcytCrcTable = table;
+        }
+        let crc = 0 ^ (-1);
+        for (let i = 0; i < buf.length; i++) {
+            crc = (crc >>> 8) ^ table[(crc ^ buf[i]) & 0xFF];
+        }
+        return (crc ^ (-1)) >>> 0;
+    }
+
+    function buildPngTextChunk(keyword, text) {
+        const keyBytes = new TextEncoder().encode(keyword);
+        const textBytes = new TextEncoder().encode(text);
+        const dataLen = keyBytes.length + 1 + textBytes.length;
+        const chunk = new Uint8Array(4 + 4 + dataLen + 4);
+
+        const view = new DataView(chunk.buffer);
+        view.setUint32(0, dataLen);
+        chunk[4] = 0x74; chunk[5] = 0x45; chunk[6] = 0x58; chunk[7] = 0x74; // 'tEXt'
+
+        let offset = 8;
+        chunk.set(keyBytes, offset);
+        offset += keyBytes.length;
+        chunk[offset++] = 0; // 零分隔符
+        chunk.set(textBytes, offset);
+        offset += textBytes.length;
+
+        const crcData = chunk.subarray(4, 8 + dataLen);
+        view.setUint32(offset, calculateCrc32(crcData));
+        return chunk;
+    }
+
+    // 🌟 全量记忆备份卡导出：直接下载到设备存储（使用 DataURL 避免 WebView 拦截）
     function openMemoryCardExportModal() {
         if (!window.G) {
             if (typeof showToast === 'function') showToast('游戏状态未就绪', 'error');
@@ -310,10 +357,9 @@
 
         const curDay = window.G.day || 1;
         const curName = window.G.player?.ytName || '主播';
-        const defaultFilename = `MCYT_Memory_Day${curDay}_${curName}`;
+        const defaultFilename = `MCYT_记忆卡_第${curDay}天_${curName}.png`;
 
         let currentCoverDataUrl = window.G.player?.avatarLive2d || window.G.player?.skin || '';
-        // 默认精美封面底图
         const fallbackCoverSvg = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" fill="%232b8a3e"/><circle cx="200" cy="160" r="70" fill="%23ffffff" opacity="0.9"/><text x="200" y="270" fill="%23ffffff" font-size="28" font-weight="bold" font-family="sans-serif" text-anchor="middle">MCYT MEMORY CARD</text><text x="200" y="310" fill="%23e0e0e0" font-size="18" font-family="sans-serif" text-anchor="middle">Day ' + curDay + ' · ' + encodeURIComponent(curName) + '</text></svg>';
 
         if (!currentCoverDataUrl || !currentCoverDataUrl.startsWith('data:image')) {
@@ -322,7 +368,7 @@
 
         modalBody.innerHTML = `
             <div style="font-size:12.5px;color:#666;margin-bottom:12px;line-height:1.5;">
-                将当前小手机的所有进度（人物属性、联系人、聊天历史、朋友圈、动态配图及小号）打包隐写编码为一张独立的「记忆备份卡」PNG 图片。
+                将当前小手机的所有人设、通讯录、完整聊天、朋友圈、动态配图及小号数据打包封装为标准的 PNG 记忆卡，直接下载保存。
             </div>
 
             <div style="display:flex;gap:12px;align-items:center;background:#f9f9f9;padding:10px;border-radius:10px;border:1px solid #eeeeee;margin-bottom:12px;">
@@ -331,7 +377,7 @@
                 </div>
                 <div style="flex:1;">
                     <div style="font-size:12.5px;font-weight:600;color:#222;margin-bottom:4px;">卡面封面图像</div>
-                    <div style="font-size:11px;color:#888;margin-bottom:6px;">支持任意相册图片作为封面</div>
+                    <div style="font-size:11px;color:#888;margin-bottom:6px;">默认使用当前皮套/形象，支持自选相册封面</div>
                     <button id="chooseCustomCardCoverBtn" style="padding:4px 10px;font-size:11px;border-radius:6px;border:1px solid #d0d0d0;background:#fff;color:#333;cursor:pointer;">更换封面图</button>
                     <input type="file" id="memoryCardCoverFileInput" accept="image/*" style="display:none;" />
                 </div>
@@ -345,13 +391,13 @@
             <div style="margin-bottom:14px;">
                 <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:#555;cursor:pointer;">
                     <input type="checkbox" id="memoryCardIncludeApiKeyToggle" style="accent-color:#07c160;" />
-                    <span>导出时连同当前 API 密钥一起保存（私密数据）</span>
+                    <span>导出时包含当前 API Key（私密数据）</span>
                 </label>
             </div>
 
             <div style="display:flex;gap:8px;justify-content:flex-end;">
                 <button onclick="closeModal()" style="padding:7px 14px;border-radius:6px;border:1px solid #e0e0e0;background:#f5f5f5;color:#666;font-size:12px;cursor:pointer;">取消</button>
-                <button id="doDownloadMemoryCardBtn" style="padding:7px 18px;border-radius:6px;border:none;background:#07c160;color:#fff;font-size:12px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
+                <button id="doDownloadMemoryCardBtn" style="padding:7px 20px;border-radius:6px;border:none;background:#07c160;color:#fff;font-size:12.5px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:4px;">
                     <span>下载记忆卡</span>
                 </button>
             </div>
@@ -383,14 +429,14 @@
                 const filenameInput = document.getElementById('memoryCardFilenameInput');
                 let finalFilename = (filenameInput?.value || '').trim() || defaultFilename;
                 if (!finalFilename.toLowerCase().endsWith('.png')) finalFilename += '.png';
+                finalFilename = finalFilename.replace(/[\\/:*?"<>|]/g, '_');
 
                 const includeKey = !!document.getElementById('memoryCardIncludeApiKeyToggle')?.checked;
 
                 downloadBtn.disabled = true;
-                downloadBtn.textContent = '正在编码记忆卡...';
+                downloadBtn.textContent = '正在封装记忆卡...';
 
                 try {
-                    // 获取全量存档
                     let payload;
                     if (typeof serializeGameState === 'function') {
                         payload = serializeGameState();
@@ -400,79 +446,100 @@
                         throw new Error('无法读取游戏当前数据');
                     }
 
-                    // 是否剔除 API 密钥
                     if (!includeKey && payload.ai) {
                         payload.ai = Object.assign({}, payload.ai, { apiKey: '' });
                     }
 
                     const fullCardData = {
                         app: 'MC_YouTube_Simulator',
-                        version: (typeof CURRENT_APP_VERSION !== 'undefined') ? CURRENT_APP_VERSION : '1.611',
+                        version: CURRENT_APP_VERSION,
                         timestamp: Date.now(),
                         day: window.G.day || 1,
                         author: window.G.player?.ytName || 'MC女主播',
                         data: payload
                     };
 
-                    // 优先调用底层 ImageBackup 生成 PNG，或者回退到通用 tEXt 写入
-                    if (window.ImageBackup && typeof window.ImageBackup.embedDataIntoPng === 'function') {
-                        // 将封面绘制到 Canvas 获得纯正 PNG 二进制
-                        const canvas = document.createElement('canvas');
-                        const img = new Image();
+                    const jsonStr = JSON.stringify(fullCardData);
+                    const base64Json = btoa(unescape(encodeURIComponent(jsonStr)));
+
+                    // 绘制底图 Canvas
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 400;
+                    canvas.height = 400;
+                    const ctx = canvas.getContext('2d');
+
+                    const img = new Image();
+                    if (!currentCoverDataUrl.startsWith('data:')) {
                         img.crossOrigin = 'anonymous';
-                        img.onload = () => {
-                            canvas.width = img.naturalWidth || 400;
-                            canvas.height = img.naturalHeight || 400;
-                            const ctx = canvas.getContext('2d');
-                            ctx.drawImage(img, 0, 0);
+                    }
+                    img.src = currentCoverDataUrl;
 
-                            canvas.toBlob(blob => {
-                                const fr = new FileReader();
-                                fr.onload = () => {
-                                    const u8 = new Uint8Array(fr.result);
-                                    const encodedU8 = window.ImageBackup.embedDataIntoPng(u8, 'mcyt_memory_card', JSON.stringify(fullCardData));
-                                    const cardBlob = new Blob([encodedU8], { type: 'image/png' });
-                                    
-                                    // 更新最后一次备份提醒基准
-                                    const rCfg = getBackupReminderConfig();
-                                    rCfg.lastBackupDay = window.G.day || 1;
-                                    rCfg.lastBackupTime = Date.now();
-                                    saveBackupReminderConfig(rCfg);
-
-                                    // 执行下载
-                                    const downloadUrl = URL.createObjectURL(cardBlob);
-                                    const a = document.createElement('a');
-                                    a.href = downloadUrl;
-                                    a.download = finalFilename;
-                                    document.body.appendChild(a);
-                                    a.click();
-                                    document.body.removeChild(a);
-                                    URL.revokeObjectURL(downloadUrl);
-
-                                    closeModal();
-                                    if (typeof showToast === 'function') showToast(`记忆卡 [${finalFilename}] 导出成功！`, 'success');
-                                };
-                                fr.readAsArrayBuffer(blob);
-                            }, 'image/png');
-                        };
+                    await new Promise((resolve) => {
+                        img.onload = resolve;
                         img.onerror = () => {
-                            throw new Error('卡面封面载入失败');
+                            img.removeAttribute('crossOrigin');
+                            img.src = fallbackCoverSvg;
+                            img.onload = resolve;
+                            img.onerror = resolve;
                         };
-                        img.src = currentCoverDataUrl;
-                    } else {
-                        // 降级导出 JSON 文本文件
-                        const blob = new Blob([JSON.stringify(fullCardData, null, 2)], { type: 'application/json' });
-                        const url = URL.createObjectURL(blob);
+                    });
+
+                    let arrayBuf;
+                    try {
+                        ctx.drawImage(img, 0, 0, 400, 400);
+                        const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+                        if (blob) arrayBuf = await blob.arrayBuffer();
+                    } catch (_) {}
+
+                    if (!arrayBuf) {
+                        ctx.fillStyle = '#07c160';
+                        ctx.fillRect(0, 0, 400, 400);
+                        ctx.fillStyle = '#ffffff';
+                        ctx.font = 'bold 36px sans-serif';
+                        ctx.textAlign = 'center';
+                        ctx.fillText('MCYT MEMORY CARD', 200, 200);
+                        const fBlob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+                        arrayBuf = await fBlob.arrayBuffer();
+                    }
+
+                    const srcBytes = new Uint8Array(arrayBuf);
+                    const view = new DataView(srcBytes.buffer);
+                    const ihdrLen = view.getUint32(8);
+                    const insertPos = 8 + 4 + 4 + ihdrLen + 4;
+
+                    const textChunk = buildPngTextChunk('mcyt_memory_card', base64Json);
+
+                    const out = new Uint8Array(srcBytes.length + textChunk.length);
+                    out.set(srcBytes.subarray(0, insertPos), 0);
+                    out.set(textChunk, insertPos);
+                    out.set(srcBytes.subarray(insertPos), insertPos + textChunk.length);
+
+                    const outBlob = new Blob([out], { type: 'image/png' });
+
+                    // 🚀 核心关键：转为 DataURL（兼容原生 Android WebView 直接下到 Download 目录）
+                    const reader = new FileReader();
+                    reader.onloadend = () => {
+                        const dataUrl = reader.result;
                         const a = document.createElement('a');
-                        a.href = url;
-                        a.download = finalFilename.replace(/\.png$/, '') + '.json';
+                        a.href = dataUrl;
+                        a.download = finalFilename;
                         document.body.appendChild(a);
                         a.click();
                         document.body.removeChild(a);
-                        URL.revokeObjectURL(url);
+
+                        // 更新备份周期记录
+                        const rCfg = getBackupReminderConfig();
+                        rCfg.lastBackupDay = window.G.day || 1;
+                        rCfg.lastBackupTime = Date.now();
+                        saveBackupReminderConfig(rCfg);
+
                         closeModal();
-                        if (typeof showToast === 'function') showToast('记忆数据已下载', 'success');
-                    }
+                        if (typeof showToast === 'function') {
+                            showToast(`✅ 记忆卡 [${finalFilename}] 已直接下载到存储目录！`, 'success', 3500);
+                        }
+                    };
+                    reader.readAsDataURL(outBlob);
+
                 } catch (err) {
                     console.error('导出记忆卡失败', err);
                     if (typeof showToast === 'function') showToast('导出记忆卡失败: ' + err.message, 'error');
@@ -513,22 +580,61 @@
         if (isPng) {
             const reader = new FileReader();
             reader.onload = (e) => {
-                const u8 = new Uint8Array(e.target.result);
+                const buf = e.target.result;
                 try {
-                    let extractedStr = null;
-                    if (window.ImageBackup && typeof window.ImageBackup.extractDataFromPng === 'function') {
-                        extractedStr = window.ImageBackup.extractDataFromPng(u8, 'mcyt_memory_card');
-                        if (!extractedStr) {
-                            // 尝试兼容老版本的 key
-                            extractedStr = window.ImageBackup.extractDataFromPng(u8, 'mcyt_save_data') || window.ImageBackup.extractDataFromPng(u8, 'chara');
+                    const view = new DataView(buf);
+                    if (view.getUint32(0) !== 0x89504E47) {
+                        throw new Error('不是标准的 PNG 格式图片');
+                    }
+
+                    let offset = 8;
+                    let foundJson = null;
+
+                    while (offset < buf.byteLength) {
+                        if (offset + 8 > buf.byteLength) break;
+                        const length = view.getUint32(offset);
+                        const type = [
+                            String.fromCharCode(view.getUint8(offset + 4)),
+                            String.fromCharCode(view.getUint8(offset + 5)),
+                            String.fromCharCode(view.getUint8(offset + 6)),
+                            String.fromCharCode(view.getUint8(offset + 7))
+                        ].join('');
+
+                        const dataOffset = offset + 8;
+                        if (type === 'tEXt' && dataOffset + length <= buf.byteLength) {
+                            const bytes = new Uint8Array(buf, dataOffset, length);
+                            let nullIdx = -1;
+                            for (let i = 0; i < bytes.length; i++) {
+                                if (bytes[i] === 0) { nullIdx = i; break; }
+                            }
+                            if (nullIdx !== -1) {
+                                const key = new TextDecoder('latin1').decode(bytes.subarray(0, nullIdx));
+                                const val = new TextDecoder('utf-8').decode(bytes.subarray(nullIdx + 1));
+                                if (key === 'mcyt_memory_card' || key === 'mcyt_save_data') {
+                                    foundJson = val;
+                                    break;
+                                }
+                            }
+                        }
+                        offset += 4 + 4 + length + 4;
+                    }
+
+                    if (!foundJson) {
+                        throw new Error('未在该图片中检测到记忆卡数据，请确认是否为记忆卡原图。');
+                    }
+
+                    let decodedStr = '';
+                    try {
+                        decodedStr = decodeURIComponent(escape(atob(foundJson)));
+                    } catch (_) {
+                        try {
+                            decodedStr = atob(foundJson);
+                        } catch (_) {
+                            decodedStr = foundJson;
                         }
                     }
 
-                    if (!extractedStr) {
-                        throw new Error('未在该图片中检测到记忆卡数据，请确认是否为导出的原图。');
-                    }
-
-                    const parsed = JSON.parse(extractedStr);
+                    const parsed = JSON.parse(decodedStr);
                     const realState = (parsed && parsed.data) ? parsed.data : parsed;
                     _applyMemoryCardToGame(realState);
                 } catch (err) {
@@ -575,7 +681,6 @@
                     if (typeof updateUI === 'function') updateUI();
                     if (typeof renderAllPanels === 'function') renderAllPanels();
 
-                    // 更新最后一次备份提醒基准
                     const rCfg = getBackupReminderConfig();
                     rCfg.lastBackupDay = window.G.day || 1;
                     rCfg.lastBackupTime = Date.now();
@@ -599,14 +704,13 @@
         if (title) title.textContent = '系统设置';
 
         const orbCfg = window.ErrorMonitor ? window.ErrorMonitor.getConfig() : { enabled: true, size: 46, shape: 'circle' };
-        const appVer = (typeof CURRENT_APP_VERSION !== 'undefined') ? CURRENT_APP_VERSION : '1.611';
+        const appVer = CURRENT_APP_VERSION;
         const aiCfg = getSafeAIConfig();
         const searchCfg = getSafeSearchConfig();
         const profiles = getAIProfiles();
         const activeProfileName = localStorage.getItem('mcyt_active_ai_profile_name') || '默认配置';
         const reminderCfg = getBackupReminderConfig();
 
-        // 取得向导当前方案展示标签
         let agentDisplayLabel = '跟随全局主模型';
         let agentDisplaySub = `主模型: ${aiCfg.model || '未设定'}`;
         const curAgentSetting = aiCfg.agentProfileName || aiCfg.agentModel || 'follow_global';
@@ -645,7 +749,7 @@
                     </button>
                 </div>
 
-                <!-- 🌟 分区 1：AI 模型配置面板 -->
+                <!-- 分区 1：AI 模型配置面板 -->
                 <div id="settingsTabContent_ai" class="settings-tab-content">
                     
                     <div style="background:#ffffff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.04);border:1px solid #eeeeee;">
@@ -654,7 +758,7 @@
                             <span style="font-size:11px;color:#07c160;background:#f0f9eb;padding:2px 8px;border-radius:10px;">方案: <b>${escapeHtml(activeProfileName)}</b></span>
                         </div>
                         <div style="font-size:11px;color:#888;margin-bottom:12px;">
-                            兼容 OpenAI 标准协议（DeepSeek、GPT-4o、Claude、Gemini、通义等）。
+                            标准 OpenAI 兼容协议（支持 DeepSeek、GPT-4o、Claude、Gemini、通义等）。
                         </div>
 
                         <div style="display:flex;flex-direction:column;gap:10px;">
@@ -668,7 +772,6 @@
                                 <input type="password" id="aiApiKeyInput" value="${escapeHtml(aiCfg.apiKey || '')}" placeholder="sk-..." style="width:100%;padding:8px 10px;border:1px solid #e0e0e0;border-radius:8px;font-size:12px;background:#fcfcfc;outline:none;box-sizing:border-box;">
                             </div>
 
-                            <!-- 游戏主模型点选器（替代原生丑陋 select） -->
                             <div>
                                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
                                     <span style="font-size:11.5px;font-weight:600;color:#555;">游戏主剧情模型</span>
@@ -680,7 +783,6 @@
                                 </div>
                             </div>
 
-                            <!-- 向导小助手独立模型方案绑定 -->
                             <div style="border-top:1px solid #f0f0f0;padding-top:10px;margin-top:2px;">
                                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
                                     <label style="font-size:11.5px;font-weight:600;color:#555;">智能向导独立方案</label>
@@ -695,7 +797,6 @@
                                 </div>
                             </div>
 
-                            <!-- 极简微信质感操作按钮栏 -->
                             <div style="display:grid;grid-template-columns:repeat(2, 1fr);gap:8px;margin-top:6px;">
                                 <button id="updateCurrentProfileBtn" style="padding:8px;font-size:12px;font-weight:600;background:#07c160;color:#fff;border:none;border-radius:8px;cursor:pointer;">更新该方案</button>
                                 <button id="saveAsNewProfileBtn" style="padding:8px;font-size:12px;background:#ffffff;color:#333;border:1px solid #e0e0e0;border-radius:8px;cursor:pointer;">另存为新方案</button>
@@ -705,7 +806,6 @@
                         </div>
                     </div>
 
-                    <!-- 配置方案管理（微信极简折叠卡片） -->
                     <div style="background:#ffffff;border-radius:12px;padding:12px 14px;box-shadow:0 1px 3px rgba(0,0,0,0.04);border:1px solid #eeeeee;">
                         <div id="profileArchiveHeader" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
                             <span style="font-size:12.5px;font-weight:600;color:#333;">已存配置方案 (${profiles.length + 1})</span>
@@ -798,7 +898,6 @@
 
                             <button id="saveSearchConfigBtn" style="width:100%;padding:9px;font-size:12px;font-weight:600;background:#07c160;color:#fff;border:none;border-radius:8px;cursor:pointer;">保存联网设置</button>
 
-                            <!-- 联网搜索实时测试台 -->
                             <div style="margin-top:14px;border-top:1px solid #f0f0f0;padding-top:12px;">
                                 <div style="font-size:12px;font-weight:600;color:#333;margin-bottom:6px;">搜索功能实时测试</div>
                                 <div style="display:flex;gap:6px;">
@@ -866,7 +965,6 @@
                 <!-- 分区 4：小手机全量记忆卡与系统维护 -->
                 <div id="settingsTabContent_system" class="settings-tab-content" style="display:none;">
                     
-                    <!-- 🌟 记忆备份卡核心操作区 -->
                     <div style="background:#ffffff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.04);border:1px solid #eeeeee;">
                         <div style="font-size:13.5px;font-weight:600;color:#181818;margin-bottom:4px;">小手机全量记忆卡</div>
                         <div style="font-size:11px;color:#888;margin-bottom:12px;">
@@ -884,7 +982,6 @@
                             </button>
                         </div>
 
-                        <!-- 定期备份提醒设置 -->
                         <div style="background:#f9f9f9;border-radius:8px;padding:10px 12px;border:1px solid #eee;">
                             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
                                 <span style="font-size:12px;font-weight:600;color:#333;">定期备份提醒周期</span>
@@ -931,7 +1028,6 @@
     }
 
     function bindSettingsAppEvents() {
-        // Tab 切换（原生微信白灰微绿状态切换）
         document.querySelectorAll('.settings-tab-btn').forEach(btn => {
             btn.onclick = () => {
                 const target = btn.dataset.tab;
@@ -952,7 +1048,6 @@
             };
         });
 
-        // 方案折叠卡片
         const archiveHeader = document.getElementById('profileArchiveHeader');
         const archiveBody = document.getElementById('profileArchiveBody');
         const archiveArrow = document.getElementById('profileArchiveArrow');
@@ -971,7 +1066,6 @@
         let currentAgentProfileChoice = getSafeAIConfig().agentProfileName || 'follow_global';
         let currentSelectedModel = getSafeAIConfig().model || 'gpt-4o-mini';
 
-        // 🌟 绑定游戏主模型单选弹窗（彻底取代丑陋 select）
         const triggerMainModelBtn = document.getElementById('triggerMainModelPickerBtn');
         if (triggerMainModelBtn) {
             triggerMainModelBtn.onclick = () => {
@@ -984,7 +1078,6 @@
             };
         }
 
-        // 绑定向导方案点选弹窗
         const triggerPickerBtn = document.getElementById('triggerAgentModelPickerBtn');
         if (triggerPickerBtn) {
             triggerPickerBtn.onclick = () => {
@@ -1017,7 +1110,6 @@
             };
         };
 
-        // 更新当前方案
         const updateSaveBtn = document.getElementById('updateCurrentProfileBtn');
         if (updateSaveBtn) {
             updateSaveBtn.onclick = () => {
@@ -1050,7 +1142,6 @@
             };
         }
 
-        // 另存为新方案
         const saveAsBtn = document.getElementById('saveAsNewProfileBtn');
         if (saveAsBtn) {
             saveAsBtn.onclick = () => {
@@ -1081,7 +1172,6 @@
             };
         }
 
-        // 连通性测试
         const testAiBtn = document.getElementById('testAiConnectBtn');
         if (testAiBtn) {
             testAiBtn.onclick = async () => {
@@ -1123,7 +1213,6 @@
             };
         }
 
-        // 拉取模型列表
         const fetchModelsBtn = document.getElementById('fetchModelsBtn');
         if (fetchModelsBtn) {
             fetchModelsBtn.onclick = async () => {
@@ -1154,7 +1243,6 @@
                         list.sort();
                         fullModelList = Array.from(new Set([...list, ...DEFAULT_MODEL_PRESETS]));
                         if (typeof showToast === 'function') showToast(`成功发现 ${list.length} 个可用模型`, 'success');
-                        // 自动唤出单选弹窗供用户挑拣
                         openModelPickerModal(currentSelectedModel, fullModelList, (picked) => {
                             currentSelectedModel = picked;
                             const displayEl = document.getElementById('mainModelPickerDisplay');
@@ -1171,13 +1259,11 @@
             };
         }
 
-        // 配置文本备份
         const backupBtn = document.getElementById('backupConfigModalBtn');
         if (backupBtn) {
             backupBtn.onclick = () => openConfigBackupModal();
         }
 
-        // 联网搜索设置
         const searchToggle = document.getElementById('searchEnableToggle');
         const searchToggleText = document.getElementById('searchEnableText');
         const searchConfigBody = document.getElementById('searchConfigBody');
@@ -1234,7 +1320,6 @@
             };
         }
 
-        // 联网搜索测试
         const testSearchBtn = document.getElementById('executeWebSearchTestBtn');
         const testSearchQuery = document.getElementById('webSearchTestQueryInput');
         const testSearchResultBox = document.getElementById('webSearchTestResultBox');
@@ -1281,7 +1366,6 @@
             };
         }
 
-        // 悬浮球开关与尺寸
         const orbToggle = document.getElementById('orbMasterToggle');
         const orbToggleText = document.getElementById('orbToggleText');
         const detailBox = document.getElementById('orbConfigDetailBox');
@@ -1367,7 +1451,6 @@
             logBtn.onclick = () => window.ErrorMonitor.openLogModal();
         }
 
-        // 🌟 记忆卡导出/导入按钮绑定
         const exportCardBtn = document.getElementById('triggerExportMemoryCardBtn');
         if (exportCardBtn) {
             exportCardBtn.onclick = () => openMemoryCardExportModal();
@@ -1378,7 +1461,6 @@
             importCardBtn.onclick = () => openMemoryCardImportModal();
         }
 
-        // 备份周期药丸切换
         document.querySelectorAll('.backup-remind-pill').forEach(pill => {
             pill.onclick = () => {
                 const days = parseInt(pill.dataset.days) || 0;
@@ -1412,7 +1494,6 @@
         }
     }
 
-    // 方案切换
     window.switchAIProfile = function(name) {
         if (name === '默认配置') {
             localStorage.setItem('mcyt_active_ai_profile_name', '默认配置');
@@ -1439,7 +1520,6 @@
         if (typeof showToast === 'function') showToast(`已切换至方案: ${target.name}`, 'success');
     };
 
-    // 方案删除
     window.deleteAIProfile = function(name) {
         openWechatConfirmModal('删除方案', `确定要删除配置方案 [${name}] 吗？`, () => {
             let list = getAIProfiles().filter(p => p.name !== name);
@@ -1452,7 +1532,6 @@
         });
     };
 
-    // 配置文本备份恢复弹窗（微信白灰风格）
     function openConfigBackupModal() {
         const modal = document.getElementById('modal');
         const modalBody = document.getElementById('modalBody');
@@ -1537,7 +1616,6 @@
         };
     }
 
-    // 检查并提示备份
     window.checkBackupReminderOnDayAdvance = function() {
         if (!window.G || window.G.phase !== 'playing') return;
         const cfg = getBackupReminderConfig();
