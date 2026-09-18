@@ -100,7 +100,7 @@
                             <div class="app-slot" id="appSlotMoments" onclick="openPhoneApp('moments')">
                                 <div class="app-icon-box" style="background: linear-gradient(135deg, #ff8787, #e03131);">
                                     <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
-                                        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                                        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
                                     </svg>
                                 </div>
                                 <div class="app-title-label">朋友圈</div>
@@ -239,14 +239,14 @@
             <div id="gamePage" style="display:none;"></div>
         </div>
 
-        <!-- 全站通用弹窗基座 -->
-        <div class="modal-overlay" id="modal">
-            <div class="modal-box retro-pink-window" id="modalContent">
-                <div class="retro-pink-titlebar">
-                    <span id="retroModalTitle">系统提示</span>
-                    <button class="retro-pink-btn close-btn" id="modalClose">✕</button>
+        <!-- 全站通用弹窗基座（升级为仿微信原生白灰极简质感，100%保留所有原始ID确保脚本与事件调用稳定） -->
+        <div class="modal-overlay" id="modal" style="background: rgba(0,0,0,0.45) !important; backdrop-filter: blur(2px) !important;">
+            <div class="modal-box retro-pink-window" id="modalContent" style="background: #ffffff !important; border: none !important; border-radius: 12px !important; box-shadow: 0 10px 30px rgba(0,0,0,0.18) !important; padding: 0 !important; overflow: hidden !important; max-width: 320px !important; width: 90% !important; font-family: -apple-system, sans-serif !important;">
+                <div class="retro-pink-titlebar" style="background: #ffffff !important; border-bottom: 0.5px solid #f0f0f0 !important; padding: 14px 16px !important; display: flex !important; justify-content: space-between !important; align-items: center !important;">
+                    <span id="retroModalTitle" style="font-size: 15.5px !important; font-weight: 600 !important; color: #181818 !important; letter-spacing: 0.2px !important;">系统提示</span>
+                    <button class="retro-pink-btn close-btn" id="modalClose" style="background: #f4f4f4 !important; border: none !important; border-radius: 50% !important; width: 24px !important; height: 24px !important; display: flex !important; align-items: center !important; justify-content: center !important; color: #888888 !important; font-size: 13px !important; cursor: pointer !important; padding: 0 !important; line-height: 1 !important;">✕</button>
                 </div>
-                <div class="retro-pink-content" id="modalBody"></div>
+                <div class="retro-pink-content" id="modalBody" style="padding: 16px !important; font-size: 13.5px !important; color: #333333 !important; line-height: 1.5 !important; max-height: 65vh !important; overflow-y: auto !important; background: #ffffff !important;"></div>
             </div>
         </div>
     </div>
@@ -291,6 +291,7 @@
     <script src="js/apps/chat/chat-moments.js"></script>
     <script src="js/apps/chat/chat-prompt-engine.js"></script>
     <script src="js/apps/chat/chat-group.js"></script>
+    <script src="js/apps/chat/chat-card.js"></script>
     <script src="js/apps/chat/chat-app.js"></script>
 
     <script>
