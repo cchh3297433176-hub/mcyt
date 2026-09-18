@@ -5,8 +5,8 @@
  * 1. 玩家三维人设档案（线上主播 / 线下现实作息 / MC游戏皮肤）与个性签名
  * 2. assets/avatars/ 头像子目录架构，支持本地相册选取头像与图库随机
  * 3. 国家与地区实时检索筛选器、时区偏移换算、中国真实时间跟随询问
- * 4. 账号多马甲管理：小号独立通讯录、小号注册/改名/个性签名/换头像
- * 5. 专属双轨防丢持久化引擎
+ * 4. 账号多马甲管理：小号独立通讯录、小号注册/改名/个性签名/换头像、小号新好友申请红点提示
+ * 5. 专属双轨防丢持久化引擎与微信原生风格弹窗
  */
 
 (function() {
@@ -102,6 +102,15 @@
     window.restoreWechatProfileData = restoreAccountsFromStorage;
     restoreAccountsFromStorage();
 
+    // 计算某个账号未处理的好友申请数量
+    function getAccountPendingReqCount(accId) {
+        if (!window.G || !Array.isArray(window.G.friendRequests)) return 0;
+        return window.G.friendRequests.filter(r => {
+            const target = r.targetAccountId || 'main';
+            return target === accId;
+        }).length;
+    }
+
     // ============================================================
     // 👤 当前激活账号信息读取
     // ============================================================
@@ -144,7 +153,7 @@
     window.getActiveAccountInfo = getActiveAccountInfo;
 
     // ============================================================
-    // 🖥️ 渲染「我」页面 HTML
+    // 🖥️ 渲染「我」页面 HTML（带小号红点提示）
     // ============================================================
     function buildProfileTabHTML() {
         const curAcc = getActiveAccountInfo();
@@ -156,14 +165,23 @@
         alts.forEach(alt => {
             const isUsing = window.G.currentAccountId === alt.id;
             const altSig = alt.signature ? escapeHtml(alt.signature) : '未设置个性签名';
+            const pendingCount = getAccountPendingReqCount(alt.id);
+
             altsListHtml += `
             <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#f9fafb;border-radius:8px;border:0.5px solid #e5e7eb;margin-bottom:6px;">
                 <div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1;">
-                    <img src="${alt.avatar || 'assets/icons/chat.png'}" style="width:38px;height:38px;border-radius:6px;object-fit:cover;flex-shrink:0;" onerror="this.src='assets/icons/chat.png';" />
+                    <div style="position:relative;width:38px;height:38px;flex-shrink:0;">
+                        <img src="${alt.avatar || 'assets/icons/chat.png'}" style="width:100%;height:100%;border-radius:6px;object-fit:cover;" onerror="this.src='assets/icons/chat.png';" />
+                        ${pendingCount > 0 ? `
+                        <span style="position:absolute;top:-4px;right:-4px;background:#fa5151;color:#fff;font-size:9.5px;font-weight:700;padding:1px 5px;border-radius:9px;border:1.5px solid #fff;line-height:1.1;">
+                            ${pendingCount}
+                        </span>` : ''}
+                    </div>
                     <div style="min-width:0;flex:1;">
                         <div style="font-size:13px;font-weight:600;color:#1f2937;display:flex;align-items:center;gap:4px;">
                             <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px;">${escapeHtml(alt.name)}</span>
                             <span style="font-size:10px;background:#e5e7eb;color:#4b5563;padding:1px 4px;border-radius:3px;font-weight:normal;">小号</span>
+                            ${pendingCount > 0 ? `<span style="font-size:10px;color:#fa5151;font-weight:500;">新申请</span>` : ''}
                         </div>
                         <div style="font-size:11px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px;">
                             ${altSig}
@@ -181,6 +199,7 @@
         });
 
         const currentSigText = curAcc.signature ? escapeHtml(curAcc.signature) : '未设置个性签名';
+        const mainPendingCount = getAccountPendingReqCount('main');
 
         return `
         <div style="background:#ededed;min-height:100%;padding-bottom:30px;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Helvetica,sans-serif;">
@@ -266,11 +285,15 @@
                 <!-- 主号项 -->
                 <div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;background:#f9fafb;border-radius:8px;border:0.5px solid #e5e7eb;margin-bottom:6px;">
                     <div style="display:flex;align-items:center;gap:10px;min-width:0;flex:1;">
-                        <img src="${p.avatar || 'assets/icons/chat.png'}" style="width:38px;height:38px;border-radius:6px;object-fit:cover;flex-shrink:0;" onerror="this.src='assets/icons/chat.png';" />
+                        <div style="position:relative;width:38px;height:38px;flex-shrink:0;">
+                            <img src="${p.avatar || 'assets/icons/chat.png'}" style="width:100%;height:100%;border-radius:6px;object-fit:cover;" onerror="this.src='assets/icons/chat.png';" />
+                            ${mainPendingCount > 0 ? `<span style="position:absolute;top:-4px;right:-4px;background:#fa5151;color:#fff;font-size:9.5px;font-weight:700;padding:1px 5px;border-radius:9px;border:1.5px solid #fff;line-height:1.1;">${mainPendingCount}</span>` : ''}
+                        </div>
                         <div style="min-width:0;flex:1;">
                             <div style="font-size:13px;font-weight:600;color:#1f2937;display:flex;align-items:center;gap:4px;">
                                 <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px;">${escapeHtml(p.ytName || '主播大号')}</span>
                                 <span style="font-size:10px;background:#e8f8f0;color:#07c160;padding:1px 4px;border-radius:3px;">主号</span>
+                                ${mainPendingCount > 0 ? `<span style="font-size:10px;color:#fa5151;font-weight:500;">新申请</span>` : ''}
                             </div>
                             <div style="font-size:11px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:2px;">
                                 ${p.signature ? escapeHtml(p.signature) : '未设置个性签名'}
@@ -289,7 +312,7 @@
     window.buildProfileTabHTML = buildProfileTabHTML;
 
     // ============================================================
-    // 微信拟真通用对话框助手（告别粉白遮罩与丑陋原生弹窗）
+    // 微信拟真通用对话框助手（纯正微信白灰绿质感）
     // ============================================================
     function showWechatStyleModal(htmlContent) {
         const exist = document.getElementById('wechatProfileInnerModal');
@@ -326,7 +349,7 @@
             <div style="padding:24px 20px 20px;text-align:center;">
                 <div style="font-size:16px;font-weight:600;color:#181818;margin-bottom:8px;">设置已保存</div>
                 <div style="font-size:13px;color:#888;line-height:1.5;margin-bottom:20px;">
-                    人设档案已更新并自动持久化，角色在后续互动中将自然呼应。
+                    人设档案已更新并自动持久化。
                 </div>
                 <button type="button" onclick="window.closeWechatStyleModal()" style="width:100%;padding:10px 0;background:#07c160;color:#fff;border:none;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;">
                     确定
@@ -337,11 +360,8 @@
         if (typeof autoSaveGame === 'function') autoSaveGame();
     };
 
-    // ============================================================
-    // ✍️ 修改个性签名弹窗（支持大号与小号）
-    // ============================================================
+    // ✍️ 修改个性签名弹窗
     window.openChangeSignatureModal = function(targetAccountId) {
-        const curAcc = getActiveAccountInfo();
         let oldSig = '';
         if (targetAccountId === 'main') {
             oldSig = window.G.player?.signature || '';
@@ -377,9 +397,7 @@
         };
     };
 
-    // ============================================================
     // 🌐 国家与地区检索选择器
-    // ============================================================
     window.openRegionSearchModal = function() {
         let currentList = [...PRESET_REGIONS];
 
@@ -402,7 +420,7 @@
                     <span onclick="window.closeWechatStyleModal()" style="font-size:14px;color:#888;cursor:pointer;">关闭</span>
                 </div>
                 <div style="padding:10px 14px;background:#fff;">
-                    <input type="text" id="regionSearchInput" placeholder="输入国家名称或拼音快速搜索..." style="width:100%;padding:7px 10px;border-radius:6px;border:1px solid #e0e0e0;background:#f7f7f7;font-size:12.5px;box-sizing:border-box;outline:none;">
+                    <input type="text" id="regionSearchInput" placeholder="输入国家名称快速搜索..." style="width:100%;padding:7px 10px;border-radius:6px;border:1px solid #e0e0e0;background:#f7f7f7;font-size:12.5px;box-sizing:border-box;outline:none;">
                 </div>
                 <div id="regionListContainer" style="max-height:240px;overflow-y:auto;background:#fff;">
                     ${renderList(currentList)}
@@ -464,9 +482,7 @@
         if (typeof autoSaveGame === 'function') autoSaveGame();
     };
 
-    // ============================================================
     // 🖼️ 头像更换与改名（仿微信 ActionSheet 质感）
-    // ============================================================
     window.openChangeAvatarOptionsModal = function(targetAccountId) {
         showWechatStyleModal(`
             <div style="text-align:center;padding:18px 16px;">
@@ -558,7 +574,6 @@
         if (typeof autoSaveGame === 'function') autoSaveGame();
     };
 
-    // 优雅注销小号确认窗（告别原生 alert / confirm）
     window.confirmDeleteAltAccount = function(altId, altName) {
         showWechatStyleModal(`
             <div style="padding:22px 18px 18px;text-align:center;">

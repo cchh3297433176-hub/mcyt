@@ -1,6 +1,6 @@
 /**
  * js/apps/chat/chat-app.js
- * 💬 微信独立主应用（仿微信白灰绿质感 · 个性签名支持 · 双语即时翻译 · 拟真语音条 · 三种发图模式完整恢复 · 经典翻转卡片/微信框 · 真表情调用 · 撤回单次偷窥脱敏 · 长按引用与编辑 · Token统计 · 动态转发与名片推荐 · 加号5项完整功能 · 大小号好友物理隔离 · 极简名片与角色独立备注齿轮设置）
+ * 💬 微信独立主应用（仿微信白灰绿质感 · 个性签名支持 · 双语即时翻译 · 拟真语音条 · 三种发图模式 · 经典翻转卡片/微信框 · 真表情调用 · 撤回单次偷窥脱敏 · 长按引用与编辑 · Token统计 · 动态转发与名片推荐 · 加号聊天折叠设置与长消息折叠渲染 · 大小号好友物理隔离与申请红点 · 极简名片与独立备注齿轮）
  */
 
 (function() {
@@ -10,6 +10,29 @@
     window._stickerDrawerOpen = false;
     window._plusDrawerOpen = false;
     window._activeQuoteMessage = null;
+    window._chatExpandAllMap = {}; // 记录哪些会话被用户主动临时展开了历史记录
+
+    // 读取或初始化折叠配置
+    function getChatCollapseConfig() {
+        if (!window.G) window.G = {};
+        if (!window.G.chatCollapseConfig) {
+            try {
+                const saved = localStorage.getItem('mcyt_chat_collapse_config');
+                window.G.chatCollapseConfig = saved ? JSON.parse(saved) : { enabled: true, limit: 50 };
+            } catch (_) {
+                window.G.chatCollapseConfig = { enabled: true, limit: 50 };
+            }
+        }
+        return window.G.chatCollapseConfig;
+    }
+
+    function saveChatCollapseConfig(cfg) {
+        if (!window.G) window.G = {};
+        window.G.chatCollapseConfig = cfg;
+        try {
+            localStorage.setItem('mcyt_chat_collapse_config', JSON.stringify(cfg));
+        } catch (_) {}
+    }
 
     // 微信"消息"主列表构建（严格按照当前账号隔离好友列表，支持备注名展示）
     function buildChatListHTML() {
@@ -58,7 +81,6 @@
             });
 
             return rows.map(({ npc, preview, timeLabel, blocked, isDating }) => {
-                // 聊天主列表：优先显示备注名
                 const displayName = npc.remark ? npc.remark : (npc.name || npc.id);
                 return `
                 <div class="chat-item" data-npc-id="${npc.id}" style="display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:0.5px solid #ededed;cursor:pointer;background:#fff;">
@@ -145,9 +167,13 @@
             return;
         }
 
+        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
         let mainContentHtml = '';
         let topBarHtml = '';
-        const pendingCount = (window.G.friendRequests || []).length + (window.G.groupInvites || []).length;
+
+        // 计算针对当前账号的待处理申请数
+        const pendingFriendReqCount = (window.G.friendRequests || []).filter(r => (r.targetAccountId || 'main') === curAcc.id).length;
+        const pendingCount = pendingFriendReqCount + (window.G.groupInvites || []).length;
         const isDirect = window.G.chatActiveTab !== 'group';
 
         if (_activeBottomTab === 'chats') {
@@ -199,6 +225,9 @@
             mainContentHtml = (typeof buildProfileTabHTML === 'function') ? buildProfileTabHTML() : '<div style="padding:40px;text-align:center;color:#999;">人设模块加载中...</div>';
         }
 
+        // 计算所有小号是否有未处理请求，用于“我”Tab小红点
+        const totalOtherReqCount = (window.G.friendRequests || []).filter(r => (r.targetAccountId || 'main') !== curAcc.id).length;
+
         const bottomNavHtml = `
             <div style="height:52px;background:#f7f7f7;border-top:0.5px solid #dcdcdc;display:flex;justify-content:space-around;align-items:center;flex-shrink:0;box-sizing:border-box;">
                 <button onclick="window.switchWechatBottomTab('chats')" style="border:none;background:none;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;color:${_activeBottomTab === 'chats' ? '#07c160' : '#888888'};">
@@ -209,9 +238,10 @@
                     <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor;"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3"/></svg>
                     <span style="font-size:10.5px;font-weight:${_activeBottomTab === 'moments' ? '600' : 'normal'};">动态</span>
                 </button>
-                <button onclick="window.switchWechatBottomTab('profile')" style="border:none;background:none;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;color:${_activeBottomTab === 'profile' ? '#07c160' : '#888888'};">
+                <button onclick="window.switchWechatBottomTab('profile')" style="position:relative;border:none;background:none;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;color:${_activeBottomTab === 'profile' ? '#07c160' : '#888888'};">
                     <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor;"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
                     <span style="font-size:10.5px;font-weight:${_activeBottomTab === 'profile' ? '600' : 'normal'};">我</span>
+                    ${totalOtherReqCount > 0 ? `<span style="position:absolute;top:0;right:8px;width:7px;height:7px;background:#fa5151;border-radius:50%;"></span>` : ''}
                 </button>
             </div>
         `;
@@ -254,7 +284,8 @@
     };
 
     window.openAddChatTargetModal = function() {
-        const reqCount = (window.G.friendRequests || []).length + (window.G.groupInvites || []).length;
+        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
+        const reqCount = (window.G.friendRequests || []).filter(r => (r.targetAccountId || 'main') === curAcc.id).length + (window.G.groupInvites || []).length;
         let mask = document.createElement('div');
         mask.className = 'wechat-action-sheet-mask';
         mask.innerHTML = `
@@ -268,7 +299,7 @@
         document.body.appendChild(mask);
     };
 
-    // 添加联系人（支持个性签名与备注）
+    // 添加联系人
     window.openCreateCustomNpcModal = function() {
         document.querySelector('.wechat-action-sheet-mask')?.remove();
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '我' };
@@ -398,26 +429,27 @@
 
     window.openSocialRequestsModal = function() {
         document.querySelector('.wechat-action-sheet-mask')?.remove();
-        const fReqs = window.G.friendRequests || [];
+        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
+        const fReqs = (window.G.friendRequests || []).filter(r => (r.targetAccountId || 'main') === curAcc.id);
         const gInvs = window.G.groupInvites || [];
 
         if (fReqs.length === 0 && gInvs.length === 0) {
-            window.openWechatCleanModal('申请与邀请', `<div style="text-align:center;color:#999;padding:20px 0;font-size:13px;">暂无新的申请或群邀请</div>`, () => {});
+            window.openWechatCleanModal('申请与邀请', `<div style="text-align:center;color:#999;padding:20px 0;font-size:13px;">当前账号暂无新的申请或邀请</div>`, () => {});
             return;
         }
 
         let bodyHtml = '<div style="max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;">';
 
-        fReqs.forEach((r, idx) => {
+        fReqs.forEach((r) => {
             bodyHtml += `
             <div style="display:flex;align-items:center;justify-content:space-between;padding:8px;background:#f9f9f9;border-radius:6px;">
-                <div style="font-size:12.5px;color:#181818;">
-                    <b>${escapeHtml(r.name || '玩家')}</b> 请求添加好友<br>
-                    <span style="font-size:11px;color:#888;">${escapeHtml(r.reason || '想跟你一起玩MC')}</span>
+                <div style="font-size:12.5px;color:#181818;min-width:0;flex:1;padding-right:6px;">
+                    <b>${escapeHtml(r.name || '角色')}</b> 请求添加当前账号<br>
+                    <span style="font-size:11px;color:#888;">${escapeHtml(r.reason || '通过名片推荐申请添加好友')}</span>
                 </div>
-                <div style="display:flex;gap:6px;">
-                    <button onclick="window.handleFriendRequestAction(${idx}, true)" style="border:none;background:#07c160;color:#fff;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;">接受</button>
-                    <button onclick="window.handleFriendRequestAction(${idx}, false)" style="border:none;background:#e5e5e5;color:#555;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;">忽略</button>
+                <div style="display:flex;gap:6px;flex-shrink:0;">
+                    <button onclick="window.handleFriendRequestActionById('${r.id}', true)" style="border:none;background:#07c160;color:#fff;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;">接受</button>
+                    <button onclick="window.handleFriendRequestActionById('${r.id}', false)" style="border:none;background:#e5e5e5;color:#555;padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;">忽略</button>
                 </div>
             </div>`;
         });
@@ -440,38 +472,42 @@
         window.openWechatCleanModal('新的申请与邀请', bodyHtml, () => {});
     };
 
-    window.handleFriendRequestAction = function(idx, accept) {
-        document.querySelector('.wechat-action-sheet-mask')?.remove();
+    window.handleFriendRequestActionById = function(reqId, accept) {
+        document.querySelector('.wechat-clean-modal-mask')?.remove();
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
-        const req = (window.G.friendRequests || [])[idx];
-        if (req) {
-            if (accept) {
-                const nid = 'npc_req_' + Date.now();
-                if (!window.G.npcs) window.G.npcs = {};
-                window.G.npcs[nid] = {
-                    id: nid,
-                    name: req.name || '新好友',
-                    remark: '',
-                    region: '中国',
-                    persona: req.persona || '一位热情的游戏粉丝。',
-                    signature: '',
-                    favor: 50,
-                    relationshipStage: 'friend',
-                    avatarUrl: window.getRandomAvatar(),
-                    isCustom: true,
-                    ownerAccountId: curAcc.id
-                };
-                window.syncCustomNpcsToLocalBackup();
-                if (typeof showToast === 'function') showToast('已添加新好友', 'success', 1200);
-            }
-            window.G.friendRequests.splice(idx, 1);
-            if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
-            renderChatApp();
+        const idx = (window.G.friendRequests || []).findIndex(r => r.id === reqId);
+        if (idx === -1) return;
+
+        const req = window.G.friendRequests[idx];
+        if (accept) {
+            const nid = req.applicantNpcId || ('npc_' + Date.now());
+            if (!window.G.npcs) window.G.npcs = {};
+            
+            // 绑定到当前小号独立通讯录
+            window.G.npcs[nid] = {
+                id: nid,
+                name: req.name || '新好友',
+                remark: '',
+                region: req.region || '中国',
+                persona: req.persona || '通过名片添加的好友。',
+                signature: req.signature || '',
+                favor: req.favor || 50,
+                relationshipStage: 'friend',
+                avatarUrl: req.avatar || window.getRandomAvatar(),
+                isCustom: true,
+                ownerAccountId: curAcc.id
+            };
+            window.syncCustomNpcsToLocalBackup();
+            if (typeof showToast === 'function') showToast('已添加到通讯录', 'success', 1200);
         }
+
+        window.G.friendRequests.splice(idx, 1);
+        if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+        renderChatApp();
     };
 
     window.handleGroupInviteAction = function(idx, accept) {
-        document.querySelector('.wechat-action-sheet-mask')?.remove();
+        document.querySelector('.wechat-clean-modal-mask')?.remove();
         const inv = (window.G.groupInvites || [])[idx];
         if (inv) {
             if (accept) {
@@ -493,29 +529,22 @@
         }
     };
 
-    // ============================================================
-    // 📇 角色名片页（微信极简原生UI · 仅头像名字签名好感地区 · 右上角齿轮）
-    // ============================================================
+    // 📇 角色名片页
     window.openNpcProfileCardModal = function(npcId) {
         const npc = window.G.npcs[npcId];
         if (!npc) return;
 
         const isDating = window.ChatPromptEngine && window.ChatPromptEngine.isNpcInDatingRelationship(npc);
         const sigText = npc.signature ? escapeHtml(npc.signature) : '未设置个性签名';
-
-        // 名字展示规则：若有备注，大字显示备注名，下方括号注明原名；若无备注，直接显示原名
         const hasRemark = !!(npc.remark && npc.remark.trim());
         const primaryName = hasRemark ? escapeHtml(npc.remark.trim()) : escapeHtml(npc.name || npc.id);
         const subNameHtml = hasRemark ? `<div style="font-size:12px;color:#888888;margin-top:2px;">原名：${escapeHtml(npc.name || '')}</div>` : '';
-
-        // 好感度状态文字
         const favorText = `${npc.favor || 50} (${isDating ? '恋人' : (npc.favor >= 80 ? '暧昧期' : '朋友')})`;
 
         let mask = document.createElement('div');
         mask.className = 'wechat-clean-modal-mask';
         mask.innerHTML = `
             <div class="wechat-clean-modal-card" style="max-width:320px;padding:20px 18px;position:relative;background:#ffffff;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.12);box-sizing:border-box;">
-                <!-- 右上角简约矢量齿轮按钮 -->
                 <button type="button" id="btnNpcCardGear" title="资料设置" style="position:absolute;top:14px;right:14px;border:none;background:none;width:30px;height:30px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;color:#707070;">
                     <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;">
                         <circle cx="12" cy="12" r="3"></circle>
@@ -523,7 +552,6 @@
                     </svg>
                 </button>
 
-                <!-- 头像与姓名区域 -->
                 <div style="display:flex;align-items:center;gap:14px;padding-bottom:16px;border-bottom:0.5px solid #f0f0f0;margin-bottom:14px;padding-right:28px;">
                     <div style="position:relative;width:56px;height:56px;flex-shrink:0;cursor:pointer;" onclick="window.triggerChangeNpcAvatar('${npcId}')" title="点击更换头像">
                         <img id="npcCardAvatarDisplay" src="${npc.avatarUrl || window.getRandomAvatar()}" style="width:100%;height:100%;border-radius:8px;object-fit:cover;" onerror="this.src='assets/icons/chat.png';" />
@@ -539,7 +567,6 @@
                     </div>
                 </div>
 
-                <!-- 极简信息列表：个性签名、地区、好感度 -->
                 <div style="display:flex;flex-direction:column;gap:12px;margin-bottom:18px;font-size:13px;color:#222;">
                     <div style="display:flex;align-items:flex-start;gap:10px;">
                         <span style="color:#888;flex-shrink:0;min-width:44px;">签名</span>
@@ -555,7 +582,6 @@
                     </div>
                 </div>
 
-                <!-- 底部操作按钮 -->
                 <div style="display:flex;flex-direction:column;gap:8px;">
                     <button type="button" id="btnNpcCardSendMsg" style="border:none;background:#07c160;color:#fff;padding:9px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;text-align:center;">
                         发消息
@@ -578,9 +604,7 @@
         };
     };
 
-    // ============================================================
-    // ⚙️ 角色资料设置弹窗（点击齿轮呼出 · 仿微信白灰极简风格）
-    // ============================================================
+    // ⚙️ 角色资料设置弹窗
     window.openNpcSettingsModal = function(npcId) {
         const npc = window.G.npcs[npcId];
         if (!npc) return;
@@ -658,7 +682,6 @@
             if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
             if (typeof showToast === 'function') showToast('资料已保存', 'success', 1200);
 
-            // 重新刷新名片及聊天界面
             window.openNpcProfileCardModal(npcId);
             if (window.G.currentChatNpc === npcId) {
                 renderSingleChatWindow();
@@ -757,7 +780,6 @@
         if (typeof showToast === 'function') showToast('已更换头像', 'success', 1000);
     };
 
-    // ⚡️ 局部 DOM 微操作：双语点击即时翻译
     window.toggleMessageTranslationDirect = function(el, msgId) {
         const box = document.getElementById(`transBox_${msgId}`);
         const btn = document.getElementById(`transBtn_${msgId}`);
@@ -771,22 +793,25 @@
         }
     };
 
-    // ⚡️ 局部 DOM 微操作：语音条声学展开/折叠
     window.toggleVoiceMessageDetailsDirect = function(msgId) {
         const box = document.getElementById(`voiceDescBox_${msgId}`);
         if (!box) return;
         box.style.display = (box.style.display === 'none' || !box.style.display) ? 'block' : 'none';
     };
 
-    // ⚡️ 点击翻转卡片：切换正面图片与背面描绘
     window.toggleCardFlipDirect = function(msgId) {
         const card = document.getElementById(`flipCard_${msgId}`);
         if (!card) return;
         card.classList.toggle('is-flipped');
     };
 
+    window.toggleChatHistoryExpand = function(key) {
+        window._chatExpandAllMap[key] = !window._chatExpandAllMap[key];
+        renderSingleChatWindow();
+    };
+
     // ============================================================
-    // 💬 单人私聊窗口渲染（顶栏支持备注名与小括号原名）
+    // 💬 单人私聊窗口渲染（带消息折叠与防卡顿优化）
     // ============================================================
     function renderSingleChatWindow(container) {
         if (!container) container = document.getElementById('appModalBody') || document.getElementById('socialTab');
@@ -808,11 +833,39 @@
         const tokenDisplay = window.formatTokenString(tokensCount);
         const isGenerating = !!window._MCYT_CHAT_GENERATING[npcId];
 
-        // 顶栏名字规则：有备注显示「备注名 (原名)」，无备注显示「原名」
         const topHeaderTitle = (npc.remark && npc.remark.trim()) ? `${npc.remark.trim()} (${npc.name})` : (npc.name || npc.id);
 
-        let messagesHtml = '';
-        for (const msg of chatHist) {
+        // 聊天记录折叠逻辑处理
+        const collapseCfg = getChatCollapseConfig();
+        const chatKey = `single_${npcId}_${curAcc.id}`;
+        const isExpanded = !!window._chatExpandAllMap[chatKey];
+
+        let visibleMessages = chatHist;
+        let collapseBannerHtml = '';
+
+        if (collapseCfg.enabled && chatHist.length > collapseCfg.limit && !isExpanded) {
+            const hiddenCount = chatHist.length - collapseCfg.limit;
+            visibleMessages = chatHist.slice(-collapseCfg.limit);
+            collapseBannerHtml = `
+                <div style="text-align:center;margin:10px 0 16px;">
+                    <span onclick="window.toggleChatHistoryExpand('${chatKey}')" style="display:inline-flex;align-items:center;gap:4px;background:#e5e5e5;color:#555;padding:4px 12px;border-radius:12px;font-size:11px;cursor:pointer;user-select:none;">
+                        <svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:currentColor;"><path d="M12 8l-6 6 1.41 1.41L12 10.83l4.59 4.58L18 14z"/></svg>
+                        已折叠早前 ${hiddenCount} 条消息，点击展开
+                    </span>
+                </div>
+            `;
+        } else if (collapseCfg.enabled && chatHist.length > collapseCfg.limit && isExpanded) {
+            collapseBannerHtml = `
+                <div style="text-align:center;margin:8px 0 14px;">
+                    <span onclick="window.toggleChatHistoryExpand('${chatKey}')" style="display:inline-flex;align-items:center;gap:4px;background:#e5e5e5;color:#888;padding:3px 10px;border-radius:12px;font-size:10.5px;cursor:pointer;user-select:none;">
+                        收起早期历史消息
+                    </span>
+                </div>
+            `;
+        }
+
+        let messagesHtml = collapseBannerHtml;
+        for (const msg of visibleMessages) {
             const isSelf = (msg.from === 'player');
 
             let quoteHtml = '';
@@ -1130,7 +1183,7 @@
         }
     }
 
-    // 查看名片详情弹窗（支持个性签名与备注名）
+    // 查看名片详情弹窗
     window.openContactCardDetailModal = function(id, name, persona, avatar, signature) {
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
         const exists = !!(window.G.npcs && window.G.npcs[id]);
@@ -1309,7 +1362,8 @@
             recalledText: targetMsg.imageDesc ? `[快照描述: ${targetMsg.imageDesc}]` : (targetMsg.text || ''),
             recalledWasPeeked: wasPeeked,
             peekHandled: false,
-            time: new Date().toLocaleTimeString().slice(0, 5)
+            time: new Date().toLocaleTimeString().slice(0, 5),
+            timestamp: Date.now()
         });
 
         if (wasPeeked && typeof showToast === 'function') {
@@ -1327,7 +1381,7 @@
     window.openVoiceInputModal = function(type, id) {
         window.openWechatCleanModal('发送语音消息', `
             <div style="display:flex;flex-direction:column;gap:10px;text-align:left;">
-                <div style="font-size:12px;color:#666;">输入你想说出的话（系统自动换算微信秒数）：</div>
+                <div style="font-size:12px;color:#666;">输入你想说出的话（自动换算微信秒数）：</div>
                 <textarea id="wcleanVoiceTextInput" rows="3" placeholder="例如：我刚回到家，今天真是累死我了..." class="wechat-clean-input" style="line-height:1.4;resize:none;"></textarea>
             </div>
         `, () => {
@@ -1344,6 +1398,7 @@
                 text,
                 senderName: curAcc.name,
                 time,
+                timestamp: Date.now(),
                 quote: window._activeQuoteMessage ? Object.assign({}, window._activeQuoteMessage) : null
             };
             window._activeQuoteMessage = null;
@@ -1361,7 +1416,7 @@
         });
     };
 
-    // 🤖 单人私聊 AI 回复触发
+    // 🤖 单人私聊 AI 回复触发（带跨时段与隔夜双时间戳感知）
     window.triggerAIReplyForSingle = async function(npcId) {
         const npc = window.G.npcs[npcId];
         if (!npc) return;
@@ -1389,7 +1444,20 @@
         const history = window.getAccountChatHistory(npcId, curAcc.id);
         const isBehindActive = !!window.G._behindScreenActive[npcId];
 
+        // 提取上一条对方或我发出的消息时间戳
+        let lastMsgTime = '';
+        let lastMsgTimestamp = null;
+        for (let i = history.length - 1; i >= 0; i--) {
+            if (history[i].from === 'player' || history[i].from === 'npc') {
+                lastMsgTime = history[i].time || '';
+                lastMsgTimestamp = history[i].timestamp || null;
+                break;
+            }
+        }
+
         let peekNotice = '';
+        let lastRecommendedAltCard = null;
+
         const recentDialogue = history.slice(-14).map(m => {
             const speaker = (m.from === 'player') ? curAcc.name : (npc.name);
             if (m.from === 'action' && m.recalledWasPeeked && !m.peekHandled && m.recalledText) {
@@ -1399,7 +1467,12 @@
             }
             if (m.type === 'voice') return `${speaker} [语音]: ${m.text || ''}`;
             if (m.type === 'shared_moment') return `${speaker} [分享了朋友圈动态]: ${m.sharedMoment?.author} 发的 “${m.sharedMoment?.body || ''}”；配图：${m.sharedMoment?.imageDesc || '无'}；评论区八卦：${m.sharedMoment?.commentsSummary || '暂无评论'}`;
-            if (m.type === 'contact_card') return `${speaker} [推荐了名片]: ${m.contactCard?.name}（人设：${m.contactCard?.persona || 'MC同伴'}，签名：“${m.contactCard?.signature || '无'}”，身份：${m.contactCard?.isAlt ? '对方的小号' : '新朋友'}）`;
+            if (m.type === 'contact_card') {
+                if (m.contactCard && m.contactCard.isAlt) {
+                    lastRecommendedAltCard = m.contactCard;
+                }
+                return `${speaker} [推荐了名片]: ${m.contactCard?.name}（人设：${m.contactCard?.persona || 'MC同伴'}，签名：“${m.contactCard?.signature || '无'}”，身份：${m.contactCard?.isAlt ? '对方的小号' : '新朋友'}）`;
+            }
             if (m.type === 'moment_notice') return `[系统提醒]: ${m.author} 刚发了一条新朋友圈动态`;
             if (m.originalText) return `${speaker}: ${m.originalText} (译: ${m.text || ''})`;
             if (m.imageDesc) return `${speaker} [发了张照片，画面描绘]: ${m.imageDesc}`;
@@ -1412,7 +1485,9 @@
                 npc,
                 curAcc,
                 recentDialogueText: recentDialogue + peekNotice,
-                isBehindActive
+                isBehindActive,
+                lastMsgTime,
+                lastMsgTimestamp
             })
             : {
                 sysPrompt: `扮演MC好友「${npc.name}」，严禁句末加句号，严禁括号动作描写。`,
@@ -1427,6 +1502,31 @@
 
             let clean = (typeof stripThought === 'function') ? stripThought(raw.trim()) : raw.trim();
             clean = clean.replace(/\([^)]*\)/g, '').replace(/（[^）]*）/g, '').trim();
+
+            // 若对方推荐了小号名片，且角色回复中明确答应加好友，在数据层真正实例化好友申请
+            if (lastRecommendedAltCard && lastRecommendedAltCard.isAlt) {
+                const agreeKeywords = ['加了', '加上了', '去加', '同意', '通过', '搜了', '发申请', '加你小号', '加那个号', '扫了'];
+                const hasAgreed = agreeKeywords.some(kw => clean.includes(kw));
+                if (hasAgreed) {
+                    if (!window.G.friendRequests) window.G.friendRequests = [];
+                    const alreadySent = window.G.friendRequests.some(r => r.applicantNpcId === npc.id && r.targetAccountId === lastRecommendedAltCard.id);
+                    if (!alreadySent) {
+                        window.G.friendRequests.push({
+                            id: 'freq_' + Date.now(),
+                            applicantNpcId: npc.id,
+                            targetAccountId: lastRecommendedAltCard.id,
+                            name: npc.name,
+                            region: npc.region || '中国',
+                            persona: npc.persona || '你的好友',
+                            signature: npc.signature || '',
+                            favor: npc.favor || 50,
+                            avatar: npc.avatarUrl || 'assets/icons/chat.png',
+                            reason: `我是 ${npc.name}，你刚才把名片推给我啦，来加上！`,
+                            time: new Date().toLocaleTimeString().slice(0, 5)
+                        });
+                    }
+                }
+            }
 
             const estInputTokens = Math.round((promptCtx.sysPrompt.length + promptCtx.userPrompt.length) * 1.35);
             const estOutputTokens = Math.round(clean.length * 1.35);
@@ -1460,7 +1560,8 @@
                         momentId: item.momentId,
                         author: item.author,
                         text: item.text,
-                        time
+                        time,
+                        timestamp: Date.now()
                     }, curAcc.id);
                 } else if (item.type === 'voice') {
                     window.pushChatMessageSafe(npcId, {
@@ -1469,7 +1570,8 @@
                         seconds: item.seconds || 3,
                         audioBg: item.audioBg || '',
                         text: item.text || '',
-                        time
+                        time,
+                        timestamp: Date.now()
                     }, curAcc.id);
                 } else if (item.type === 'sticker_entity') {
                     const resolved = window.resolveStickerImageUrl(item.category, item.desc);
@@ -1480,14 +1582,16 @@
                             stickerUrl: resolved.url,
                             stickerDesc: resolved.desc,
                             text: `[表情: ${resolved.desc}]`,
-                            time
+                            time,
+                            timestamp: Date.now()
                         }, curAcc.id);
                     } else {
                         window.pushChatMessageSafe(npcId, {
                             from: 'npc',
                             type: 'text',
                             text: `[${item.desc || '表情'}]`,
-                            time
+                            time,
+                            timestamp: Date.now()
                         }, curAcc.id);
                     }
                 } else {
@@ -1496,7 +1600,8 @@
                         type: 'text',
                         text: item.text || '',
                         originalText: item.originalText || null,
-                        time
+                        time,
+                        timestamp: Date.now()
                     }, curAcc.id);
                 }
 
@@ -1510,7 +1615,8 @@
                 window.pushChatMessageSafe(npcId, {
                     from: 'behind_screen',
                     text: behindText,
-                    time: new Date().toLocaleTimeString().slice(0, 5)
+                    time: new Date().toLocaleTimeString().slice(0, 5),
+                    timestamp: Date.now()
                 }, curAcc.id);
                 if (window.G.currentChatNpc === npcId) renderSingleChatWindow();
             }
@@ -1640,7 +1746,7 @@
         });
     };
 
-    // 完整的 5 大功能加号抽屉面板
+    // 完整的 6 大功能加号抽屉面板（增添聊天折叠功能）
     function buildChatPlusDrawerHTML(type, id) {
         return `
         <div id="chatPlusDrawer" style="background:#f7f7f7;border-top:0.5px solid #dcdcdc;flex-shrink:0;animation:wechatSlideUp 0.18s ease-out;">
@@ -1656,6 +1762,12 @@
                         <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#0284c7;stroke-width:1.8;stroke-linecap:round;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
                     </div>
                     <span class="wechat-plus-label">推荐名片</span>
+                </div>
+                <div class="wechat-plus-item" onclick="window._plusDrawerOpen=false; window.openChatCollapseSettingsModal('${type}','${id}')">
+                    <div class="wechat-plus-icon-box">
+                        <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#d97706;stroke-width:1.8;stroke-linecap:round;"><rect x="4" y="4" width="16" height="16" rx="2"></rect><line x1="8" y1="12" x2="16" y2="12"></line></svg>
+                    </div>
+                    <span class="wechat-plus-label">聊天折叠</span>
                 </div>
                 <div class="wechat-plus-item" onclick="window._plusDrawerOpen=false; window.openTokenMonitorModal()">
                     <div class="wechat-plus-icon-box">
@@ -1687,7 +1799,42 @@
         else if (typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
     };
 
-    // 📇 推荐名片选择弹窗（透传个性签名与备注名优先展示）
+    // 🗂️ 聊天记录自动折叠设置弹窗
+    window.openChatCollapseSettingsModal = function(type, id) {
+        const cfg = getChatCollapseConfig();
+
+        window.openWechatCleanModal('聊天记录折叠', `
+            <div style="text-align:left;font-size:13px;color:#333;">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:12px;border-bottom:0.5px solid #f0f0f0;margin-bottom:12px;">
+                    <div>
+                        <div style="font-weight:600;color:#181818;">开启早期消息折叠</div>
+                        <div style="font-size:11.5px;color:#888;margin-top:2px;">仅显示最近消息，大幅减轻滑动卡顿</div>
+                    </div>
+                    <input type="checkbox" id="wcleanCollapseToggle" ${cfg.enabled ? 'checked' : ''} style="width:18px;height:18px;accent-color:#07c160;cursor:pointer;">
+                </div>
+                <div>
+                    <label style="font-size:12px;color:#666;font-weight:600;display:block;margin-bottom:4px;">保留最近消息条数：</label>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <input type="number" id="wcleanCollapseLimit" value="${cfg.limit || 50}" min="15" max="200" step="5" class="wechat-clean-input" style="width:100px;">
+                        <span style="font-size:12px;color:#888;">条（推荐 30~60）</span>
+                    </div>
+                </div>
+            </div>
+        `, () => {
+            const enabled = document.getElementById('wcleanCollapseToggle')?.checked ?? true;
+            let limit = parseInt(document.getElementById('wcleanCollapseLimit')?.value) || 50;
+            if (limit < 10) limit = 10;
+            if (limit > 300) limit = 300;
+
+            saveChatCollapseConfig({ enabled, limit });
+            if (typeof showToast === 'function') showToast('折叠设置已生效', 'success', 1000);
+
+            if (type === 'single') renderSingleChatWindow();
+            else if (typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
+        });
+    };
+
+    // 📇 推荐名片选择弹窗
     window.openRecommendContactModal = function(type, id) {
         window._plusDrawerOpen = false;
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '我' };
@@ -1774,6 +1921,7 @@
         `, () => {});
     };
 
+    // 发送名片（优化：移除自动触发AI回复，改为用户手动点闪电生成）
     window.doSendContactCardDirect = function(type, targetId, cardId, name, persona, avatar, isAlt, signature) {
         document.querySelector('.wechat-clean-modal-mask')?.remove();
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '我' };
@@ -1800,9 +1948,7 @@
         if (type === 'single') {
             window.pushChatMessageSafe(targetId, cardMsg, curAcc.id);
             renderSingleChatWindow();
-            if (typeof window.triggerAIReplyForSingle === 'function') {
-                window.triggerAIReplyForSingle(targetId);
-            }
+            // 已移除自动 triggerAIReplyForSingle，保持微信静默，由用户点击闪电生成
         } else {
             if (!window.G.groupChatHistory[targetId]) window.G.groupChatHistory[targetId] = [];
             window.G.groupChatHistory[targetId].push(cardMsg);
@@ -1860,13 +2006,11 @@
                     <button type="button" id="btnChatModeBoth" class="moment-mode-tab-btn" onclick="window._switchChatSendMode('real_with_desc')">③ 真实图+文字描绘</button>
                 </div>
 
-                <!-- 模式一：文字代替图片（翻转卡片） -->
                 <div id="panelChatTextOnly" style="display:block;">
                     <div style="font-size:11.5px;color:#888;margin-bottom:4px;">填写画面描绘（点击卡片翻转查看）：</div>
                     <textarea id="wchatFlipDescInput" rows="3" placeholder="例如：我在平原建造好的两层原木别墅、箱子里的整整一组下界合金锭..." class="wechat-clean-input" style="line-height:1.4;resize:none;"></textarea>
                 </div>
 
-                <!-- 模式二与模式三：图片选择器 -->
                 <div id="panelChatRealImg" style="display:none;">
                     <div style="margin-bottom:8px;">
                         <label style="border:1px dashed #07c160;background:#f6fbf8;color:#07c160;padding:10px;border-radius:6px;font-size:13px;font-weight:500;text-align:center;cursor:pointer;display:block;">
@@ -1879,7 +2023,6 @@
                     </div>
                 </div>
 
-                <!-- 模式三：文字描绘补充 -->
                 <div id="panelChatExtraDesc" style="display:none;">
                     <div style="font-size:11.5px;color:#888;margin-bottom:4px;">向对方描述图片内容（极省Token）：</div>
                     <textarea id="wchatRealDescInput" rows="2" placeholder="向AI描述图片中的关键画面（如：我的血量只剩半颗心，正在被苦力怕追赶）" class="wechat-clean-input" style="line-height:1.4;resize:none;"></textarea>
@@ -1905,6 +2048,7 @@
                     text: `[图片描述: ${desc}]`,
                     senderName: curAcc.name,
                     time,
+                    timestamp: Date.now(),
                     quote: window._activeQuoteMessage ? Object.assign({}, window._activeQuoteMessage) : null
                 };
             } else if (chatSendMode === 'real_only') {
@@ -1921,6 +2065,7 @@
                     text: '[图片]',
                     senderName: curAcc.name,
                     time,
+                    timestamp: Date.now(),
                     quote: window._activeQuoteMessage ? Object.assign({}, window._activeQuoteMessage) : null
                 };
             } else if (chatSendMode === 'real_with_desc') {
@@ -1938,6 +2083,7 @@
                     text: `[图片] ${desc}`,
                     senderName: curAcc.name,
                     time,
+                    timestamp: Date.now(),
                     quote: window._activeQuoteMessage ? Object.assign({}, window._activeQuoteMessage) : null
                 };
             }
@@ -2033,10 +2179,10 @@
                 if (typeof showToast === 'function') showToast('对方已拒收你的消息', 'error');
                 return;
             }
-            window.pushChatMessageSafe(id, { from: 'player', isPlayer: true, type: 'sticker', stickerUrl: url, stickerDesc: desc, text: `[表情: ${desc}]`, time, quote }, curAcc.id);
+            window.pushChatMessageSafe(id, { from: 'player', isPlayer: true, type: 'sticker', stickerUrl: url, stickerDesc: desc, text: `[表情: ${desc}]`, time, timestamp: Date.now(), quote }, curAcc.id);
         } else {
             if (!window.G.groupChatHistory[id]) window.G.groupChatHistory[id] = [];
-            window.G.groupChatHistory[id].push({ from: 'player', isPlayer: true, type: 'sticker', stickerUrl: url, stickerDesc: desc, text: `[表情: ${desc}]`, time, quote });
+            window.G.groupChatHistory[id].push({ from: 'player', isPlayer: true, type: 'sticker', stickerUrl: url, stickerDesc: desc, text: `[表情: ${desc}]`, time, timestamp: Date.now(), quote });
             window.syncChatHistoryToLocalBackup();
         }
         window._stickerDrawerOpen = false;
@@ -2056,14 +2202,14 @@
         window._activeQuoteMessage = null;
 
         if (window.isAccountBlockedByNpc(npcId, curAcc.id)) {
-            window.pushChatMessageSafe(npcId, { from: 'player', isPlayer: true, text, time: new Date().toLocaleTimeString().slice(0, 5), quote }, curAcc.id);
-            window.pushChatMessageSafe(npcId, { from: 'action', text: `消息已被拒收`, time: new Date().toLocaleTimeString().slice(0, 5) }, curAcc.id);
+            window.pushChatMessageSafe(npcId, { from: 'player', isPlayer: true, text, time: new Date().toLocaleTimeString().slice(0, 5), timestamp: Date.now(), quote }, curAcc.id);
+            window.pushChatMessageSafe(npcId, { from: 'action', text: `消息已被拒收`, time: new Date().toLocaleTimeString().slice(0, 5), timestamp: Date.now() }, curAcc.id);
             input.value = '';
             renderSingleChatWindow();
             return;
         }
 
-        window.pushChatMessageSafe(npcId, { from: 'player', isPlayer: true, text, time: new Date().toLocaleTimeString().slice(0, 5), quote }, curAcc.id);
+        window.pushChatMessageSafe(npcId, { from: 'player', isPlayer: true, text, time: new Date().toLocaleTimeString().slice(0, 5), timestamp: Date.now(), quote }, curAcc.id);
         input.value = '';
         renderSingleChatWindow();
         if (typeof autoSaveGame === 'function') autoSaveGame();

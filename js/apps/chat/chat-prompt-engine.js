@@ -1,7 +1,7 @@
 /**
  * js/apps/chat/chat-prompt-engine.js
  * 🧠 微信聊天活人感提示词架构引擎
- * 模块化装配：主体通用拟人核心 + 关系进阶状态机 + 异地恋模块 + 时差生理感知 + 双语与仿微信语音协议 + 真实语义表情包索引 + 动态发布协议 + 大小号双重身份认知与名片接纳状态机
+ * 模块化装配：主体通用拟人核心 + 关系进阶状态机 + 异地恋模块 + 时差生理感知 + 双时间戳隔夜作息感知 + 双语与仿微信语音协议 + 真实语义表情包索引 + 动态发布协议 + 大小号双重身份认知与名片接纳状态机
  */
 
 (function() {
@@ -150,7 +150,7 @@ ${isForeign ? `
 9. 【关于对方撤回消息的反应铁律】：
    - 如果系统提醒对方刚才撤回了消息或图片，你就像真实微信好友一样随口问一嘴（如"撤回啥了"、吐槽网速或就当没看见），【绝对严禁】在后续对话中反反复复一直追问对方撤回了什么！除非对方撤回的内容描述极其炸裂反常，否则聊下一话题时必须彻底翻篇！
 10. 【关于名片推荐与动态转发的交互认知】：
-   - 对方如果推荐了名片：你会获悉该名片是谁（可能是好友，也可能是对方的小号）。如果好感度尚浅或不认识，可好奇发问或婉拒；如果熟悉信任，可表示同意添加。
+   - 对方如果推荐了名片：你会获悉该名片是谁（可能是好友，也可能是对方的小号）。如果好感度尚浅或不认识，可好奇发问或婉拒；如果熟悉信任或对方推荐的是其小号，可表示同意添加。如果决定添加该小号，系统会自动处理申请协议。
    - 对方如果转发了动态：你能够获悉该动态的正文内容以及评论区八卦，根据你的性格对动态或下面的评论进行自然吐槽、吃瓜或共鸣。
 `;
     }
@@ -186,7 +186,6 @@ ${isForeign ? `
      * 模块四：大小号认知与多重记忆隔离（活人感反差吐槽）
      */
     function getAccountDualityPrompt(npc, curAcc) {
-        // 如果当前是小号，或者存在其他账号聊天记录
         const allAccounts = (typeof window.getWechatAccountsList === 'function') ? window.getWechatAccountsList() : [];
         const isAlt = (curAcc.id !== 'main');
         
@@ -197,7 +196,6 @@ ${isForeign ? `
             prompt += `- 对方当前使用的是小号。如果对方没有在聊天中亲口承认或透露自己是大号，你【完全不知道】这人和大号是同一个人，把他当作全新认识的微信好友！\n`;
         } else {
             prompt += `- 对方当前使用的是大号。\n`;
-            // 如果该角色也加过其他小号，注入对比与吐槽记忆
             const otherAccs = allAccounts.filter(a => a.id !== curAcc.id);
             if (otherAccs.length > 0) {
                 prompt += `- 你在微信通讯录里也添加过对方的其他好友/小号身份（例如：${otherAccs.map(a => a.name).join('、')}）。在你的真实认知里，这两个账号可能是不同的人（除非对方已经挑明）。如果大号脾气差、冷淡没礼貌，而小号热情可爱，你在和大号聊天时，偶尔可以拿那个号来吐槽对比（例：“昨天加的一个朋友说话可比你有礼貌多了”），反之亦然！\n`;
@@ -207,9 +205,39 @@ ${isForeign ? `
     }
 
     /**
+     * 微信跨时段与隔夜活人感时钟分析
+     */
+    function analyzeMessageTimeGapContext(lastMsgTime, lastMsgTimestamp, nowTimestamp, timeCtx) {
+        if (!lastMsgTimestamp && !lastMsgTime) return '';
+        const now = nowTimestamp ? new Date(nowTimestamp) : new Date();
+        const prev = lastMsgTimestamp ? new Date(lastMsgTimestamp) : null;
+
+        let gapDesc = '';
+        if (prev) {
+            const diffMinutes = Math.floor((now.getTime() - prev.getTime()) / (1000 * 60));
+            const diffHours = Math.floor(diffMinutes / 60);
+
+            const isDifferentDay = (now.getDate() !== prev.getDate()) || (diffHours >= 6);
+            if (isDifferentDay) {
+                const prevHour = prev.getHours();
+                const nowHour = now.getHours();
+                gapDesc = `【真实微信隔夜回复感知】：\n` +
+                          `- 对方上一条消息发出时间为昨夜或数小时前（约 ${prevHour.toString().padStart(2, '0')}:${prev.getMinutes().toString().padStart(2, '0')}）。\n` +
+                          `- 当前你回复的时间为：${timeCtx.nPeriod} ${timeCtx.nTime}（已相隔约 ${diffHours} 小时）。\n` +
+                          `- 【活人回复指引】：你昨晚可能睡着了、忙别的事，直到现在才看到消息。请像真人隔夜回微信一样自然应对（如“昨晚睡着了没看到”、“刚醒，昨晚你怎么那么晚”等），绝对严禁把对方昨晚的消息当作刚刚发出的！\n`;
+            } else if (diffMinutes >= 60) {
+                gapDesc = `【微信消息间隔】：对方上一句是 ${diffHours} 小时前发送的，你现在才看到并回复，态度保持自然，可带出刚才忙完的日常感。\n`;
+            }
+        } else if (lastMsgTime) {
+            gapDesc = `【上一条消息时间参考】：对方上一句在 ${lastMsgTime} 发出，当前你回复的时间是 ${timeCtx.nTime}。\n`;
+        }
+        return gapDesc;
+    }
+
+    /**
      * 主提示词组装总装配器
      */
-    function buildWechatAIPromptContext({ npc, curAcc, recentDialogueText = '', isBehindActive = false }) {
+    function buildWechatAIPromptContext({ npc, curAcc, recentDialogueText = '', isBehindActive = false, lastMsgTime = '', lastMsgTimestamp = null }) {
         if (!npc) return { sysPrompt: '', userPrompt: '' };
 
         const pRegion = curAcc.region || '中国';
@@ -226,6 +254,12 @@ ${isForeign ? `
         assembledSysPrompt += `- 对方所在地(${pRegion})时间：${timeCtx.pPeriod} ${timeCtx.pTime}\n`;
         assembledSysPrompt += `- 时差情况：${timeCtx.diffDesc}\n`;
         assembledSysPrompt += `【要求】：必须体现出你当下的生理时间与困意状态！\n\n`;
+
+        // 注入隔夜作息感知
+        const gapContext = analyzeMessageTimeGapContext(lastMsgTime, lastMsgTimestamp, Date.now(), timeCtx);
+        if (gapContext) {
+            assembledSysPrompt += `${gapContext}\n`;
+        }
 
         assembledSysPrompt += getModule1Prompt(isForeign, nRegion);
 
@@ -263,5 +297,5 @@ ${isForeign ? `
         buildWechatAIPromptContext
     };
 
-    console.log('✅ ChatPromptEngine 微信活人感提示词架构引擎已装载大小号记忆隔离与名片动态协议');
+    console.log('✅ ChatPromptEngine 微信活人感提示词架构引擎已装载隔夜作息感知与名片状态机');
 })();
