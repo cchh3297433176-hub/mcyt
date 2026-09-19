@@ -1,13 +1,16 @@
 /**
  * js/apps/chat/chat-app-panels.js
- * 💬 微信主应用 · 拆分分片 6/7：表情抽屉（buildChatStickerDrawerHTML 及分类/添加/备注/新建分类）、
+ * 💬 微信主应用 · 拆分分片 6/7：表情抽屉（buildChatStickerDrawerHTML 及分类/添加/备注/新建分类/图床导入/长按红叉删除表情与分组）、
  *    加号功能面板 8 大格子（buildChatPlusDrawerHTML）、记忆设置弹窗、联网设置弹窗、聊天折叠设置弹窗、
- *    推荐名片选择弹窗、发送名片、最近 Token 统计弹窗、🌟 拟真生活排版卡片设置弹窗。
+ *    推荐名片选择弹窗、发送名片、最近 Token 统计弹窗、拟真生活排版卡片设置弹窗。
  * ⚠️ 拆分自 chat-app.js，包含加号面板入口与角色专属联网搜索配置弹窗。
  */
 
 (function() {
     'use strict';
+
+    // 表情管理模式状态（长按卡片后浮现红叉）
+    window._stickerManageMode = false;
 
     // 🧠 角色独立记忆总结配置存取（与契约表 mcyt_npc_memory_configs 严格对齐）
     function getNpcMemoryConfig(id) {
@@ -98,66 +101,208 @@
     }
     window.saveNpcUiCardConfig = saveNpcUiCardConfig;
 
+    // 表情抽屉 HTML 构建（支持长按红叉删除与分组长按删除）
     function buildChatStickerDrawerHTML(type, id) {
         if (typeof ensureStickersLoaded === 'function') ensureStickersLoaded();
         const cats = window.G.stickerCategories || ['猪猪'];
         const active = window.G.activeStickerCategory || cats[0];
         const list = (window.G.stickerLibrary || []).filter(s => s && s.category === active);
+        const isManage = !!window._stickerManageMode;
 
         const tabsHtml = cats.map(c => `
-            <span onclick="window.switchChatStickerCategory('${escapeHtml(c)}','${type}','${id}')" style="display:inline-block;padding:4px 10px;margin-right:6px;border-radius:12px;font-size:12px;cursor:pointer;flex-shrink:0;background:${c === active ? '#07c160' : '#e8e8e8'};color:${c === active ? '#fff' : '#666'};">${escapeHtml(c)}</span>
+            <span class="wechat-sticker-tab-pill" 
+                  data-cat="${escapeHtml(c)}"
+                  onclick="window.switchChatStickerCategory('${escapeHtml(c)}','${type}','${id}')" 
+                  style="display:inline-block;padding:4px 10px;margin-right:6px;border-radius:12px;font-size:12px;cursor:pointer;flex-shrink:0;background:${c === active ? '#07c160' : '#e8e8e8'};color:${c === active ? '#fff' : '#666'};user-select:none;-webkit-user-select:none;">${escapeHtml(c)}</span>
         `).join('');
 
-        let cardsHtml = `
-            <div class="wechat-sticker-card" onclick="window.openAddStickerChoiceModal('${type}','${id}')" title="添加新表情" style="border:1px dashed #bbb;background:#fafafa;">
-                <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:none;stroke:#888888;stroke-width:2;stroke-linecap:round;">
-                    <line x1="12" y1="5" x2="12" y2="19"></line>
-                    <line x1="5" y1="12" x2="19" y2="12"></line>
-                </svg>
+        let cardsHtml = '';
+        if (!isManage) {
+            cardsHtml += `
+                <div class="wechat-sticker-card" onclick="window.openAddStickerChoiceModal('${type}','${id}')" title="添加新表情" style="border:1px dashed #bbb;background:#fafafa;cursor:pointer;">
+                    <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:none;stroke:#888888;stroke-width:2;stroke-linecap:round;">
+                        <line x1="12" y1="5" x2="12" y2="19"></line>
+                        <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                </div>
+            `;
+        }
+
+        cardsHtml += list.map((s, idx) => {
+            const rawUrl = s.url || '';
+            const rawDesc = (s.desc || '').replace(/'/g, '');
+            return `
+            <div class="wechat-sticker-card wechat-sticker-item-box" 
+                 data-idx="${idx}" 
+                 data-cat="${escapeHtml(active)}" 
+                 data-url="${escapeHtml(rawUrl)}"
+                 data-desc="${escapeHtml(rawDesc)}"
+                 onclick="window.onStickerCardClick(event, '${type}', '${id}', '${escapeHtml(rawUrl)}', '${escapeHtml(rawDesc)}', ${idx})" 
+                 title="${escapeHtml(s.desc || '')}" 
+                 style="position:relative;cursor:pointer;user-select:none;-webkit-user-select:none;">
+                <img src="${escapeHtml(s.url)}" style="width:100%;height:100%;object-fit:cover;border-radius:4px;" loading="lazy" onerror="this.src='assets/icons/chat.png';">
+                ${isManage ? `
+                    <div class="sticker-delete-cross" 
+                         onclick="window.deleteSingleStickerDirect(event, '${escapeHtml(active)}', ${idx}, '${type}', '${id}')" 
+                         style="position:absolute;top:-5px;right:-5px;width:18px;height:18px;background:#fa5151;color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:bold;box-shadow:0 1px 4px rgba(0,0,0,0.3);z-index:2;line-height:1;border:1.5px solid #fff;">
+                        ✕
+                    </div>
+                ` : ''}
             </div>
+            `;
+        }).join('');
+
+        const manageToggleBtn = isManage ? `
+            <button onclick="window.toggleStickerManageMode(false, '${type}', '${id}')" style="border:none;background:#07c160;padding:3px 10px;border-radius:10px;font-size:11px;color:#fff;cursor:pointer;margin-left:auto;font-weight:600;white-space:nowrap;">完成</button>
+        ` : `
+            <button onclick="window.toggleStickerManageMode(true, '${type}', '${id}')" style="border:0.5px solid #ccc;background:#fff;padding:3px 8px;border-radius:10px;font-size:11px;color:#666;cursor:pointer;margin-left:auto;white-space:nowrap;">管理</button>
         `;
-
-        cardsHtml += list.map(s => `
-            <div class="wechat-sticker-card" onclick="window.sendChatSticker('${type}','${id}','${escapeHtml(s.url)}','${escapeHtml((s.desc || '').replace(/'/g, ''))}')" title="${escapeHtml(s.desc || '')}">
-                <img src="${escapeHtml(s.url)}" style="width:100%;height:100%;object-fit:cover;" loading="lazy">
-            </div>
-        `).join('');
 
         return `
         <div id="chatStickerDrawer" style="background:#f7f7f7;border-top:0.5px solid #dcdcdc;flex-shrink:0;animation:wechatSlideUp 0.18s ease-out;">
             <div style="display:flex;align-items:center;overflow-x:auto;padding:8px 10px 4px;white-space:nowrap;">
                 ${tabsHtml}
                 <button onclick="window.openCreateStickerCategoryModal('${type}','${id}')" style="border:0.5px solid #ccc;background:#fff;padding:3px 8px;border-radius:10px;font-size:11px;color:#555;cursor:pointer;margin-left:4px;white-space:nowrap;">+ 分组</button>
+                ${manageToggleBtn}
             </div>
-            <div class="wechat-sticker-grid">
-                ${cardsHtml}
+            <div class="wechat-sticker-grid" style="min-height:110px;max-height:190px;overflow-y:auto;padding:8px 10px 14px;">
+                ${cardsHtml || '<div style="grid-column:span 4;text-align:center;color:#bbb;font-size:12px;padding:30px 0;">该分组暂无表情包</div>'}
             </div>
         </div>`;
     }
     window.buildChatStickerDrawerHTML = buildChatStickerDrawerHTML;
 
+    // 切换表情管理模式
+    window.toggleStickerManageMode = function(open, type, id) {
+        window._stickerManageMode = (open === undefined) ? !window._stickerManageMode : !!open;
+        if (type === 'single' && typeof renderSingleChatWindow === 'function') renderSingleChatWindow();
+        else if (typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
+        bindStickerGestures(type, id);
+    };
+
+    // 表情卡片点击处理（管理模式下禁止发送）
+    window.onStickerCardClick = function(e, type, id, url, desc, idx) {
+        if (window._stickerManageMode) {
+            e.stopPropagation();
+            return;
+        }
+        window.sendChatSticker(type, id, url, desc);
+    };
+
+    // 删除单个表情包
+    window.deleteSingleStickerDirect = function(e, cat, catIdx, type, id) {
+        e.stopPropagation();
+        if (!window.G.stickerLibrary) return;
+
+        // 依据当前分组和索引定位全局库中对应项
+        let curCount = -1;
+        const globalIdx = window.G.stickerLibrary.findIndex(s => {
+            if (s && s.category === cat) {
+                curCount++;
+                return curCount === catIdx;
+            }
+            return false;
+        });
+
+        if (globalIdx !== -1) {
+            window.G.stickerLibrary.splice(globalIdx, 1);
+            if (typeof showToast === 'function') showToast('已删除表情', 'info', 1000);
+            if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+            if (type === 'single' && typeof renderSingleChatWindow === 'function') renderSingleChatWindow();
+            else if (typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
+            bindStickerGestures(type, id);
+        }
+    };
+
+    // 绑定长按手势（长按表情进入管理模式，长按分组弹出删除确认）
+    function bindStickerGestures(type, id) {
+        setTimeout(() => {
+            const drawer = document.getElementById('chatStickerDrawer');
+            if (!drawer) return;
+
+            // 1. 卡片长按进入红叉管理模式
+            drawer.querySelectorAll('.wechat-sticker-item-box').forEach(card => {
+                if (typeof bindLongPressEvent === 'function') {
+                    bindLongPressEvent(card, null, () => {
+                        window.toggleStickerManageMode(true, type, id);
+                    });
+                }
+            });
+
+            // 2. 分组长按弹出删除分组确认
+            drawer.querySelectorAll('.wechat-sticker-tab-pill').forEach(pill => {
+                const catName = pill.getAttribute('data-cat');
+                if (!catName) return;
+                if (typeof bindLongPressEvent === 'function') {
+                    bindLongPressEvent(pill, null, () => {
+                        window.confirmDeleteStickerCategory(catName, type, id);
+                    });
+                }
+            });
+        }, 30);
+    }
+    window.bindStickerGestures = bindStickerGestures;
+
+    // 删除分组确认弹窗
+    window.confirmDeleteStickerCategory = function(catName, type, id) {
+        if (catName === '猪猪' || catName === '默认') {
+            if (typeof showToast === 'function') showToast('默认分组不允许删除', 'info', 1200);
+            return;
+        }
+
+        window.openWechatCleanModal('删除分组', `
+            <div style="text-align:center;padding:12px 6px;font-size:13.5px;color:#333;line-height:1.5;">
+                确定要删除分组「<b>${escapeHtml(catName)}</b>」及其下所有表情包吗？
+            </div>
+        `, () => {
+            if (window.G.stickerCategories) {
+                window.G.stickerCategories = window.G.stickerCategories.filter(c => c !== catName);
+            }
+            if (window.G.stickerLibrary) {
+                window.G.stickerLibrary = window.G.stickerLibrary.filter(s => s.category !== catName);
+            }
+            window.G.activeStickerCategory = window.G.stickerCategories?.[0] || '猪猪';
+            window._stickerManageMode = false;
+
+            if (typeof showToast === 'function') showToast('分组已删除', 'success', 1200);
+            if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+            if (type === 'single' && typeof renderSingleChatWindow === 'function') renderSingleChatWindow();
+            else if (typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
+            bindStickerGestures(type, id);
+        });
+    };
+
     window.toggleChatStickerDrawer = function(type, id) {
         window._stickerDrawerOpen = !window._stickerDrawerOpen;
         window._plusDrawerOpen = false;
-        if (type === 'single') renderSingleChatWindow();
+        window._stickerManageMode = false; // 打开关闭时重置管理状态
+        if (type === 'single' && typeof renderSingleChatWindow === 'function') renderSingleChatWindow();
         else if (typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
+        if (window._stickerDrawerOpen) bindStickerGestures(type, id);
     };
 
     window.switchChatStickerCategory = function(cat, type, id) {
         window.G.activeStickerCategory = cat;
-        if (type === 'single') renderSingleChatWindow();
+        if (type === 'single' && typeof renderSingleChatWindow === 'function') renderSingleChatWindow();
         else if (typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
+        bindStickerGestures(type, id);
     };
 
+    // 添加表情弹窗（支持本地相册与图库/图床 URL 导入）
     window.openAddStickerChoiceModal = function(type, id) {
         const curCat = window.G.activeStickerCategory || '猪猪';
-        window.openWechatCleanModal(`添加表情包`, `
-            <div style="display:flex;flex-direction:column;gap:8px;">
+        window.openWechatCleanModal(`添加表情包（${escapeHtml(curCat)}）`, `
+            <div style="display:flex;flex-direction:column;gap:10px;text-align:left;">
                 <label style="border:1px solid #dcdcdc;background:#f9f9f9;padding:12px;border-radius:6px;font-size:13px;font-weight:500;color:#333;cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
-                    <span>从手机相册导入本地表情</span>
+                    <span>从手机相册导入本地图片</span>
                     <input type="file" id="localStickerFileInput" accept="image/*" style="display:none;">
                     <span style="color:#07c160;font-size:15px;">›</span>
                 </label>
+
+                <div onclick="window.openUrlStickerImportModal('${escapeHtml(curCat)}','${type}','${id}')" style="border:1px solid #dcdcdc;background:#f9f9f9;padding:12px;border-radius:6px;font-size:13px;font-weight:500;color:#333;cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
+                    <span>输入网络图片 / 图床链接导入</span>
+                    <span style="color:#07c160;font-size:15px;">›</span>
+                </div>
             </div>
         `, () => {});
 
@@ -179,6 +324,41 @@
         }, 30);
     };
 
+    // 🌐 输入网络图床/外部图片 URL 导入弹窗（支持单条或换行批量导入）
+    window.openUrlStickerImportModal = function(cat, type, id) {
+        document.querySelector('.wechat-clean-modal-mask')?.remove();
+
+        window.openWechatCleanModal('图床/网络表情导入', `
+            <div style="display:flex;flex-direction:column;gap:10px;text-align:left;">
+                <div style="font-size:12px;color:#666;">输入图片 URL（支持一行一条批量填入）：</div>
+                <textarea id="wcleanUrlStickerInput" rows="4" placeholder="https://example.com/sticker1.png&#10;https://example.com/sticker2.gif" class="wechat-clean-input" style="line-height:1.45;resize:none;font-size:12px;"></textarea>
+                <input type="text" id="wcleanUrlStickerDesc" placeholder="统一表情情绪描述（选填，如：得意、大笑）..." class="wechat-clean-input">
+                <div style="font-size:11px;color:#999;line-height:1.4;">提示：可直接填入 GitHub 图库、CDN 加速或任意图床链接，无需打包占用本地空间。</div>
+            </div>
+        `, () => {
+            const val = document.getElementById('wcleanUrlStickerInput')?.value || '';
+            const desc = document.getElementById('wcleanUrlStickerDesc')?.value.trim() || '网络表情';
+            const urls = val.split('\n').map(u => u.trim()).filter(u => u.startsWith('http://') || u.startsWith('https://'));
+
+            if (urls.length === 0) {
+                if (typeof showToast === 'function') showToast('请输入有效的 http/https 图片链接', 'warning', 1500);
+                return false;
+            }
+
+            if (!window.G.stickerLibrary) window.G.stickerLibrary = [];
+            urls.forEach((u, i) => {
+                const itemDesc = urls.length > 1 ? `${desc} ${i + 1}` : desc;
+                window.G.stickerLibrary.push({ category: cat, desc: itemDesc, url: u });
+            });
+
+            if (typeof showToast === 'function') showToast(`成功导入 ${urls.length} 个表情`, 'success', 1200);
+            if (type === 'single' && typeof renderSingleChatWindow === 'function') renderSingleChatWindow();
+            else if (typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
+            bindStickerGestures(type, id);
+            if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+        });
+    };
+
     window.openStickerRemarkModal = function(base64Url, cat, type, id) {
         window.openWechatCleanModal('设置表情备注', `
             <div style="display:flex;justify-content:center;margin-bottom:12px;">
@@ -190,8 +370,9 @@
             if (!window.G.stickerLibrary) window.G.stickerLibrary = [];
             window.G.stickerLibrary.push({ category: cat, desc, url: base64Url });
             if (typeof showToast === 'function') showToast('表情已添加', 'success', 1200);
-            if (type === 'single') renderSingleChatWindow();
+            if (type === 'single' && typeof renderSingleChatWindow === 'function') renderSingleChatWindow();
             else if (typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
+            bindStickerGestures(type, id);
             if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
         });
     };
@@ -205,13 +386,14 @@
             if (!window.G.stickerCategories) window.G.stickerCategories = ['猪猪'];
             if (!window.G.stickerCategories.includes(val)) window.G.stickerCategories.push(val);
             window.G.activeStickerCategory = val;
-            if (type === 'single') renderSingleChatWindow();
+            if (type === 'single' && typeof renderSingleChatWindow === 'function') renderSingleChatWindow();
             else if (typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
+            bindStickerGestures(type, id);
             if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
         });
     };
 
-    // 完整的 8 大功能加号抽屉面板（新增“排版美化”卡片入口）
+    // 完整的 8 大功能加号抽屉面板
     function buildChatPlusDrawerHTML(type, id) {
         return `
         <div id="chatPlusDrawer" style="background:#f7f7f7;border-top:0.5px solid #dcdcdc;flex-shrink:0;animation:wechatSlideUp 0.18s ease-out;">
@@ -272,11 +454,12 @@
     window.toggleChatPlusDrawer = function(type, id) {
         window._plusDrawerOpen = !window._plusDrawerOpen;
         window._stickerDrawerOpen = false;
-        if (type === 'single') renderSingleChatWindow();
+        window._stickerManageMode = false;
+        if (type === 'single' && typeof renderSingleChatWindow === 'function') renderSingleChatWindow();
         else if (typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
     };
 
-    // 🧾 角色独立拟真排版卡片设置弹窗（带微绿问号科普说明）
+    // 🧾 角色独立拟真排版卡片设置弹窗
     window.openNpcUiCardSettingsModal = function(type, id) {
         if (type !== 'single') {
             if (typeof showToast === 'function') showToast('拟真排版设置目前支持专属好友单人私聊', 'info', 1500);
@@ -322,7 +505,7 @@
         });
     };
 
-    // 💡 拟真排版机制说明弹窗（含降速提示）
+    // 💡 拟真排版机制说明弹窗
     window.showUiCardIntroTooltip = function() {
         const text = "开启后角色可在适当场景（如分享购物小票、手写便签、电影票根、账单、行程清单等）生成仿真物品卡片。提示：因需渲染美化样式与排版代码，开启后角色单次回复 Token 会显著增加，回复生成速度会略有下降。";
         if (typeof window.openWechatCleanModal === 'function') {
@@ -336,7 +519,7 @@
         }
     };
 
-    // 🌐 角色独立联网设置弹窗（带微绿问号科普说明）
+    // 🌐 角色独立联网设置弹窗
     window.openNpcSearchSettingsModal = function(type, id) {
         if (type !== 'single') {
             if (typeof showToast === 'function') showToast('联网设置目前支持专属好友单人私聊', 'info', 1500);
@@ -380,7 +563,7 @@
                         <div style="font-size:11px;color:#888;margin-top:4px;">包含此类词必触发检索；未命中时由 AI 依据内容自主判断。</div>
                     </div>
 
-                    <div style="font-size:11px;color:#999;background:#f9f9f9;padding:6px 10px;border-radius:4px;line-line:1.45;">
+                    <div style="font-size:11px;color:#999;background:#f9f9f9;padding:6px 10px;border-radius:4px;line-height:1.45;">
                         目标角色：<b>${escapeHtml(npcDisplayName)}</b><br>
                         规则：借助系统设置中心配置的联网通道实时检索，保持拟真生动的答复与资料参考。
                     </div>
@@ -403,7 +586,7 @@
         });
     };
 
-    // 💡 联网机制说明弹窗（严格控制在 150 字以内并包含降速提示）
+    // 💡 联网机制说明弹窗
     window.showSearchIntroTooltip = function() {
         const text = "开启后角色具备实时联网能力。当聊到实时资讯、生活百科、知识盲区或触发自定义关键词时，AI将自动调用底层引擎检索全网事实，并在需要时推送网页卡片。提示：因需执行多路实时网络抓取、解析与内容清洗，开启后角色回复速度会略有下降。";
         if (typeof window.openWechatCleanModal === 'function') {
@@ -417,7 +600,7 @@
         }
     };
 
-    // 🧠 角色独立记忆总结设置弹窗（带微绿问号科普）
+    // 🧠 角色独立记忆总结设置弹窗
     window.openNpcMemorySettingsModal = function(type, id) {
         if (type !== 'single') {
             if (typeof showToast === 'function') showToast('记忆设置目前支持专属好友单人私聊', 'info', 1500);
@@ -477,7 +660,7 @@
         });
     };
 
-    // 💡 记忆科普提示（严格控制在 50 字以内）
+    // 💡 记忆科普提示
     window.showMemoryIntroTooltip = function() {
         const text = "满额自动将早期对白凝练为第三人称客观事实，留足最新上下文，兼顾长期记忆与对话连贯。";
         if (typeof window.openWechatCleanModal === 'function') {
@@ -521,7 +704,7 @@
             saveChatCollapseConfig({ enabled, limit });
             if (typeof showToast === 'function') showToast('折叠设置已生效', 'success', 1000);
 
-            if (type === 'single') renderSingleChatWindow();
+            if (type === 'single' && typeof renderSingleChatWindow === 'function') renderSingleChatWindow();
             else if (typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
         });
     };
@@ -642,7 +825,7 @@
             if (typeof depositRememoriEvidence === 'function') {
                 depositRememoriEvidence(targetId, curAcc.id, `${curAcc.name}[推荐了名片: ${name}]`);
             }
-            renderSingleChatWindow();
+            if (typeof renderSingleChatWindow === 'function') renderSingleChatWindow();
         } else {
             if (!window.G.groupChatHistory[targetId]) window.G.groupChatHistory[targetId] = [];
             window.G.groupChatHistory[targetId].push(cardMsg);

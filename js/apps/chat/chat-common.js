@@ -1,20 +1,24 @@
 /**
  * js/apps/chat/chat-common.js
- * 💬 微信基础公共库：头像池加载 · 持久化双轨防丢备份（防空冲刷保护） · 微信通用样式注入 · 原生对话框/操作表 · Token监控池 · AI实体解析器 · 酒馆 PNG 人设卡封装与导入解析引擎
+ * 💬 微信基础公共库：头像池加载 · 持久化双轨防丢备份（防空冲刷保护） · 微信通用样式注入 · 原生对话框/操作表 · Token监控池 · 
+ *    🌟 表情包自注册插件引擎（window.registerStickerPack，支持各分组独立文件按需载入，彻底解耦零Token膨胀） · 
+ *    AI实体解析器 · 酒馆 PNG 人设卡封装与导入解析引擎
  */
 
 (function() {
     'use strict';
 
     const AVATAR_SUBDIR = 'assets/avatars/';
+    const STICKER_SUBDIR = 'assets/stickers/';
     window._MCYT_AVATAR_SUBDIR = AVATAR_SUBDIR;
+    window._MCYT_STICKER_SUBDIR = STICKER_SUBDIR;
 
     const CUSTOM_NPCS_BACKUP_KEY = 'mcyt_wechat_custom_npcs';
     const CHAT_HISTORY_BACKUP_KEY = 'mcyt_wechat_chathistory_v2';
     const TOKEN_HISTORY_STORAGE_KEY = 'mcyt_chat_token_history_v1';
     const MOMENTS_FEED_BACKUP_KEY = 'mcyt_wechat_feed_backup_v2';
 
-    // 默认保底安全头像池，杜绝初次进入异步加载慢导致随机头像失效
+    // 默认保底安全头像池
     const FALLBACK_AVATARS = [
         'assets/icons/chat.png',
         'assets/icons/theme.png',
@@ -83,6 +87,84 @@
     window.getRandomAvatar = getRandomAvatar;
     window.initAvatarPool = initAvatarPool;
 
+    // ============================================================
+    // 🎭 表情包自注册驱动引擎：各分组只需放置独立 list.js 即可无感挂载
+    // ============================================================
+    window.registerStickerPack = function(categoryName, stickerList) {
+        if (!categoryName || !Array.isArray(stickerList)) return;
+        if (!window.G) window.G = {};
+        if (!Array.isArray(window.G.stickerCategories)) window.G.stickerCategories = ['猪猪'];
+        if (!Array.isArray(window.G.stickerLibrary)) window.G.stickerLibrary = [];
+
+        // 自动注入分组标签
+        if (!window.G.stickerCategories.includes(categoryName)) {
+            window.G.stickerCategories.unshift(categoryName);
+        }
+
+        const existingUrls = new Set(
+            window.G.stickerLibrary
+                .filter(s => s && s.category === categoryName)
+                .map(s => s.url)
+        );
+
+        stickerList.forEach(item => {
+            if (item && item.url && !existingUrls.has(item.url)) {
+                window.G.stickerLibrary.push({
+                    category: categoryName,
+                    desc: item.desc || categoryName,
+                    url: item.url,
+                    localUrl: item.local || null
+                });
+                existingUrls.add(item.url);
+            }
+        });
+
+        if (!window.G.activeStickerCategory) {
+            window.G.activeStickerCategory = categoryName;
+        }
+    };
+
+    // 动态扫描并加载子目录中的表情包分组（根据 assets/stickers/index.json 自动引入）
+    function loadExternalStickerPacks() {
+        // 先吸收先于本文件加载的挂起数据
+        if (window._MCYT_PENDING_STICKERS && typeof window._MCYT_PENDING_STICKERS === 'object') {
+            for (const [cat, list] of Object.entries(window._MCYT_PENDING_STICKERS)) {
+                window.registerStickerPack(cat, list);
+            }
+            window._MCYT_PENDING_STICKERS = {};
+        }
+
+        // 读取表情目录索引并加载各自分组的 list.js
+        fetch(STICKER_SUBDIR + 'index.json?t=' + Date.now())
+            .then(res => res.json())
+            .then(packNames => {
+                if (Array.isArray(packNames)) {
+                    packNames.forEach(name => {
+                        const script = document.createElement('script');
+                        script.src = `${STICKER_SUBDIR}${encodeURIComponent(name)}/list.js?t=${Date.now()}`;
+                        document.head.appendChild(script);
+                    });
+                }
+            })
+            .catch(() => {
+                // 兜底尝试加载默认的常见分组
+                ['小狗', '抽象'].forEach(name => {
+                    const s = document.createElement('script');
+                    s.src = `${STICKER_SUBDIR}${encodeURIComponent(name)}/list.js`;
+                    document.head.appendChild(s);
+                });
+            });
+    }
+    loadExternalStickerPacks();
+
+    function ensureStickersLoaded() {
+        if (!window.G) window.G = {};
+        if (!Array.isArray(window.G.stickerCategories)) window.G.stickerCategories = ['小狗', '抽象', '猪猪'];
+        if (!Array.isArray(window.G.stickerLibrary)) window.G.stickerLibrary = [];
+        if (!window.G.activeStickerCategory) window.G.activeStickerCategory = window.G.stickerCategories[0] || '小狗';
+    }
+    window.ensureStickersLoaded = ensureStickersLoaded;
+
     // 后台生成状态记录表（npcId/groupId => timer / promise）
     if (!window._MCYT_CHAT_GENERATING) window._MCYT_CHAT_GENERATING = {};
 
@@ -115,7 +197,6 @@
             if (!window.G || !window.G.npcs || typeof window.G.npcs !== 'object') return;
             const keys = Object.keys(window.G.npcs);
             
-            // 🛡️ 核心防丢保护：如果当前内存为空，但本地备份有数据，严禁用空数据覆盖已有存档！
             if (keys.length === 0) {
                 const existing = localStorage.getItem(CUSTOM_NPCS_BACKUP_KEY);
                 if (existing && existing.length > 10) {
@@ -180,7 +261,6 @@
             if (!window.G || !window.G.chatHistory || typeof window.G.chatHistory !== 'object') return;
             const keys = Object.keys(window.G.chatHistory);
             
-            // 🛡️ 核心防丢保护：防止空冲刷
             if (keys.length === 0) {
                 const existing = localStorage.getItem(CHAT_HISTORY_BACKUP_KEY);
                 if (existing && existing.length > 10) {
@@ -219,12 +299,11 @@
     }
     window.restoreChatHistoryFromLocalBackup = restoreChatHistoryFromLocalBackup;
 
-    // 朋友圈动态防丢独立持久化槽（增设容量上限、配额防爆与空覆盖防护）
+    // 朋友圈动态防丢独立持久化槽
     function syncMomentsFeedToLocalBackup() {
         try {
             if (!window.G || !Array.isArray(window.G.feed)) return;
 
-            // 🛡️ 核心防丢保护：防止动态空冲刷
             if (window.G.feed.length === 0) {
                 const existing = localStorage.getItem(MOMENTS_FEED_BACKUP_KEY);
                 if (existing && existing.length > 10) {
@@ -335,7 +414,6 @@
                 box-sizing: border-box !important;
             }
 
-            /* 微信纯色极简后台生成悬浮胶囊 */
             .wechat-bg-generating-banner {
                 position: fixed; top: 48px; left: 50%; transform: translateX(-50%);
                 background: rgba(24, 24, 24, 0.88); backdrop-filter: blur(8px);
@@ -428,7 +506,6 @@
             .wechat-plus-item:active .wechat-plus-icon-box { background: #eaeaea; }
             .wechat-plus-label { font-size: 11px; color: #555555; }
 
-            /* 微信拟真语音条 */
             .wechat-voice-bubble {
                 display: flex; align-items: center; gap: 8px; min-height: 38px;
                 padding: 8px 12px; border-radius: 5px; cursor: pointer; user-select: none;
@@ -440,7 +517,6 @@
             .wechat-voice-bar:nth-child(2) { height: 12px; }
             .wechat-voice-bar:nth-child(3) { height: 16px; }
 
-            /* 微信朋友圈拍立得质感画片卡片 */
             .wechat-photo-card {
                 background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px;
                 padding: 10px; max-width: 240px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
@@ -463,7 +539,6 @@
                 overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical;
             }
 
-            /* 微信朋友圈转发卡片与名片卡片 */
             .wechat-share-moment-card {
                 background: #ffffff; border: 1px solid #e0e0e0; border-radius: 6px;
                 padding: 10px 12px; width: 220px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
@@ -477,7 +552,6 @@
             }
             .wechat-contact-card:active { background: #f8fafc; }
 
-            /* 微信聊天中的系统级提示条 */
             .wechat-sys-notice-pill {
                 display: inline-flex; align-items: center; gap: 4px; background: rgba(0,0,0,0.06);
                 color: #666666; font-size: 11px; padding: 3px 10px; border-radius: 12px;
@@ -485,7 +559,6 @@
             }
             .wechat-sys-notice-pill span.link { color: #576b95; font-weight: 600; }
 
-            /* 微信引用条 */
             .wechat-quote-bar {
                 display: flex; align-items: center; justify-content: space-between;
                 background: #e9e9e9; padding: 5px 10px; font-size: 11.5px; color: #666;
@@ -505,7 +578,6 @@
                 background: #07c160 !important; color: #ffffff !important; font-weight: 600;
             }
 
-            /* 聊天列表原生左滑删除项样式 */
             .chat-swipe-item {
                 position: relative;
                 width: 100%;
@@ -597,8 +669,8 @@
         if (!window.G.feed) window.G.feed = [];
         if (!window.G._behindScreenActive) window.G._behindScreenActive = {};
         if (!window.G._chatShowFullHistory) window.G._chatShowFullHistory = {};
-        if (!window.G.stickerCategories) window.G.stickerCategories = ['猪猪'];
-        if (!window.G.stickerLibrary) window.G.stickerLibrary = [];
+        
+        ensureStickersLoaded();
 
         restoreCustomNpcsFromLocalBackup();
         restoreChatHistoryFromLocalBackup();
@@ -680,11 +752,6 @@
     }
     window.formatTokenString = formatTokenString;
 
-    /**
-     * 解析 AI 回复中的表情包/语音/双语/发动态实体及动态提醒
-     * 🛡️ 深度加固：采用时序切分引擎，自动剥离任何误嵌套在 [MSG] 内或裸露的 [STICKER...] 标签，
-     *    全面支持双语属性 original="..." / original='...' 跨行解析，防止标签代码泄露给玩家！
-     */
     function parseAIReplyEntities(rawText, npcName) {
         if (!rawText) return [];
         let clean = (typeof stripThought === 'function') ? stripThought(rawText).trim() : rawText.trim();
@@ -692,7 +759,6 @@
 
         const entities = [];
 
-        // 1. 优先提取偶发朋友圈动态标签 [POST_MOMENT text="..." img_desc="..."]
         const postMomentRegex = /\[POST_MOMENT\s+text="([^"]+)"(?:\s+img_desc="([^"]*)")?\]/i;
         const pMatch = postMomentRegex.exec(clean);
         if (pMatch) {
@@ -729,14 +795,10 @@
             clean = clean.replace(postMomentRegex, '').trim();
         }
 
-        // 2. 宏观标记切分器：统一匹配 [VOICE...]...[/VOICE]、[STICKER...]、以及 [MSG...]...[/MSG]
-        // 🛡️ 正则全方位强化：
-        // MSG 开头支持 original="...", original='...' 或无引号，属性内容支持多行贪婪匹配
         const tokenRegex = /\[VOICE(?:\s+seconds=["']?(\d+)["']?)?(?:\s+audio_bg=["']?([^"']*)["']?)?\]([\s\S]*?)\[\/VOICE\]|\[STICKER(?:\s+category=["']?([^"'\]\s]*)["']?)?(?:\s+desc=["']?([^"'\]\s]*)["']?)?\s*\]|\[MSG(?:\s+original=(?:"([\s\S]*?)"|'([\s\S]*?)'|([^\]\s]+)))?\]([\s\S]*?)\[\/MSG\]/gi;
 
         let match;
         while ((match = tokenRegex.exec(clean)) !== null) {
-            // 分支 A: VOICE 语音条
             if (match[0].startsWith('[VOICE')) {
                 const sec = parseInt(match[1]) || Math.min(60, Math.max(2, Math.round((match[3] || '').length * 0.45)));
                 entities.push({
@@ -746,9 +808,8 @@
                     text: (match[3] || '').trim()
                 });
             }
-            // 分支 B: 独立输出的 STICKER 表情包
             else if (match[0].startsWith('[STICKER')) {
-                const cat = (match[4] || '猪猪').trim();
+                const cat = (match[4] || '小狗').trim();
                 const desc = (match[5] || '开心').trim();
                 entities.push({
                     type: 'sticker_entity',
@@ -756,13 +817,10 @@
                     desc: desc
                 });
             }
-            // 分支 C: MSG 微信普通/双语气泡（防御内部误嵌的 STICKER 及格式自愈）
             else if (match[0].startsWith('[MSG')) {
-                // 属性提取：双引号/单引号/无引号三选一
                 const original = (match[6] || match[7] || match[8] || '').trim();
                 let innerText = (match[9] || '').trim();
 
-                // 检查 MSG 内部是否夹带了 [STICKER ...]
                 const nestedStickerRegex = /\[STICKER(?:\s+category=["']?([^"'\]\s]*)["']?)?(?:\s+desc=["']?([^"'\]\s]*)["']?)?\s*\]/gi;
                 if (nestedStickerRegex.test(innerText)) {
                     let lastIdx = 0;
@@ -779,7 +837,7 @@
                         }
                         entities.push({
                             type: 'sticker_entity',
-                            category: (stMatch[1] || '猪猪').trim(),
+                            category: (stMatch[1] || '小狗').trim(),
                             desc: (stMatch[2] || '开心').trim()
                         });
                         lastIdx = nestedStickerRegex.lastIndex;
@@ -793,7 +851,6 @@
                         });
                     }
                 } else {
-                    // 彻底清除内部任何残留的破坏性未闭合标签
                     innerText = innerText.replace(/\[STICKER[^\]]*\]/gi, '').trim();
                     if (innerText || original) {
                         entities.push({
@@ -806,13 +863,10 @@
             }
         }
 
-        // 如果提取到了标准实体，直接返回（最多返回 8 个气泡）
         if (entities.length > 0) {
             return entities.slice(0, 8);
         }
 
-        // 🛡️ 保底分支：若模型标签未闭合或完全没按规矩闭合，启动全量自愈剥离器
-        // 彻底清洗裸露的 [MSG original="..."] 或 [MSG] 或 [/MSG]
         let sanitized = clean;
         const msgLooseRegex = /\[MSG(?:\s+original=(?:"([\s\S]*?)"|'([\s\S]*?)'|([^\]\s]+)))?\]([\s\S]*?)(?:\[\/MSG\]|$)/gi;
         let looseMatch;
@@ -832,7 +886,6 @@
             return entities.slice(0, 8);
         }
 
-        // 先检查是否有裸露的 [STICKER...]
         const nakedStickerRegex = /\[STICKER(?:\s+category=["']?([^"'\]\s]*)["']?)?(?:\s+desc=["']?([^"'\]\s]*)["']?)?\s*\]/gi;
         if (nakedStickerRegex.test(sanitized)) {
             let lastIdx = 0;
@@ -845,7 +898,7 @@
                 }
                 entities.push({
                     type: 'sticker_entity',
-                    category: (nMatch[1] || '猪猪').trim(),
+                    category: (nMatch[1] || '小狗').trim(),
                     desc: (nMatch[2] || '开心').trim()
                 });
                 lastIdx = nakedStickerRegex.lastIndex;
@@ -857,7 +910,6 @@
             if (entities.length > 0) return entities.slice(0, 8);
         }
 
-        // 纯文本按行拆分兜底（彻底剔除残留的方括号标签残渣）
         const pureText = sanitized
             .replace(/\[\/?(?:MSG|VOICE|STICKER|FAVOR|BEHIND_SCREEN)[^\]]*\]/gi, '')
             .trim();
@@ -874,10 +926,14 @@
     function resolveStickerImageUrl(category, desc) {
         const lib = window.G.stickerLibrary || [];
         const found = lib.find(s => s && (s.category === category || !category) && (s.desc === desc || (s.desc && s.desc.includes(desc))));
-        if (found && found.url) return { url: found.url, desc: found.desc };
+        if (found && (found.url || found.localUrl)) {
+            return { url: found.localUrl || found.url, desc: found.desc };
+        }
 
         const catFallback = lib.find(s => s && s.category === category);
-        if (catFallback && catFallback.url) return { url: catFallback.url, desc: catFallback.desc };
+        if (catFallback && (catFallback.url || catFallback.localUrl)) {
+            return { url: catFallback.localUrl || catFallback.url, desc: catFallback.desc };
+        }
 
         return null;
     }
@@ -904,10 +960,6 @@
     }
     window.hideGeneratingBanner = hideGeneratingBanner;
 
-    // ============================================================
-    // 📇 酒馆（Tavern）规范角色卡 PNG 导出与解析引擎
-    // 特性：底图采用头像，将静态人设编码至 PNG tEXt 数据块，绝不含聊天记录与好感度
-    // ============================================================
     function crc32(buf) {
         let table = window._crc32Table;
         if (!table) {
@@ -936,12 +988,12 @@
 
         const view = new DataView(chunk.buffer);
         view.setUint32(0, dataLen);
-        chunk[4] = 0x74; chunk[5] = 0x45; chunk[6] = 0x58; chunk[7] = 0x74; // 'tEXt'
+        chunk[4] = 0x74; chunk[5] = 0x45; chunk[6] = 0x58; chunk[7] = 0x74;
 
         let offset = 8;
         chunk.set(keyBytes, offset);
         offset += keyBytes.length;
-        chunk[offset++] = 0; // null separator
+        chunk[offset++] = 0;
         chunk.set(textBytes, offset);
         offset += textBytes.length;
 
@@ -1107,9 +1159,6 @@
     }
     window.exportTavernCharacterPng = exportTavernCharacterPng;
 
-    // ============================================================
-    // 📥 酒馆规范角色卡 PNG / JSON 解析导入引擎
-    // ============================================================
     function parsePngTextChunks(arrayBuffer) {
         const view = new DataView(arrayBuffer);
         if (view.getUint32(0) !== 0x89504E47 || view.getUint32(4) !== 0x0D0A1A0A) {

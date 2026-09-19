@@ -3,7 +3,7 @@
  * 💬 微信主应用 · 拆分分片 3/7：单人私聊窗口渲染（renderSingleChatWindow，含消息折叠、防卡顿优化与智能重说切换）、
  *    微信内嵌全屏浏览器浮层（window.openWebPageLink）、
  *    重新生成回复的确认与执行（confirmRetryLastAIReply / doRetryLastAIReply）、
- *    微信原生直显大图与点击 3D 翻转查看文字、🌟 拟真生活排版卡片（ui_card）渲染。
+ *    🌟 微信原生直显大图与沉浸式大图文字查看器对接、拟真生活排版卡片（ui_card）渲染。
  * ⚠️ 拆分自 chat-app.js，window.renderSingleChatWindow 的导出位置从原文件末尾就地前移到函数定义处。
  */
 
@@ -392,7 +392,7 @@
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
                 </div>`;
             } else if (msg.type === 'image' || msg.type === 'image_flip' || msg.type === 'image_text_only' || msg.imageUrl || msg.imageDesc) {
-                // 🖼️ 微信原生纯净直显图片气泡（彻底消除拍立得相框与右下角描述，点击即 3D 翻转呈现背面文字）
+                // 🖼️ 微信原生纯净直显图片气泡（点击直达全屏沉浸大图与舒展文字查看器，彻底剔除狭窄翻转）
                 const imageBubbleHtml = (typeof window.renderWechatPureImageBubbleHTML === 'function')
                     ? window.renderWechatPureImageBubbleHTML(msg)
                     : `<div style="padding:10px 14px;background:#fff;border-radius:8px;font-size:13px;color:#222;">“${escapeHtml(msg.imageDesc || msg.text || '图片')}”</div>`;
