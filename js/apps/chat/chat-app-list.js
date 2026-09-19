@@ -19,7 +19,7 @@
     window._chatExpandAllMap = {}; // 记录哪些会话被用户主动临时展开了历史记录
     window._activeSwipedItem = null;  // 记录当前处于左滑展开状态的行
 
-    // 🌟 辅助函数：将高价值对话证据沉淀写入 Rememori 存储池
+    // 🌟 辅助函数：将高价值对话证据沉淀写入 Rememori 存储池（已改为轻量暂存，防止单条口水话污染向量库）
     window.depositRememoriEvidence = function depositRememoriEvidence(npcId, curAccId, content) {
         if (!content || content.length < 5) return;
         try {
@@ -68,7 +68,33 @@
         } catch (_) {}
     }
 
-    // 🧠 检查并派发给忆海（Rememori）后台静默总结
+    // 辅助函数：根据起止消息生成精准的人类时间跨度标签
+    function formatTimeSpanLabel(startMsg, endMsg) {
+        const tStart = (startMsg && startMsg.timestamp) ? new Date(startMsg.timestamp) : new Date();
+        const tEnd = (endMsg && endMsg.timestamp) ? new Date(endMsg.timestamp) : new Date();
+
+        const pad = (n) => String(n).padStart(2, '0');
+        const getPeriod = (h) => (h < 6 ? '凌晨' : h < 12 ? '上午' : h < 18 ? '下午' : '晚上');
+
+        const y1 = tStart.getFullYear();
+        const m1 = tStart.getMonth() + 1;
+        const d1 = tStart.getDate();
+        const h1 = tStart.getHours();
+        const min1 = pad(tStart.getMinutes());
+
+        const y2 = tEnd.getFullYear();
+        const m2 = tEnd.getMonth() + 1;
+        const d2 = tEnd.getDate();
+        const h2 = tEnd.getHours();
+        const min2 = pad(tEnd.getMinutes());
+
+        if (y1 === y2 && m1 === m2 && d1 === d2) {
+            return `${y1}年${m1}月${d1}日 ${getPeriod(h1)}${pad(h1)}:${min1} - ${pad(h2)}:${min2}`;
+        }
+        return `${y1}年${m1}月${d1}日 ${pad(h1)}:${min1} 至 ${y2}年${m2}月${d2}日 ${pad(h2)}:${min2}`;
+    }
+
+    // 🧠 检查并派发给忆海（Rememori）后台静默总结（带精确时间跨度与具名事实提炼）
     window.checkAndTriggerAutoMemorySummary = function checkAndTriggerAutoMemorySummary(npcId, curAccId) {
         const cfg = getNpcMemoryConfig(npcId);
         if (!cfg || !cfg.enabled) return;
@@ -77,16 +103,24 @@
         const triggerLimit = Math.max(10, parseInt(cfg.triggerCount) || 20);
         const keepCount = Math.max(4, parseInt(cfg.keepRecent) || 8);
 
+        // 未达到触发总结阈值，安静返回
         if (hist.length < triggerLimit) return;
 
+        // 计算超出保留上下文的最前部分
         const sliceCount = hist.length - keepCount;
         if (sliceCount < 4) return;
 
+        // 提取待总结的早期对话切片
         const sliceToSummarize = hist.slice(0, sliceCount);
         const npc = window.G.npcs ? window.G.npcs[npcId] : null;
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '玩家' };
         const npcName = (npc && npc.remark) ? npc.remark : (npc ? npc.name : '对方');
         const playerName = curAcc.name || '玩家';
+
+        // 计算这段历史切片的时间跨度
+        const startMsg = sliceToSummarize[0];
+        const endMsg = sliceToSummarize[sliceToSummarize.length - 1];
+        const timeSpan = formatTimeSpanLabel(startMsg, endMsg);
 
         const dialogueLines = sliceToSummarize.map(m => {
             const speaker = (m.from === 'player') ? playerName : npcName;
@@ -96,6 +130,7 @@
             return `${speaker}: ${m.text || ''}`;
         }).join('\n');
 
+        // 保留最新部分活跃消息留在私聊窗口中
         const remaining = hist.slice(sliceCount);
         const historyKey = `${curAccId || 'main'}_${npcId}`;
         if (window.G.chatHistory) {
@@ -105,14 +140,24 @@
         if (typeof window.syncChatHistoryToLocalBackup === 'function') window.syncChatHistoryToLocalBackup();
         if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
 
-        window.postMessage({
+        // 向忆海后台派发任务，附带精准时间跨度与 NPC 真实元数据
+        const summaryPayload = {
             type: 'TRIGGER_REMEMORI_SUMMARY',
             scene: 'chat',
             dialogues: dialogueLines,
             playerName,
             npcName,
-            npcId
-        }, '*');
+            npcId,
+            timeSpan
+        };
+
+        window.postMessage(summaryPayload, '*');
+
+        // 穿透向子 iframe（若已打开忆海视图）同步分发
+        const rememoriIframe = document.querySelector('iframe[src*="rememori"]');
+        if (rememoriIframe && rememoriIframe.contentWindow) {
+            rememoriIframe.contentWindow.postMessage(summaryPayload, '*');
+        }
 
         if (window.G.currentChatNpc === npcId) renderSingleChatWindow();
     }
@@ -336,7 +381,7 @@
         if (typeof window.openWechatCleanModal === 'function') {
             window.openWechatCleanModal('删除联系人', `
                 <div style="text-align:center;padding:12px 0 6px;font-size:14px;color:#222;line-height:1.5;">
-                    将联系人「<b>${escapeHtml(displayName)}</b>」删除，将同时删除该角色的所有聊天记录。
+                    将联系人「<b>${escapeHtml(displayName)}</b>」删除，将同时清除该角色的所有聊天记录及忆海记忆认知。
                 </div>
             `, () => {
                 window.doDeleteContactNpc(npcId);
@@ -344,9 +389,12 @@
         }
     };
 
-    // 执行彻底删除角色
+    // 执行彻底删除角色（级联清理聊天与忆海记忆）
     window.doDeleteContactNpc = function(npcId) {
         if (!window.G || !window.G.npcs) return;
+
+        const npc = window.G.npcs[npcId];
+        const npcName = npc ? (npc.remark || npc.name) : npcId;
 
         delete window.G.npcs[npcId];
 
@@ -374,13 +422,34 @@
             window.G.currentChatNpc = null;
         }
 
+        // 清除对应的独立记忆配置
+        if (window.G.npcMemoryConfigs && window.G.npcMemoryConfigs[npcId]) {
+            delete window.G.npcMemoryConfigs[npcId];
+            try {
+                localStorage.setItem('mcyt_npc_memory_configs', JSON.stringify(window.G.npcMemoryConfigs));
+            } catch (_) {}
+        }
+
         window._activeSwipedItem = null;
+
+        // 向忆海广播级联删除事件
+        const delEvent = {
+            type: 'DELETE_NPC_MEMORIES',
+            npcId: npcId,
+            npcName: npcName
+        };
+        window.postMessage(delEvent, '*');
+
+        const rememoriIframe = document.querySelector('iframe[src*="rememori"]');
+        if (rememoriIframe && rememoriIframe.contentWindow) {
+            rememoriIframe.contentWindow.postMessage(delEvent, '*');
+        }
 
         if (typeof window.syncCustomNpcsToLocalBackup === 'function') window.syncCustomNpcsToLocalBackup();
         if (typeof window.syncChatHistoryToLocalBackup === 'function') window.syncChatHistoryToLocalBackup();
         if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
 
-        if (typeof showToast === 'function') showToast('联系人已删除', 'success', 1200);
+        if (typeof showToast === 'function') showToast('联系人及认知已彻底删除', 'success', 1200);
         renderChatApp();
     };
 

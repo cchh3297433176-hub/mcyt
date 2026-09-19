@@ -63,7 +63,7 @@
         return { needSearch: false, query: '' };
     }
 
-    // 🤖 单人私聊 AI 回复触发（带跨时段、隔夜双时间戳感知、塔罗牌解读感知、Rememori 证据链与联网搜索）
+    // 🤖 单人私聊 AI 回复触发（带跨时段、隔夜双时间戳感知、塔罗牌解读感知、滑动窗口总结与联网搜索）
     window.triggerAIReplyForSingle = async function(npcId) {
         const npc = window.G.npcs[npcId];
         if (!npc) return;
@@ -144,7 +144,7 @@
         // 🌐 联网搜索检索处理
         let searchResults = [];
         let searchContextPrompt = '';
-        let isSearchTriggered = false; // 标记本轮是否触发了联网搜索
+        let isSearchTriggered = false;
         const searchCfg = (typeof window.getNpcSearchConfig === 'function')
             ? window.getNpcSearchConfig(npcId)
             : { enabled: false, maxResults: 3, sendWebPage: true, forcedKeywords: '' };
@@ -187,7 +187,6 @@
             };
 
         try {
-            // 设置 maxTokens 上限为 10000（给予大模型无限充裕的输出空间，绝不提前截断）
             const raw = await callAI([
                 { role: 'system', content: promptCtx.sysPrompt },
                 { role: 'user', content: promptCtx.userPrompt }
@@ -256,8 +255,6 @@
             const entities = window.parseAIReplyEntities(clean, npc.name);
             const finalEntities = (entities && entities.length) ? entities : [{ type: 'text', text: '在呢' }];
 
-            let collectedPureReply = '';
-
             for (let i = 0; i < finalEntities.length; i++) {
                 const item = finalEntities[i];
                 const time = new Date().toLocaleTimeString().slice(0, 5);
@@ -282,7 +279,6 @@
                         time,
                         timestamp: Date.now()
                     }, curAcc.id);
-                    collectedPureReply += ` [语音: ${item.text || ''}]`;
                 } else if (item.type === 'sticker_entity') {
                     const resolved = window.resolveStickerImageUrl(item.category, item.desc);
                     if (resolved) {
@@ -313,7 +309,6 @@
                         time,
                         timestamp: Date.now()
                     }, curAcc.id);
-                    collectedPureReply += ' ' + (item.originalText || item.text || '');
                 }
 
                 if (window.G.currentChatNpc === npcId) renderSingleChatWindow();
@@ -346,11 +341,6 @@
                 }
             }
 
-            // 🧠 记忆保护：如果本轮触发了联网搜索，绝不沉淀到忆海长效记忆中，随上下文隐藏自动消失
-            if (collectedPureReply.trim() && !isSearchTriggered) {
-                depositRememoriEvidence(npcId, curAcc.id, `${npc.name}: ${collectedPureReply.trim()}`);
-            }
-
             if (behindText && isBehindActive) {
                 window.pushChatMessageSafe(npcId, {
                     from: 'behind_screen',
@@ -361,7 +351,7 @@
                 if (window.G.currentChatNpc === npcId) renderSingleChatWindow();
             }
 
-            // 如果触发了联网搜索，同样跳过本轮的历史记忆总结，不把菜谱和联网百科做成具名客观事实
+            // 🧠 只有未触发全网搜索时，才进行历史滑动总结（避免将百科知识污染为长效事实）
             if (!isSearchTriggered) {
                 checkAndTriggerAutoMemorySummary(npcId, curAcc.id);
             }
