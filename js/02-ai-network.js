@@ -158,6 +158,9 @@ async function webSearch(query, maxResults = 3) {
     const q = (query || '').trim();
     if (!q) return { answer: '', results: [] };
 
+    // 每次检索前确保从 localStorage 同步最新设置
+    loadSearchConfig();
+
     const provider = (G.search && G.search.provider) || 'bing_local';
 
     // 1. Bing 免 Key 抓取通道（具备国内环境多通道弹性容灾与 DOM 解析）
@@ -285,12 +288,18 @@ async function webSearch(query, maxResults = 3) {
         return { answer: data.answer || '', results };
     }
 
-    // 4. Tavily 国际通用搜索 API
+    // 4. Tavily 国际通用搜索 API（同时支持 Header 与 Body 双重凭证）
     if (provider === 'tavily') {
         const resp = await fetch('https://api.tavily.com/search', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-            body: JSON.stringify({ query: q, search_depth: 'basic', max_results: maxResults, include_answer: true }),
+            body: JSON.stringify({
+                api_key: key,
+                query: q,
+                search_depth: 'basic',
+                max_results: maxResults,
+                include_answer: true
+            }),
         });
         if (!resp.ok) {
             const t = await resp.text();
@@ -465,6 +474,12 @@ async function callAI(messages, options = {}) {
         }
     }
 }
+
+// 自动执行加载
+loadAIConfig();
+loadSavedModels();
+loadMemorySummarySettings();
+loadSearchConfig();
 
 // 暴露全局
 window.callAI = callAI;
