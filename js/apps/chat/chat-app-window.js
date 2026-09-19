@@ -3,7 +3,7 @@
  * 💬 微信主应用 · 拆分分片 3/7：单人私聊窗口渲染（renderSingleChatWindow，含消息折叠、防卡顿优化与智能重说切换）、
  *    微信内嵌全屏浏览器浮层（window.openWebPageLink）、
  *    重新生成回复的确认与执行（confirmRetryLastAIReply / doRetryLastAIReply）、
- *    彻底去除拍立得相纸与右下角描述，全面启用微信原生直显大图与点击 3D 翻转查看文字。
+ *    微信原生直显大图与点击 3D 翻转查看文字、🌟 拟真生活排版卡片（ui_card）渲染。
  * ⚠️ 拆分自 chat-app.js，window.renderSingleChatWindow 的导出位置从原文件末尾就地前移到函数定义处。
  */
 
@@ -135,7 +135,7 @@
     // ============================================================
     // 💬 单人私聊窗口渲染（带消息折叠、防卡顿优化与智能重说切换）
     // ============================================================
-    window.renderSingleChatWindow = function renderSingleChatWindow(container) {
+    window.renderSingleChatWindow = function renderSingleChatWindow(container, renderOpts = {}) {
         if (!container) container = document.getElementById('appModalBody') || document.getElementById('socialTab');
         if (!container) return;
 
@@ -148,17 +148,17 @@
         if (legacyWrap) legacyWrap.remove();
 
         const npcId = window.G.currentChatNpc;
-        const npc = window.G.npcs[npcId];
+        const npc = window.G.npcs ? window.G.npcs[npcId] : null;
         if (!npc) { window.closeChat(); return; }
 
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', region: '中国' };
-        const isBlocked = window.isAccountBlockedByNpc(npcId, curAcc.id);
-        const chatHist = window.getAccountChatHistory(npcId, curAcc.id);
-        const isBehindActive = !!window.G._behindScreenActive[npcId];
+        const isBlocked = (typeof window.isAccountBlockedByNpc === 'function') ? window.isAccountBlockedByNpc(npcId, curAcc.id) : false;
+        const chatHist = window.getAccountChatHistory(npcId, curAcc.id) || [];
+        const isBehindActive = !!(window.G._behindScreenActive && window.G._behindScreenActive[npcId]);
 
-        const tokensCount = window.calculateHistoryTokens(chatHist);
-        const tokenDisplay = window.formatTokenString(tokensCount);
-        const isGenerating = !!window._MCYT_CHAT_GENERATING[npcId];
+        const tokensCount = (typeof window.calculateHistoryTokens === 'function') ? window.calculateHistoryTokens(chatHist) : 0;
+        const tokenDisplay = (typeof window.formatTokenString === 'function') ? window.formatTokenString(tokensCount) : '0';
+        const isGenerating = !!(window._MCYT_CHAT_GENERATING && window._MCYT_CHAT_GENERATING[npcId]);
 
         const topHeaderTitle = (npc.remark && npc.remark.trim()) ? `${npc.remark.trim()} (${npc.name})` : (npc.name || npc.id);
 
@@ -172,32 +172,36 @@
         }
         const canRedo = !!(lastDialogueMsg && lastDialogueMsg.from === 'npc');
 
-        const collapseCfg = getChatCollapseConfig();
+        const collapseCfg = (typeof getChatCollapseConfig === 'function') ? getChatCollapseConfig() : { enabled: true, limit: 50 };
         const chatKey = `single_${npcId}_${curAcc.id}`;
-        const isExpanded = !!window._chatExpandAllMap[chatKey];
+        const isExpanded = !!(window._chatExpandAllMap && window._chatExpandAllMap[chatKey]);
 
+        // 🛡️ 折叠逻辑严谨保障：关掉折叠开关时 100% 呈现全部消息
         let visibleMessages = chatHist;
         let collapseBannerHtml = '';
 
-        if (collapseCfg.enabled && chatHist.length > collapseCfg.limit && !isExpanded) {
-            const hiddenCount = chatHist.length - collapseCfg.limit;
-            visibleMessages = chatHist.slice(-collapseCfg.limit);
-            collapseBannerHtml = `
-                <div style="text-align:center;margin:10px 0 16px;">
-                    <span onclick="window.toggleChatHistoryExpand('${chatKey}')" style="display:inline-flex;align-items:center;gap:4px;background:#e5e5e5;color:#555;padding:4px 12px;border-radius:12px;font-size:11px;cursor:pointer;user-select:none;">
-                        <svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:currentColor;"><path d="M12 8l-6 6 1.41 1.41L12 10.83l4.59 4.58L18 14z"/></svg>
-                        已折叠早前 ${hiddenCount} 条消息，点击展开
-                    </span>
-                </div>
-            `;
-        } else if (collapseCfg.enabled && chatHist.length > collapseCfg.limit && isExpanded) {
-            collapseBannerHtml = `
-                <div style="text-align:center;margin:8px 0 14px;">
-                    <span onclick="window.toggleChatHistoryExpand('${chatKey}')" style="display:inline-flex;align-items:center;gap:4px;background:#e5e5e5;color:#888;padding:3px 10px;border-radius:12px;font-size:10.5px;cursor:pointer;user-select:none;">
-                        收起早期历史消息
-                    </span>
-                </div>
-            `;
+        if (collapseCfg && collapseCfg.enabled && chatHist.length > collapseCfg.limit) {
+            if (!isExpanded) {
+                const hiddenCount = chatHist.length - collapseCfg.limit;
+                visibleMessages = chatHist.slice(-collapseCfg.limit);
+                collapseBannerHtml = `
+                    <div style="text-align:center;margin:12px 0 16px;">
+                        <span onclick="window.toggleChatHistoryExpand('${chatKey}')" style="display:inline-flex;align-items:center;gap:5px;background:#ffffff;color:#555555;padding:5px 14px;border-radius:16px;font-size:11.5px;cursor:pointer;user-select:none;box-shadow:0 1px 3px rgba(0,0,0,0.06);border:0.5px solid #e0e0e0;">
+                            <svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:none;stroke:#07c160;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;"><polyline points="6 9 12 15 18 9"></polyline></svg>
+                            <span>已折叠更早的 ${hiddenCount} 条消息 · 点击展开</span>
+                        </span>
+                    </div>
+                `;
+            } else {
+                collapseBannerHtml = `
+                    <div style="text-align:center;margin:10px 0 14px;">
+                        <span onclick="window.toggleChatHistoryExpand('${chatKey}')" style="display:inline-flex;align-items:center;gap:5px;background:#ffffff;color:#888888;padding:4px 12px;border-radius:14px;font-size:11px;cursor:pointer;user-select:none;box-shadow:0 1px 2px rgba(0,0,0,0.04);border:0.5px solid #e8e8e8;">
+                            <svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:none;stroke:#888888;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;"><polyline points="18 15 12 9 6 15"></polyline></svg>
+                            <span>收起早期折叠消息</span>
+                        </span>
+                    </div>
+                `;
+            }
         }
 
         let messagesHtml = collapseBannerHtml;
@@ -238,6 +242,30 @@
                         ${quoteHtml}
                         ${tarotCardHtml}
                         <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
+                    </div>
+                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
+                </div>`;
+            } else if (msg.type === 'ui_card') {
+                // 🧾 拟真生活排版卡片气泡（精致拟真白灰微绿外壳与真实物品展示）
+                const cardTypeLabel = msg.cardType || '生活便签';
+                messagesHtml += `
+                <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
+                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(npc, 38)}</div>` : ''}
+                    <div style="max-width:78%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
+                        ${quoteHtml}
+                        <div class="wechat-ui-card-container" style="background:#ffffff;border:0.5px solid #e0e0e0;border-radius:8px;padding:12px 14px;box-shadow:0 2px 8px rgba(0,0,0,0.06);width:fit-content;max-width:270px;box-sizing:border-box;cursor:pointer;">
+                            <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:0.5px dashed #e5e5e5;padding-bottom:6px;margin-bottom:8px;font-size:11px;color:#888;">
+                                <div style="display:flex;align-items:center;gap:4px;">
+                                    <svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:none;stroke:#07c160;stroke-width:2;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline></svg>
+                                    <span style="font-weight:600;color:#333;">${escapeHtml(cardTypeLabel)}</span>
+                                </div>
+                                <span style="font-size:10px;color:#aaa;">仿真物品</span>
+                            </div>
+                            <div class="wechat-ui-card-body" style="font-size:13px;line-height:1.45;color:#1f2937;">
+                                ${msg.cardHtml || escapeHtml(msg.text || '')}
+                            </div>
+                        </div>
+                        <div style="font-size:10px;color:#bbb;margin-top:3px;">${msg.time || ''}</div>
                     </div>
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
                 </div>`;
@@ -527,7 +555,9 @@
         container.innerHTML = html;
 
         const msgArea = document.getElementById('chatMessageArea');
-        if (msgArea) setTimeout(() => { msgArea.scrollTop = msgArea.scrollHeight; }, 50);
+        if (msgArea && !renderOpts.keepScroll) {
+            setTimeout(() => { msgArea.scrollTop = msgArea.scrollHeight; }, 50);
+        }
 
         container.querySelectorAll('.chat-msg-row[data-msgid]').forEach(row => {
             const mid = row.dataset.msgid;
@@ -552,7 +582,7 @@
 
     // 重新生成回复确认弹窗
     window.confirmRetryLastAIReply = function(npcId) {
-        if (window._MCYT_CHAT_GENERATING[npcId]) {
+        if (window._MCYT_CHAT_GENERATING && window._MCYT_CHAT_GENERATING[npcId]) {
             if (typeof showToast === 'function') showToast('对方正在回复中，请稍候', 'info', 1000);
             return;
         }
@@ -579,7 +609,7 @@
             hist.pop();
         }
 
-        window.syncChatHistoryToLocalBackup();
+        if (typeof window.syncChatHistoryToLocalBackup === 'function') window.syncChatHistoryToLocalBackup();
         if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
         renderSingleChatWindow();
 

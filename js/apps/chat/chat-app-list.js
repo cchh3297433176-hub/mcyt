@@ -2,7 +2,7 @@
  * js/apps/chat/chat-app-list.js
  * 💬 微信主应用 · 拆分分片 1/7：模块级状态变量、角色记忆/折叠配置读写、消息主列表构建（buildChatListHTML）、
  *    左滑删除交互引擎（bindSwipeToDeleteEngine）、删除联系人确认与执行。
- * ⚠️ 本文件由原 chat-app.js（143KB 单体文件）拆分而来，仅做物理搬家，不改动任何函数内部逻辑。
+ * ⚠️ 本文件由原 chat-app.js（143KB 单体文件）拆分而来。
  *    拆分详情与文件拆分总表见 mcyt模拟器.md 对应章节。
  * ⚠️ 角色名片卡已拆分至 chat-card.js，塔罗卡片与队列已拆分至 chat-tarot.js
  * 加载顺序：本文件（list）→ chat-app-shell.js → chat-app-window.js → chat-app-bubble.js
@@ -19,7 +19,7 @@
     window._chatExpandAllMap = {}; // 记录哪些会话被用户主动临时展开了历史记录
     window._activeSwipedItem = null;  // 记录当前处于左滑展开状态的行
 
-    // 🌟 辅助函数：将高价值对话证据沉淀写入 Rememori 存储池（已改为轻量暂存，防止单条口水话污染向量库）
+    // 🌟 辅助函数：将高价值对话证据沉淀写入 Rememori 存储池（轻量暂存，防止单条口水话污染向量库）
     window.depositRememoriEvidence = function depositRememoriEvidence(npcId, curAccId, content) {
         if (!content || content.length < 5) return;
         try {
@@ -95,6 +95,7 @@
     }
 
     // 🧠 检查并派发给忆海（Rememori）后台静默总结（带精确时间跨度与具名事实提炼）
+    // 🛡️ 铁律修复：只提炼长效记忆，绝不物理截断或删除原始聊天记录！
     window.checkAndTriggerAutoMemorySummary = function checkAndTriggerAutoMemorySummary(npcId, curAccId) {
         const cfg = getNpcMemoryConfig(npcId);
         if (!cfg || !cfg.enabled) return;
@@ -110,8 +111,15 @@
         const sliceCount = hist.length - keepCount;
         if (sliceCount < 4) return;
 
+        // 防止对同一批历史反复重复总结：记录已总结到的消息时间戳
+        if (!window.G._lastSummaryTimestampMap) window.G._lastSummaryTimestampMap = {};
+        const summarySessionKey = `${curAccId || 'main'}_${npcId}`;
+        const lastProcessedTime = window.G._lastSummaryTimestampMap[summarySessionKey] || 0;
+
         // 提取待总结的早期对话切片
-        const sliceToSummarize = hist.slice(0, sliceCount);
+        const sliceToSummarize = hist.slice(0, sliceCount).filter(m => (m.timestamp || 0) > lastProcessedTime);
+        if (sliceToSummarize.length < 4) return;
+
         const npc = window.G.npcs ? window.G.npcs[npcId] : null;
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '玩家' };
         const npcName = (npc && npc.remark) ? npc.remark : (npc ? npc.name : '对方');
@@ -130,15 +138,8 @@
             return `${speaker}: ${m.text || ''}`;
         }).join('\n');
 
-        // 保留最新部分活跃消息留在私聊窗口中
-        const remaining = hist.slice(sliceCount);
-        const historyKey = `${curAccId || 'main'}_${npcId}`;
-        if (window.G.chatHistory) {
-            window.G.chatHistory[historyKey] = remaining;
-        }
-
-        if (typeof window.syncChatHistoryToLocalBackup === 'function') window.syncChatHistoryToLocalBackup();
-        if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+        // 记录已总结锚点，绝不截断 window.G.chatHistory
+        window.G._lastSummaryTimestampMap[summarySessionKey] = endMsg.timestamp || Date.now();
 
         // 向忆海后台派发任务，附带精准时间跨度与 NPC 真实元数据
         const summaryPayload = {
@@ -158,8 +159,6 @@
         if (rememoriIframe && rememoriIframe.contentWindow) {
             rememoriIframe.contentWindow.postMessage(summaryPayload, '*');
         }
-
-        if (window.G.currentChatNpc === npcId) renderSingleChatWindow();
     }
 
     // 读取或初始化折叠配置
@@ -183,6 +182,15 @@
             localStorage.setItem('mcyt_chat_collapse_config', JSON.stringify(cfg));
         } catch (_) {}
     }
+
+    // 🗂️ 切换单人会话的消息展开/收起状态
+    window.toggleChatHistoryExpand = function toggleChatHistoryExpand(chatKey) {
+        if (!window._chatExpandAllMap) window._chatExpandAllMap = {};
+        window._chatExpandAllMap[chatKey] = !window._chatExpandAllMap[chatKey];
+        if (typeof renderSingleChatWindow === 'function') {
+            renderSingleChatWindow(null, { keepScroll: true });
+        }
+    };
 
     // 微信"消息"主列表构建（支持左滑删除结构与样式）
     window.buildChatListHTML = function buildChatListHTML() {

@@ -2,7 +2,7 @@
  * js/apps/chat/chat-app-panels.js
  * 💬 微信主应用 · 拆分分片 6/7：表情抽屉（buildChatStickerDrawerHTML 及分类/添加/备注/新建分类）、
  *    加号功能面板 8 大格子（buildChatPlusDrawerHTML）、记忆设置弹窗、联网设置弹窗、聊天折叠设置弹窗、
- *    推荐名片选择弹窗、发送名片、最近 Token 统计弹窗。
+ *    推荐名片选择弹窗、发送名片、最近 Token 统计弹窗、🌟 拟真生活排版卡片设置弹窗。
  * ⚠️ 拆分自 chat-app.js，包含加号面板入口与角色专属联网搜索配置弹窗。
  */
 
@@ -70,6 +70,33 @@
         } catch (_) {}
     }
     window.saveNpcSearchConfig = saveNpcSearchConfig;
+
+    // 🧾 角色独立【拟真排版卡片】配置存取
+    function getNpcUiCardConfig(id) {
+        try {
+            const raw = localStorage.getItem('mcyt_npc_uicard_configs');
+            if (raw) {
+                const map = JSON.parse(raw);
+                if (map && map[id]) return map[id];
+            }
+        } catch (_) {}
+        return {
+            enabled: false,
+            customPrompt: '在分享生活物件、购物结账、备忘清单、行程或收到电影票/小票时，生成美观仿真的生活卡片'
+        };
+    }
+    window.getNpcUiCardConfig = getNpcUiCardConfig;
+
+    function saveNpcUiCardConfig(id, cfg) {
+        try {
+            let map = {};
+            const raw = localStorage.getItem('mcyt_npc_uicard_configs');
+            if (raw) map = JSON.parse(raw) || {};
+            map[id] = { ...getNpcUiCardConfig(id), ...cfg };
+            localStorage.setItem('mcyt_npc_uicard_configs', JSON.stringify(map));
+        } catch (_) {}
+    }
+    window.saveNpcUiCardConfig = saveNpcUiCardConfig;
 
     function buildChatStickerDrawerHTML(type, id) {
         if (typeof ensureStickersLoaded === 'function') ensureStickersLoaded();
@@ -184,7 +211,7 @@
         });
     };
 
-    // 完整的 8 大功能加号抽屉面板（新增“联网设置”）
+    // 完整的 8 大功能加号抽屉面板（新增“排版美化”卡片入口）
     function buildChatPlusDrawerHTML(type, id) {
         return `
         <div id="chatPlusDrawer" style="background:#f7f7f7;border-top:0.5px solid #dcdcdc;flex-shrink:0;animation:wechatSlideUp 0.18s ease-out;">
@@ -213,6 +240,12 @@
                     </div>
                     <span class="wechat-plus-label">联网设置</span>
                 </div>
+                <div class="wechat-plus-item" onclick="window._plusDrawerOpen=false; window.openNpcUiCardSettingsModal('${type}','${id}')">
+                    <div class="wechat-plus-icon-box">
+                        <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#e11d48;stroke-width:1.8;stroke-linecap:round;"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                    </div>
+                    <span class="wechat-plus-label">拟真排版</span>
+                </div>
                 <div class="wechat-plus-item" onclick="window._plusDrawerOpen=false; window.openChatCollapseSettingsModal('${type}','${id}')">
                     <div class="wechat-plus-icon-box">
                         <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#d97706;stroke-width:1.8;stroke-linecap:round;"><rect x="4" y="4" width="16" height="16" rx="2"></rect><line x1="8" y1="12" x2="16" y2="12"></line></svg>
@@ -231,12 +264,6 @@
                     </div>
                     <span class="wechat-plus-label">共创视频</span>
                 </div>
-                <div class="wechat-plus-item" onclick="window._plusDrawerOpen=false; window.handleInviteCollabStream('${type}','${id}')">
-                    <div class="wechat-plus-icon-box">
-                        <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#2563eb;stroke-width:1.8;stroke-linecap:round;"><circle cx="12" cy="12" r="2"></circle><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"></path></svg>
-                    </div>
-                    <span class="wechat-plus-label">连麦开播</span>
-                </div>
             </div>
         </div>`;
     }
@@ -247,6 +274,66 @@
         window._stickerDrawerOpen = false;
         if (type === 'single') renderSingleChatWindow();
         else if (typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
+    };
+
+    // 🧾 角色独立拟真排版卡片设置弹窗（带微绿问号科普说明）
+    window.openNpcUiCardSettingsModal = function(type, id) {
+        if (type !== 'single') {
+            if (typeof showToast === 'function') showToast('拟真排版设置目前支持专属好友单人私聊', 'info', 1500);
+            return;
+        }
+
+        const cfg = getNpcUiCardConfig(id);
+        const npc = window.G.npcs ? window.G.npcs[id] : null;
+        const npcDisplayName = npc ? (npc.remark || npc.name) : '当前好友';
+
+        const modalBody = `
+            <div style="text-align:left;font-size:13px;color:#333;">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:10px;border-bottom:0.5px solid #f0f0f0;margin-bottom:12px;">
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <span style="font-weight:600;color:#181818;">开启拟真生活排版</span>
+                        <button type="button" onclick="window.showUiCardIntroTooltip()" style="border:none;background:#e8f7ed;color:#07c160;width:18px;height:18px;border-radius:50%;font-size:11px;font-weight:bold;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;">?</button>
+                    </div>
+                    <input type="checkbox" id="wcleanUiCardToggle" ${cfg.enabled ? 'checked' : ''} style="width:18px;height:18px;accent-color:#07c160;cursor:pointer;">
+                </div>
+
+                <div style="display:flex;flex-direction:column;gap:12px;">
+                    <div>
+                        <label style="font-size:12px;color:#666;font-weight:600;display:block;margin-bottom:4px;">自定义卡片生成时机与偏好：</label>
+                        <textarea id="wcleanUiCardPrompt" rows="3" class="wechat-clean-input" style="width:100%;line-height:1.4;resize:none;" placeholder="如：买东西时发热敏小票、备忘事项发手写便利贴、看电影发影票...">${escapeHtml(cfg.customPrompt || '')}</textarea>
+                        <div style="font-size:11px;color:#888;margin-top:4px;">AI 将在符合日常语境时，使用安全 HTML/CSS 生成拟真便签、收据、清单或小票。</div>
+                    </div>
+
+                    <div style="font-size:11px;color:#999;background:#f9f9f9;padding:6px 10px;border-radius:4px;line-height:1.45;">
+                        目标角色：<b>${escapeHtml(npcDisplayName)}</b><br>
+                        机制：卡片仅用于对话呈现与长按引用，AI 记忆总结时会自动过滤标签提取纯文本，绝不污染记忆。
+                    </div>
+                </div>
+            </div>
+        `;
+
+        window.openWechatCleanModal('拟真生活排版', modalBody, () => {
+            const enabled = document.getElementById('wcleanUiCardToggle')?.checked ?? false;
+            const customPrompt = document.getElementById('wcleanUiCardPrompt')?.value.trim() || '在分享生活物件、购物结账、备忘清单、行程或收到电影票/小票时，生成美观仿真的生活卡片';
+
+            saveNpcUiCardConfig(id, { enabled, customPrompt });
+            if (typeof showToast === 'function') showToast('拟真排版设置已更新', 'success', 1200);
+            if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+        });
+    };
+
+    // 💡 拟真排版机制说明弹窗（含降速提示）
+    window.showUiCardIntroTooltip = function() {
+        const text = "开启后角色可在适当场景（如分享购物小票、手写便签、电影票根、账单、行程清单等）生成仿真物品卡片。提示：因需渲染美化样式与排版代码，开启后角色单次回复 Token 会显著增加，回复生成速度会略有下降。";
+        if (typeof window.openWechatCleanModal === 'function') {
+            window.openWechatCleanModal('拟真排版机制', `
+                <div style="text-align:left;padding:8px 4px;font-size:13px;color:#333;line-height:1.6;">
+                    ${escapeHtml(text)}
+                </div>
+            `, () => {});
+        } else if (typeof showToast === 'function') {
+            showToast(text, 'info', 4000);
+        }
     };
 
     // 🌐 角色独立联网设置弹窗（带微绿问号科普说明）

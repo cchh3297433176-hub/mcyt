@@ -4,7 +4,8 @@
  *    支持按角色独立设置的【单次回复条数最少~最多范围】与【语音发送频率】严格调度执行；
  *    拟真语音环境音（audio_bg）与声调细节还原；
  *    带跨时段、隔夜双时间戳感知、塔罗牌解读感知、Rememori 证据链沉淀、
- *    专属好友独立联网搜索检索与权威网页卡片推送、以及好感度铁律动态结算机制。
+ *    专属好友独立联网搜索检索与权威网页卡片推送、以及好感度铁律动态结算机制；
+ *    🌟 新增：角色主动发送文字图片（[IMAGE_TEXT]）与拟真生活排版卡片（[UI_CARD]）无损解析与安全消毒。
  */
 
 (function() {
@@ -122,17 +123,35 @@
         return pool[Math.floor(Math.random() * pool.length)];
     }
 
-    // 🤖 单人私聊 AI 回复触发（条数控制、拟真语音环境音还原、好感度动态铁律）
+    // 辅助函数：清洗拟真 UI 卡片中的危险脚本标签与外部注入
+    function sanitizeUiCardHtml(htmlStr) {
+        if (!htmlStr) return '';
+        let sanitized = htmlStr
+            .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, '')
+            .replace(/on\w+="[^"]*"/gi, '')
+            .replace(/on\w+='[^']*'/gi, '')
+            .replace(/javascript:[^"']*/gi, '#');
+        return sanitized.trim();
+    }
+
+    // 辅助函数：剥离 HTML 标签提取纯文本描述（用于长期记忆与总结，防代码污染）
+    function extractTextFromHtml(htmlStr) {
+        if (!htmlStr) return '';
+        return htmlStr.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+
+    // 🤖 单人私聊 AI 回复触发（条数控制、拟真语音环境音还原、好感度动态铁律、文字图片、拟真UI卡片）
     window.triggerAIReplyForSingle = async function(npcId) {
-        const npc = window.G.npcs[npcId];
+        const npc = window.G.npcs ? window.G.npcs[npcId] : null;
         if (!npc) return;
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', region: '中国', name: '主播' };
 
-        if (window.isAccountBlockedByNpc(npcId, curAcc.id)) {
+        if (typeof window.isAccountBlockedByNpc === 'function' && window.isAccountBlockedByNpc(npcId, curAcc.id)) {
             if (typeof showToast === 'function') showToast('当前账号已被对方拒收', 'error');
             return;
         }
 
+        if (!window._MCYT_CHAT_GENERATING) window._MCYT_CHAT_GENERATING = {};
         if (window._MCYT_CHAT_GENERATING[npcId]) {
             if (typeof showToast === 'function') showToast('对方正在回复中，请稍候', 'info', 1000);
             return;
@@ -142,19 +161,24 @@
         if (window.G.currentChatNpc === npcId && typeof renderSingleChatWindow === 'function') renderSingleChatWindow();
 
         let bannerTimer = setTimeout(() => {
-            if (window._MCYT_CHAT_GENERATING[npcId]) {
+            if (window._MCYT_CHAT_GENERATING[npcId] && typeof window.showGeneratingBanner === 'function') {
                 window.showGeneratingBanner(npc.remark || npc.name);
             }
         }, 3000);
 
-        const history = window.getAccountChatHistory(npcId, curAcc.id);
-        const isBehindActive = !!window.G._behindScreenActive[npcId];
+        const history = window.getAccountChatHistory(npcId, curAcc.id) || [];
+        const isBehindActive = !!(window.G._behindScreenActive && window.G._behindScreenActive[npcId]);
 
         // 读取角色独立设定的发消息条数与语音偏好
         const chatCfg = npc.chatSettings || { minMsgs: 1, maxMsgs: 3, voiceFreq: 'rare' };
         const minMsgs = Math.max(1, parseInt(chatCfg.minMsgs) || 1);
         const maxMsgs = Math.max(minMsgs, parseInt(chatCfg.maxMsgs) || 3);
         const voiceFreq = chatCfg.voiceFreq || 'rare';
+
+        // 读取角色独立设定的拟真排版卡片配置
+        const uiCardCfg = (typeof window.getNpcUiCardConfig === 'function')
+            ? window.getNpcUiCardConfig(npcId)
+            : { enabled: false, customPrompt: '' };
 
         let lastMsgTime = '';
         let lastMsgTimestamp = null;
@@ -199,6 +223,7 @@
                 return `${speaker} [推荐了名片]: ${m.contactCard?.name}（人设：${m.contactCard?.persona || 'MC同伴'}，签名：“${m.contactCard?.signature || '无'}”，身份：${m.contactCard?.isAlt ? '对方的小号' : '新朋友'}）`;
             }
             if (m.type === 'web_page') return `${speaker} [分享了网页链接]: ${m.webPage?.title || ''} (${m.webPage?.url || ''})`;
+            if (m.type === 'ui_card') return `${speaker} [分享了拟真物品卡片: ${m.cardType || '卡片'}]: ${m.cardSummary || extractTextFromHtml(m.cardHtml) || '卡片内容'}`;
             if (m.type === 'moment_notice') return `[系统提醒]: ${m.author} 刚发了一条新朋友圈动态`;
             if (m.originalText) return `${speaker}: ${m.originalText} (译: ${m.text || ''})`;
             if (m.imageDesc) return `${speaker} [发了张照片，画面描绘]: ${m.imageDesc}`;
@@ -247,6 +272,21 @@
             styleConstraint += `【语音偏好】：你经常随手发语音，请在本次回复的气泡中穿插 1~2 条带真实环境音与语气的拟真语音条：\n[VOICE seconds="秒数" audio_bg="听到的细节声音与说话语气"]语音口语内容[/VOICE]\n`;
         } else {
             styleConstraint += `【语音偏好】：主要发文字打字，偶尔极少才发语音条。\n`;
+        }
+
+        // 注入文字图片指令
+        styleConstraint += `【文字图片发送协议】：\n` +
+            `在想向对方分享正在做的事、手边物品、刚完成的MC建筑/地牢、窗外天气或夜宵时，你可以独立发送一张逼真的文字图片！\n` +
+            `格式必须独立成行，严禁嵌套在 [MSG] 内部：\n` +
+            `[IMAGE_TEXT]100到150字以内的纯客观画面细节描绘，犹如用相机镜头拍下一张真实相片（写明光线、角度、静止物品、色调，纯静止画面，严禁动作神态描写）[/IMAGE_TEXT]\n`;
+
+        // 注入拟真生活排版卡片指令（若开启）
+        if (uiCardCfg && uiCardCfg.enabled) {
+            styleConstraint += `【拟真生活排版卡片协议（已开启）】：\n` +
+                `偏好要求：${uiCardCfg.customPrompt || '在分享购物结账、便签、清单或收到小票时生成拟真卡片'}\n` +
+                `在语境恰当自然时，允许输出一个高质感拟真卡片（严禁每轮都发，只在需要时出现）：\n` +
+                `格式为：[UI_CARD type="热敏小票/手写便签/行程单/电影票/清单"]内联CSS的DIV卡片HTML结构[/UI_CARD]\n` +
+                `卡片要求：全部使用内联 style 样式，宽度自适应（max-width:260px），字体精致、背景逼真（例如小票用微黄纸质感带虚线锯齿、便利贴用淡黄带投影）。必须独立输出，严禁塞进 [MSG] 中！\n`;
         }
 
         // 注入好感度动态结算铁律协议
@@ -317,6 +357,30 @@
                 if (typeof window.syncCustomNpcsToLocalBackup === 'function') window.syncCustomNpcsToLocalBackup();
             }
 
+            // 📸 1. 提取角色主动发送的文字图片 [IMAGE_TEXT]...[/IMAGE_TEXT]
+            const extractedImageTexts = [];
+            clean = clean.replace(/\[IMAGE_TEXT\]([\s\S]*?)\[\/IMAGE_TEXT\]/gi, (match, p1) => {
+                const desc = p1.trim();
+                if (desc) {
+                    extractedImageTexts.push(desc);
+                }
+                return '';
+            }).trim();
+
+            // 🧾 2. 提取拟真生活排版卡片 [UI_CARD type="..."]...[/UI_CARD]
+            const extractedUiCards = [];
+            clean = clean.replace(/\[UI_CARD(?:\s+type="([^"]*)")?\]([\s\S]*?)\[\/UI_CARD\]/gi, (match, cardType, cardInner) => {
+                const innerHtml = cardInner.trim();
+                if (innerHtml) {
+                    extractedUiCards.push({
+                        type: cardType || '便签卡片',
+                        html: sanitizeUiCardHtml(innerHtml),
+                        summary: extractTextFromHtml(innerHtml).slice(0, 50)
+                    });
+                }
+                return '';
+            }).trim();
+
             // 🛡️ 智能自愈修复：防止模型因意外未闭合 [MSG] 导致前端掉格式
             const openTagMatches = clean.match(/\[MSG(?:\s+original=(?:"[\s\S]*?"|'[\s\S]*?'|[^\]\s]+))?\]/gi) || [];
             const closeTagMatches = clean.match(/\[\/MSG\]/gi) || [];
@@ -352,14 +416,16 @@
 
             const estInputTokens = Math.round((promptCtx.sysPrompt.length + promptCtx.userPrompt.length) * 1.35);
             const estOutputTokens = Math.round(clean.length * 1.35);
-            window.recordTokenHistoryEntry({
-                time: new Date().toLocaleTimeString().slice(0, 5),
-                targetName: npc.remark || npc.name,
-                type: '私聊',
-                inTokens: estInputTokens,
-                outTokens: estOutputTokens,
-                totalTokens: estInputTokens + estOutputTokens
-            });
+            if (typeof window.recordTokenHistoryEntry === 'function') {
+                window.recordTokenHistoryEntry({
+                    time: new Date().toLocaleTimeString().slice(0, 5),
+                    targetName: npc.remark || npc.name,
+                    type: '私聊',
+                    inTokens: estInputTokens,
+                    outTokens: estOutputTokens,
+                    totalTokens: estInputTokens + estOutputTokens
+                });
+            }
 
             let behindText = '';
             const bsMatch = clean.match(/\[BEHIND_SCREEN\]([\s\S]*?)\[\/BEHIND_SCREEN\]/i);
@@ -368,7 +434,10 @@
                 clean = clean.replace(/\[BEHIND_SCREEN\][\s\S]*?\[\/BEHIND_SCREEN\]/gi, '').trim();
             }
 
-            let entities = window.parseAIReplyEntities(clean, npc.name);
+            let entities = (typeof window.parseAIReplyEntities === 'function')
+                ? window.parseAIReplyEntities(clean, npc.name)
+                : [{ type: 'text', text: clean.replace(/\[\/?MSG.*?\]/gi, '') }];
+
             if (!entities || !entities.length) {
                 entities = [{ type: 'text', text: '在呢' }];
             }
@@ -393,7 +462,6 @@
 
             // 🎯 语音偏好后处理与拟真背景音注入：
             if (voiceFreq === 'never') {
-                // 严禁语音：将语音条全部降级转回纯文本
                 entities = entities.map(ent => {
                     if (ent.type === 'voice') {
                         return { type: 'text', text: ent.text || '' };
@@ -401,7 +469,6 @@
                     return ent;
                 });
             } else if (voiceFreq === 'voice_only') {
-                // 全语音：将文本气泡全量转化为带细腻环境音的拟真语音条
                 entities = entities.map(ent => {
                     if (ent.type === 'text' && ent.text) {
                         const sec = Math.min(60, Math.max(2, Math.round(ent.text.length * 0.45)));
@@ -417,7 +484,6 @@
                     return ent;
                 });
             } else if (voiceFreq === 'often') {
-                // 经常语音：若模型完全没有输出语音，则挑选 1 条纯文本转为拟真语音条
                 const hasVoice = entities.some(e => e.type === 'voice');
                 if (!hasVoice && entities.length > 0) {
                     const textIndices = entities.map((e, idx) => (e.type === 'text' ? idx : -1)).filter(i => i !== -1);
@@ -432,7 +498,6 @@
                         };
                     }
                 } else {
-                    // 为缺失 audioBg 的语音补充背景音
                     entities.forEach(e => {
                         if (e.type === 'voice' && !e.audioBg) {
                             e.audioBg = generateSmartVoiceAudioBg(npcH);
@@ -440,7 +505,6 @@
                     });
                 }
             } else {
-                // rare 模式下若发了语音，也保障 audioBg 不为空
                 entities.forEach(e => {
                     if (e.type === 'voice' && !e.audioBg) {
                         e.audioBg = generateSmartVoiceAudioBg(npcH);
@@ -466,6 +530,26 @@
                 }
                 entities = kept;
             }
+
+            // 📸 插入提取到的文字图片实体
+            extractedImageTexts.forEach(imgDesc => {
+                entities.push({
+                    type: 'image_flip',
+                    imageDesc: imgDesc,
+                    text: `[图片: ${imgDesc.slice(0, 24)}]`
+                });
+            });
+
+            // 🧾 插入提取到的拟真 UI 卡片实体
+            extractedUiCards.forEach(card => {
+                entities.push({
+                    type: 'ui_card',
+                    cardType: card.type,
+                    cardHtml: card.html,
+                    cardSummary: card.summary,
+                    text: `[${card.type}] ${card.summary}`
+                });
+            });
 
             const finalEntities = entities;
 
@@ -493,8 +577,30 @@
                         time,
                         timestamp: Date.now()
                     }, curAcc.id);
+                } else if (item.type === 'image_flip') {
+                    window.pushChatMessageSafe(npcId, {
+                        from: 'npc',
+                        type: 'image_flip',
+                        imageDesc: item.imageDesc,
+                        text: item.text,
+                        time,
+                        timestamp: Date.now()
+                    }, curAcc.id);
+                } else if (item.type === 'ui_card') {
+                    window.pushChatMessageSafe(npcId, {
+                        from: 'npc',
+                        type: 'ui_card',
+                        cardType: item.cardType,
+                        cardHtml: item.cardHtml,
+                        cardSummary: item.cardSummary,
+                        text: item.text,
+                        time,
+                        timestamp: Date.now()
+                    }, curAcc.id);
                 } else if (item.type === 'sticker_entity') {
-                    const resolved = window.resolveStickerImageUrl(item.category, item.desc);
+                    const resolved = (typeof window.resolveStickerImageUrl === 'function')
+                        ? window.resolveStickerImageUrl(item.category, item.desc)
+                        : null;
                     if (resolved) {
                         window.pushChatMessageSafe(npcId, {
                             from: 'npc',
@@ -565,7 +671,7 @@
                 if (window.G.currentChatNpc === npcId && typeof renderSingleChatWindow === 'function') renderSingleChatWindow();
             }
 
-            // 🧠 历史滑动总结
+            // 🧠 历史滑动总结（此时卡片与网络检索已被剥离为干净文本，不污染长期记忆）
             if (!isSearchTriggered && typeof checkAndTriggerAutoMemorySummary === 'function') {
                 checkAndTriggerAutoMemorySummary(npcId, curAcc.id);
             }
@@ -576,8 +682,8 @@
             if (typeof showToast === 'function') showToast('回复失败，请检查AI配置', 'error');
         } finally {
             clearTimeout(bannerTimer);
-            delete window._MCYT_CHAT_GENERATING[npcId];
-            window.hideGeneratingBanner();
+            if (window._MCYT_CHAT_GENERATING) delete window._MCYT_CHAT_GENERATING[npcId];
+            if (typeof window.hideGeneratingBanner === 'function') window.hideGeneratingBanner();
             if (window.G.currentChatNpc === npcId && typeof renderSingleChatWindow === 'function') renderSingleChatWindow();
         }
     };
