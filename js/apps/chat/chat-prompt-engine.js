@@ -128,7 +128,7 @@
    - 【死刑级禁令】：严禁使用括号 ()、星号 * 或描写动作神态心理（如"*叹气*"、"（揉揉眼睛）"）！这只是纯文字微信屏幕，对方看不见任何动作！
 2. 【消息节奏与切分】：
    - 闲聊随口回 1 条；情绪激动吐槽时连发 2~3 条短消息；冷淡或无语时发单字（"嗯""哦"）或一个标点（"？"）。
-   - 每条微信气泡必须用 [MSG]...[/MSG] 包裹。一次回复可输出 1 到 3 个气泡。
+   - 每条微信气泡必须用 [MSG]...[/MSG] 包裹。
 3. 【打字手滑与错字补正】：
    - 允许偶尔（每 8 轮左右）自然出现拼音手滑打错一个同音字，并在紧接着的下一个气泡发一两个字做纠正（例：上一句"我独自饿了"，下一句补"肚子"）。不要过于频繁。
 4. 【独立人格与边界】：
@@ -142,9 +142,7 @@
    - 当你想发表情包时，【绝对不要】自己在正文里打[表情: 描述]，必须严格使用系统专用标签输出：
      [STICKER category="分组名" desc="关键词"]
    - 示例：[STICKER category="猪猪" desc="开心"]
-   - 【⚠️ 绝对独立，禁止嵌套】：[STICKER ...] 必须与 [MSG] 并列独立输出，【绝对严厉禁止】把 [STICKER ...] 塞进 [MSG]...[/MSG] 标签的肚子里或文字末尾！[MSG] 只能包含纯文字！
-     * 正确格式：[MSG]知道了[/MSG][STICKER category="猪猪" desc="开心"]
-     * 错误格式：[MSG]知道了[STICKER category="猪猪" desc="开心"][/MSG]（严厉禁止！）
+   - 【⚠️ 绝对独立，禁止嵌套】：[STICKER ...] 必须与 [MSG] 并列独立输出，【绝对严厉禁止】把 [STICKER ...] 塞进 [MSG]...[/MSG] 标签内部或文字末尾！[MSG] 只能包含纯文字！
    - 频率控制：真人不会每句话都配图，平均 5~8 轮才偶发 1 次，或者单独只发一个表情包表达情绪。
 ${isForeign ? `
 6. 【跨国双语对话】：
@@ -153,29 +151,23 @@ ${isForeign ? `
    - 格式：[MSG original="英文或当地外文原句"]中文翻译[/MSG]
    - 示例：[MSG original="Yo bro, check this out!"]卧槽兄弟 快看这个[/MSG]
 ` : ''}
-7. 【拟真语音条输出】：
-   - 仅在很困、环境杂音特别、打字不便时偶发。格式：
-     [VOICE seconds="秒数" audio_bg="纯耳朵听到的声音与声调"]语音文字内容[/VOICE]
-   - audio_bg 只能包含听觉细节（如"周围呼呼的风声与哈欠声"），严禁写任何肉眼动作！
+7. 【拟真语音条输出与环境音规范（真实听觉细节）】：
+   - 当你发语音时，格式必须为：
+     [VOICE seconds="秒数" audio_bg="纯耳朵听到的声音环境与说话语气"]语音文字内容[/VOICE]
+   - audio_bg 是对方耳机里听到的真实环境音与你的说话语气细节（例如："背景有密集的机械键盘打字声与轻笑"、"室外呼呼的风声与吸鼻涕声"、"被窝里翻身的布料摩擦声、说话带着刚睡醒的沙哑哈欠"、"喝水吞咽声"、"叹气声与轻微电流杂音"）。
+   - 严禁在 audio_bg 写任何视觉可见动作（严禁写“眨了眨眼”、“低头看着手机”等），只能写听得见的声音！
+   - 语音文字内容必须极具口语活人感，带真实的语气词（如“诶……”、“那个”、“嘶……”、“哈哈哈”、甚至中途卡壳）。
 8. 【聊天中偶发朋友圈动态】：
    - 仅在聊到兴起、分享当下生活、好玩的MC日常或吐槽时，可以顺带发布一条朋友圈动态。
    - 格式必须写在所有气泡之后：[POST_MOMENT text="动态文字" img_desc="配图文字描绘（可选）"]
    - 配图只写快照意象描述（例如：杂乱的工作台截图、凌晨三点的游戏天空）。
 9. 【关于对方撤回消息的反应铁律】：
-   - 如果系统提醒对方刚才撤回了消息或图片，你就像真实微信好友一样随口问一嘴（如"撤回啥了"、吐槽网速或就当没看见），【绝对严禁】在后续对话中反反复复一直追问对方撤回了什么！除非对方撤回的内容描述极其炸裂反常，否则聊下一话题时必须彻底翻篇！
+   - 如果系统提醒对方刚才撤回了消息或图片，你就像真实微信好友一样随口问一嘴（如"撤回啥了"、吐槽网速或就当没看见），【绝对严禁】在后续对话中反反复复一直追问对方撤回了什么！聊下一话题时必须彻底翻篇！
 10. 【关于名片推荐与动态转发的交互认知】：
-   - 对方如果推荐了名片：你会获悉该名片是谁（可能是好友，也可能是对方的小号）。如果好感度尚浅或不认识，可好奇发问或婉拒；如果熟悉信任或对方推荐的是其小号，可表示同意添加。如果决定添加该小号，系统会自动处理申请协议。
-   - 对方如果转发了动态：你能够获悉该动态的正文内容以及评论区八卦，根据你的性格对动态或下面的评论进行自然吐槽、吃瓜或共鸣。
+   - 对方如果推荐了名片：你会获悉该名片是谁。如果熟悉信任或对方推荐的是其小号，可表示同意添加。
+   - 对方如果转发了动态：你能够获悉该动态的正文内容以及评论区八卦，根据你的性格对动态或评论进行自然吐槽、吃瓜或共鸣。
 11. 【🔮 关于对方转发塔罗牌阵的活人感交互认知（核心铁律）】：
-   - 对方如果向你转发了塔罗牌阵（包含提问、牌阵名称、抽到的每张牌及其正逆位）：
-   - 【绝非占卜机器】：你【绝不是】专业的在线解牌机，严禁输出死板说教、分点列出 1234 的教科书式标准解牌！
-   - 【千人千面性格反应】：你必须结合你的人设立场、性格习惯以及与对方的关系做出独一无二的活人反应：
-     * 如果你对神秘学感兴趣或有玄学人设：可以兴致勃勃地帮对方看，带着强烈个人偏好进行趣味解读；
-     * 如果你是理性派/技术宅/实用主义者：可能会调侃这是“伪科学”“概率学把戏”，吐槽对方怎么突然搞起封建迷信；
-     * 如果你完全不懂塔罗：完全允许坦白承认自己不会看，甚至看着牌名望文生义胡乱猜测搞笑联想（如把“倒吊人”当成蝙蝠侠、把“愚者”当成纯傻子）、或者直接弄错解释；
-     * 如果你性格傲娇/毒舌/恶趣味：可以趁机拿牌面含义嘲讽戏弄对方一番，或者故意给出一个极其离谱恶搞的“毒舌预言”；
-     * 如果你性格冷淡或正在摸鱼：可以直接拒绝解读（如“看不懂 别整这些神神叨叨的”、“忙着挖矿呢 找别人看去”）。
-   - 保持微信短句与手打节奏，绝不为了长篇大论而失去活人感。
+   - 对方如果向你转发了塔罗牌阵，你绝不是在线解牌机，严禁输出死板说教的标准解牌，按你的真实人设做出专业、搞笑乱猜、毒舌嘲讽或冷淡拒绝的活人反应。
 `;
     }
 
@@ -259,7 +251,6 @@ ${isForeign ? `
 
     /**
      * 🌟 Rememori 忆海证据检索与记忆挂载模块
-     * 读取由 Rememori 系统或持久层沉淀的历史证据与切片
      */
     function getRememoriContextForNpc(npcId, curAccId, userName = '用户') {
         if (!window._rememoriStore) {
@@ -282,9 +273,9 @@ ${isForeign ? `
     }
 
     /**
-     * 主提示词组装总装配器
+     * 主提示词组装总装配器（已增强接纳条数、语音偏好、好感度等 extraConstraint）
      */
-    function buildWechatAIPromptContext({ npc, curAcc, recentDialogueText = '', isBehindActive = false, lastMsgTime = '', lastMsgTimestamp = null }) {
+    function buildWechatAIPromptContext({ npc, curAcc, recentDialogueText = '', isBehindActive = false, lastMsgTime = '', lastMsgTimestamp = null, extraConstraint = '' }) {
         if (!npc) return { sysPrompt: '', userPrompt: '' };
 
         const currentUserName = curAcc?.name || '用户';
@@ -294,7 +285,7 @@ ${isForeign ? `
         const timeCtx = calculateTimeAndZoneContext(pRegion, nRegion);
         const isDating = isNpcInDatingRelationship(npc);
 
-        // 🎭 对 NPC 设定执行宏替换：将设定里的 {{user}} / {{y/n}} 替换为当前用户名字
+        // 🎭 对 NPC 设定执行宏替换
         const processedPersona = replaceUserMacroVariables(npc.persona || '一位MC玩家同伴', currentUserName);
 
         let assembledSysPrompt = `你正在微信上扮演角色「${npc.name}」。\n`;
@@ -306,7 +297,7 @@ ${isForeign ? `
         assembledSysPrompt += `- 时差情况：${timeCtx.diffDesc}\n`;
         assembledSysPrompt += `【要求】：必须体现出你当下的生理时间与困意状态！\n\n`;
 
-        // 🌟 挂载 Rememori 忆海深层证据切片（同时执行宏替换）
+        // 🌟 挂载 Rememori 忆海深层证据切片
         const rememoriMem = getRememoriContextForNpc(npc.id, curAcc.id, currentUserName);
         if (rememoriMem) {
             assembledSysPrompt += rememoriMem;
@@ -333,11 +324,15 @@ ${isForeign ? `
             assembledSysPrompt += getModule3Prompt();
         }
 
+        // 🎯 核心注入：最高优先级的外部动态约束（条数控制、语音偏好与环境音规范、好感度铁律）
+        if (extraConstraint) {
+            assembledSysPrompt += `\n${extraConstraint}\n`;
+        }
+
         if (isBehindActive) {
             assembledSysPrompt += `\n【动作感知】：已开启动作感知。在所有消息发送完毕后，在回复最末尾附带一段 [BEHIND_SCREEN]...[/BEHIND_SCREEN]，客观描写你屏幕这端的一个物理小动作（25~45字）。\n`;
         }
 
-        // 对最近历史对白也执行一次宏替换，确保上下文宏变量彻底解析为用户名
         const processedDialogue = replaceUserMacroVariables(recentDialogueText, currentUserName);
         let userPrompt = processedDialogue ? `【最近聊天记录与事件感知】：\n${processedDialogue}\n\n请回复「${currentUserName}」：` : `对方向你发起了对话，请回复：`;
 
@@ -358,5 +353,5 @@ ${isForeign ? `
         replaceUserMacroVariables
     };
 
-    console.log('✅ ChatPromptEngine 微信活人感提示词架构引擎已装载 {{user}}/{{y/n}} 宏变量替换、Rememori 证据与塔罗牌认知规范');
+    console.log('✅ ChatPromptEngine 微信活人感提示词架构引擎已装载 extraConstraint 强约束、拟真语音听觉细节与 Rememori 证据规范');
 })();

@@ -2,6 +2,7 @@
  * js/apps/chat/chat-app-ai.js
  * 💬 微信主应用 · 拆分分片 5/7：单人私聊 AI 回复触发核心（window.triggerAIReplyForSingle）。
  *    支持按角色独立设置的【单次回复条数最少~最多范围】与【语音发送频率】严格调度执行；
+ *    拟真语音环境音（audio_bg）与声调细节还原；
  *    带跨时段、隔夜双时间戳感知、塔罗牌解读感知、Rememori 证据链沉淀、
  *    专属好友独立联网搜索检索与权威网页卡片推送、以及好感度铁律动态结算机制。
  */
@@ -68,7 +69,6 @@
         if (!text || targetCount <= 1) return [text];
         const segs = text.split(/(?<=[，。！？!?~…\n])\s*/).map(s => s.trim()).filter(Boolean);
         if (segs.length <= 1) {
-            // 如果缺乏明确标点，则尝试空格或定长拆分
             const spaceParts = text.split(/\s+/).filter(Boolean);
             if (spaceParts.length >= targetCount) {
                 const result = [];
@@ -81,7 +81,6 @@
             return [text];
         }
 
-        // 重新聚合成恰好 targetCount 个短句
         if (segs.length <= targetCount) {
             return segs;
         }
@@ -94,7 +93,36 @@
         return result.slice(0, targetCount);
     }
 
-    // 🤖 单人私聊 AI 回复触发（支持条数限制、语音频率控制、好感度动态铁律）
+    // 辅助函数：根据当前客观时段生成极其拟真生活化的语音背景音兜底
+    function generateSmartVoiceAudioBg(hour = 14) {
+        const nightBgs = [
+            '被窝里翻身的布料摩擦声、伴随轻微疲倦哈欠与鼻音',
+            '深夜房间里极安静、伴随轻微的呼吸声与被子摩擦声',
+            '耳机里漏出的轻微游戏背景音乐与鼠标微弱点击声'
+        ];
+        const morningBgs = [
+            '刚睡醒还带着浓浓沙哑鼻音、远处微弱的风声',
+            '被窝摩擦声与轻微吸气声'
+        ];
+        const dayBgs = [
+            '轻快的机械键盘敲击咔嗒声与鼠标点击',
+            '周围走动杂音、杯子放在桌上的清脆碰击声',
+            '说话时带着抑制不住的轻笑气音与键盘打字声'
+        ];
+        const eveningBgs = [
+            '放松的叹气声、背景有隐约的电脑风扇运转微声',
+            '喝水吞咽声、说话语调懒散舒适'
+        ];
+
+        let pool = dayBgs;
+        if (hour >= 0 && hour < 6) pool = nightBgs;
+        else if (hour >= 6 && hour < 9) pool = morningBgs;
+        else if (hour >= 18 && hour < 24) pool = eveningBgs;
+
+        return pool[Math.floor(Math.random() * pool.length)];
+    }
+
+    // 🤖 单人私聊 AI 回复触发（条数控制、拟真语音环境音还原、好感度动态铁律）
     window.triggerAIReplyForSingle = async function(npcId) {
         const npc = window.G.npcs[npcId];
         if (!npc) return;
@@ -156,7 +184,7 @@
                 m.peekHandled = true;
                 return `[系统]: 对方撤回了一条消息`;
             }
-            if (m.type === 'voice') return `${speaker} [语音]: ${m.text || ''}`;
+            if (m.type === 'voice') return `${speaker} [语音，背景音: ${m.audioBg || '无'}]: ${m.text || ''}`;
             if (m.type === 'shared_tarot') {
                 if (window.ChatTarot && typeof window.ChatTarot.formatTarotForPrompt === 'function') {
                     return window.ChatTarot.formatTarotForPrompt(m, speaker);
@@ -209,16 +237,16 @@
             }
         }
 
-        // 针对条数范围、语音偏好与好感度铁律注入强约束指令
+        // 针对条数范围、拟真语音环境音与好感度铁律注入强约束指令
         let styleConstraint = `【条数硬性约束】：本次回复必须分为 ${minMsgs} 到 ${maxMsgs} 个独立的 [MSG]...[/MSG] 消息气泡发送。\n`;
         if (voiceFreq === 'never') {
-            styleConstraint += `【语音偏好】：你习惯只发文字，绝对禁止发送任何语音条 [VOICE]！\n`;
+            styleConstraint += `【语音偏好】：你习惯只发文字打字，绝对严禁发送任何语音条 [VOICE]！\n`;
         } else if (voiceFreq === 'voice_only') {
-            styleConstraint += `【语音偏好】：你此时正在忙碌或习惯用语音，请将本次全部回复都用 [VOICE:秒数]语音转述文字[/VOICE] 形式发送！\n`;
+            styleConstraint += `【语音偏好】：你此时正在忙碌或懒得打字，本次回复全部使用拟真语音条发送！格式必须为：\n[VOICE seconds="秒数" audio_bg="耳朵听到的声音与语气"]语音口语文字[/VOICE]\naudio_bg 必须包含丰富的生活声音（如键盘打字声、叹气、哈欠、笑场、翻身摩擦声等），展现生动活人感！\n`;
         } else if (voiceFreq === 'often') {
-            styleConstraint += `【语音偏好】：你经常发语音，请在本次回复的气泡中穿插 1~2 条 [VOICE:秒数]内容[/VOICE] 拟真语音条。\n`;
+            styleConstraint += `【语音偏好】：你经常随手发语音，请在本次回复的气泡中穿插 1~2 条带真实环境音与语气的拟真语音条：\n[VOICE seconds="秒数" audio_bg="听到的细节声音与说话语气"]语音口语内容[/VOICE]\n`;
         } else {
-            styleConstraint += `【语音偏好】：主要发文字，偶尔极少发语音。\n`;
+            styleConstraint += `【语音偏好】：主要发文字打字，偶尔极少才发语音条。\n`;
         }
 
         // 注入好感度动态结算铁律协议
@@ -262,32 +290,25 @@
                 const parsedDelta = parseFloat(favorMatch[1]) || 0;
                 clean = clean.replace(/\[FAVOR:\s*[+\-]?\d+(?:\.\d+)?\s*\]/gi, '').trim();
 
-                // 严苛铁律门禁审查：
                 if (parsedDelta > 0) {
-                    // 每轮最多只能增加 0.5
                     favorDelta = Math.min(0.5, parsedDelta);
                 } else if (parsedDelta < 0) {
-                    // 检查玩家最新发言是否属于极端冒犯或激烈争吵
                     const severeConflictKeywords = ['滚', '去死', '讨厌你', '决裂', '绝交', '恶心', '傻逼', '废物', '闭嘴', '吵架', '出轨', '背叛'];
                     const isSevereConflict = severeConflictKeywords.some(kw => lastPlayerMsgText.includes(kw));
 
                     if (isSevereConflict) {
-                        // 激烈场景允许更大扣除，上限 -5
                         favorDelta = Math.max(-5.0, parsedDelta);
                     } else {
-                        // 日常普通扫兴最多只扣 -1.0
                         favorDelta = Math.max(-1.0, parsedDelta);
                     }
                 }
             }
 
-            // 结算并累加好感度至角色对象
             if (favorDelta !== 0) {
                 const currentFavor = parseFloat(npc.favor !== undefined ? npc.favor : 50);
                 const nextFavor = Math.max(0, Math.min(100, Math.round((currentFavor + favorDelta) * 10) / 10));
                 npc.favor = nextFavor;
 
-                // 若好感度降至 60 以下且处于恋爱期，则自动解除恋爱阶段
                 if (npc.favor < 60 && (npc.relationshipStage === 'dating' || npc.isDating)) {
                     npc.relationshipStage = 'friend';
                     npc.isDating = false;
@@ -297,7 +318,6 @@
             }
 
             // 🛡️ 智能自愈修复：防止模型因意外未闭合 [MSG] 导致前端掉格式
-            // 兼容普通 [MSG] 与带属性的 [MSG original="..."]
             const openTagMatches = clean.match(/\[MSG(?:\s+original=(?:"[\s\S]*?"|'[\s\S]*?'|[^\]\s]+))?\]/gi) || [];
             const closeTagMatches = clean.match(/\[\/MSG\]/gi) || [];
             if (openTagMatches.length > closeTagMatches.length) {
@@ -368,7 +388,10 @@
                 entities = expanded;
             }
 
-            // 🎯 语音偏好后处理与净化执行：
+            // 计算该角色的本地小时（用于生成高度匹配的语音环境音背景）
+            const npcH = (promptCtx.timeCtx && promptCtx.timeCtx.hour !== undefined) ? promptCtx.timeCtx.hour : new Date().getHours();
+
+            // 🎯 语音偏好后处理与拟真背景音注入：
             if (voiceFreq === 'never') {
                 // 严禁语音：将语音条全部降级转回纯文本
                 entities = entities.map(ent => {
@@ -378,33 +401,51 @@
                     return ent;
                 });
             } else if (voiceFreq === 'voice_only') {
-                // 全语音：将文本气泡全量转化为拟真语音条
+                // 全语音：将文本气泡全量转化为带细腻环境音的拟真语音条
                 entities = entities.map(ent => {
                     if (ent.type === 'text' && ent.text) {
                         const sec = Math.min(60, Math.max(2, Math.round(ent.text.length * 0.45)));
                         return {
                             type: 'voice',
                             text: ent.text,
-                            seconds: sec
+                            seconds: sec,
+                            audioBg: generateSmartVoiceAudioBg(npcH)
                         };
+                    } else if (ent.type === 'voice' && !ent.audioBg) {
+                        ent.audioBg = generateSmartVoiceAudioBg(npcH);
                     }
                     return ent;
                 });
             } else if (voiceFreq === 'often') {
-                // 经常语音：若模型完全没有输出语音，则随机挑选 1 条纯文本转为语音条
+                // 经常语音：若模型完全没有输出语音，则挑选 1 条纯文本转为拟真语音条
                 const hasVoice = entities.some(e => e.type === 'voice');
                 if (!hasVoice && entities.length > 0) {
                     const textIndices = entities.map((e, idx) => (e.type === 'text' ? idx : -1)).filter(i => i !== -1);
                     if (textIndices.length > 0) {
-                        const targetIdx = textIndices[textIndices.length - 1]; // 默认取末尾或某一条
+                        const targetIdx = textIndices[textIndices.length - 1];
                         const rawT = entities[targetIdx].text || '';
                         entities[targetIdx] = {
                             type: 'voice',
                             text: rawT,
-                            seconds: Math.min(60, Math.max(2, Math.round(rawT.length * 0.45)))
+                            seconds: Math.min(60, Math.max(2, Math.round(rawT.length * 0.45))),
+                            audioBg: generateSmartVoiceAudioBg(npcH)
                         };
                     }
+                } else {
+                    // 为缺失 audioBg 的语音补充背景音
+                    entities.forEach(e => {
+                        if (e.type === 'voice' && !e.audioBg) {
+                            e.audioBg = generateSmartVoiceAudioBg(npcH);
+                        }
+                    });
                 }
+            } else {
+                // rare 模式下若发了语音，也保障 audioBg 不为空
+                entities.forEach(e => {
+                    if (e.type === 'voice' && !e.audioBg) {
+                        e.audioBg = generateSmartVoiceAudioBg(npcH);
+                    }
+                });
             }
 
             // 🎯 严格把控单次回复条数在最大上限 maxMsgs 内
@@ -414,7 +455,12 @@
                 const mergedText = rest.map(r => r.text || '').filter(Boolean).join(' ');
                 const lastItem = rest[0];
                 if (lastItem && lastItem.type === 'voice') {
-                    kept.push({ type: 'voice', text: mergedText, seconds: Math.min(60, Math.max(2, Math.round(mergedText.length * 0.45))) });
+                    kept.push({
+                        type: 'voice',
+                        text: mergedText,
+                        seconds: Math.min(60, Math.max(2, Math.round(mergedText.length * 0.45))),
+                        audioBg: lastItem.audioBg || generateSmartVoiceAudioBg(npcH)
+                    });
                 } else {
                     kept.push({ type: 'text', text: mergedText, originalText: lastItem?.originalText || null });
                 }
@@ -442,7 +488,7 @@
                         from: 'npc',
                         type: 'voice',
                         seconds: item.seconds || 3,
-                        audioBg: item.audioBg || '',
+                        audioBg: item.audioBg || '轻微的呼吸声与环境微音',
                         text: item.text || '',
                         time,
                         timestamp: Date.now()
@@ -485,7 +531,7 @@
                 }
             }
 
-            // 🌐 推送搜索到的优质网页卡片（若开启且有权威搜索结果）
+            // 🌐 推送搜索到的优质网页卡片
             if (searchCfg.sendWebPage && searchResults && searchResults.length > 0) {
                 const topPage = searchResults[0];
                 if (topPage && topPage.url) {
@@ -519,7 +565,7 @@
                 if (window.G.currentChatNpc === npcId && typeof renderSingleChatWindow === 'function') renderSingleChatWindow();
             }
 
-            // 🧠 只有未触发全网搜索时，才进行历史滑动总结（避免将百科知识污染为长效事实）
+            // 🧠 历史滑动总结
             if (!isSearchTriggered && typeof checkAndTriggerAutoMemorySummary === 'function') {
                 checkAndTriggerAutoMemorySummary(npcId, curAcc.id);
             }
