@@ -9,6 +9,39 @@
 (function() {
     'use strict';
 
+    // 🧠 角色独立记忆总结配置存取（与契约表 mcyt_npc_memory_configs 严格对齐）
+    function getNpcMemoryConfig(id) {
+        try {
+            const raw = localStorage.getItem('mcyt_npc_memory_configs');
+            if (raw) {
+                const map = JSON.parse(raw);
+                if (map && map[id]) return map[id];
+            }
+        } catch (_) {}
+        return {
+            enabled: true,
+            keepRecent: 8,
+            triggerCount: 20
+        };
+    }
+    window.getNpcMemoryConfig = getNpcMemoryConfig;
+
+    function saveNpcMemoryConfig(id, cfg) {
+        try {
+            let map = {};
+            const raw = localStorage.getItem('mcyt_npc_memory_configs');
+            if (raw) map = JSON.parse(raw) || {};
+            map[id] = { ...getNpcMemoryConfig(id), ...cfg };
+            localStorage.setItem('mcyt_npc_memory_configs', JSON.stringify(map));
+            
+            // 同步挂载到全局运行态，防止内存与持久层不一致
+            if (!window.G) window.G = {};
+            if (!window.G.npcMemoryConfigs) window.G.npcMemoryConfigs = {};
+            window.G.npcMemoryConfigs[id] = map[id];
+        } catch (_) {}
+    }
+    window.saveNpcMemoryConfig = saveNpcMemoryConfig;
+
     // 🌐 角色独立联网搜索配置存取
     function getNpcSearchConfig(id) {
         try {
@@ -260,7 +293,7 @@
                         <div style="font-size:11px;color:#888;margin-top:4px;">包含此类词必触发检索；未命中时由 AI 依据内容自主判断。</div>
                     </div>
 
-                    <div style="font-size:11px;color:#999;background:#f9f9f9;padding:6px 10px;border-radius:4px;line-height:1.45;">
+                    <div style="font-size:11px;color:#999;background:#f9f9f9;padding:6px 10px;border-radius:4px;line-line:1.45;">
                         目标角色：<b>${escapeHtml(npcDisplayName)}</b><br>
                         规则：借助系统设置中心配置的联网通道实时检索，保持拟真生动的答复与资料参考。
                     </div>
@@ -519,7 +552,9 @@
 
         if (type === 'single') {
             window.pushChatMessageSafe(targetId, cardMsg, curAcc.id);
-            depositRememoriEvidence(targetId, curAcc.id, `${curAcc.name}[推荐了名片: ${name}]`);
+            if (typeof depositRememoriEvidence === 'function') {
+                depositRememoriEvidence(targetId, curAcc.id, `${curAcc.name}[推荐了名片: ${name}]`);
+            }
             renderSingleChatWindow();
         } else {
             if (!window.G.groupChatHistory[targetId]) window.G.groupChatHistory[targetId] = [];
@@ -533,7 +568,7 @@
 
     // 📊 最近 10 轮 Token 统计弹窗
     window.openTokenMonitorModal = function() {
-        const list = window.getTokenHistoryList();
+        const list = (typeof window.getTokenHistoryList === 'function') ? window.getTokenHistoryList() : [];
         if (list.length === 0) {
             window.openWechatCleanModal('Token 消耗明细', `
                 <div style="text-align:center;color:#888;padding:24px 0;font-size:13px;">

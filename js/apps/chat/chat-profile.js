@@ -34,14 +34,16 @@
     // ============================================================
     function syncAccountsToStorage() {
         try {
-            if (window.G && window.G.altAccounts) {
+            if (!window.G) window.G = {};
+            if (window.G.altAccounts) {
                 localStorage.setItem('mcyt_wechat_alt_accounts', JSON.stringify(window.G.altAccounts));
             }
-            if (window.G && window.G.currentAccountId) {
+            if (window.G.currentAccountId) {
                 localStorage.setItem('mcyt_wechat_current_account_id', window.G.currentAccountId);
             }
-            if (window.G && window.G.player) {
+            if (window.G.player) {
                 const personaPayload = {
+                    ytName: window.G.player.ytName || '',
                     offlinePersona: window.G.player.offlinePersona || '',
                     onlinePersona: window.G.player.onlinePersona || '',
                     gameSkinPersona: window.G.player.gameSkinPersona || '',
@@ -64,6 +66,7 @@
             const rawPersonas = localStorage.getItem('mcyt_wechat_player_personas');
             if (rawPersonas) {
                 const pData = JSON.parse(rawPersonas);
+                if (pData.ytName && !window.G.player.ytName) window.G.player.ytName = pData.ytName;
                 if (pData.offlinePersona !== undefined) window.G.player.offlinePersona = pData.offlinePersona;
                 if (pData.onlinePersona !== undefined) window.G.player.onlinePersona = pData.onlinePersona;
                 if (pData.gameSkinPersona !== undefined) window.G.player.gameSkinPersona = pData.gameSkinPersona;
@@ -74,9 +77,9 @@
             }
         } catch (_) {}
 
-        if (window.G.player.offlinePersona === undefined) window.G.player.offlinePersona = '';
-        if (window.G.player.onlinePersona === undefined) window.G.player.onlinePersona = '';
-        if (window.G.player.gameSkinPersona === undefined) window.G.player.gameSkinPersona = '';
+        if (window.G.player.offlinePersona === undefined) window.G.player.offlinePersona = window.G.player.persona || '';
+        if (window.G.player.onlinePersona === undefined) window.G.player.onlinePersona = window.G.player.avatarLive2d || '';
+        if (window.G.player.gameSkinPersona === undefined) window.G.player.gameSkinPersona = window.G.player.skin || '';
         if (window.G.player.signature === undefined) window.G.player.signature = '';
         if (!window.G.player.region) window.G.player.region = '中国 (China)';
 
@@ -85,7 +88,9 @@
             const rawAlts = localStorage.getItem('mcyt_wechat_alt_accounts');
             if (rawAlts) {
                 const alts = JSON.parse(rawAlts);
-                if (Array.isArray(alts)) window.G.altAccounts = alts;
+                if (Array.isArray(alts)) {
+                    window.G.altAccounts = alts;
+                }
             }
         } catch (_) {}
         if (!window.G.altAccounts) window.G.altAccounts = [];
@@ -100,6 +105,7 @@
     }
 
     window.restoreWechatProfileData = restoreAccountsFromStorage;
+    window.syncWechatProfileData = syncAccountsToStorage;
     restoreAccountsFromStorage();
 
     // 计算某个账号未处理的好友申请数量

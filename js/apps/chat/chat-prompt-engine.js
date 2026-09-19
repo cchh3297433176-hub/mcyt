@@ -1,7 +1,7 @@
 /**
  * js/apps/chat/chat-prompt-engine.js
  * 🧠 微信聊天活人感提示词架构引擎
- * 模块化装配：主体通用拟人核心 + 关系进阶状态机 + 异地恋模块 + 时差生理感知 + 双时间戳隔夜作息感知 + 双语与仿微信语音协议 + 真实语义表情包索引 + 动态发布协议 + 大小号双重身份认知与名片接纳状态机 + 🌟 Rememori 忆海向量长效记忆挂载 + 🔮 塔罗牌阵拟人认知与特色解读协议
+ * 模块化装配：主体通用拟人核心 + 关系进阶状态机 + 异地恋模块 + 时差生理感知 + 双时间戳隔夜作息感知 + 双语与仿微信语音协议 + 真实语义表情包索引 + 动态发布协议 + 大小号双重身份认知与名片接纳状态机 + 🌟 Rememori 忆海向量长效记忆挂载 + 🔮 塔罗牌阵拟人认知与特色解读协议 + 🎭 {{user}} / {{y/n}} 动态宏变量替换
  */
 
 (function() {
@@ -20,6 +20,17 @@
         '加拿大': -5,
         '澳大利亚': 10
     };
+
+    /**
+     * 🎭 宏变量替换引擎：将人设与对白中的 {{user}}、{{User}}、{{y/n}}、{{Y/N}} 自动替换为当前用户身份名称
+     */
+    function replaceUserMacroVariables(text, userName = '用户') {
+        if (!text || typeof text !== 'string') return text || '';
+        const safeName = userName || '用户';
+        return text
+            .replace(/\{\{\s*user\s*\}\}/gi, safeName)
+            .replace(/\{\{\s*y\/n\s*\}\}/gi, safeName);
+    }
 
     /**
      * 计算并格式化两个地区当前的真实本地时间与时差感受
@@ -250,7 +261,7 @@ ${isForeign ? `
      * 🌟 Rememori 忆海证据检索与记忆挂载模块
      * 读取由 Rememori 系统或持久层沉淀的历史证据与切片
      */
-    function getRememoriContextForNpc(npcId, curAccId) {
+    function getRememoriContextForNpc(npcId, curAccId, userName = '用户') {
         if (!window._rememoriStore) {
             try {
                 const raw = localStorage.getItem('mcyt_rememori_cache_v1');
@@ -262,7 +273,11 @@ ${isForeign ? `
         const records = store[key] || store[npcId] || [];
         if (!records.length) return '';
 
-        const lines = records.slice(-6).map(r => `• [${r.time || '往事'}]: ${r.content || r.text || r}`);
+        const lines = records.slice(-6).map(r => {
+            const rawContent = r.content || r.text || r;
+            const replaced = replaceUserMacroVariables(rawContent, userName);
+            return `• [${r.time || '往事'}]: ${replaced}`;
+        });
         return `\n【🧠 忆海 (Rememori) 长期证据与深层记忆】：\n` + lines.join('\n') + `\n【指引】：以上是你在与对方交往中真切沉淀的深层记忆与承诺证据，请在对话中自然贯彻这一背景认知，不可遗忘冲突。\n\n`;
     }
 
@@ -272,14 +287,18 @@ ${isForeign ? `
     function buildWechatAIPromptContext({ npc, curAcc, recentDialogueText = '', isBehindActive = false, lastMsgTime = '', lastMsgTimestamp = null }) {
         if (!npc) return { sysPrompt: '', userPrompt: '' };
 
+        const currentUserName = curAcc?.name || '用户';
         const pRegion = curAcc.region || '中国';
         const nRegion = npc.region || '中国';
         const isForeign = (nRegion !== '中国');
         const timeCtx = calculateTimeAndZoneContext(pRegion, nRegion);
         const isDating = isNpcInDatingRelationship(npc);
 
+        // 🎭 对 NPC 设定执行宏替换：将设定里的 {{user}} / {{y/n}} 替换为当前用户名字
+        const processedPersona = replaceUserMacroVariables(npc.persona || '一位MC玩家同伴', currentUserName);
+
         let assembledSysPrompt = `你正在微信上扮演角色「${npc.name}」。\n`;
-        assembledSysPrompt += `【你的档案】：\n- 设定/性格：${npc.persona || '一位MC玩家同伴'}\n- 常驻地区：${nRegion}\n- 当前好感度：${npc.favor || 50}/100\n- 恋爱关系状态：${isDating ? '已确立恋人关系（交往中）' : (npc.favor >= 80 ? '关系亲密/暧昧试探期' : '普通朋友')}\n\n`;
+        assembledSysPrompt += `【你的档案】：\n- 设定/性格：${processedPersona}\n- 常驻地区：${nRegion}\n- 当前好感度：${npc.favor || 50}/100\n- 恋爱关系状态：${isDating ? '已确立恋人关系（交往中）' : (npc.favor >= 80 ? '关系亲密/暧昧试探期' : '普通朋友')}\n\n`;
 
         assembledSysPrompt += `【客观时空与生理状态】：\n`;
         assembledSysPrompt += `- 你的本地时间：${timeCtx.nPeriod} ${timeCtx.nTime}（生理状态：${timeCtx.nState}）\n`;
@@ -287,8 +306,8 @@ ${isForeign ? `
         assembledSysPrompt += `- 时差情况：${timeCtx.diffDesc}\n`;
         assembledSysPrompt += `【要求】：必须体现出你当下的生理时间与困意状态！\n\n`;
 
-        // 🌟 挂载 Rememori 忆海深层证据切片
-        const rememoriMem = getRememoriContextForNpc(npc.id, curAcc.id);
+        // 🌟 挂载 Rememori 忆海深层证据切片（同时执行宏替换）
+        const rememoriMem = getRememoriContextForNpc(npc.id, curAcc.id, currentUserName);
         if (rememoriMem) {
             assembledSysPrompt += rememoriMem;
         }
@@ -318,7 +337,9 @@ ${isForeign ? `
             assembledSysPrompt += `\n【动作感知】：已开启动作感知。在所有消息发送完毕后，在回复最末尾附带一段 [BEHIND_SCREEN]...[/BEHIND_SCREEN]，客观描写你屏幕这端的一个物理小动作（25~45字）。\n`;
         }
 
-        let userPrompt = recentDialogueText ? `【最近聊天记录与事件感知】：\n${recentDialogueText}\n\n请回复「${curAcc.name}」：` : `对方向你发起了对话，请回复：`;
+        // 对最近历史对白也执行一次宏替换，确保上下文宏变量彻底解析为用户名
+        const processedDialogue = replaceUserMacroVariables(recentDialogueText, currentUserName);
+        let userPrompt = processedDialogue ? `【最近聊天记录与事件感知】：\n${processedDialogue}\n\n请回复「${currentUserName}」：` : `对方向你发起了对话，请回复：`;
 
         return {
             sysPrompt: assembledSysPrompt.trim(),
@@ -333,8 +354,9 @@ ${isForeign ? `
         isNpcInDatingRelationship,
         getAvailableStickersSummary,
         buildWechatAIPromptContext,
-        getRememoriContextForNpc
+        getRememoriContextForNpc,
+        replaceUserMacroVariables
     };
 
-    console.log('✅ ChatPromptEngine 微信活人感提示词架构引擎已装载 Rememori 证据与塔罗牌认知规范');
+    console.log('✅ ChatPromptEngine 微信活人感提示词架构引擎已装载 {{user}}/{{y/n}} 宏变量替换、Rememori 证据与塔罗牌认知规范');
 })();
