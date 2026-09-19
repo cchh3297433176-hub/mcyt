@@ -9,38 +9,53 @@
 (function() {
     'use strict';
 
-    // 辅助函数：判断是否需要联网搜索并提取关键词
+    // 辅助函数：判断是否需要联网搜索并提取关键词（不区分大小写，强词与提问双通道穿透）
     function checkSearchIntent(lastPlayerText, searchCfg) {
-        if (!lastPlayerText || !searchCfg || !searchCfg.enabled) {
+        if (!lastPlayerText) {
             return { needSearch: false, query: '' };
         }
 
         const text = lastPlayerText.trim();
-        const rawKeywords = (searchCfg.forcedKeywords || '').split(/[,，\s]+/).filter(Boolean);
+        const lowerText = text.toLowerCase();
+        
+        // 强指令关键词库
+        const forcedKeywordsList = (searchCfg && searchCfg.forcedKeywords)
+            ? searchCfg.forcedKeywords.split(/[,，\s]+/).filter(Boolean)
+            : ['搜索', '查一下', '查查', '搜一下', '帮我找', '搜搜', '百度一下'];
 
-        // 1. 自定义关键词强制匹配
-        for (const kw of rawKeywords) {
-            if (text.includes(kw)) {
-                let cleanQuery = text.replace(new RegExp(kw, 'g'), '').replace(/^[，,。.？！?!、\s]+|[，,。.？！?!、\s]+$/g, '').trim();
+        // 1. 自定义关键词强制匹配（若玩家显式包含关键词，即使独立开关未开也允许穿透执行）
+        for (const rawKw of forcedKeywordsList) {
+            const kw = rawKw.trim();
+            if (!kw) continue;
+            if (lowerText.includes(kw.toLowerCase())) {
+                const kwRegex = new RegExp(kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'gi');
+                let cleanQuery = text.replace(kwRegex, '').replace(/^[，,。.？！?!、:\s]+|[，,。.？！?!、:\s]+$/g, '').trim();
+                cleanQuery = cleanQuery.replace(/^(?:帮我|给我|麻烦|请|看看|想知道)\s*/i, '').trim();
                 if (!cleanQuery) cleanQuery = text;
                 return { needSearch: true, query: cleanQuery };
             }
         }
 
+        // 若当前角色未开启联网开关，则不触发自主意图判断
+        if (!searchCfg || !searchCfg.enabled) {
+            return { needSearch: false, query: '' };
+        }
+
         // 2. AI 自主判断：提问或生活百科/事实探知场景
         const autoPatterns = [
-            /(?:怎么|如何|怎样)(?:做|弄|搞|办|弄出|搞定)/,
-            /(?:做法|菜谱|配方|步骤|教程|攻略)/,
-            /(?:是什么|什么意思|指的是|介绍一下|科普)/,
-            /(?:什么时候|几月几日|哪天|历史上的今天)/,
-            /(?:最新|今天|昨晚|近期|现在).*(?:新闻|消息|热搜|发生|更新)/,
-            /(?:为什么|为何).*(?:会这样|原因)/,
-            /(?:你知道|听过|听说过).*(?:吗|不)/
+            /(?:怎么|如何|怎样)(?:做|弄|搞|办|弄出|搞定)/i,
+            /(?:做法|菜谱|配方|步骤|教程|攻略)/i,
+            /(?:是什么|什么意思|指的是|介绍一下|科普)/i,
+            /(?:什么时候|几月几日|哪天|历史上的今天)/i,
+            /(?:最新|今天|昨晚|近期|现在).*(?:新闻|消息|热搜|发生|更新)/i,
+            /(?:为什么|为何).*(?:会这样|原因)/i,
+            /(?:你知道|听过|听说过).*(?:吗|不)/i
         ];
 
         for (const pat of autoPatterns) {
             if (pat.test(text)) {
-                let cleanQuery = text.replace(/^[，,。.？！?!、\s]+|[，,。.？！?!、\s]+$/g, '').trim();
+                let cleanQuery = text.replace(/^[，,。.？！?!、:\s]+|[，,。.？！?!、:\s]+$/g, '').trim();
+                cleanQuery = cleanQuery.replace(/^(?:帮我|给我|想知道)\s*/i, '').trim();
                 return { needSearch: true, query: cleanQuery };
             }
         }
@@ -129,6 +144,7 @@
         // 🌐 联网搜索检索处理
         let searchResults = [];
         let searchContextPrompt = '';
+        let isSearchTriggered = false; // 标记本轮是否触发了联网搜索
         const searchCfg = (typeof window.getNpcSearchConfig === 'function')
             ? window.getNpcSearchConfig(npcId)
             : { enabled: false, maxResults: 3, sendWebPage: true, forcedKeywords: '' };
@@ -142,11 +158,14 @@
                 searchResults = (searchData && Array.isArray(searchData.results)) ? searchData.results : [];
                 const searchAnswer = (searchData && searchData.answer) ? searchData.answer.trim() : '';
                 if (searchResults.length > 0 || searchAnswer) {
+                    isSearchTriggered = true;
                     const formattedResults = searchResults.map((item, idx) => {
-                        return `[来源${idx + 1}] ${item.title}\n摘要: ${item.content || ''}\n链接: ${item.url || ''}`;
-                    }).join('\n\n');
-                    const answerLine = searchAnswer ? `检索概要：${searchAnswer}\n\n` : '';
-                    searchContextPrompt = `\n\n【实时全网联网检索参考（对方刚刚提及了相关内容或触发了搜索指令）】：\n检索关键词：“${intent.query}”\n${answerLine}${formattedResults}\n【要求】：直接用你自己的口吻转述上述真实检索到的信息内容本身，禁止复读或改写对方的请求原话，禁止在回复中出现“角色名：”这类脚本格式，就当作你自己刚刚上网查到的事直接讲给对方听。`;
+                        const title = item.title || '网页标题';
+                        const snippet = (item.content || '').slice(0, 200);
+                        return `[资料${idx + 1}] 《${title}》: ${snippet}`;
+                    }).join('\n');
+                    const answerLine = searchAnswer ? `核心概要: ${searchAnswer}\n` : '';
+                    searchContextPrompt = `\n\n【全网实时检索到的最新资料（仅供当前对话参考，不进入长期记忆）】：\n检索词：“${intent.query}”\n${answerLine}${formattedResults}\n【格式与语气绝对铁律】：\n1. 请务必保持微信好友口吻，用 1 到 3 个 [MSG]...[/MSG] 气泡随性转述上述查到的核心要点，禁止长篇大论生硬背诵，禁止出现角色名前缀！\n2. 每一个消息气泡必须以 [MSG] 开头，并严格以 [/MSG] 完整闭合，绝对禁止遗漏标签！`;
                 }
             } catch (searchErr) {
                 console.warn('联网搜索检索失败或超时:', searchErr);
@@ -163,18 +182,34 @@
                 lastMsgTimestamp
             })
             : {
-                sysPrompt: `扮演MC好友「${npc.name}」，严禁句末加句号，严禁括号动作描写。`,
+                sysPrompt: `扮演MC好友「${npc.name}」，严禁句末加句号，严禁括号动作描写，每条消息必须用 [MSG]...[/MSG] 包裹。`,
                 userPrompt: recentDialogue ? `最近对话：\n${recentDialogue}${searchContextPrompt}\n\n回复：` : '打个招呼。'
             };
 
         try {
+            // 设置 maxTokens 上限为 10000（给予大模型无限充裕的输出空间，绝不提前截断）
             const raw = await callAI([
                 { role: 'system', content: promptCtx.sysPrompt },
                 { role: 'user', content: promptCtx.userPrompt }
-            ], { maxTokens: 450, temperature: 0.86, silent: true });
+            ], { maxTokens: 10000, temperature: 0.86, silent: true });
 
             let clean = (typeof stripThought === 'function') ? stripThought(raw.trim()) : raw.trim();
-            clean = clean.replace(/\([^)]*\)/g, '').replace(/（[^）]*）/g, '').trim();
+
+            // 仅清洗括号内的动作/神态描写，保护知识与搜索内容中正常的说明括号
+            clean = clean.replace(/[\(（](?:揉|叹|眨|看|摸|笑|低头|抬头|轻笑|撇嘴|皱眉|转身|歪头|小声|抱|握|拉|推|咬|红着脸|动作)[^\)）]*[\)）]/gi, '').trim();
+
+            // 🛡️ 智能自愈修复：防止模型因意外未闭合 [MSG] 导致前端掉格式
+            if (clean.includes('[MSG') && !clean.includes('[/MSG]')) {
+                clean += '[/MSG]';
+            } else {
+                const openCount = (clean.match(/\[MSG[^\]]*\]/g) || []).length;
+                const closeCount = (clean.match(/\[\/MSG\]/g) || []).length;
+                if (openCount > closeCount) {
+                    for (let k = 0; k < (openCount - closeCount); k++) {
+                        clean += '[/MSG]';
+                    }
+                }
+            }
 
             if (lastRecommendedAltCard && lastRecommendedAltCard.isAlt) {
                 const agreeKeywords = ['加了', '加上了', '去加', '同意', '通过', '搜了', '发申请', '加你小号', '加那个号', '扫了'];
@@ -311,7 +346,8 @@
                 }
             }
 
-            if (collectedPureReply.trim()) {
+            // 🧠 记忆保护：如果本轮触发了联网搜索，绝不沉淀到忆海长效记忆中，随上下文隐藏自动消失
+            if (collectedPureReply.trim() && !isSearchTriggered) {
                 depositRememoriEvidence(npcId, curAcc.id, `${npc.name}: ${collectedPureReply.trim()}`);
             }
 
@@ -325,7 +361,10 @@
                 if (window.G.currentChatNpc === npcId) renderSingleChatWindow();
             }
 
-            checkAndTriggerAutoMemorySummary(npcId, curAcc.id);
+            // 如果触发了联网搜索，同样跳过本轮的历史记忆总结，不把菜谱和联网百科做成具名客观事实
+            if (!isSearchTriggered) {
+                checkAndTriggerAutoMemorySummary(npcId, curAcc.id);
+            }
 
             if (typeof autoSaveGame === 'function') autoSaveGame();
         } catch(e) {
