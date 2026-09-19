@@ -682,6 +682,8 @@
 
     /**
      * 解析 AI 回复中的表情包/语音/双语/发动态实体及动态提醒
+     * 🛡️ 深度加固：采用时序切分引擎，自动剥离任何误嵌套在 [MSG] 内或裸露的 [STICKER...] 标签，
+     *    严格保障输出时序一致，绝不把标签当成普通文字显示给玩家！
      */
     function parseAIReplyEntities(rawText, npcName) {
         if (!rawText) return [];
@@ -690,7 +692,7 @@
 
         const entities = [];
 
-        // 提取偶发动态标签 [POST_MOMENT text="..." img_desc="..."]
+        // 1. 优先提取偶发朋友圈动态标签 [POST_MOMENT text="..." img_desc="..."]
         const postMomentRegex = /\[POST_MOMENT\s+text="([^"]+)"(?:\s+img_desc="([^"]*)")?\]/i;
         const pMatch = postMomentRegex.exec(clean);
         if (pMatch) {
@@ -727,55 +729,123 @@
             clean = clean.replace(postMomentRegex, '').trim();
         }
 
-        // 1. 拟真语音 [VOICE seconds="..." audio_bg="..."]正文[/VOICE]
-        const voiceRegex = /\[VOICE(?:\s+seconds="?(\d+)"?)?(?:\s+audio_bg="?([^"]*)"?)?\]([\s\S]*?)\[\/VOICE\]/gi;
-        let vMatch;
-        while ((vMatch = voiceRegex.exec(clean)) !== null) {
-            const sec = parseInt(vMatch[1]) || Math.min(60, Math.max(2, Math.round((vMatch[3] || '').length * 0.45)));
-            entities.push({
-                type: 'voice',
-                seconds: sec,
-                audioBg: (vMatch[2] || '').trim(),
-                text: (vMatch[3] || '').trim()
-            });
-        }
+        // 2. 宏观标记切分器：统一匹配 [VOICE...]...[/VOICE]、[STICKER...]、以及 [MSG...]...[/MSG]
+        // 正则增强：兼容单双引号或无引号，捕获它们在原始文本中的先后出现顺序
+        const tokenRegex = /\[VOICE(?:\s+seconds=["']?(\d+)["']?)?(?:\s+audio_bg=["']?([^"']*)["']?)?\]([\s\S]*?)\[\/VOICE\]|\[STICKER(?:\s+category=["']?([^"'\]\s]*)["']?)?(?:\s+desc=["']?([^"'\]\s]*)["']?)?\s*\]|\[MSG(?:\s+original=["']?([^"']+)["']?)?\]([\s\S]*?)\[\/MSG\]/gi;
 
-        // 2. 真实表情包调用标签 [STICKER category="..." desc="..."]
-        const stickerRegex = /\[STICKER(?:\s+category="([^"]*)")?(?:\s+desc="([^"]*)")?\]/gi;
-        let sMatch;
-        while ((sMatch = stickerRegex.exec(clean)) !== null) {
-            const cat = (sMatch[1] || '猪猪').trim();
-            const desc = (sMatch[2] || '开心').trim();
-            entities.push({
-                type: 'sticker_entity',
-                category: cat,
-                desc: desc
-            });
-        }
+        let match;
+        let foundAnyTag = false;
 
-        // 3. 标准消息或双语 [MSG original="..."]正文[/MSG]
-        const msgRegex = /\[MSG(?:\s+original="([^"]+)")?\]([\s\S]*?)\[\/MSG\]/gi;
-        let mMatch;
-        while ((mMatch = msgRegex.exec(clean)) !== null) {
-            const original = (mMatch[1] || '').trim();
-            const text = (mMatch[2] || '').trim();
-            if (text || original) {
+        while ((match = tokenRegex.exec(clean)) !== null) {
+            foundAnyTag = true;
+
+            // 分支 A: VOICE 语音条
+            if (match[0].startsWith('[VOICE')) {
+                const sec = parseInt(match[1]) || Math.min(60, Math.max(2, Math.round((match[3] || '').length * 0.45)));
                 entities.push({
-                    type: 'text',
-                    text: text || original,
-                    originalText: original || null
+                    type: 'voice',
+                    seconds: sec,
+                    audioBg: (match[2] || '').trim(),
+                    text: (match[3] || '').trim()
                 });
+            }
+            // 分支 B: 独立输出的 STICKER 表情包
+            else if (match[0].startsWith('[STICKER')) {
+                const cat = (match[4] || '猪猪').trim();
+                const desc = (match[5] || '开心').trim();
+                entities.push({
+                    type: 'sticker_entity',
+                    category: cat,
+                    desc: desc
+                });
+            }
+            // 分支 C: MSG 微信普通/双语气泡（重点加固：防御内部误嵌的 STICKER）
+            else if (match[0].startsWith('[MSG')) {
+                const original = (match[6] || '').trim();
+                let innerText = (match[7] || '').trim();
+
+                // 检查 MSG 内部是否夹带了 [STICKER ...]
+                const nestedStickerRegex = /\[STICKER(?:\s+category=["']?([^"'\]\s]*)["']?)?(?:\s+desc=["']?([^"'\]\s]*)["']?)?\s*\]/gi;
+                if (nestedStickerRegex.test(innerText)) {
+                    let lastIdx = 0;
+                    nestedStickerRegex.lastIndex = 0;
+                    let stMatch;
+                    while ((stMatch = nestedStickerRegex.exec(innerText)) !== null) {
+                        const beforeText = innerText.substring(lastIdx, stMatch.index).trim();
+                        if (beforeText) {
+                            entities.push({
+                                type: 'text',
+                                text: beforeText,
+                                originalText: original || null
+                            });
+                        }
+                        entities.push({
+                            type: 'sticker_entity',
+                            category: (stMatch[1] || '猪猪').trim(),
+                            desc: (stMatch[2] || '开心').trim()
+                        });
+                        lastIdx = nestedStickerRegex.lastIndex;
+                    }
+                    const afterText = innerText.substring(lastIdx).trim();
+                    if (afterText) {
+                        entities.push({
+                            type: 'text',
+                            text: afterText,
+                            originalText: null
+                        });
+                    }
+                } else {
+                    // 彻底清除内部任何残留的破坏性未闭合符号
+                    innerText = innerText.replace(/\[STICKER[^\]]*\]/gi, '').trim();
+                    if (innerText || original) {
+                        entities.push({
+                            type: 'text',
+                            text: innerText || original,
+                            originalText: original || null
+                        });
+                    }
+                }
             }
         }
 
-        if (entities.length > 0) return entities.slice(0, 5);
+        // 如果提取到了标准实体，直接返回（最多返回 5 个气泡防止刷屏）
+        if (entities.length > 0) {
+            return entities.slice(0, 5);
+        }
 
-        const lines = clean.split(/\n+/).map(l => l.trim()).filter(Boolean);
+        // 保底分支：若模型完全没有使用 [MSG] 格式
+        // 先检查是否有裸露的 [STICKER...]
+        const nakedStickerRegex = /\[STICKER(?:\s+category=["']?([^"'\]\s]*)["']?)?(?:\s+desc=["']?([^"'\]\s]*)["']?)?\s*\]/gi;
+        if (nakedStickerRegex.test(clean)) {
+            let lastIdx = 0;
+            nakedStickerRegex.lastIndex = 0;
+            let nMatch;
+            while ((nMatch = nakedStickerRegex.exec(clean)) !== null) {
+                const textPart = clean.substring(lastIdx, nMatch.index).trim();
+                if (textPart) {
+                    entities.push({ type: 'text', text: textPart });
+                }
+                entities.push({
+                    type: 'sticker_entity',
+                    category: (nMatch[1] || '猪猪').trim(),
+                    desc: (nMatch[2] || '开心').trim()
+                });
+                lastIdx = nakedStickerRegex.lastIndex;
+            }
+            const tailPart = clean.substring(lastIdx).trim();
+            if (tailPart) {
+                entities.push({ type: 'text', text: tailPart });
+            }
+            if (entities.length > 0) return entities.slice(0, 5);
+        }
+
+        // 纯文本按行拆分兜底
+        const lines = clean.replace(/\[STICKER[^\]]*\]/gi, '').split(/\n+/).map(l => l.trim()).filter(Boolean);
         if (lines.length > 0) {
             return lines.slice(0, 3).map(l => ({ type: 'text', text: l }));
         }
 
-        return [{ type: 'text', text: clean }];
+        return [{ type: 'text', text: clean.replace(/\[STICKER[^\]]*\]/gi, '').trim() }];
     }
     window.parseAIReplyEntities = parseAIReplyEntities;
 
@@ -1002,12 +1072,10 @@
         }
         const finalFilename = baseName.replace(/[\\/:*?"<>|]/g, '_');
 
-        // 1. 优先将图片转为 DataURL（兼容 Android WebView 保存）
         const reader = new FileReader();
         reader.onloadend = () => {
             const dataUrl = reader.result;
 
-            // 2. 尝试触发浏览器下载
             try {
                 const a = document.createElement('a');
                 a.href = dataUrl;
@@ -1017,7 +1085,6 @@
                 document.body.removeChild(a);
             } catch (_) {}
 
-            // 3. 弹出极简预览弹窗（支持长按保存，杜绝手机端下载无反应）
             showExportedCardModal(dataUrl, finalFilename);
         };
         reader.readAsDataURL(outBlob);
@@ -1030,7 +1097,6 @@
     // ============================================================
     function parsePngTextChunks(arrayBuffer) {
         const view = new DataView(arrayBuffer);
-        // PNG 签名验证 89 50 4E 47 0D 0A 1A 0A
         if (view.getUint32(0) !== 0x89504E47 || view.getUint32(4) !== 0x0D0A1A0A) {
             return null;
         }
@@ -1067,7 +1133,7 @@
                 }
             }
 
-            offset += 4 + 4 + length + 4; // len + type + data + crc
+            offset += 4 + 4 + length + 4;
         }
         return chunks;
     }
@@ -1101,7 +1167,6 @@
                 throw new Error('未在图片中检测到酒馆角色卡数据');
             }
 
-            // 尝试 Base64 解码
             let jsonStr = '';
             try {
                 jsonStr = decodeURIComponent(escape(atob(rawDataStr)));
@@ -1120,7 +1185,6 @@
                 throw new Error('角色卡数据解析失败');
             }
 
-            // 将 PNG 文件转为 Base64 DataURL 作为头像
             const avatarDataUrl = await new Promise((res) => {
                 const r = new FileReader();
                 r.onload = () => res(r.result);
@@ -1143,7 +1207,6 @@
         const persona = (data.description || dataObj.description || data.persona || dataObj.persona || '').trim();
         const personality = data.personality || dataObj.personality || '';
 
-        // 提取地区与个性签名
         let region = '中国';
         if (personality.includes('美国 - 东部') || personality.includes('美国东部')) region = '美国 - 东部';
         else if (personality.includes('美国 - 西部') || personality.includes('美国西部')) region = '美国 - 西部';
