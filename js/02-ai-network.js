@@ -110,14 +110,16 @@ function loadMemorySummarySettings() {
 }
 
 // ============================================================
-// 🔍 多平台联网搜索模块核心（Bing Local / 博查 / 秘塔 / Tavily）
+// 🔍 多平台联网搜索核心（Bing 免Key通道 / 博查 / 秘塔 / Tavily）
 // ============================================================
+if (!window.G) window.G = {};
 if (!G.search) {
     G.search = {
-        enabled: false,
+        enabled: true,
         provider: 'bing_local',
         apiKey: '',
-        keys: { bocha: '', metaso: '', tavily: '' }
+        keys: { bocha: '', metaso: '', tavily: '' },
+        maxResults: 3
     };
 }
 if (!G.search.keys) {
@@ -147,20 +149,28 @@ function loadSearchConfig() {
     } catch (_) {}
 }
 
-async function webSearch(query, maxResults = 4) {
-    const provider = G.search.provider || 'bing_local';
-    
-    // 1. Bing (Local) 免 Key 双通道抓取
+/**
+ * 核心网络搜索入口
+ * @param {string} query 检索关键词
+ * @param {number} maxResults 最大获取条数
+ */
+async function webSearch(query, maxResults = 3) {
+    const q = (query || '').trim();
+    if (!q) return { answer: '', results: [] };
+
+    const provider = (G.search && G.search.provider) || 'bing_local';
+
+    // 1. Bing 免 Key 抓取通道（具备国内环境多通道弹性容灾与 DOM 解析）
     if (provider === 'bing_local') {
         const parseBingHTML = (htmlText) => {
-            if (!htmlText || htmlText.length < 200) return [];
+            if (!htmlText || htmlText.length < 150) return [];
             const parser = new DOMParser();
             const doc = parser.parseFromString(htmlText, 'text/html');
             const list = [];
-            const nodes = doc.querySelectorAll('li.b_algo, div.b_algo');
+            const nodes = doc.querySelectorAll('li.b_algo, div.b_algo, .b_ans');
+            
             nodes.forEach(el => {
-                const titleEl = el.querySelector('h2 a') || el.querySelector('h2');
-                const linkEl = el.querySelector('h2 a') || el.querySelector('a');
+                const titleEl = el.querySelector('h2 a') || el.querySelector('h2') || el.querySelector('a');
                 const descEl = el.querySelector('.b_caption p') || el.querySelector('.b_algoSlug') || 
                                el.querySelector('.b_lineclamp2') || el.querySelector('.b_lineclamp3') || 
                                el.querySelector('.b_lineclamp4') || el.querySelector('p');
@@ -168,40 +178,56 @@ async function webSearch(query, maxResults = 4) {
                 if (titleEl) {
                     const title = (titleEl.innerText || titleEl.textContent || '').trim();
                     const snippet = descEl ? (descEl.innerText || descEl.textContent || '').trim() : '';
-                    let url = linkEl ? (linkEl.getAttribute('href') || '') : '';
+                    let url = titleEl.getAttribute('href') || (titleEl.querySelector('a') ? titleEl.querySelector('a').getAttribute('href') : '') || '';
                     if (url.startsWith('/')) url = 'https://cn.bing.com' + url;
 
-                    if (title && !title.includes('必应') && !title.includes('Microsoft Bing')) {
-                        list.push({ title, content: snippet || title, url });
+                    if (title && !title.includes('必应') && !title.includes('Microsoft Bing') && !title.includes('登录') && !title.includes('相关搜索')) {
+                        list.push({
+                            title: title,
+                            content: snippet || title,
+                            url: url
+                        });
                     }
                 }
             });
             return list;
         };
 
-        const targetUrl = 'https://cn.bing.com/search?q=' + encodeURIComponent(query);
-        const bridgeEndpoints = [
+        const targetUrl = 'https://cn.bing.com/search?q=' + encodeURIComponent(q) + '&setlang=zh-hans';
+        
+        // 多路穿透代理通道（按可用率梯度排序，带独立超时熔断）
+        const proxyGateways = [
+            'https://corsproxy.io/?' + encodeURIComponent(targetUrl),
             'https://api.allorigins.win/raw?url=' + encodeURIComponent(targetUrl),
-            'https://corsproxy.io/?' + encodeURIComponent(targetUrl)
+            'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(targetUrl)
         ];
 
-        for (const bridge of bridgeEndpoints) {
+        for (const gwUrl of proxyGateways) {
             try {
                 const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 9000);
-                const resp = await fetch(bridge, { signal: controller.signal });
+                const timeoutId = setTimeout(() => controller.abort(), 6000);
+                const resp = await fetch(gwUrl, { 
+                    signal: controller.signal,
+                    headers: { 'Accept-Language': 'zh-CN,zh;q=0.9' }
+                });
                 clearTimeout(timeoutId);
+
                 if (resp.ok) {
                     const html = await resp.text();
                     const results = parseBingHTML(html);
-                    if (results.length > 0) return { answer: '', results: results.slice(0, maxResults) };
+                    if (results.length > 0) {
+                        return { answer: '', results: results.slice(0, maxResults) };
+                    }
                 }
-            } catch (_) {}
+            } catch (_) {
+                // 自动跳往下一个通道，静默防崩
+            }
         }
 
+        // 最后防线：直接尝试抓取（若容器本身或原生桥放行了跨域）
         try {
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 6000);
+            const timeoutId = setTimeout(() => controller.abort(), 4000);
             const resp = await fetch(targetUrl, { signal: controller.signal });
             clearTimeout(timeoutId);
             if (resp.ok) {
@@ -215,14 +241,14 @@ async function webSearch(query, maxResults = 4) {
     }
 
     const key = ((G.search.keys && G.search.keys[provider]) || G.search.apiKey || '').trim();
-    if (!key) throw new Error(`请先填入 ${provider} 的 API Key`);
+    if (!key) throw new Error(`请先在系统设置中填入 ${provider} 的 API Key`);
 
     // 2. 博查搜索 API
     if (provider === 'bocha') {
         const resp = await fetch('https://api.bochaai.com/v1/web-search', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-            body: JSON.stringify({ query: query, freshness: 'noLimit', summary: true, count: maxResults })
+            body: JSON.stringify({ query: q, freshness: 'noLimit', summary: true, count: maxResults })
         });
         if (!resp.ok) {
             const err = await resp.text();
@@ -243,7 +269,7 @@ async function webSearch(query, maxResults = 4) {
         const resp = await fetch('https://metaso.cn/api/v1/search', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-            body: JSON.stringify({ query: query, mode: 'concise', limit: maxResults })
+            body: JSON.stringify({ query: q, mode: 'concise', limit: maxResults })
         });
         if (!resp.ok) {
             const err = await resp.text();
@@ -259,12 +285,12 @@ async function webSearch(query, maxResults = 4) {
         return { answer: data.answer || '', results };
     }
 
-    // 4. Tavily 国际通用搜索
+    // 4. Tavily 国际通用搜索 API
     if (provider === 'tavily') {
         const resp = await fetch('https://api.tavily.com/search', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${key}` },
-            body: JSON.stringify({ query: query, search_depth: 'basic', max_results: maxResults, include_answer: true }),
+            body: JSON.stringify({ query: q, search_depth: 'basic', max_results: maxResults, include_answer: true }),
         });
         if (!resp.ok) {
             const t = await resp.text();
