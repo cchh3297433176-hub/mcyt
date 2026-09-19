@@ -1,9 +1,9 @@
 /**
  * js/apps/chat/chat-app-ai.js
  * 💬 微信主应用 · 拆分分片 5/7：单人私聊 AI 回复触发核心（window.triggerAIReplyForSingle）。
+ *    支持按角色独立设置的【单次回复条数最少~最多范围】与【语音发送频率】严格调度执行；
  *    带跨时段、隔夜双时间戳感知、塔罗牌解读感知、Rememori 证据链沉淀、
  *    以及专属好友独立联网搜索检索与权威网页卡片推送。
- * ⚠️ 拆分自 chat-app.js，包含联网意图识别、webSearch 调度与网页气泡派发。
  */
 
 (function() {
@@ -63,7 +63,7 @@
         return { needSearch: false, query: '' };
     }
 
-    // 🤖 单人私聊 AI 回复触发（带跨时段、隔夜双时间戳感知、塔罗牌解读感知、滑动窗口总结与联网搜索）
+    // 🤖 单人私聊 AI 回复触发（支持条数限制与语音频率控制）
     window.triggerAIReplyForSingle = async function(npcId) {
         const npc = window.G.npcs[npcId];
         if (!npc) return;
@@ -90,6 +90,12 @@
 
         const history = window.getAccountChatHistory(npcId, curAcc.id);
         const isBehindActive = !!window.G._behindScreenActive[npcId];
+
+        // 读取角色独立设定的发消息条数与语音偏好
+        const chatCfg = npc.chatSettings || { minMsgs: 1, maxMsgs: 3, voiceFreq: 'rare' };
+        const minMsgs = Math.max(1, parseInt(chatCfg.minMsgs) || 1);
+        const maxMsgs = Math.max(minMsgs, parseInt(chatCfg.maxMsgs) || 3);
+        const voiceFreq = chatCfg.voiceFreq || 'rare';
 
         let lastMsgTime = '';
         let lastMsgTimestamp = null;
@@ -165,11 +171,21 @@
                         return `[资料${idx + 1}] 《${title}》: ${snippet}`;
                     }).join('\n');
                     const answerLine = searchAnswer ? `核心概要: ${searchAnswer}\n` : '';
-                    searchContextPrompt = `\n\n【全网实时检索到的最新资料（仅供当前对话参考，不进入长期记忆）】：\n检索词：“${intent.query}”\n${answerLine}${formattedResults}\n【格式与语气绝对铁律】：\n1. 请务必保持微信好友口吻，用 1 到 3 个 [MSG]...[/MSG] 气泡随性转述上述查到的核心要点，禁止长篇大论生硬背诵，禁止出现角色名前缀！\n2. 每一个消息气泡必须以 [MSG] 开头，并严格以 [/MSG] 完整闭合，绝对禁止遗漏标签！`;
+                    searchContextPrompt = `\n\n【全网实时检索到的最新资料（仅供当前对话参考，不进入长期记忆）】：\n检索词：“${intent.query}”\n${answerLine}${formattedResults}\n【格式与语气绝对铁律】：\n1. 请务必保持微信好友口吻，用 ${minMsgs} 到 ${maxMsgs} 个 [MSG]...[/MSG] 气泡随性转述核心要点，禁止长篇大论生硬背诵，禁止出现角色名前缀！\n2. 每一个消息气泡必须以 [MSG] 开头，并严格以 [/MSG] 完整闭合，绝对禁止遗漏标签！`;
                 }
             } catch (searchErr) {
                 console.warn('联网搜索检索失败或超时:', searchErr);
             }
+        }
+
+        // 针对条数范围与语音偏好注入强约束指令
+        let styleConstraint = `【条数约束】：本次回复必须分为 ${minMsgs} 到 ${maxMsgs} 个独立的 [MSG]...[/MSG] 消息气泡发送。\n`;
+        if (voiceFreq === 'never') {
+            styleConstraint += `【语音偏好】：你习惯只发文字，严禁发送任何语音条 [VOICE]！\n`;
+        } else if (voiceFreq === 'voice_only') {
+            styleConstraint += `【语音偏好】：你此时正在忙碌或习惯用语音，请尽量将回复用 [VOICE:秒数]语音内容[/VOICE] 形式发送！\n`;
+        } else if (voiceFreq === 'often') {
+            styleConstraint += `【语音偏好】：你经常随手发语音，可以在气泡中穿插 1~2 条 [VOICE:秒数]内容[/VOICE] 语音条。\n`;
         }
 
         const promptCtx = (window.ChatPromptEngine && typeof window.ChatPromptEngine.buildWechatAIPromptContext === 'function')
@@ -179,10 +195,11 @@
                 recentDialogueText: recentDialogue + peekNotice + searchContextPrompt,
                 isBehindActive,
                 lastMsgTime,
-                lastMsgTimestamp
+                lastMsgTimestamp,
+                extraConstraint: styleConstraint
             })
             : {
-                sysPrompt: `扮演MC好友「${npc.name}」，严禁句末加句号，严禁括号动作描写，每条消息必须用 [MSG]...[/MSG] 包裹。`,
+                sysPrompt: `扮演MC好友「${npc.name}」，严禁句末加句号，严禁括号动作描写，每条消息必须用 [MSG]...[/MSG] 包裹。\n${styleConstraint}`,
                 userPrompt: recentDialogue ? `最近对话：\n${recentDialogue}${searchContextPrompt}\n\n回复：` : '打个招呼。'
             };
 
@@ -252,8 +269,51 @@
                 clean = clean.replace(/\[BEHIND_SCREEN\][\s\S]*?\[\/BEHIND_SCREEN\]/gi, '').trim();
             }
 
-            const entities = window.parseAIReplyEntities(clean, npc.name);
-            const finalEntities = (entities && entities.length) ? entities : [{ type: 'text', text: '在呢' }];
+            let entities = window.parseAIReplyEntities(clean, npc.name);
+            if (!entities || !entities.length) {
+                entities = [{ type: 'text', text: '在呢' }];
+            }
+
+            // 语音偏好后处理与净化：
+            if (voiceFreq === 'never') {
+                // 严禁语音：将语音条全部降级转回纯文本
+                entities = entities.map(ent => {
+                    if (ent.type === 'voice') {
+                        return { type: 'text', text: ent.text || '' };
+                    }
+                    return ent;
+                });
+            } else if (voiceFreq === 'voice_only') {
+                // 全语音：将文本气泡全量转化为拟真语音条
+                entities = entities.map(ent => {
+                    if (ent.type === 'text' && ent.text) {
+                        const sec = Math.min(60, Math.max(2, Math.round(ent.text.length * 0.45)));
+                        return {
+                            type: 'voice',
+                            text: ent.text,
+                            seconds: sec
+                        };
+                    }
+                    return ent;
+                });
+            }
+
+            // 严格把控单次回复条数在 [minMsgs, maxMsgs] 范围内
+            if (entities.length > maxMsgs) {
+                // 超出最大上限时进行尾部实体平滑合并
+                const kept = entities.slice(0, maxMsgs - 1);
+                const rest = entities.slice(maxMsgs - 1);
+                const mergedText = rest.map(r => r.text || '').filter(Boolean).join(' ');
+                const lastItem = rest[0];
+                if (lastItem && lastItem.type === 'voice') {
+                    kept.push({ type: 'voice', text: mergedText, seconds: Math.min(60, Math.max(2, Math.round(mergedText.length * 0.45))) });
+                } else {
+                    kept.push({ type: 'text', text: mergedText });
+                }
+                entities = kept;
+            }
+
+            const finalEntities = entities;
 
             for (let i = 0; i < finalEntities.length; i++) {
                 const item = finalEntities[i];

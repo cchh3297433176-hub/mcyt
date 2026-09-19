@@ -1,12 +1,28 @@
 /**
  * js/apps/chat/chat-app-bubble.js
  * 💬 微信主应用 · 拆分分片 4/7：消息气泡长按操作菜单（openBubbleActionSheet）、长按引用/取消引用、
- *    编辑消息、删除消息、撤回消息（单次偷窥脱敏）、语音输入弹窗。
- * ⚠️ 拆分自 chat-app.js，仅做物理搬家，不改动任何函数内部逻辑。
+ *    编辑消息、删除消息、撤回消息（单次偷窥脱敏）、语音输入弹窗、
+ *    以及原生微信直显图片 3D 平滑翻转查看背面文字引擎（彻底去除拍立得边框与右下角描述）。
  */
 
 (function() {
     'use strict';
+
+    // 🔄 微信原生直显图片 3D 平滑翻转引擎（正面纯净大图，背面文字描绘，无拍立得相纸与右下角浮字）
+    window.toggleChatImageFlip = function(cardWrapper) {
+        if (!cardWrapper) return;
+        const flipper = cardWrapper.querySelector('.wechat-image-flipper-inner');
+        if (!flipper) return;
+
+        const isFlipped = cardWrapper.getAttribute('data-flipped') === 'true';
+        if (isFlipped) {
+            flipper.style.transform = 'rotateY(0deg)';
+            cardWrapper.setAttribute('data-flipped', 'false');
+        } else {
+            flipper.style.transform = 'rotateY(180deg)';
+            cardWrapper.setAttribute('data-flipped', 'true');
+        }
+    };
 
     // 气泡长按操作菜单
     window.openBubbleActionSheet = function(msgId, type, targetId) {
@@ -58,7 +74,9 @@
         else if (msg.type === 'shared_moment') summaryText = `[朋友圈分享]`;
         else if (msg.type === 'contact_card') summaryText = `[名片] ${msg.contactCard?.name || ''}`;
         else if (msg.type === 'web_page') summaryText = `[链接] ${msg.webPage?.title || ''}`;
-        else if (msg.type === 'image_flip' || msg.type === 'image_text_only' || msg.imageDesc) summaryText = `[图片] ${msg.imageDesc || msg.text || ''}`;
+        else if (msg.type === 'image' || msg.type === 'image_flip' || msg.type === 'image_text_only' || msg.imageDesc) {
+            summaryText = `[图片] ${msg.imageDesc || msg.text || ''}`;
+        }
         else if (msg.type === 'sticker') summaryText = `[表情]`;
 
         window._activeQuoteMessage = {
@@ -194,8 +212,57 @@
                 if (typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
             }
 
-            if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+            if (typeof window.autoSaveGame === 'function') autoSaveGame();
         });
+    };
+
+    // 🖼️ 微信原生纯净直显图片气泡渲染器（支持真实图片或文字描绘翻转，去拍立得相框与右下角小字）
+    window.renderWechatPureImageBubbleHTML = function(msg) {
+        const descText = msg.imageDesc || msg.text || '';
+        const hasRealImg = !!(msg.imageUrl || msg.url);
+        const imgUrl = msg.imageUrl || msg.url || '';
+
+        // 如果既无真实图片又无文字描述，兜底保护
+        if (!hasRealImg && !descText) {
+            return `<div style="padding:10px 14px;background:#ededed;border-radius:8px;font-size:13px;color:#888;">[空图片消息]</div>`;
+        }
+
+        // 正面渲染内容：若是纯文字描绘图，正面展示微信原生极简纯净画面微缩卡；若有真实图片，正面为纯净图片
+        const frontContent = hasRealImg ? `
+            <img src="${imgUrl}" style="width:100%;height:100%;object-fit:cover;display:block;border-radius:8px;" onerror="this.onerror=null;this.src='assets/icons/chat.png';" />
+        ` : `
+            <div style="width:100%;height:100%;min-height:140px;background:linear-gradient(135deg, #f3f4f6, #e5e7eb);display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;text-align:center;border-radius:8px;">
+                <svg viewBox="0 0 24 24" style="width:32px;height:32px;fill:none;stroke:#9ca3af;stroke-width:1.8;margin-bottom:8px;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                <span style="font-size:12px;color:#6b7280;font-weight:500;">点击翻转查看画面描写</span>
+            </div>
+        `;
+
+        // 背面渲染内容：纯粹展示文字描述，带有原生微信白灰微绿的温润质感
+        const backContent = `
+            <div style="width:100%;height:100%;min-height:140px;background:#2c2c2c;color:#f3f3f3;padding:14px 16px;box-sizing:border-box;border-radius:8px;display:flex;flex-direction:column;justify-content:space-between;text-align:left;overflow-y:auto;">
+                <div style="font-size:12.5px;line-height:1.5;color:#f9fafb;word-break:break-word;">
+                    ${escapeHtml(descText || '暂无画面文字描述')}
+                </div>
+                <div style="font-size:10px;color:#9ca3af;text-align:right;margin-top:10px;letter-spacing:0.3px;">
+                    点击翻回正面 ↺
+                </div>
+            </div>
+        `;
+
+        return `
+            <div class="wechat-image-flipper-container" data-flipped="false" onclick="window.toggleChatImageFlip(this)" style="perspective:1000px;width:100%;max-width:210px;cursor:pointer;-webkit-user-select:none;user-select:none;">
+                <div class="wechat-image-flipper-inner" style="position:relative;width:100%;transition:transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);transform-style:preserve-3d;border-radius:8px;">
+                    <!-- 正面 -->
+                    <div class="wechat-image-flipper-front" style="width:100%;-webkit-backface-visibility:hidden;backface-visibility:hidden;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);background:#fff;display:block;">
+                        ${frontContent}
+                    </div>
+                    <!-- 背面 -->
+                    <div class="wechat-image-flipper-back" style="position:absolute;top:0;left:0;width:100%;height:100%;-webkit-backface-visibility:hidden;backface-visibility:hidden;transform:rotateY(180deg);border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.12);">
+                        ${backContent}
+                    </div>
+                </div>
+            </div>
+        `;
     };
 
 })();

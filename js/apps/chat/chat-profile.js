@@ -6,7 +6,7 @@
  * 2. assets/avatars/ 头像子目录架构，支持本地相册选取头像与图库随机
  * 3. 国家与地区实时检索筛选器、时区偏移换算、中国真实时间跟随询问
  * 4. 账号多马甲管理：小号独立通讯录、小号注册/改名/个性签名/换头像、小号新好友申请红点提示
- * 5. 专属双轨防丢持久化引擎与微信原生风格弹窗
+ * 5. 专属双轨防丢持久化引擎与微信原生风格弹窗（解决改名重启失效Bug）
  */
 
 (function() {
@@ -30,7 +30,7 @@
     ];
 
     // ============================================================
-    // 💾 独立双轨持久化防丢引擎（彻底杜绝重启丢小号/丢人设）
+    // 💾 独立双轨持久化防丢引擎（彻底杜绝重启丢小号/丢人设/改名还原）
     // ============================================================
     function syncAccountsToStorage() {
         try {
@@ -43,7 +43,8 @@
             }
             if (window.G.player) {
                 const personaPayload = {
-                    ytName: window.G.player.ytName || '',
+                    ytName: window.G.player.ytName || window.G.player.name || '',
+                    name: window.G.player.ytName || window.G.player.name || '',
                     offlinePersona: window.G.player.offlinePersona || '',
                     onlinePersona: window.G.player.onlinePersona || '',
                     gameSkinPersona: window.G.player.gameSkinPersona || '',
@@ -61,12 +62,18 @@
         if (!window.G) window.G = {};
         if (!window.G.player) window.G.player = {};
 
-        // 1. 恢复三维人设、个性签名与地区
+        // 1. 恢复三维人设、个性签名、昵称与地区（若持久层存在，强制覆盖防还原）
         try {
             const rawPersonas = localStorage.getItem('mcyt_wechat_player_personas');
             if (rawPersonas) {
                 const pData = JSON.parse(rawPersonas);
-                if (pData.ytName && !window.G.player.ytName) window.G.player.ytName = pData.ytName;
+                if (pData.ytName) {
+                    window.G.player.ytName = pData.ytName;
+                    window.G.player.name = pData.ytName;
+                    if (Array.isArray(window.G.player._nameHistory) && !window.G.player._nameHistory.includes(pData.ytName)) {
+                        window.G.player._nameHistory.push(pData.ytName);
+                    }
+                }
                 if (pData.offlinePersona !== undefined) window.G.player.offlinePersona = pData.offlinePersona;
                 if (pData.onlinePersona !== undefined) window.G.player.onlinePersona = pData.onlinePersona;
                 if (pData.gameSkinPersona !== undefined) window.G.player.gameSkinPersona = pData.gameSkinPersona;
@@ -127,7 +134,7 @@
             return {
                 id: 'main',
                 isAlt: false,
-                name: window.G.player?.ytName || '主播大号',
+                name: window.G.player?.ytName || window.G.player?.name || '主播大号',
                 avatar: window.G.player?.avatar || (typeof getRandomAvatar === 'function' ? getRandomAvatar() : 'assets/icons/chat.png'),
                 signature: window.G.player?.signature || '',
                 bio: '官方主账号',
@@ -149,7 +156,7 @@
         return {
             id: 'main',
             isAlt: false,
-            name: window.G.player?.ytName || '主播大号',
+            name: window.G.player?.ytName || window.G.player?.name || '主播大号',
             avatar: window.G.player?.avatar || 'assets/icons/chat.png',
             signature: '',
             bio: '',
@@ -297,7 +304,7 @@
                         </div>
                         <div style="min-width:0;flex:1;">
                             <div style="font-size:13px;font-weight:600;color:#1f2937;display:flex;align-items:center;gap:4px;">
-                                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px;">${escapeHtml(p.ytName || '主播大号')}</span>
+                                <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:110px;">${escapeHtml(p.ytName || p.name || '主播大号')}</span>
                                 <span style="font-size:10px;background:#e8f8f0;color:#07c160;padding:1px 4px;border-radius:3px;">主号</span>
                                 ${mainPendingCount > 0 ? `<span style="font-size:10px;color:#fa5151;font-weight:500;">新申请</span>` : ''}
                             </div>
@@ -540,10 +547,10 @@
         if (typeof autoSaveGame === 'function') autoSaveGame();
     };
 
-    // 改名弹窗
+    // 改名弹窗（彻底同步至 ytName / name / 历史库与本地双轨持久化）
     window.openChangeAccountNameModal = function(targetAccountId) {
         const curAcc = getActiveAccountInfo();
-        const currentName = (targetAccountId === 'main') ? (window.G.player?.ytName || '') : curAcc.name;
+        const currentName = (targetAccountId === 'main') ? (window.G.player?.ytName || window.G.player?.name || '') : curAcc.name;
 
         showWechatStyleModal(`
             <div style="padding:20px 18px 16px;">
@@ -562,6 +569,12 @@
             if (targetAccountId === 'main') {
                 if (!window.G.player) window.G.player = {};
                 window.G.player.ytName = val;
+                window.G.player.name = val;
+                if (!Array.isArray(window.G.player._nameHistory)) {
+                    window.G.player._nameHistory = [val];
+                } else if (!window.G.player._nameHistory.includes(val)) {
+                    window.G.player._nameHistory.push(val);
+                }
             } else {
                 const alt = (window.G.altAccounts || []).find(a => a.id === targetAccountId);
                 if (alt) alt.name = val;
@@ -570,6 +583,7 @@
             window.closeWechatStyleModal();
             if (typeof renderChatApp === 'function') renderChatApp();
             if (typeof autoSaveGame === 'function') autoSaveGame();
+            if (typeof showToast === 'function') showToast('昵称已修改并保存', 'success', 1000);
         };
     };
 

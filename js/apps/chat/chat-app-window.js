@@ -2,8 +2,9 @@
  * js/apps/chat/chat-app-window.js
  * 💬 微信主应用 · 拆分分片 3/7：单人私聊窗口渲染（renderSingleChatWindow，含消息折叠、防卡顿优化与智能重说切换）、
  *    微信内嵌全屏浏览器浮层（window.openWebPageLink）、
- *    重新生成回复的确认与执行（confirmRetryLastAIReply / doRetryLastAIReply）。
- * ⚠️ 拆分自 chat-app.js，仅做物理搬家；window.renderSingleChatWindow 的导出位置从原文件末尾就地前移到函数定义处。
+ *    重新生成回复的确认与执行（confirmRetryLastAIReply / doRetryLastAIReply）、
+ *    彻底去除拍立得相纸与右下角描述，全面启用微信原生直显大图与点击 3D 翻转查看文字。
+ * ⚠️ 拆分自 chat-app.js，window.renderSingleChatWindow 的导出位置从原文件末尾就地前移到函数定义处。
  */
 
 (function() {
@@ -66,7 +67,7 @@
             <div style="flex: 1; position: relative; width: 100%; height: 100%; overflow: hidden; background: #f2f2f2;">
                 <iframe id="wechatBrowserIframe" src="${escapeHtml(url)}" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" style="width: 100%; height: 100%; border: none; background: #ffffff;"></iframe>
                 
-                <!-- 跨域防拦截/X-Frame-Options 提示底栏胶囊（当目标站点拒绝嵌入时，方便玩家一键唤起原生访问） -->
+                <!-- 跨域防拦截/X-Frame-Options 提示底栏胶囊 -->
                 <div id="browserCspTip" style="position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.72); backdrop-filter: blur(4px); color: #fff; padding: 6px 14px; border-radius: 18px; font-size: 11px; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); pointer-events: auto; white-space: nowrap;">
                     <span>部分页面若受限无法完全展示</span>
                     <span id="fallbackOpenLinkBtn" style="color: #6ee7b7; font-weight: 600; cursor: pointer; text-decoration: underline;">唤起系统应用打开 ›</span>
@@ -362,55 +363,19 @@
                     </div>
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
                 </div>`;
-            } else if (msg.type === 'image_flip' || (isSelf && msg.imageDesc && !msg.imageUrl)) {
-                const desc = msg.imageDesc || msg.text || '画片内容';
-                const frontImg = msg.imageUrl || 'assets/icons/chat.png';
+            } else if (msg.type === 'image' || msg.type === 'image_flip' || msg.type === 'image_text_only' || msg.imageUrl || msg.imageDesc) {
+                // 🖼️ 微信原生纯净直显图片气泡（彻底消除拍立得相框与右下角描述，点击即 3D 翻转呈现背面文字）
+                const imageBubbleHtml = (typeof window.renderWechatPureImageBubbleHTML === 'function')
+                    ? window.renderWechatPureImageBubbleHTML(msg)
+                    : `<div style="padding:10px 14px;background:#fff;border-radius:8px;font-size:13px;color:#222;">“${escapeHtml(msg.imageDesc || msg.text || '图片')}”</div>`;
+
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
                     ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(npc, 38)}</div>` : ''}
                     <div style="max-width:72%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                         ${quoteHtml}
-                        <div id="flipCard_${msg._id}" class="wechat-flip-card" onclick="window.toggleCardFlipDirect('${msg._id}')" style="perspective:1000px;cursor:pointer;">
-                            <div class="flip-inner" style="width:190px;height:120px;position:relative;transition:transform 0.4s;transform-style:preserve-3d;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.1);">
-                                <div class="flip-front" style="position:absolute;inset:0;backface-visibility:hidden;background:#ffffff;border:1px solid #e2e8f0;border-radius:8px;padding:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;">
-                                    <img src="${frontImg}" style="width:46px;height:46px;object-fit:contain;margin-bottom:6px;opacity:0.85;">
-                                    <div style="font-size:11px;color:#07c160;font-weight:600;">[拍立得卡片 · 点击翻转]</div>
-                                </div>
-                                <div class="flip-back" style="position:absolute;inset:0;backface-visibility:hidden;background:linear-gradient(135deg, #1e293b, #334155);color:#fff;border-radius:8px;padding:12px;display:flex;align-items:center;justify-content:center;transform:rotateY(180deg);font-size:12.5px;line-height:1.45;text-align:center;">
-                                    “${escapeHtml(desc)}”
-                                </div>
-                            </div>
-                        </div>
-                        <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
-                    </div>
-                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
-                </div>`;
-            } else if (!isSelf && (msg.type === 'image_text_only' || msg.imageDesc)) {
-                const desc = msg.imageDesc || msg.text || '照片内容';
-                messagesHtml += `
-                <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:flex-start;margin-bottom:12px;align-items:flex-start;">
-                    <div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(npc, 38)}</div>
-                    <div style="max-width:72%;display:flex;flex-direction:column;align-items:flex-start;">
-                        ${quoteHtml}
-                        <div style="background:#ffffff;border:1px solid #e2e8f0;border-left:3px solid #07c160;border-radius:6px;padding:8px 12px;box-shadow:0 1px 3px rgba(0,0,0,0.04);max-width:210px;">
-                            <div style="font-size:10.5px;color:#07c160;font-weight:600;margin-bottom:3px;">📷 对方发送了一张照片</div>
-                            <div style="font-size:13px;color:#2c3e50;line-height:1.45;word-break:break-word;">“${escapeHtml(desc)}”</div>
-                        </div>
-                        <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
-                    </div>
-                </div>`;
-            } else if (msg.type === 'image' || msg.imageUrl) {
-                const imgSrc = msg.imageUrl || msg.url || 'assets/icons/chat.png';
-                messagesHtml += `
-                <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
-                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(npc, 38)}</div>` : ''}
-                    <div style="max-width:65%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
-                        ${quoteHtml}
-                        <div style="background:#fff;padding:3px;border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,0.06);cursor:pointer;" onclick="window.openMomentImagePreview('${imgSrc}', '${escapeHtml(msg.imageDesc || '')}')">
-                            <img src="${imgSrc}" style="max-width:180px;max-height:220px;border-radius:4px;object-fit:cover;display:block;" />
-                        </div>
-                        ${msg.imageDesc ? `<div style="font-size:11px;color:#888;margin-top:2px;background:#f9f9f9;padding:2px 6px;border-radius:3px;">描绘: ${escapeHtml(msg.imageDesc)}</div>` : ''}
-                        <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
+                        ${imageBubbleHtml}
+                        <div style="font-size:10px;color:#bbb;margin-top:3px;">${msg.time || ''}</div>
                     </div>
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
                 </div>`;
@@ -583,7 +548,7 @@
                 }
             };
         }
-    }
+    };
 
     // 重新生成回复确认弹窗
     window.confirmRetryLastAIReply = function(npcId) {

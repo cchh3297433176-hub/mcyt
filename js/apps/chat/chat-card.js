@@ -4,8 +4,9 @@
  * 职责：
  * 1. 角色极简原生名片卡（仅保留头像、姓名/备注、个性签名、地区与好感度）
  * 2. 独立齿轮“资料设置”白灰拟真弹窗（备注名、原名、签名、地区、恋爱状态、人设Prompt修改）
- * 3. 角色卡 PNG 导出入口（支持自定义文件名）、换头像与角色卡导入
- * 4. 推荐名片详情弹窗与添加通讯录
+ * 3. 角色回复偏好设置：单次最少/最多发送条数控制、语音发送频率控制
+ * 4. 角色卡 PNG 导出入口（支持自定义文件名）、换头像与角色卡导入
+ * 5. 推荐名片详情弹窗与添加通讯录
  */
 
 (function() {
@@ -88,7 +89,7 @@
     }
     window.openNpcProfileCardModal = openNpcProfileCardModal;
 
-    // ⚙️ 角色资料设置弹窗（内含人设导出 PNG 按钮及命名弹窗）
+    // ⚙️ 角色资料设置弹窗（内含发送条数限制、语音频率设置、人设导出 PNG 按钮）
     function openNpcSettingsModal(npcId) {
         if (!window.G || !window.G.npcs) return;
         const npc = window.G.npcs[npcId];
@@ -100,6 +101,18 @@
         const regionOptionsHtml = regionList.map(r => `
             <option value="${r}" ${npc.region === r ? 'selected' : ''}>${r}</option>
         `).join('');
+
+        // 默认回复条数与语音设置读取
+        if (!npc.chatSettings) {
+            npc.chatSettings = {
+                minMsgs: 1,
+                maxMsgs: 3,
+                voiceFreq: 'rare' // 'never' | 'rare' | 'often' | 'voice_only'
+            };
+        }
+        const minMsgs = Math.max(1, parseInt(npc.chatSettings.minMsgs) || 1);
+        const maxMsgs = Math.max(minMsgs, parseInt(npc.chatSettings.maxMsgs) || 3);
+        const voiceFreq = npc.chatSettings.voiceFreq || 'rare';
 
         if (typeof openWechatCleanModal === 'function') {
             openWechatCleanModal('资料设置', `
@@ -122,6 +135,41 @@
                             ${regionOptionsHtml}
                         </select>
                     </div>
+
+                    <!-- 聊天回复条数与语音偏好设置面板 -->
+                    <div style="background:#f8f9fa;border-radius:8px;padding:10px 12px;border:0.5px solid #eee;display:flex;flex-direction:column;gap:10px;">
+                        <div style="font-size:12px;font-weight:600;color:#181818;display:flex;align-items:center;gap:5px;">
+                            <span style="display:inline-block;width:3px;height:12px;background:#07c160;border-radius:2px;"></span>
+                            聊天偏好与输出控制
+                        </div>
+
+                        <!-- 条数范围设置 -->
+                        <div>
+                            <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;color:#666;margin-bottom:5px;">
+                                <span>单次发送条数</span>
+                                <span style="font-weight:600;color:#07c160;"><span id="wcleanMinMsgsLabel">${minMsgs}</span> 条 ~ <span id="wcleanMaxMsgsLabel">${maxMsgs}</span> 条</span>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:8px;">
+                                <span style="font-size:11px;color:#888;">最少</span>
+                                <input type="range" id="wcleanMinMsgsRange" min="1" max="5" value="${minMsgs}" style="flex:1;accent-color:#07c160;">
+                                <span style="font-size:11px;color:#888;">最多</span>
+                                <input type="range" id="wcleanMaxMsgsRange" min="1" max="8" value="${maxMsgs}" style="flex:1;accent-color:#07c160;">
+                            </div>
+                        </div>
+
+                        <!-- 语音频率设置 -->
+                        <div>
+                            <div style="font-size:11.5px;color:#666;margin-bottom:5px;">语音发送频率</div>
+                            <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:6px;" id="voiceFreqSelectorGroup">
+                                <button type="button" class="voice-freq-btn" data-val="never" style="padding:5px 0;border-radius:5px;font-size:11.5px;cursor:pointer;border:1px solid ${voiceFreq === 'never' ? '#07c160' : '#e0e0e0'};background:${voiceFreq === 'never' ? '#f0f9eb' : '#fff'};color:${voiceFreq === 'never' ? '#07c160' : '#444'};font-weight:${voiceFreq === 'never' ? '600' : 'normal'};">从不</button>
+                                <button type="button" class="voice-freq-btn" data-val="rare" style="padding:5px 0;border-radius:5px;font-size:11.5px;cursor:pointer;border:1px solid ${voiceFreq === 'rare' ? '#07c160' : '#e0e0e0'};background:${voiceFreq === 'rare' ? '#f0f9eb' : '#fff'};color:${voiceFreq === 'rare' ? '#07c160' : '#444'};font-weight:${voiceFreq === 'rare' ? '600' : 'normal'};">偶尔</button>
+                                <button type="button" class="voice-freq-btn" data-val="often" style="padding:5px 0;border-radius:5px;font-size:11.5px;cursor:pointer;border:1px solid ${voiceFreq === 'often' ? '#07c160' : '#e0e0e0'};background:${voiceFreq === 'often' ? '#f0f9eb' : '#fff'};color:${voiceFreq === 'often' ? '#07c160' : '#444'};font-weight:${voiceFreq === 'often' ? '600' : 'normal'};">经常</button>
+                                <button type="button" class="voice-freq-btn" data-val="voice_only" style="padding:5px 0;border-radius:5px;font-size:11.5px;cursor:pointer;border:1px solid ${voiceFreq === 'voice_only' ? '#07c160' : '#e0e0e0'};background:${voiceFreq === 'voice_only' ? '#f0f9eb' : '#fff'};color:${voiceFreq === 'voice_only' ? '#07c160' : '#444'};font-weight:${voiceFreq === 'voice_only' ? '600' : 'normal'};">全语音</button>
+                            </div>
+                            <input type="hidden" id="wcleanSetVoiceFreqVal" value="${voiceFreq}">
+                        </div>
+                    </div>
+
                     <div>
                         <div style="display:flex;justify-content:space-between;align-items:center;">
                             <label style="font-size:11.5px;color:#777;font-weight:500;">好感度 (0~100)</label>
@@ -159,12 +207,24 @@
                 const personaVal = document.getElementById('wcleanSetNpcPersona')?.value.trim() || 'MC好友同伴。';
                 const favorVal = parseInt(document.getElementById('wcleanSetFavorRange')?.value) || 0;
 
+                const curMin = parseInt(document.getElementById('wcleanMinMsgsRange')?.value) || 1;
+                const curMax = parseInt(document.getElementById('wcleanMaxMsgsRange')?.value) || 3;
+                const finalMax = Math.max(curMin, curMax);
+                const curVoiceFreq = document.getElementById('wcleanSetVoiceFreqVal')?.value || 'rare';
+
                 npc.remark = remarkVal;
                 npc.name = nameVal;
                 npc.signature = sigVal;
                 npc.region = regVal;
                 npc.persona = personaVal;
                 npc.favor = favorVal;
+
+                // 写入角色条数与语音偏好
+                npc.chatSettings = {
+                    minMsgs: curMin,
+                    maxMsgs: finalMax,
+                    voiceFreq: curVoiceFreq
+                };
 
                 if (npc.favor < 60 && npc.relationshipStage === 'dating') {
                     npc.relationshipStage = 'friend';
@@ -189,6 +249,53 @@
                 if (range && display) {
                     range.oninput = () => { display.textContent = range.value; };
                 }
+
+                // 条数联动滑块逻辑
+                const minRange = document.getElementById('wcleanMinMsgsRange');
+                const maxRange = document.getElementById('wcleanMaxMsgsRange');
+                const minLabel = document.getElementById('wcleanMinMsgsLabel');
+                const maxLabel = document.getElementById('wcleanMaxMsgsLabel');
+
+                if (minRange && maxRange && minLabel && maxLabel) {
+                    minRange.oninput = () => {
+                        let minV = parseInt(minRange.value) || 1;
+                        let maxV = parseInt(maxRange.value) || 3;
+                        if (minV > maxV) {
+                            maxRange.value = minV;
+                            maxLabel.textContent = minV;
+                        }
+                        minLabel.textContent = minV;
+                    };
+                    maxRange.oninput = () => {
+                        let minV = parseInt(minRange.value) || 1;
+                        let maxV = parseInt(maxRange.value) || 3;
+                        if (maxV < minV) {
+                            minRange.value = maxV;
+                            minLabel.textContent = maxV;
+                        }
+                        maxLabel.textContent = maxV;
+                        minLabel.textContent = minRange.value;
+                    };
+                }
+
+                // 语音频率点击切换
+                const freqBtns = document.querySelectorAll('.voice-freq-btn');
+                const freqHidden = document.getElementById('wcleanSetVoiceFreqVal');
+                freqBtns.forEach(btn => {
+                    btn.onclick = () => {
+                        freqBtns.forEach(b => {
+                            b.style.border = '1px solid #e0e0e0';
+                            b.style.background = '#fff';
+                            b.style.color = '#444';
+                            b.style.fontWeight = 'normal';
+                        });
+                        btn.style.border = '1px solid #07c160';
+                        btn.style.background = '#f0f9eb';
+                        btn.style.color = '#07c160';
+                        btn.style.fontWeight = '600';
+                        if (freqHidden) freqHidden.value = btn.getAttribute('data-val');
+                    };
+                });
 
                 const datingBtn = document.getElementById('btnToggleDatingInSettings');
                 if (datingBtn) {
@@ -218,7 +325,6 @@
                 const exportBtn = document.getElementById('btnExportTavernPngCard');
                 if (exportBtn) {
                     exportBtn.onclick = () => {
-                        // 弹出简约命名弹窗
                         promptExportFilename(npc);
                     };
                 }
@@ -348,7 +454,12 @@
             relationshipStage: 'friend',
             avatarUrl: avatar || (typeof getRandomAvatar === 'function' ? getRandomAvatar() : 'assets/icons/chat.png'),
             isCustom: true,
-            ownerAccountId: curAcc.id
+            ownerAccountId: curAcc.id,
+            chatSettings: {
+                minMsgs: 1,
+                maxMsgs: 3,
+                voiceFreq: 'rare'
+            }
         };
 
         if (typeof window.syncCustomNpcsToLocalBackup === 'function') window.syncCustomNpcsToLocalBackup();
@@ -403,7 +514,12 @@
                         relationshipStage: 'friend',
                         avatarUrl: profile.avatarUrl || (typeof getRandomAvatar === 'function' ? getRandomAvatar() : 'assets/icons/chat.png'),
                         isCustom: true,
-                        ownerAccountId: curAcc.id
+                        ownerAccountId: curAcc.id,
+                        chatSettings: {
+                            minMsgs: 1,
+                            maxMsgs: 3,
+                            voiceFreq: 'rare'
+                        }
                     };
 
                     if (typeof window.syncCustomNpcsToLocalBackup === 'function') window.syncCustomNpcsToLocalBackup();
