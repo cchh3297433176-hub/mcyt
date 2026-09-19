@@ -1,15 +1,54 @@
 /**
  * js/apps/chat/chat-app-ai.js
  * 💬 微信主应用 · 拆分分片 5/7：单人私聊 AI 回复触发核心（window.triggerAIReplyForSingle）。
- *    带跨时段、隔夜双时间戳感知、塔罗牌解读感知与 Rememori 证据链沉淀。
- * ⚠️ 拆分自 chat-app.js，仅做物理搬家，不改动任何函数内部逻辑。
- *    未来「聊天联网搜索」功能的接入点计划落在本文件（AI 请求发出之前判断是否需要联网）。
+ *    带跨时段、隔夜双时间戳感知、塔罗牌解读感知、Rememori 证据链沉淀、
+ *    以及专属好友独立联网搜索检索与权威网页卡片推送。
+ * ⚠️ 拆分自 chat-app.js，包含联网意图识别、webSearch 调度与网页气泡派发。
  */
 
 (function() {
     'use strict';
 
-    // 🤖 单人私聊 AI 回复触发（带跨时段、隔夜双时间戳感知、塔罗牌解读感知与 Rememori 证据链沉淀）
+    // 辅助函数：判断是否需要联网搜索并提取关键词
+    function checkSearchIntent(lastPlayerText, searchCfg) {
+        if (!lastPlayerText || !searchCfg || !searchCfg.enabled) {
+            return { needSearch: false, query: '' };
+        }
+
+        const text = lastPlayerText.trim();
+        const rawKeywords = (searchCfg.forcedKeywords || '').split(/[,，\s]+/).filter(Boolean);
+
+        // 1. 自定义关键词强制匹配
+        for (const kw of rawKeywords) {
+            if (text.includes(kw)) {
+                let cleanQuery = text.replace(new RegExp(kw, 'g'), '').replace(/^[，,。.？！?!、\s]+|[，,。.？！?!、\s]+$/g, '').trim();
+                if (!cleanQuery) cleanQuery = text;
+                return { needSearch: true, query: cleanQuery };
+            }
+        }
+
+        // 2. AI 自主判断：提问或生活百科/事实探知场景
+        const autoPatterns = [
+            /(?:怎么|如何|怎样)(?:做|弄|搞|办|弄出|搞定)/,
+            /(?:做法|菜谱|配方|步骤|教程|攻略)/,
+            /(?:是什么|什么意思|指的是|介绍一下|科普)/,
+            /(?:什么时候|几月几日|哪天|历史上的今天)/,
+            /(?:最新|今天|昨晚|近期|现在).*(?:新闻|消息|热搜|发生|更新)/,
+            /(?:为什么|为何).*(?:会这样|原因)/,
+            /(?:你知道|听过|听说过).*(?:吗|不)/
+        ];
+
+        for (const pat of autoPatterns) {
+            if (pat.test(text)) {
+                let cleanQuery = text.replace(/^[，,。.？！?!、\s]+|[，,。.？！?!、\s]+$/g, '').trim();
+                return { needSearch: true, query: cleanQuery };
+            }
+        }
+
+        return { needSearch: false, query: '' };
+    }
+
+    // 🤖 单人私聊 AI 回复触发（带跨时段、隔夜双时间戳感知、塔罗牌解读感知、Rememori 证据链与联网搜索）
     window.triggerAIReplyForSingle = async function(npcId) {
         const npc = window.G.npcs[npcId];
         if (!npc) return;
@@ -39,12 +78,20 @@
 
         let lastMsgTime = '';
         let lastMsgTimestamp = null;
+        let lastPlayerMsgText = '';
+
         for (let i = history.length - 1; i >= 0; i--) {
-            if (history[i].from === 'player' || history[i].from === 'npc') {
-                lastMsgTime = history[i].time || '';
-                lastMsgTimestamp = history[i].timestamp || null;
-                break;
+            const h = history[i];
+            if (h.from === 'player' || h.from === 'npc') {
+                if (!lastMsgTime) {
+                    lastMsgTime = h.time || '';
+                    lastMsgTimestamp = h.timestamp || null;
+                }
             }
+            if (h.from === 'player' && !lastPlayerMsgText) {
+                lastPlayerMsgText = h.text || h.originalText || '';
+            }
+            if (lastMsgTime && lastPlayerMsgText) break;
         }
 
         let peekNotice = '';
@@ -59,7 +106,6 @@
             }
             if (m.type === 'voice') return `${speaker} [语音]: ${m.text || ''}`;
             if (m.type === 'shared_tarot') {
-                // 🔮 委托给 ChatTarot 进行结构化提取
                 if (window.ChatTarot && typeof window.ChatTarot.formatTarotForPrompt === 'function') {
                     return window.ChatTarot.formatTarotForPrompt(m, speaker);
                 }
@@ -72,6 +118,7 @@
                 }
                 return `${speaker} [推荐了名片]: ${m.contactCard?.name}（人设：${m.contactCard?.persona || 'MC同伴'}，签名：“${m.contactCard?.signature || '无'}”，身份：${m.contactCard?.isAlt ? '对方的小号' : '新朋友'}）`;
             }
+            if (m.type === 'web_page') return `${speaker} [分享了网页链接]: ${m.webPage?.title || ''} (${m.webPage?.url || ''})`;
             if (m.type === 'moment_notice') return `[系统提醒]: ${m.author} 刚发了一条新朋友圈动态`;
             if (m.originalText) return `${speaker}: ${m.originalText} (译: ${m.text || ''})`;
             if (m.imageDesc) return `${speaker} [发了张照片，画面描绘]: ${m.imageDesc}`;
@@ -79,18 +126,42 @@
             return `${speaker}: ${m.text || ''}`;
         }).join('\n');
 
+        // 🌐 联网搜索检索处理
+        let searchResults = [];
+        let searchContextPrompt = '';
+        const searchCfg = (typeof window.getNpcSearchConfig === 'function')
+            ? window.getNpcSearchConfig(npcId)
+            : { enabled: false, maxResults: 3, sendWebPage: true, forcedKeywords: '' };
+
+        const intent = checkSearchIntent(lastPlayerMsgText, searchCfg);
+        if (intent.needSearch && intent.query && typeof window.webSearch === 'function') {
+            try {
+                if (typeof showToast === 'function') showToast(`对方正在检索网络...`, 'info', 1200);
+                const limit = searchCfg.maxResults || 3;
+                searchResults = await window.webSearch(intent.query, limit);
+                if (searchResults && searchResults.length > 0) {
+                    const formattedResults = searchResults.map((item, idx) => {
+                        return `[来源${idx + 1}] ${item.title}\n摘要: ${item.snippet || item.body || ''}\n链接: ${item.url || ''}`;
+                    }).join('\n\n');
+                    searchContextPrompt = `\n\n【实时全网联网检索参考（对方刚刚提及了相关内容或触发了搜索指令）】：\n检索关键词：“${intent.query}”\n${formattedResults}\n【要求】：根据你的口吻、人设性格自然吸收并转述上述信息，不要死板报幕，可以像朋友聊天一样介绍。`;
+                }
+            } catch (searchErr) {
+                console.warn('联网搜索检索失败或超时:', searchErr);
+            }
+        }
+
         const promptCtx = (window.ChatPromptEngine && typeof window.ChatPromptEngine.buildWechatAIPromptContext === 'function')
             ? window.ChatPromptEngine.buildWechatAIPromptContext({
                 npc,
                 curAcc,
-                recentDialogueText: recentDialogue + peekNotice,
+                recentDialogueText: recentDialogue + peekNotice + searchContextPrompt,
                 isBehindActive,
                 lastMsgTime,
                 lastMsgTimestamp
             })
             : {
                 sysPrompt: `扮演MC好友「${npc.name}」，严禁句末加句号，严禁括号动作描写。`,
-                userPrompt: recentDialogue ? `最近对话：\n${recentDialogue}\n\n回复：` : '打个招呼。'
+                userPrompt: recentDialogue ? `最近对话：\n${recentDialogue}${searchContextPrompt}\n\n回复：` : '打个招呼。'
             };
 
         try {
@@ -210,6 +281,30 @@
                 if (window.G.currentChatNpc === npcId) renderSingleChatWindow();
                 if (i < finalEntities.length - 1) {
                     await new Promise(r => setTimeout(r, 420));
+                }
+            }
+
+            // 🌐 推送搜索到的优质网页卡片（若开启且有权威搜索结果）
+            if (searchCfg.sendWebPage && searchResults && searchResults.length > 0) {
+                const topPage = searchResults[0];
+                if (topPage && topPage.url) {
+                    await new Promise(r => setTimeout(r, 480));
+                    const time = new Date().toLocaleTimeString().slice(0, 5);
+                    const pageCardMsg = {
+                        from: 'npc',
+                        type: 'web_page',
+                        text: `[分享了网页: ${topPage.title || '网页链接'}]`,
+                        webPage: {
+                            title: topPage.title || '权威检索结果',
+                            snippet: topPage.snippet || topPage.body || '',
+                            url: topPage.url,
+                            source: topPage.source || '全网检索'
+                        },
+                        time,
+                        timestamp: Date.now()
+                    };
+                    window.pushChatMessageSafe(npcId, pageCardMsg, curAcc.id);
+                    if (window.G.currentChatNpc === npcId) renderSingleChatWindow();
                 }
             }
 

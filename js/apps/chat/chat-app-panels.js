@@ -1,15 +1,42 @@
 /**
  * js/apps/chat/chat-app-panels.js
  * 💬 微信主应用 · 拆分分片 6/7：表情抽屉（buildChatStickerDrawerHTML 及分类/添加/备注/新建分类）、
- *    加号功能面板 7 大格子（buildChatPlusDrawerHTML）、记忆设置弹窗、聊天折叠设置弹窗、
+ *    加号功能面板 8 大格子（buildChatPlusDrawerHTML）、记忆设置弹窗、联网设置弹窗、聊天折叠设置弹窗、
  *    推荐名片选择弹窗、发送名片、最近 Token 统计弹窗。
- * ⚠️ 拆分自 chat-app.js，仅做物理搬家，不改动任何函数内部逻辑。
- *    未来新增「联网设置」格子计划加在 buildChatPlusDrawerHTML 的 7 项网格里，并在本文件新增对应弹窗函数。
+ * ⚠️ 拆分自 chat-app.js，包含加号面板入口与角色专属联网搜索配置弹窗。
  */
 
 (function() {
     'use strict';
 
+    // 🌐 角色独立联网搜索配置存取
+    function getNpcSearchConfig(id) {
+        try {
+            const raw = localStorage.getItem('mcyt_npc_search_configs');
+            if (raw) {
+                const map = JSON.parse(raw);
+                if (map && map[id]) return map[id];
+            }
+        } catch (_) {}
+        return {
+            enabled: false,
+            maxResults: 3,
+            sendWebPage: true,
+            forcedKeywords: '搜索, 查一下, 查查, 搜一下, 帮我找'
+        };
+    }
+    window.getNpcSearchConfig = getNpcSearchConfig;
+
+    function saveNpcSearchConfig(id, cfg) {
+        try {
+            let map = {};
+            const raw = localStorage.getItem('mcyt_npc_search_configs');
+            if (raw) map = JSON.parse(raw) || {};
+            map[id] = { ...getNpcSearchConfig(id), ...cfg };
+            localStorage.setItem('mcyt_npc_search_configs', JSON.stringify(map));
+        } catch (_) {}
+    }
+    window.saveNpcSearchConfig = saveNpcSearchConfig;
 
     function buildChatStickerDrawerHTML(type, id) {
         if (typeof ensureStickersLoaded === 'function') ensureStickersLoaded();
@@ -124,7 +151,7 @@
         });
     };
 
-    // 完整的 7 大功能加号抽屉面板（“记忆设置”）
+    // 完整的 8 大功能加号抽屉面板（新增“联网设置”）
     function buildChatPlusDrawerHTML(type, id) {
         return `
         <div id="chatPlusDrawer" style="background:#f7f7f7;border-top:0.5px solid #dcdcdc;flex-shrink:0;animation:wechatSlideUp 0.18s ease-out;">
@@ -146,6 +173,12 @@
                         <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#10b981;stroke-width:1.8;stroke-linecap:round;"><path d="M12 2a9 9 0 0 0-9 9c0 3.6 2.1 6.7 5.2 8.1l.8 2.9 3-1.5c0 .3.5.5.8.5a9 9 0 0 0 9-9 9 9 0 0 0-9-9z"/><path d="M9.5 9h5"/><path d="M9.5 13h5"/></svg>
                     </div>
                     <span class="wechat-plus-label">记忆设置</span>
+                </div>
+                <div class="wechat-plus-item" onclick="window._plusDrawerOpen=false; window.openNpcSearchSettingsModal('${type}','${id}')">
+                    <div class="wechat-plus-icon-box">
+                        <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#059669;stroke-width:1.8;stroke-linecap:round;"><circle cx="12" cy="12" r="9"></circle><path d="M3.6 9h16.8M3.6 15h16.8"></path><path d="M11.5 3a17 17 0 0 0 0 18M12.5 3a17 17 0 0 1 0 18"></path></svg>
+                    </div>
+                    <span class="wechat-plus-label">联网设置</span>
                 </div>
                 <div class="wechat-plus-item" onclick="window._plusDrawerOpen=false; window.openChatCollapseSettingsModal('${type}','${id}')">
                     <div class="wechat-plus-icon-box">
@@ -181,6 +214,87 @@
         window._stickerDrawerOpen = false;
         if (type === 'single') renderSingleChatWindow();
         else if (typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
+    };
+
+    // 🌐 角色独立联网设置弹窗（带微绿问号科普说明）
+    window.openNpcSearchSettingsModal = function(type, id) {
+        if (type !== 'single') {
+            if (typeof showToast === 'function') showToast('联网设置目前支持专属好友单人私聊', 'info', 1500);
+            return;
+        }
+
+        const cfg = getNpcSearchConfig(id);
+        const npc = window.G.npcs ? window.G.npcs[id] : null;
+        const npcDisplayName = npc ? (npc.remark || npc.name) : '当前好友';
+
+        const modalBody = `
+            <div style="text-align:left;font-size:13px;color:#333;">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:10px;border-bottom:0.5px solid #f0f0f0;margin-bottom:12px;">
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <span style="font-weight:600;color:#181818;">开启角色联网搜索</span>
+                        <button type="button" onclick="window.showSearchIntroTooltip()" style="border:none;background:#e8f7ed;color:#07c160;width:18px;height:18px;border-radius:50%;font-size:11px;font-weight:bold;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;padding:0;">?</button>
+                    </div>
+                    <input type="checkbox" id="wcleanSearchToggle" ${cfg.enabled ? 'checked' : ''} style="width:18px;height:18px;accent-color:#07c160;cursor:pointer;">
+                </div>
+
+                <div style="display:flex;flex-direction:column;gap:12px;">
+                    <div>
+                        <label style="font-size:12px;color:#666;font-weight:600;display:block;margin-bottom:4px;">联网检索条目上限：</label>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <input type="number" id="wcleanSearchMaxResults" value="${cfg.maxResults || 3}" min="1" max="5" step="1" class="wechat-clean-input" style="width:90px;">
+                            <span style="font-size:11.5px;color:#888;">条（推荐 2~3 条，兼顾精准度与速度）</span>
+                        </div>
+                    </div>
+
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding:2px 0;">
+                        <div>
+                            <span style="font-size:12px;color:#666;font-weight:600;">发送搜索到的网页卡片</span>
+                            <div style="font-size:11px;color:#888;margin-top:1px;">查到结果后将权威网页链接卡片同步发到聊天中</div>
+                        </div>
+                        <input type="checkbox" id="wcleanSearchSendPage" ${cfg.sendWebPage ? 'checked' : ''} style="width:17px;height:17px;accent-color:#07c160;cursor:pointer;">
+                    </div>
+
+                    <div>
+                        <label style="font-size:12px;color:#666;font-weight:600;display:block;margin-bottom:4px;">自定义强制搜索关键词：</label>
+                        <input type="text" id="wcleanSearchKeywords" value="${escapeHtml(cfg.forcedKeywords || '')}" placeholder="逗号或空格隔开，如：搜索, 查一下, 帮我找" class="wechat-clean-input" style="width:100%;">
+                        <div style="font-size:11px;color:#888;margin-top:4px;">包含此类词必触发检索；未命中时由 AI 依据内容自主判断。</div>
+                    </div>
+
+                    <div style="font-size:11px;color:#999;background:#f9f9f9;padding:6px 10px;border-radius:4px;line-height:1.45;">
+                        目标角色：<b>${escapeHtml(npcDisplayName)}</b><br>
+                        规则：借助系统设置中心配置的联网通道实时检索，保持拟真生动的答复与资料参考。
+                    </div>
+                </div>
+            </div>
+        `;
+
+        window.openWechatCleanModal('联网设置', modalBody, () => {
+            const enabled = document.getElementById('wcleanSearchToggle')?.checked ?? false;
+            let maxResults = parseInt(document.getElementById('wcleanSearchMaxResults')?.value) || 3;
+            const sendWebPage = document.getElementById('wcleanSearchSendPage')?.checked ?? true;
+            const forcedKeywords = document.getElementById('wcleanSearchKeywords')?.value.trim() || '搜索, 查一下, 查查, 搜一下, 帮我找';
+
+            if (maxResults < 1) maxResults = 1;
+            if (maxResults > 5) maxResults = 5;
+
+            saveNpcSearchConfig(id, { enabled, maxResults, sendWebPage, forcedKeywords });
+            if (typeof showToast === 'function') showToast('联网设置已更新', 'success', 1200);
+            if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+        });
+    };
+
+    // 💡 联网机制说明弹窗（严格控制在 150 字以内并包含降速提示）
+    window.showSearchIntroTooltip = function() {
+        const text = "开启后角色具备实时联网能力。当聊到实时资讯、生活百科、知识盲区或触发自定义关键词时，AI将自动调用底层引擎检索全网事实，并在需要时推送网页卡片。提示：因需执行多路实时网络抓取、解析与内容清洗，开启后角色回复速度会略有下降。";
+        if (typeof window.openWechatCleanModal === 'function') {
+            window.openWechatCleanModal('联网搜索机制', `
+                <div style="text-align:left;padding:8px 4px;font-size:13px;color:#333;line-height:1.6;">
+                    ${escapeHtml(text)}
+                </div>
+            `, () => {});
+        } else if (typeof showToast === 'function') {
+            showToast(text, 'info', 4000);
+        }
     };
 
     // 🧠 角色独立记忆总结设置弹窗（带微绿问号科普）
@@ -449,6 +563,5 @@
             <div style="font-size:11px;color:#999;text-align:center;margin-top:10px;">仅保留历史最近 10 轮</div>
         `, () => {});
     };
-
 
 })();
