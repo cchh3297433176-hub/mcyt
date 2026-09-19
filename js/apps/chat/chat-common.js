@@ -1,7 +1,7 @@
 /**
  * js/apps/chat/chat-common.js
  * 💬 微信基础公共库：头像池加载 · 持久化双轨防丢备份（防空冲刷保护） · 微信通用样式注入 · 原生对话框/操作表 · Token监控池 · 
- *    🌟 表情包自注册插件引擎（window.registerStickerPack，支持各分组独立文件按需载入，彻底解耦零Token膨胀） · 
+ *    🌟 表情包全量自愈装载底座（内置四大黄金分组：【豆米乌卡】40张 + 【小狗】94张 + 【抽象】42张 + 【猪猪】，老存档无缝穿透激活） · 
  *    AI实体解析器 · 酒馆 PNG 人设卡封装与导入解析引擎
  */
 
@@ -9,9 +9,7 @@
     'use strict';
 
     const AVATAR_SUBDIR = 'assets/avatars/';
-    const STICKER_SUBDIR = 'assets/stickers/';
     window._MCYT_AVATAR_SUBDIR = AVATAR_SUBDIR;
-    window._MCYT_STICKER_SUBDIR = STICKER_SUBDIR;
 
     const CUSTOM_NPCS_BACKUP_KEY = 'mcyt_wechat_custom_npcs';
     const CHAT_HISTORY_BACKUP_KEY = 'mcyt_wechat_chathistory_v2';
@@ -88,82 +86,260 @@
     window.initAvatarPool = initAvatarPool;
 
     // ============================================================
-    // 🎭 表情包自注册驱动引擎：各分组只需放置独立 list.js 即可无感挂载
+    // 🎭 内置同步表情包全量数据底座（四组全量即开即用，杜绝 WebView 跨域拦截）
     // ============================================================
+    const BUILTIN_STICKER_PRESETS = {
+        '豆米乌卡': [
+            { desc: '头顶加载思索', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005348_origin_mmexport1784611626132.png' },
+            { desc: '委屈放声大哭', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005350_origin_mmexport1784611626517.png' },
+            { desc: '双手合十祈求', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005351_origin_mmexport1784611626710.png' },
+            { desc: '消息已收到', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005342_origin_mmexport1784611624409.png' },
+            { desc: '相拥依偎贴贴', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005341_origin_mmexport1784611624165.png' },
+            { desc: '举钻戒求婚示爱', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005340_origin_mmexport1784611624026.png' },
+            { desc: '爱心环绕委屈祈求', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005347_origin_mmexport1784611625901.png' },
+            { desc: '头顶着火不爽', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005345_origin_mmexport1784611625273.png' },
+            { desc: '挥拳冒火愤怒', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005346_origin_mmexport1784611625567.png' },
+            { desc: '抱着大爱心愉悦', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005344_origin_mmexport1784611625020.png' },
+            { desc: '感动落泪爱意包围', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005343_origin_mmexport1784611624770.png' },
+            { desc: '戴睡帽困倦犯困', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005335_origin_mmexport1784611622974.png' },
+            { desc: '戴墨镜耍酷闪耀', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005334_origin_mmexport1784611622741.png' },
+            { desc: '举禁止牌表示拒绝', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005339_origin_mmexport1784611623864.png' },
+            { desc: '遗憾离场落寞退场', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005338_origin_mmexport1784611623708.png' },
+            { desc: '比爱心眨眼放电', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005337_origin_mmexport1784611623486.png' },
+            { desc: '眼神亮晶晶害羞欲言', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005379_origin_a5cae49601a8ecfa.png' },
+            { desc: '满眼星光合十期待', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005336_origin_mmexport1784611623207.png' },
+            { desc: '手拿绿色对勾标牌', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005349_origin_mmexport1784611626344.png' },
+            { desc: '高举双手欢呼点赞', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005381_origin_mmexport1784626203895.png' },
+            { desc: '独自抽烟落寞倦怠', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005383_origin_mmexport1784626560473.png' },
+            { desc: '闭眼大喊激动宣泄', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005382_origin_mmexport1784626559987.png' },
+            { desc: '严肃推眼镜认真思索', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005384_origin_mmexport1784626560987.png' },
+            { desc: '看手机心碎落泪', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005385_origin_mmexport1784626561526.png' },
+            { desc: '小猫小狗甜蜜依偎', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005386_origin_mmexport1784626562108.png' },
+            { desc: '揪住脖颈气呼呼', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005394_origin_mmexport1784626571220.png' },
+            { desc: '对手指脸红腼腆害羞', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005392_origin_mmexport1784626569050.png' },
+            { desc: '推眼镜托下巴沉思', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005393_origin_mmexport1784626569854.png' },
+            { desc: '单手擦眼泪抽泣', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005391_origin_mmexport1784626567817.png' },
+            { desc: '气泡打招呼Hi', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005390_origin_mmexport1784626566804.png' },
+            { desc: '手拿菜刀乖巧威胁', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005389_origin_mmexport1784626565663.png' },
+            { desc: '伸手指向一旁气恼', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005388_origin_mmexport1784626564974.png' },
+            { desc: '闭眼浅笑惬意得意', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005387_origin_mmexport1784626563645.png' },
+            { desc: '端杯子疑惑问号', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005396_origin_mmexport1784626573539.png' },
+            { desc: '弯眼笑开口道谢谢谢', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005401_origin_mmexport1784626576502.png' },
+            { desc: '大颗泪珠崩溃大哭', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005399_origin_mmexport1784626575458.png' },
+            { desc: '佩戴领结浪漫送花', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005400_origin_mmexport1784626575975.png' },
+            { desc: '额头怒气抬手发火', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005397_origin_mmexport1784626574167.png' },
+            { desc: '星光自信得意比手势', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005398_origin_mmexport1784626574804.png' },
+            { desc: '趴手机等对方消息', url: 'https://gitee.com/zqn1013/gitee/raw/master/img/1000005395_origin_mmexport1784626572001.png' }
+        ],
+        '小狗': [
+            { desc: '仰泳晃动手臂冒爱心', url: 'https://pic1.imgdb.cn/item/69c0a15eccd26bacb4daa6a7.gif' },
+            { desc: '快速激动奔跑', url: 'https://pic1.imgdb.cn/item/69c0a15eccd26bacb4daa6ab.gif' },
+            { desc: '伸舌头抬右手晃尾巴', url: 'https://pic1.imgdb.cn/item/69c0a308ccd26bacb4daa6bb.gif' },
+            { desc: '黄狗快乐唱歌扭动', url: 'https://pic1.imgdb.cn/item/69c0a308ccd26bacb4daa6bd.gif' },
+            { desc: '白狗头顶冒红心摇晃', url: 'https://pic1.imgdb.cn/item/69c0a497ccd26bacb4daa6d2.gif' },
+            { desc: '黄狗头顶冒红心摇晃', url: 'https://pic1.imgdb.cn/item/69c0a647ccd26bacb4daa6f3.gif' },
+            { desc: '白狗盖被趴枕头乱想', url: 'https://pic1.imgdb.cn/item/69c0a497ccd26bacb4daa6d3.gif' },
+            { desc: '黄狗盖被趴枕头乱想', url: 'https://pic1.imgdb.cn/item/69c0a647ccd26bacb4daa6f6.gif' },
+            { desc: '白狗包里掏出巨大爱心', url: 'https://pic1.imgdb.cn/item/69c0a497ccd26bacb4daa6d6.gif' },
+            { desc: '黄狗包里掏出巨大爱心', url: 'https://pic1.imgdb.cn/item/69c0a67fccd26bacb4daa6fa.gif' },
+            { desc: '白狗抽泣委屈', url: 'https://pic1.imgdb.cn/item/69c0a497ccd26bacb4daa6d4.gif' },
+            { desc: '黄狗抽泣委屈', url: 'https://pic1.imgdb.cn/item/69c0b275ccd26bacb4dabf21.gif' },
+            { desc: '白狗双眼冒爱心摇尾巴', url: 'https://pic1.imgdb.cn/item/69c0a5f3ccd26bacb4daa6e8.gif' },
+            { desc: '黄狗迷恋爱心', url: 'https://pic1.imgdb.cn/item/69c0a647ccd26bacb4daa6f1.gif' },
+            { desc: '白狗哭着抱大药丸', url: 'https://pic1.imgdb.cn/item/69c0a5f3ccd26bacb4daa6ec.gif' },
+            { desc: '黄狗哭着抱大药丸', url: 'https://pic1.imgdb.cn/item/69c0b496ccd26bacb4dabf51.gif' },
+            { desc: '白狗托起小黄狗', url: 'https://pic1.imgdb.cn/item/69c0a5f3ccd26bacb4daa6ed.gif' },
+            { desc: '黄狗托起小白狗', url: 'https://pic1.imgdb.cn/item/69c0a647ccd26bacb4daa6f2.gif' },
+            { desc: '白狗穿婚纱拿手捧花', url: 'https://pic1.imgdb.cn/item/69c0a5f3ccd26bacb4daa6eb.gif' },
+            { desc: '白狗香蕉装闪星星', url: 'https://pic1.imgdb.cn/item/69c0a5f3ccd26bacb4daa6ea.gif' },
+            { desc: '黄狗香蕉装闪星星', url: 'https://pic1.imgdb.cn/item/69c0a67fccd26bacb4daa6f9.gif' },
+            { desc: '黄狗打电脑白狗贴背', url: 'https://pic1.imgdb.cn/item/69c0a497ccd26bacb4daa6d7.gif' },
+            { desc: '白狗打电脑黄狗贴背', url: 'https://pic1.imgdb.cn/item/69c0b275ccd26bacb4dabf20.gif' },
+            { desc: '黄狗嘟嘴亲亲冒爱心', url: 'https://pic1.imgdb.cn/item/69c0b275ccd26bacb4dabf23.gif' },
+            { desc: '趴在身上充电', url: 'https://pic1.imgdb.cn/item/69c0b275ccd26bacb4dabf22.gif' },
+            { desc: '白狗穿睡衣靠枕头', url: 'https://pic1.imgdb.cn/item/69c0a647ccd26bacb4daa6f4.gif' },
+            { desc: '拿出背后棉花糖', url: 'https://pic1.imgdb.cn/item/69c0b5e9ccd26bacb4dabfa6.gif' },
+            { desc: '享受阳光闭眼照耀', url: 'https://pic1.imgdb.cn/item/69c0b5e9ccd26bacb4dabfa7.gif' },
+            { desc: '小狗被窝睡觉守候', url: 'https://pic1.imgdb.cn/item/69c0b5e9ccd26bacb4dabfa9.gif' },
+            { desc: '趴背亲吻捏脸颊', url: 'https://pic1.imgdb.cn/item/69c0b5e9ccd26bacb4dabfab.gif' },
+            { desc: '盖绿被蹭大红心', url: 'https://pic1.imgdb.cn/item/69c0b5e9ccd26bacb4dabfa8.gif' },
+            { desc: '抱手机等消息', url: 'https://pic1.imgdb.cn/item/69c0b5e9ccd26bacb4dabfaa.gif' },
+            { desc: '裹绿被墙后偷看', url: 'https://pic1.imgdb.cn/item/69c0b718ccd26bacb4dac170.gif' },
+            { desc: '抱腿悬挂不放手', url: 'https://pic1.imgdb.cn/item/69c0b718ccd26bacb4dac16f.gif' },
+            { desc: '包包里惊喜钻出', url: 'https://pic1.imgdb.cn/item/69c0b718ccd26bacb4dac172.gif' },
+            { desc: '黄狗戴蓝手套点赞', url: 'https://pic1.imgdb.cn/item/69c0b718ccd26bacb4dac173.gif' },
+            { desc: '白狗戴黄手套点赞', url: 'https://pic1.imgdb.cn/item/69c0bd6945b603369a3d9b78.gif' },
+            { desc: '关灯被窝看手机', url: 'https://pic1.imgdb.cn/item/69c0b718ccd26bacb4dac174.gif' },
+            { desc: '紫耳朵黄狗一脸坏笑', url: 'https://pic1.imgdb.cn/item/69c0b718ccd26bacb4dac175.gif' },
+            { desc: '坐黄垫灵光一闪', url: 'https://pic1.imgdb.cn/item/69c0b7d0ccd26bacb4dac4b0.gif' },
+            { desc: '趴床边哭泣委屈', url: 'https://pic1.imgdb.cn/item/69c0b7d0ccd26bacb4dac4ae.gif' },
+            { desc: '主动钻进购物车', url: 'https://pic1.imgdb.cn/item/69c0b7d0ccd26bacb4dac4af.gif' },
+            { desc: '烟囱里举望远镜观察', url: 'https://pic1.imgdb.cn/item/69c0b7d0ccd26bacb4dac4b1.gif' },
+            { desc: '托脸颊冒星星', url: 'https://pic1.imgdb.cn/item/69c0b7d0ccd26bacb4dac4ad.gif' },
+            { desc: '互相牵绳遛狗', url: 'https://pic1.imgdb.cn/item/69c0b90bccd26bacb4dacb4e.gif' },
+            { desc: '趴着抬头傻笑摇尾', url: 'https://pic1.imgdb.cn/item/69c0b90bccd26bacb4dacb4a.gif' },
+            { desc: '突然受到惊吓', url: 'https://pic1.imgdb.cn/item/69c0b90bccd26bacb4dacb49.gif' },
+            { desc: '抱着小熊蹭脸蛋', url: 'https://pic1.imgdb.cn/item/69c0b90bccd26bacb4dacb48.gif' },
+            { desc: '趴屏幕前一脸期待', url: 'https://pic1.imgdb.cn/item/69c0b90bccd26bacb4dacb4d.gif' },
+            { desc: '鼻孔喷气满脸期待', url: 'https://pic1.imgdb.cn/item/69c0b90bccd26bacb4dacb4b.gif' },
+            { desc: '抱黄色枕头舒坦', url: 'https://pic1.imgdb.cn/item/69c0ba49ccd26bacb4dad1e4.gif' },
+            { desc: '双手散开冒大粉心', url: 'https://pic1.imgdb.cn/item/69c0ba49ccd26bacb4dad1e7.gif' },
+            { desc: '两只小狗转圈追逐', url: 'https://pic1.imgdb.cn/item/69c0ba49ccd26bacb4dad1e5.gif' },
+            { desc: '拿小木棍往前走', url: 'https://pic1.imgdb.cn/item/69c0ba49ccd26bacb4dad1e6.gif' },
+            { desc: '戴苹果头套委屈', url: 'https://pic1.imgdb.cn/item/69c0ba49ccd26bacb4dad1e8.gif' },
+            { desc: '1号粉丝牌开心摇晃', url: 'https://pic1.imgdb.cn/item/69c0ba49ccd26bacb4dad1e9.gif' },
+            { desc: '屁股上盖OK印章', url: 'https://pic1.imgdb.cn/item/69c0bc9445b603369a3d9726.gif' },
+            { desc: '拉拉手开心跳舞', url: 'https://pic1.imgdb.cn/item/69c0bc9445b603369a3d9727.gif' },
+            { desc: '疯狂发射粉色爱心', url: 'https://pic1.imgdb.cn/item/69c0bc9445b603369a3d9728.gif' },
+            { desc: '黄狗伴舞开心跳跃', url: 'https://pic1.imgdb.cn/item/69c0bc9545b603369a3d972a.gif' },
+            { desc: '白狗伴舞开心跳跃', url: 'https://pic1.imgdb.cn/item/69c0c60f45b603369a3da304.gif' },
+            { desc: '拿小戳子戳生气狗', url: 'https://pic1.imgdb.cn/item/69c0bc9545b603369a3d972b.gif' },
+            { desc: '网兜一网捞出爱心', url: 'https://pic1.imgdb.cn/item/69c0bc9545b603369a3d972c.gif' },
+            { desc: '乖乖坐着冒爱心', url: 'https://pic1.imgdb.cn/item/69c0bd6945b603369a3d9b7a.gif' },
+            { desc: '拼命用力点头赞同', url: 'https://pic1.imgdb.cn/item/69c0bd8845b603369a3d9c1e.gif' },
+            { desc: '信件里源源不断冒爱心', url: 'https://pic1.imgdb.cn/item/69c0c1eb45b603369a3da2ca.gif' },
+            { desc: '背后发条累瘫在地', url: 'https://pic1.imgdb.cn/item/69c0c1eb45b603369a3da2cb.gif' },
+            { desc: '认真给同伴捶背', url: 'https://pic1.imgdb.cn/item/69c0c1eb45b603369a3da2ce.gif' },
+            { desc: '被子里眼神迷糊迷茫', url: 'https://pic1.imgdb.cn/item/69c0c1eb45b603369a3da2cc.gif' },
+            { desc: '扭屁股晃尾巴跳舞', url: 'https://pic1.imgdb.cn/item/69c0c1eb45b603369a3da2cf.gif' },
+            { desc: '脏兮兮坐地认错', url: 'https://pic1.imgdb.cn/item/69c0c24d45b603369a3da2d2.gif' },
+            { desc: '死死抱腿蹭腿撒娇', url: 'https://pic1.imgdb.cn/item/69c0c24e45b603369a3da2d4.gif' },
+            { desc: '揉揉没睡醒的眼睛', url: 'https://pic1.imgdb.cn/item/69c0c46d45b603369a3da2f0.gif' },
+            { desc: '趴玩具火箭飞天', url: 'https://pic1.imgdb.cn/item/69c0c46d45b603369a3da2eb.gif' },
+            { desc: '从地底下突然冒出', url: 'https://pic1.imgdb.cn/item/69c0c51b45b603369a3da2f8.gif' },
+            { desc: '站在梯子上拿喇叭喊', url: 'https://pic1.imgdb.cn/item/69c0c51b45b603369a3da2f9.gif' },
+            { desc: '躺靠枕满脸幸福惬意', url: 'https://pic1.imgdb.cn/item/69c0c51b45b603369a3da2fa.gif' },
+            { desc: '推开窗双手招手打招呼', url: 'https://pic1.imgdb.cn/item/69c0c51b45b603369a3da2fc.gif' },
+            { desc: '可怜兮兮泪眼汪汪', url: 'https://pic1.imgdb.cn/item/69c0c51b45b603369a3da2fd.gif' },
+            { desc: '震惊到骨头从嘴里滑落', url: 'https://pic1.imgdb.cn/item/69c0c60f45b603369a3da303.gif' },
+            { desc: '拿粉刷粉刷墙壁', url: 'https://pic1.imgdb.cn/item/69c0c60f45b603369a3da306.gif' },
+            { desc: '躺被窝里准备睡觉', url: 'https://pic1.imgdb.cn/item/69c0c6cd45b603369a3da308.gif' },
+            { desc: '假装玩小车实则竖耳偷听', url: 'https://pic1.imgdb.cn/item/69c0c6cd45b603369a3da30a.gif' },
+            { desc: '耳朵里藏礼物露出得意', url: 'https://pic1.imgdb.cn/item/69c0c6cd45b603369a3da30d.gif' },
+            { desc: '坐报纸上风吹可怜小狗', url: 'https://pic1.imgdb.cn/item/69c0c6cd45b603369a3da30c.gif' },
+            { desc: '裹被子里探手招招', url: 'https://pic1.imgdb.cn/item/69c0c7d845b603369a3da332.gif' },
+            { desc: '盖小被子瑟瑟发抖', url: 'https://pic1.imgdb.cn/item/69c0c7d945b603369a3da334.gif' },
+            { desc: '一脸坏笑望过来', url: 'https://pic1.imgdb.cn/item/69c0c7d945b603369a3da335.gif' },
+            { desc: '四肢伸缩做有氧健美操', url: 'https://pic1.imgdb.cn/item/69c0c7d945b603369a3da333.gif' },
+            { desc: '站在体重秤上拽肥肉发愁', url: 'https://pic1.imgdb.cn/item/69c0c8ad45b603369a3dadb7.gif' },
+            { desc: '伸爪爪扭屁股做拉伸', url: 'https://pic1.imgdb.cn/item/69c0c8ad45b603369a3dadb8.gif' },
+            { desc: '黄狗被揉捏胖脸蛋', url: 'https://pic1.imgdb.cn/item/69c0c8ad45b603369a3dadb9.gif' },
+            { desc: '白狗被揉捏胖脸蛋', url: 'https://pic1.imgdb.cn/item/69c0c8ad45b603369a3dadba.gif' }
+        ],
+        '抽象': [
+            { desc: '这个就是我呀，会不会有点营养不良了', url: 'https://i.imgant.com/v2/tuDMWKL.jpeg' },
+            { desc: '删掉，腰不想要了？', url: 'https://i.imgant.com/v2/K893NeG.jpeg' },
+            { desc: '叹气', url: 'https://i.imgant.com/v2/ckPrEv8.jpeg' },
+            { desc: '活着憋屈啊', url: 'https://i.imgant.com/v2/LjlZPbM.jpeg' },
+            { desc: '好骚哦', url: 'https://i.imgant.com/v2/ynvlSu3.jpeg' },
+            { desc: '我此刻表情无疑是悲伤的', url: 'https://i.imgant.com/v2/lLJls5V.jpeg' },
+            { desc: '你是要气死妈妈么', url: 'https://i.imgant.com/v2/SIPjg3v.jpeg' },
+            { desc: '去哪 和谁 回来还爱我不', url: 'https://i.imgant.com/v2/dgH4yEi.jpeg' },
+            { desc: '真以为我是穷人啊', url: 'https://i.imgant.com/v2/Df5TllH.jpeg' },
+            { desc: '我在你心里的重量（0kg）', url: 'https://i.imgant.com/v2/C6eN4c1.jpeg' },
+            { desc: '我一定乖乖嘟', url: 'https://i.imgant.com/v2/mIGW4cS.jpeg' },
+            { desc: '刚睡醒，很容易拿下', url: 'https://i.imgant.com/v2/kXItqup.jpeg' },
+            { desc: '我操泥马你不要我了吗', url: 'https://i.imgant.com/v2/vXuR2E7.jpeg' },
+            { desc: '又几把咋地了啊', url: 'https://i.imgant.com/v2/LRiBynf.jpeg' },
+            { desc: '小狗皱眉', url: 'https://i.imgant.com/v2/CvEh0gi.jpeg' },
+            { desc: '你们就欺负我这个弱智吧', url: 'https://i.imgant.com/v2/viKzqox.jpeg' },
+            { desc: '老子说话没用是吧', url: 'https://i.imgant.com/v2/B2Qvzcb.jpeg' },
+            { desc: '高调路过', url: 'https://i.imgant.com/v2/SXOIeXm.jpeg' },
+            { desc: '哈士奇发呆', url: 'https://i.imgant.com/v2/LZVOmO8.jpeg' },
+            { desc: '托腮卖萌', url: 'https://i.imgant.com/v2/hELc3LX.jpeg' },
+            { desc: '开心', url: 'https://i.imgant.com/v2/sbEu9Ec.jpeg' },
+            { desc: '抽烟', url: 'https://i.imgant.com/v2/M5hvApr.jpeg' },
+            { desc: '我觉得我失宠了', url: 'https://i.imgant.com/v2/ZZluNGD.jpeg' },
+            { desc: '老地方见', url: 'https://i.imgant.com/v2/QCIRS8O.jpeg' },
+            { desc: '你要气死爸爸么', url: 'https://i.imgant.com/v2/vjtpp98.jpeg' },
+            { desc: '生气', url: 'https://i.imgant.com/v2/nyTGtMB.jpeg' },
+            { desc: '不知所措', url: 'https://i.imgant.com/v2/q1H7s5r.jpeg' },
+            { desc: '我在哭哦，你们看见了吗，我正在流眼泪', url: 'https://i.imgant.com/v2/aY8H2kv.jpeg' },
+            { desc: '这位朋友，请滚', url: 'https://i.imgant.com/v2/NqDH6c1.jpeg' },
+            { desc: '我草泥马，再发这个我打死你，我下手很重的', url: 'https://i.imgant.com/v2/MmteCvC.jpeg' },
+            { desc: '你们在做什么？！', url: 'https://i.imgant.com/v2/itpBKTZ.jpeg' },
+            { desc: '这真是...太下流了，不过我喜欢', url: 'https://i.imgant.com/v2/5svgrbd.jpeg' },
+            { desc: '哈士奇戴眼镜', url: 'https://i.imgant.com/v2/9aye7oO.jpeg' },
+            { desc: '我。现在就和这个乐乐狗一样，很无语，然后，没力气，扶墙，很想哭', url: 'https://i.imgant.com/v2/aHcqUn6.jpeg' },
+            { desc: '你看我想理你吗', url: 'https://i.imgant.com/v2/fGwUBR7.jpeg' },
+            { desc: '躺在床上忍不住眼泪直流 麻痹 我的人生为何如此艰难', url: 'https://i.imgant.com/v2/GTf4vOh.jpeg' },
+            { desc: '专业套狗（让你跑掉是我的错）', url: 'https://i.imgant.com/v2/f80XFXP.jpeg' },
+            { desc: '我现在就是这个狗呀，然后呆呆傻傻地看着你，看着这个世界，因为我什么都不懂呀', url: 'https://i.imgant.com/v2/SOx3tKj.jpeg' },
+            { desc: '翻白眼', url: 'https://i.imgant.com/v2/2DHRx2i.jpeg' },
+            { desc: '我这么可爱叫两声咋了', url: 'https://i.imgant.com/v2/6sBbjgo.jpeg' },
+            { desc: '见钱眼开', url: 'https://i.imgant.com/v2/eKP4Na8.jpeg' },
+            { desc: '哈士奇害羞', url: 'https://i.imgant.com/v2/MeWtWNE.jpeg' }
+        ]
+    };
+
+    // 🌟 全量自愈激活引擎（强行突破旧存档封锁，无损注入四大黄金分组）
+    function ensureStickersLoaded() {
+        if (!window.G) window.G = {};
+        if (!Array.isArray(window.G.stickerCategories)) {
+            window.G.stickerCategories = ['豆米乌卡', '小狗', '抽象', '猪猪'];
+        }
+        if (!Array.isArray(window.G.stickerLibrary)) {
+            window.G.stickerLibrary = [];
+        }
+
+        // 🛡️ 强行穿透门禁：检查系统四大预置分组是否在分类列表里，不在就强行补齐！
+        const goldenPacks = ['豆米乌卡', '小狗', '抽象', '猪猪'];
+        goldenPacks.forEach(packName => {
+            if (!window.G.stickerCategories.includes(packName)) {
+                window.G.stickerCategories.unshift(packName);
+            }
+        });
+
+        // 🛡️ 强行补全表情包实体数据（去重注入，绝不冲掉玩家自定义表情）
+        for (const [catName, packList] of Object.entries(BUILTIN_STICKER_PRESETS)) {
+            const existingUrls = new Set(
+                window.G.stickerLibrary
+                    .filter(s => s && s.category === catName)
+                    .map(s => s.url)
+            );
+
+            packList.forEach(item => {
+                if (item && item.url && !existingUrls.has(item.url)) {
+                    window.G.stickerLibrary.push({
+                        category: catName,
+                        desc: item.desc || catName,
+                        url: item.url
+                    });
+                    existingUrls.add(item.url);
+                }
+            });
+        }
+
+        // 如果当前选中的分类不存在或仍停留在单一分类，默认切到豆米乌卡
+        if (!window.G.activeStickerCategory || !window.G.stickerCategories.includes(window.G.activeStickerCategory)) {
+            window.G.activeStickerCategory = '豆米乌卡';
+        }
+    }
+    window.ensureStickersLoaded = ensureStickersLoaded;
+
+    // 预留注册接口供外部自由调用
     window.registerStickerPack = function(categoryName, stickerList) {
         if (!categoryName || !Array.isArray(stickerList)) return;
-        if (!window.G) window.G = {};
-        if (!Array.isArray(window.G.stickerCategories)) window.G.stickerCategories = ['猪猪'];
-        if (!Array.isArray(window.G.stickerLibrary)) window.G.stickerLibrary = [];
-
-        // 自动注入分组标签
+        ensureStickersLoaded();
         if (!window.G.stickerCategories.includes(categoryName)) {
             window.G.stickerCategories.unshift(categoryName);
         }
-
         const existingUrls = new Set(
             window.G.stickerLibrary
                 .filter(s => s && s.category === categoryName)
                 .map(s => s.url)
         );
-
         stickerList.forEach(item => {
             if (item && item.url && !existingUrls.has(item.url)) {
                 window.G.stickerLibrary.push({
                     category: categoryName,
                     desc: item.desc || categoryName,
-                    url: item.url,
-                    localUrl: item.local || null
+                    url: item.url
                 });
                 existingUrls.add(item.url);
             }
         });
-
-        if (!window.G.activeStickerCategory) {
-            window.G.activeStickerCategory = categoryName;
-        }
     };
-
-    // 动态扫描并加载子目录中的表情包分组（根据 assets/stickers/index.json 自动引入）
-    function loadExternalStickerPacks() {
-        // 先吸收先于本文件加载的挂起数据
-        if (window._MCYT_PENDING_STICKERS && typeof window._MCYT_PENDING_STICKERS === 'object') {
-            for (const [cat, list] of Object.entries(window._MCYT_PENDING_STICKERS)) {
-                window.registerStickerPack(cat, list);
-            }
-            window._MCYT_PENDING_STICKERS = {};
-        }
-
-        // 读取表情目录索引并加载各自分组的 list.js
-        fetch(STICKER_SUBDIR + 'index.json?t=' + Date.now())
-            .then(res => res.json())
-            .then(packNames => {
-                if (Array.isArray(packNames)) {
-                    packNames.forEach(name => {
-                        const script = document.createElement('script');
-                        script.src = `${STICKER_SUBDIR}${encodeURIComponent(name)}/list.js?t=${Date.now()}`;
-                        document.head.appendChild(script);
-                    });
-                }
-            })
-            .catch(() => {
-                // 兜底尝试加载默认的常见分组
-                ['小狗', '抽象'].forEach(name => {
-                    const s = document.createElement('script');
-                    s.src = `${STICKER_SUBDIR}${encodeURIComponent(name)}/list.js`;
-                    document.head.appendChild(s);
-                });
-            });
-    }
-    loadExternalStickerPacks();
-
-    function ensureStickersLoaded() {
-        if (!window.G) window.G = {};
-        if (!Array.isArray(window.G.stickerCategories)) window.G.stickerCategories = ['小狗', '抽象', '猪猪'];
-        if (!Array.isArray(window.G.stickerLibrary)) window.G.stickerLibrary = [];
-        if (!window.G.activeStickerCategory) window.G.activeStickerCategory = window.G.stickerCategories[0] || '小狗';
-    }
-    window.ensureStickersLoaded = ensureStickersLoaded;
 
     // 后台生成状态记录表（npcId/groupId => timer / promise）
     if (!window._MCYT_CHAT_GENERATING) window._MCYT_CHAT_GENERATING = {};
@@ -670,11 +846,12 @@
         if (!window.G._behindScreenActive) window.G._behindScreenActive = {};
         if (!window.G._chatShowFullHistory) window.G._chatShowFullHistory = {};
         
-        ensureStickersLoaded();
-
         restoreCustomNpcsFromLocalBackup();
         restoreChatHistoryFromLocalBackup();
         restoreMomentsFeedFromLocalBackup();
+
+        // 🌟 核心：在此处彻底激活预置表情包，突破旧存档拦截
+        ensureStickersLoaded();
 
         if (typeof window.restoreWechatProfileData === 'function') {
             window.restoreWechatProfileData();
@@ -809,7 +986,7 @@
                 });
             }
             else if (match[0].startsWith('[STICKER')) {
-                const cat = (match[4] || '小狗').trim();
+                const cat = (match[4] || '豆米乌卡').trim();
                 const desc = (match[5] || '开心').trim();
                 entities.push({
                     type: 'sticker_entity',
@@ -837,7 +1014,7 @@
                         }
                         entities.push({
                             type: 'sticker_entity',
-                            category: (stMatch[1] || '小狗').trim(),
+                            category: (stMatch[1] || '豆米乌卡').trim(),
                             desc: (stMatch[2] || '开心').trim()
                         });
                         lastIdx = nestedStickerRegex.lastIndex;
@@ -898,7 +1075,7 @@
                 }
                 entities.push({
                     type: 'sticker_entity',
-                    category: (nMatch[1] || '小狗').trim(),
+                    category: (nMatch[1] || '豆米乌卡').trim(),
                     desc: (nMatch[2] || '开心').trim()
                 });
                 lastIdx = nakedStickerRegex.lastIndex;
@@ -926,14 +1103,10 @@
     function resolveStickerImageUrl(category, desc) {
         const lib = window.G.stickerLibrary || [];
         const found = lib.find(s => s && (s.category === category || !category) && (s.desc === desc || (s.desc && s.desc.includes(desc))));
-        if (found && (found.url || found.localUrl)) {
-            return { url: found.localUrl || found.url, desc: found.desc };
-        }
+        if (found && found.url) return { url: found.url, desc: found.desc };
 
         const catFallback = lib.find(s => s && s.category === category);
-        if (catFallback && (catFallback.url || catFallback.localUrl)) {
-            return { url: catFallback.localUrl || catFallback.url, desc: catFallback.desc };
-        }
+        if (catFallback && catFallback.url) return { url: catFallback.url, desc: catFallback.desc };
 
         return null;
     }
