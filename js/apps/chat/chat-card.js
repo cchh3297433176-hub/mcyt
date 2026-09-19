@@ -12,6 +12,11 @@
 (function() {
     'use strict';
 
+    function formatFavorNumber(val) {
+        const num = parseFloat(val) || 0;
+        return Number.isInteger(num) ? num.toString() : num.toFixed(1);
+    }
+
     // 📇 极简原生微信名片卡
     function openNpcProfileCardModal(npcId) {
         if (!window.G || !window.G.npcs) return;
@@ -23,7 +28,8 @@
         const hasRemark = !!(npc.remark && npc.remark.trim());
         const primaryName = hasRemark ? escapeHtml(npc.remark.trim()) : escapeHtml(npc.name || npc.id);
         const subNameHtml = hasRemark ? `<div style="font-size:12px;color:#888888;margin-top:2px;">原名：${escapeHtml(npc.name || '')}</div>` : '';
-        const favorText = `${npc.favor || 50} (${isDating ? '恋人' : (npc.favor >= 80 ? '暧昧期' : '朋友')})`;
+        const curFavor = parseFloat(npc.favor !== undefined ? npc.favor : 50);
+        const favorText = `${formatFavorNumber(curFavor)} (${isDating ? '恋人' : (curFavor >= 80 ? '暧昧期' : '朋友')})`;
 
         let mask = document.createElement('div');
         mask.className = 'wechat-clean-modal-mask';
@@ -113,6 +119,7 @@
         const minMsgs = Math.max(1, parseInt(npc.chatSettings.minMsgs) || 1);
         const maxMsgs = Math.max(minMsgs, parseInt(npc.chatSettings.maxMsgs) || 3);
         const voiceFreq = npc.chatSettings.voiceFreq || 'rare';
+        const curFavor = parseFloat(npc.favor !== undefined ? npc.favor : 50);
 
         if (typeof openWechatCleanModal === 'function') {
             openWechatCleanModal('资料设置', `
@@ -173,9 +180,9 @@
                     <div>
                         <div style="display:flex;justify-content:space-between;align-items:center;">
                             <label style="font-size:11.5px;color:#777;font-weight:500;">好感度 (0~100)</label>
-                            <span id="wcleanSetFavorDisplay" style="font-size:13.5px;font-weight:700;color:#07c160;">${npc.favor || 50}</span>
+                            <span id="wcleanSetFavorDisplay" style="font-size:13.5px;font-weight:700;color:#07c160;">${formatFavorNumber(curFavor)}</span>
                         </div>
-                        <input type="range" id="wcleanSetFavorRange" min="0" max="100" value="${npc.favor || 50}" style="width:100%;margin-top:5px;accent-color:#07c160;">
+                        <input type="range" id="wcleanSetFavorRange" min="0" max="100" step="0.5" value="${curFavor}" style="width:100%;margin-top:5px;accent-color:#07c160;">
                     </div>
                     <div style="display:flex;align-items:center;justify-content:space-between;background:#f9f9f9;padding:8px 10px;border-radius:6px;border:0.5px solid #eee;">
                         <span style="font-size:12px;color:#444;">恋爱关系：<b style="color:${isDating ? '#ff4d4f' : '#666'};">${isDating ? '恋人（交往中）' : '普通关系'}</b></span>
@@ -205,7 +212,7 @@
                 const sigVal = document.getElementById('wcleanSetNpcSignature')?.value.trim() || '';
                 const regVal = document.getElementById('wcleanSetNpcRegion')?.value || '中国';
                 const personaVal = document.getElementById('wcleanSetNpcPersona')?.value.trim() || 'MC好友同伴。';
-                const favorVal = parseInt(document.getElementById('wcleanSetFavorRange')?.value) || 0;
+                const favorVal = parseFloat(document.getElementById('wcleanSetFavorRange')?.value) || 0;
 
                 const curMin = parseInt(document.getElementById('wcleanMinMsgsRange')?.value) || 1;
                 const curMax = parseInt(document.getElementById('wcleanMaxMsgsRange')?.value) || 3;
@@ -247,7 +254,7 @@
                 const range = document.getElementById('wcleanSetFavorRange');
                 const display = document.getElementById('wcleanSetFavorDisplay');
                 if (range && display) {
-                    range.oninput = () => { display.textContent = range.value; };
+                    range.oninput = () => { display.textContent = formatFavorNumber(range.value); };
                 }
 
                 // 条数联动滑块逻辑
@@ -306,7 +313,7 @@
                             npc.isDating = false;
                             if (typeof showToast === 'function') showToast('已恢复为朋友关系', 'info', 1000);
                         } else {
-                            const curF = parseInt(document.getElementById('wcleanSetFavorRange')?.value) || npc.favor || 0;
+                            const curF = parseFloat(document.getElementById('wcleanSetFavorRange')?.value) || npc.favor || 0;
                             if (curF < 80) {
                                 if (typeof showToast === 'function') showToast('好感度需达到 80 才可确立恋人', 'error', 1500);
                                 return;
@@ -497,7 +504,6 @@
                 if (typeof onSuccess === 'function') {
                     onSuccess(profile);
                 } else {
-                    // 默认直接实例化自建角色
                     const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
                     if (!window.G) window.G = {};
                     if (!window.G.npcs) window.G.npcs = {};

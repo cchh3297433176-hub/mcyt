@@ -3,7 +3,7 @@
  * 💬 微信主应用 · 拆分分片 5/7：单人私聊 AI 回复触发核心（window.triggerAIReplyForSingle）。
  *    支持按角色独立设置的【单次回复条数最少~最多范围】与【语音发送频率】严格调度执行；
  *    带跨时段、隔夜双时间戳感知、塔罗牌解读感知、Rememori 证据链沉淀、
- *    以及专属好友独立联网搜索检索与权威网页卡片推送。
+ *    专属好友独立联网搜索检索与权威网页卡片推送、以及好感度铁律动态结算机制。
  */
 
 (function() {
@@ -63,7 +63,38 @@
         return { needSearch: false, query: '' };
     }
 
-    // 🤖 单人私聊 AI 回复触发（支持条数限制与语音频率控制）
+    // 辅助函数：根据标点将长文本拆分为多个短气泡（用于满足最少条数 minMsgs 限制）
+    function splitTextIntoMessages(text, targetCount) {
+        if (!text || targetCount <= 1) return [text];
+        const segs = text.split(/(?<=[，。！？!?~…\n])\s*/).map(s => s.trim()).filter(Boolean);
+        if (segs.length <= 1) {
+            // 如果缺乏明确标点，则尝试空格或定长拆分
+            const spaceParts = text.split(/\s+/).filter(Boolean);
+            if (spaceParts.length >= targetCount) {
+                const result = [];
+                const chunkSize = Math.ceil(spaceParts.length / targetCount);
+                for (let i = 0; i < spaceParts.length; i += chunkSize) {
+                    result.push(spaceParts.slice(i, i + chunkSize).join(' '));
+                }
+                return result.slice(0, targetCount);
+            }
+            return [text];
+        }
+
+        // 重新聚合成恰好 targetCount 个短句
+        if (segs.length <= targetCount) {
+            return segs;
+        }
+
+        const result = [];
+        const chunkSize = Math.ceil(segs.length / targetCount);
+        for (let i = 0; i < segs.length; i += chunkSize) {
+            result.push(segs.slice(i, i + chunkSize).join(''));
+        }
+        return result.slice(0, targetCount);
+    }
+
+    // 🤖 单人私聊 AI 回复触发（支持条数限制、语音频率控制、好感度动态铁律）
     window.triggerAIReplyForSingle = async function(npcId) {
         const npc = window.G.npcs[npcId];
         if (!npc) return;
@@ -80,7 +111,7 @@
         }
 
         window._MCYT_CHAT_GENERATING[npcId] = true;
-        if (window.G.currentChatNpc === npcId) renderSingleChatWindow();
+        if (window.G.currentChatNpc === npcId && typeof renderSingleChatWindow === 'function') renderSingleChatWindow();
 
         let bannerTimer = setTimeout(() => {
             if (window._MCYT_CHAT_GENERATING[npcId]) {
@@ -178,15 +209,25 @@
             }
         }
 
-        // 针对条数范围与语音偏好注入强约束指令
-        let styleConstraint = `【条数约束】：本次回复必须分为 ${minMsgs} 到 ${maxMsgs} 个独立的 [MSG]...[/MSG] 消息气泡发送。\n`;
+        // 针对条数范围、语音偏好与好感度铁律注入强约束指令
+        let styleConstraint = `【条数硬性约束】：本次回复必须分为 ${minMsgs} 到 ${maxMsgs} 个独立的 [MSG]...[/MSG] 消息气泡发送。\n`;
         if (voiceFreq === 'never') {
-            styleConstraint += `【语音偏好】：你习惯只发文字，严禁发送任何语音条 [VOICE]！\n`;
+            styleConstraint += `【语音偏好】：你习惯只发文字，绝对禁止发送任何语音条 [VOICE]！\n`;
         } else if (voiceFreq === 'voice_only') {
-            styleConstraint += `【语音偏好】：你此时正在忙碌或习惯用语音，请尽量将回复用 [VOICE:秒数]语音内容[/VOICE] 形式发送！\n`;
+            styleConstraint += `【语音偏好】：你此时正在忙碌或习惯用语音，请将本次全部回复都用 [VOICE:秒数]语音转述文字[/VOICE] 形式发送！\n`;
         } else if (voiceFreq === 'often') {
-            styleConstraint += `【语音偏好】：你经常随手发语音，可以在气泡中穿插 1~2 条 [VOICE:秒数]内容[/VOICE] 语音条。\n`;
+            styleConstraint += `【语音偏好】：你经常发语音，请在本次回复的气泡中穿插 1~2 条 [VOICE:秒数]内容[/VOICE] 拟真语音条。\n`;
+        } else {
+            styleConstraint += `【语音偏好】：主要发文字，偶尔极少发语音。\n`;
         }
+
+        // 注入好感度动态结算铁律协议
+        styleConstraint += `【好感度结算铁律】：\n` +
+            `请评估你当前对对方这条消息的内心感受，在回复正文的最末尾附带 [FAVOR: 数值] 标签：\n` +
+            `- 聊得开心、被关心、被赞赏或增进互动时，最多只能加 0.5（写 [FAVOR: +0.5] 或 [FAVOR: +0.2]）；\n` +
+            `- 普通日常闲聊无明显情绪波动，写 [FAVOR: 0]；\n` +
+            `- 敷衍、被扫兴或轻微不耐烦，扣除 0.5~1（写 [FAVOR: -0.5] 或 [FAVOR: -1]）；\n` +
+            `- 遇到极其恶劣的人身攻击、剧烈争吵或侮辱背叛时，才允许扣除更大数值（写 [FAVOR: -3]）。绝对禁止单次增加超过0.5！`;
 
         const promptCtx = (window.ChatPromptEngine && typeof window.ChatPromptEngine.buildWechatAIPromptContext === 'function')
             ? window.ChatPromptEngine.buildWechatAIPromptContext({
@@ -214,16 +255,54 @@
             // 仅清洗括号内的动作/神态描写，保护知识与搜索内容中正常的说明括号
             clean = clean.replace(/[\(（](?:揉|叹|眨|看|摸|笑|低头|抬头|轻笑|撇嘴|皱眉|转身|歪头|小声|抱|握|拉|推|咬|红着脸|动作)[^\)）]*[\)）]/gi, '').trim();
 
-            // 🛡️ 智能自愈修复：防止模型因意外未闭合 [MSG] 导致前端掉格式
-            if (clean.includes('[MSG') && !clean.includes('[/MSG]')) {
-                clean += '[/MSG]';
-            } else {
-                const openCount = (clean.match(/\[MSG[^\]]*\]/g) || []).length;
-                const closeCount = (clean.match(/\[\/MSG\]/g) || []).length;
-                if (openCount > closeCount) {
-                    for (let k = 0; k < (openCount - closeCount); k++) {
-                        clean += '[/MSG]';
+            // 🛡️ 好感度变动提取与绝对门禁审核
+            let favorDelta = 0;
+            const favorMatch = clean.match(/\[FAVOR:\s*([+\-]?\d+(?:\.\d+)?)\s*\]/i);
+            if (favorMatch) {
+                const parsedDelta = parseFloat(favorMatch[1]) || 0;
+                clean = clean.replace(/\[FAVOR:\s*[+\-]?\d+(?:\.\d+)?\s*\]/gi, '').trim();
+
+                // 严苛铁律门禁审查：
+                if (parsedDelta > 0) {
+                    // 每轮最多只能增加 0.5
+                    favorDelta = Math.min(0.5, parsedDelta);
+                } else if (parsedDelta < 0) {
+                    // 检查玩家最新发言是否属于极端冒犯或激烈争吵
+                    const severeConflictKeywords = ['滚', '去死', '讨厌你', '决裂', '绝交', '恶心', '傻逼', '废物', '闭嘴', '吵架', '出轨', '背叛'];
+                    const isSevereConflict = severeConflictKeywords.some(kw => lastPlayerMsgText.includes(kw));
+
+                    if (isSevereConflict) {
+                        // 激烈场景允许更大扣除，上限 -5
+                        favorDelta = Math.max(-5.0, parsedDelta);
+                    } else {
+                        // 日常普通扫兴最多只扣 -1.0
+                        favorDelta = Math.max(-1.0, parsedDelta);
                     }
+                }
+            }
+
+            // 结算并累加好感度至角色对象
+            if (favorDelta !== 0) {
+                const currentFavor = parseFloat(npc.favor !== undefined ? npc.favor : 50);
+                const nextFavor = Math.max(0, Math.min(100, Math.round((currentFavor + favorDelta) * 10) / 10));
+                npc.favor = nextFavor;
+
+                // 若好感度降至 60 以下且处于恋爱期，则自动解除恋爱阶段
+                if (npc.favor < 60 && (npc.relationshipStage === 'dating' || npc.isDating)) {
+                    npc.relationshipStage = 'friend';
+                    npc.isDating = false;
+                }
+
+                if (typeof window.syncCustomNpcsToLocalBackup === 'function') window.syncCustomNpcsToLocalBackup();
+            }
+
+            // 🛡️ 智能自愈修复：防止模型因意外未闭合 [MSG] 导致前端掉格式
+            // 兼容普通 [MSG] 与带属性的 [MSG original="..."]
+            const openTagMatches = clean.match(/\[MSG(?:\s+original=(?:"[\s\S]*?"|'[\s\S]*?'|[^\]\s]+))?\]/gi) || [];
+            const closeTagMatches = clean.match(/\[\/MSG\]/gi) || [];
+            if (openTagMatches.length > closeTagMatches.length) {
+                for (let k = 0; k < (openTagMatches.length - closeTagMatches.length); k++) {
+                    clean += '[/MSG]';
                 }
             }
 
@@ -274,7 +353,22 @@
                 entities = [{ type: 'text', text: '在呢' }];
             }
 
-            // 语音偏好后处理与净化：
+            // 🎯 最少条数（minMsgs）不足时自动切分加固
+            if (entities.length < minMsgs) {
+                const expanded = [];
+                for (const ent of entities) {
+                    if (ent.type === 'text' && ent.text && !ent.originalText && expanded.length < minMsgs) {
+                        const needed = (minMsgs - entities.length + 1);
+                        const parts = splitTextIntoMessages(ent.text, needed);
+                        parts.forEach(p => expanded.push({ type: 'text', text: p }));
+                    } else {
+                        expanded.push(ent);
+                    }
+                }
+                entities = expanded;
+            }
+
+            // 🎯 语音偏好后处理与净化执行：
             if (voiceFreq === 'never') {
                 // 严禁语音：将语音条全部降级转回纯文本
                 entities = entities.map(ent => {
@@ -296,11 +390,25 @@
                     }
                     return ent;
                 });
+            } else if (voiceFreq === 'often') {
+                // 经常语音：若模型完全没有输出语音，则随机挑选 1 条纯文本转为语音条
+                const hasVoice = entities.some(e => e.type === 'voice');
+                if (!hasVoice && entities.length > 0) {
+                    const textIndices = entities.map((e, idx) => (e.type === 'text' ? idx : -1)).filter(i => i !== -1);
+                    if (textIndices.length > 0) {
+                        const targetIdx = textIndices[textIndices.length - 1]; // 默认取末尾或某一条
+                        const rawT = entities[targetIdx].text || '';
+                        entities[targetIdx] = {
+                            type: 'voice',
+                            text: rawT,
+                            seconds: Math.min(60, Math.max(2, Math.round(rawT.length * 0.45)))
+                        };
+                    }
+                }
             }
 
-            // 严格把控单次回复条数在 [minMsgs, maxMsgs] 范围内
+            // 🎯 严格把控单次回复条数在最大上限 maxMsgs 内
             if (entities.length > maxMsgs) {
-                // 超出最大上限时进行尾部实体平滑合并
                 const kept = entities.slice(0, maxMsgs - 1);
                 const rest = entities.slice(maxMsgs - 1);
                 const mergedText = rest.map(r => r.text || '').filter(Boolean).join(' ');
@@ -308,7 +416,7 @@
                 if (lastItem && lastItem.type === 'voice') {
                     kept.push({ type: 'voice', text: mergedText, seconds: Math.min(60, Math.max(2, Math.round(mergedText.length * 0.45))) });
                 } else {
-                    kept.push({ type: 'text', text: mergedText });
+                    kept.push({ type: 'text', text: mergedText, originalText: lastItem?.originalText || null });
                 }
                 entities = kept;
             }
@@ -371,7 +479,7 @@
                     }, curAcc.id);
                 }
 
-                if (window.G.currentChatNpc === npcId) renderSingleChatWindow();
+                if (window.G.currentChatNpc === npcId && typeof renderSingleChatWindow === 'function') renderSingleChatWindow();
                 if (i < finalEntities.length - 1) {
                     await new Promise(r => setTimeout(r, 420));
                 }
@@ -397,7 +505,7 @@
                         timestamp: Date.now()
                     };
                     window.pushChatMessageSafe(npcId, pageCardMsg, curAcc.id);
-                    if (window.G.currentChatNpc === npcId) renderSingleChatWindow();
+                    if (window.G.currentChatNpc === npcId && typeof renderSingleChatWindow === 'function') renderSingleChatWindow();
                 }
             }
 
@@ -408,11 +516,11 @@
                     time: new Date().toLocaleTimeString().slice(0, 5),
                     timestamp: Date.now()
                 }, curAcc.id);
-                if (window.G.currentChatNpc === npcId) renderSingleChatWindow();
+                if (window.G.currentChatNpc === npcId && typeof renderSingleChatWindow === 'function') renderSingleChatWindow();
             }
 
             // 🧠 只有未触发全网搜索时，才进行历史滑动总结（避免将百科知识污染为长效事实）
-            if (!isSearchTriggered) {
+            if (!isSearchTriggered && typeof checkAndTriggerAutoMemorySummary === 'function') {
                 checkAndTriggerAutoMemorySummary(npcId, curAcc.id);
             }
 
@@ -424,7 +532,7 @@
             clearTimeout(bannerTimer);
             delete window._MCYT_CHAT_GENERATING[npcId];
             window.hideGeneratingBanner();
-            if (window.G.currentChatNpc === npcId) renderSingleChatWindow();
+            if (window.G.currentChatNpc === npcId && typeof renderSingleChatWindow === 'function') renderSingleChatWindow();
         }
     };
 

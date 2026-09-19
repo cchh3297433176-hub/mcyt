@@ -683,7 +683,7 @@
     /**
      * 解析 AI 回复中的表情包/语音/双语/发动态实体及动态提醒
      * 🛡️ 深度加固：采用时序切分引擎，自动剥离任何误嵌套在 [MSG] 内或裸露的 [STICKER...] 标签，
-     *    严格保障输出时序一致，绝不把标签当成普通文字显示给玩家！
+     *    全面支持双语属性 original="..." / original='...' 跨行解析，防止标签代码泄露给玩家！
      */
     function parseAIReplyEntities(rawText, npcName) {
         if (!rawText) return [];
@@ -730,15 +730,12 @@
         }
 
         // 2. 宏观标记切分器：统一匹配 [VOICE...]...[/VOICE]、[STICKER...]、以及 [MSG...]...[/MSG]
-        // 正则增强：兼容单双引号或无引号，捕获它们在原始文本中的先后出现顺序
-        const tokenRegex = /\[VOICE(?:\s+seconds=["']?(\d+)["']?)?(?:\s+audio_bg=["']?([^"']*)["']?)?\]([\s\S]*?)\[\/VOICE\]|\[STICKER(?:\s+category=["']?([^"'\]\s]*)["']?)?(?:\s+desc=["']?([^"'\]\s]*)["']?)?\s*\]|\[MSG(?:\s+original=["']?([^"']+)["']?)?\]([\s\S]*?)\[\/MSG\]/gi;
+        // 🛡️ 正则全方位强化：
+        // MSG 开头支持 original="...", original='...' 或无引号，属性内容支持多行贪婪匹配
+        const tokenRegex = /\[VOICE(?:\s+seconds=["']?(\d+)["']?)?(?:\s+audio_bg=["']?([^"']*)["']?)?\]([\s\S]*?)\[\/VOICE\]|\[STICKER(?:\s+category=["']?([^"'\]\s]*)["']?)?(?:\s+desc=["']?([^"'\]\s]*)["']?)?\s*\]|\[MSG(?:\s+original=(?:"([\s\S]*?)"|'([\s\S]*?)'|([^\]\s]+)))?\]([\s\S]*?)\[\/MSG\]/gi;
 
         let match;
-        let foundAnyTag = false;
-
         while ((match = tokenRegex.exec(clean)) !== null) {
-            foundAnyTag = true;
-
             // 分支 A: VOICE 语音条
             if (match[0].startsWith('[VOICE')) {
                 const sec = parseInt(match[1]) || Math.min(60, Math.max(2, Math.round((match[3] || '').length * 0.45)));
@@ -759,10 +756,11 @@
                     desc: desc
                 });
             }
-            // 分支 C: MSG 微信普通/双语气泡（重点加固：防御内部误嵌的 STICKER）
+            // 分支 C: MSG 微信普通/双语气泡（防御内部误嵌的 STICKER 及格式自愈）
             else if (match[0].startsWith('[MSG')) {
-                const original = (match[6] || '').trim();
-                let innerText = (match[7] || '').trim();
+                // 属性提取：双引号/单引号/无引号三选一
+                const original = (match[6] || match[7] || match[8] || '').trim();
+                let innerText = (match[9] || '').trim();
 
                 // 检查 MSG 内部是否夹带了 [STICKER ...]
                 const nestedStickerRegex = /\[STICKER(?:\s+category=["']?([^"'\]\s]*)["']?)?(?:\s+desc=["']?([^"'\]\s]*)["']?)?\s*\]/gi;
@@ -795,7 +793,7 @@
                         });
                     }
                 } else {
-                    // 彻底清除内部任何残留的破坏性未闭合符号
+                    // 彻底清除内部任何残留的破坏性未闭合标签
                     innerText = innerText.replace(/\[STICKER[^\]]*\]/gi, '').trim();
                     if (innerText || original) {
                         entities.push({
@@ -808,20 +806,40 @@
             }
         }
 
-        // 如果提取到了标准实体，直接返回（最多返回 5 个气泡防止刷屏）
+        // 如果提取到了标准实体，直接返回（最多返回 8 个气泡）
         if (entities.length > 0) {
-            return entities.slice(0, 5);
+            return entities.slice(0, 8);
         }
 
-        // 保底分支：若模型完全没有使用 [MSG] 格式
+        // 🛡️ 保底分支：若模型标签未闭合或完全没按规矩闭合，启动全量自愈剥离器
+        // 彻底清洗裸露的 [MSG original="..."] 或 [MSG] 或 [/MSG]
+        let sanitized = clean;
+        const msgLooseRegex = /\[MSG(?:\s+original=(?:"([\s\S]*?)"|'([\s\S]*?)'|([^\]\s]+)))?\]([\s\S]*?)(?:\[\/MSG\]|$)/gi;
+        let looseMatch;
+        while ((looseMatch = msgLooseRegex.exec(clean)) !== null) {
+            const orig = (looseMatch[1] || looseMatch[2] || looseMatch[3] || '').trim();
+            const body = (looseMatch[4] || '').replace(/\[\/MSG\]/gi, '').trim();
+            if (body || orig) {
+                entities.push({
+                    type: 'text',
+                    text: body || orig,
+                    originalText: orig || null
+                });
+            }
+        }
+
+        if (entities.length > 0) {
+            return entities.slice(0, 8);
+        }
+
         // 先检查是否有裸露的 [STICKER...]
         const nakedStickerRegex = /\[STICKER(?:\s+category=["']?([^"'\]\s]*)["']?)?(?:\s+desc=["']?([^"'\]\s]*)["']?)?\s*\]/gi;
-        if (nakedStickerRegex.test(clean)) {
+        if (nakedStickerRegex.test(sanitized)) {
             let lastIdx = 0;
             nakedStickerRegex.lastIndex = 0;
             let nMatch;
-            while ((nMatch = nakedStickerRegex.exec(clean)) !== null) {
-                const textPart = clean.substring(lastIdx, nMatch.index).trim();
+            while ((nMatch = nakedStickerRegex.exec(sanitized)) !== null) {
+                const textPart = sanitized.substring(lastIdx, nMatch.index).trim();
                 if (textPart) {
                     entities.push({ type: 'text', text: textPart });
                 }
@@ -832,20 +850,24 @@
                 });
                 lastIdx = nakedStickerRegex.lastIndex;
             }
-            const tailPart = clean.substring(lastIdx).trim();
+            const tailPart = sanitized.substring(lastIdx).trim();
             if (tailPart) {
                 entities.push({ type: 'text', text: tailPart });
             }
-            if (entities.length > 0) return entities.slice(0, 5);
+            if (entities.length > 0) return entities.slice(0, 8);
         }
 
-        // 纯文本按行拆分兜底
-        const lines = clean.replace(/\[STICKER[^\]]*\]/gi, '').split(/\n+/).map(l => l.trim()).filter(Boolean);
+        // 纯文本按行拆分兜底（彻底剔除残留的方括号标签残渣）
+        const pureText = sanitized
+            .replace(/\[\/?(?:MSG|VOICE|STICKER|FAVOR|BEHIND_SCREEN)[^\]]*\]/gi, '')
+            .trim();
+
+        const lines = pureText.split(/\n+/).map(l => l.trim()).filter(Boolean);
         if (lines.length > 0) {
-            return lines.slice(0, 3).map(l => ({ type: 'text', text: l }));
+            return lines.slice(0, 5).map(l => ({ type: 'text', text: l }));
         }
 
-        return [{ type: 'text', text: clean.replace(/\[STICKER[^\]]*\]/gi, '').trim() }];
+        return [{ type: 'text', text: pureText || '在呢' }];
     }
     window.parseAIReplyEntities = parseAIReplyEntities;
 
@@ -928,7 +950,6 @@
         return chunk;
     }
 
-    // 弹出角色卡预览与长按保存弹窗（解决移动端 WebView 无法触发 a.download 的问题）
     function showExportedCardModal(dataUrl, filename) {
         let mask = document.createElement('div');
         mask.className = 'wechat-clean-modal-mask';
@@ -963,7 +984,6 @@
     async function exportTavernCharacterPng(npc, customFilename = null) {
         if (!npc) return;
 
-        // 严格过滤静态人设档案，绝不导出私聊记录与好感度
         const tavernData = {
             name: npc.name || 'NPC',
             description: npc.persona || '',
@@ -997,7 +1017,6 @@
         const jsonStr = JSON.stringify(tavernData);
         const base64Json = btoa(unescape(encodeURIComponent(jsonStr)));
 
-        // 获取底图并转为 PNG ArrayBuffer（增加防 Tainted 保护）
         const avatarUrl = npc.avatarUrl || getRandomAvatar();
         const img = new Image();
         if (!avatarUrl.startsWith('data:')) {
@@ -1031,7 +1050,6 @@
             console.warn('Canvas 导出受阻，采用纯净离线头像重绘:', canvasErr);
         }
 
-        // 若 Canvas 被跨域污染，改用内建纯色极简兜底底图
         if (!arrayBuf) {
             const fallbackCanvas = document.createElement('canvas');
             fallbackCanvas.width = 400;
@@ -1050,11 +1068,10 @@
 
         const srcBytes = new Uint8Array(arrayBuf);
 
-        // 寻找 IHDR 之后的位置注入 tEXt chunk
         let insertPos = 8;
         const view = new DataView(srcBytes.buffer);
         const ihdrLen = view.getUint32(8);
-        insertPos = 8 + 4 + 4 + ihdrLen + 4; // 8 magic + 4 len + 4 type + ihdr data + 4 crc
+        insertPos = 8 + 4 + 4 + ihdrLen + 4;
 
         const textChunk = createPngTextChunk('chara', base64Json);
 
@@ -1065,7 +1082,6 @@
 
         const outBlob = new Blob([out], { type: 'image/png' });
         
-        // 支持自定义命名，去除非法文件名字符
         let baseName = (customFilename && customFilename.trim()) ? customFilename.trim() : `${npc.name || 'character'}_人设卡`;
         if (!baseName.toLowerCase().endsWith('.png')) {
             baseName += '.png';
@@ -1093,7 +1109,6 @@
 
     // ============================================================
     // 📥 酒馆规范角色卡 PNG / JSON 解析导入引擎
-    // 支持直接从 PNG 提取 chara/ccv3 文本块与底图头像，或直接读取 JSON 文件
     // ============================================================
     function parsePngTextChunks(arrayBuffer) {
         const view = new DataView(arrayBuffer);
