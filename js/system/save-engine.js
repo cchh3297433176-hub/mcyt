@@ -57,6 +57,16 @@
         window.G.player.pov = newPov;
         window.G.player._nameHistory = [newYtName];
 
+        // 默认补齐微信三维人设初始值
+        window.G.player.offlinePersona = newPersona;
+        window.G.player.onlinePersona = newLive2d || newPersona;
+        window.G.player.gameSkinPersona = newSkin || '默认MC皮肤形象';
+        window.G.player.signature = '热爱MC的创作者';
+        window.G.player.region = '中国 (China)';
+        window.G.player.regionCode = 'CN';
+        window.G.currentAccountId = 'main';
+        window.G.altAccounts = [];
+
         if (idVal === 'fans') {
             window.G.player.followers = 5000;
             window.G.player.money = 200;
@@ -129,6 +139,27 @@
         if (typeof window.appendStory === 'function') {
             window.appendStory(text, '🎮 游戏开始');
         }
+    }
+
+    // 🛡️ 深度消息净化（剔除临时生成中、残缺对象，防止损坏落盘数据导致全盘蒸发）
+    function sanitizeChatHistoryForPersist(historyMap) {
+        if (!historyMap || typeof historyMap !== 'object') return {};
+        const safeMap = {};
+        for (const [key, msgList] of Object.entries(historyMap)) {
+            if (!Array.isArray(msgList)) continue;
+            // 过滤掉尚未完成生成的残缺临时态对象
+            const cleanedList = msgList.filter(m => {
+                if (!m || typeof m !== 'object') return false;
+                if (m.isGenerating === true || m._isPendingStream === true) return false;
+                // 确保拥有最基本的内容或结构
+                if (m.text === undefined && m.type !== 'image' && m.type !== 'contact_card' && m.type !== 'tarot_card' && m.type !== 'voice' && !m.sticker) {
+                    return false;
+                }
+                return true;
+            });
+            safeMap[key] = cleanedList;
+        }
+        return safeMap;
     }
 
     function autoSaveGame() {
@@ -347,6 +378,10 @@
 
     function serializeGameState() {
         const g = window.G;
+        // 🛡️ 对单聊与群聊记录进行安全过滤后再落盘
+        const safeChatHistory = sanitizeChatHistoryForPersist(g.chatHistory);
+        const safeGroupChatHistory = sanitizeChatHistoryForPersist(g.groupChatHistory);
+
         return {
             player: g.player,
             day: g.day,
@@ -357,7 +392,7 @@
             memorySummaries: g.memorySummaries,
             memoryConfig: g.memoryConfig,
             npcs: g.npcs,
-            chatHistory: g.chatHistory,
+            chatHistory: safeChatHistory,
             currentAccountId: g.currentAccountId || 'main',
             altAccounts: g.altAccounts || [],
             blockedNpcs: g.blockedNpcs || [],
@@ -376,7 +411,7 @@
             ytExternalVideos: g.ytExternalVideos,
             ytCustomChannels: g.ytCustomChannels,
             groups: g.groups,
-            groupChatHistory: g.groupChatHistory,
+            groupChatHistory: safeGroupChatHistory,
             groupMemories: g.groupMemories,
             friendRequests: g.friendRequests,
             groupInvites: g.groupInvites || [],
@@ -408,6 +443,12 @@
             if (!g.player.pov) g.player.pov = 'second';
             if (!g.player.avatarLive2d) g.player.avatarLive2d = '';
             if (!g.player.appearanceReal) g.player.appearanceReal = '';
+            // 补全三维人设字段防空
+            if (g.player.offlinePersona === undefined) g.player.offlinePersona = g.player.persona || '';
+            if (g.player.onlinePersona === undefined) g.player.onlinePersona = g.player.avatarLive2d || '';
+            if (g.player.gameSkinPersona === undefined) g.player.gameSkinPersona = g.player.skin || '';
+            if (g.player.signature === undefined) g.player.signature = '';
+            if (!g.player.region) g.player.region = '中国 (China)';
         }
 
         if (data.day !== undefined) g.day = data.day;
@@ -421,8 +462,9 @@
             g.npcs = Object.assign({}, g.npcs, data.npcs);
         }
 
+        // 🛡️ 聊天记录恢复防御：先校验格式，绝不轻易清空已有记录
         if (!g.chatHistory) g.chatHistory = {};
-        if (data.chatHistory) {
+        if (data.chatHistory && typeof data.chatHistory === 'object') {
             for (const [k, v] of Object.entries(data.chatHistory)) {
                 if (Array.isArray(v) && v.length) {
                     g.chatHistory[k] = v;
@@ -430,10 +472,17 @@
             }
         }
 
+        // 小号与多身份强校验恢复
         g.currentAccountId = String(data.currentAccountId || 'main');
         g.altAccounts = Array.isArray(data.altAccounts)
             ? data.altAccounts.map(a => ({ ...a, id: String(a.id) }))
             : [];
+        
+        // 再次呼叫微信独立人设恢复引擎，实现双重保障
+        if (typeof window.restoreWechatProfileData === 'function') {
+            window.restoreWechatProfileData();
+        }
+
         g.blockedNpcs = Array.isArray(data.blockedNpcs) ? data.blockedNpcs : [];
         g.blockedRecords = Array.isArray(data.blockedRecords) ? data.blockedRecords : [];
 
@@ -465,7 +514,7 @@
         if (data.groups) g.groups = Object.assign({}, g.groups, data.groups);
 
         if (!g.groupChatHistory) g.groupChatHistory = {};
-        if (data.groupChatHistory) {
+        if (data.groupChatHistory && typeof data.groupChatHistory === 'object') {
             for (const [k, v] of Object.entries(data.groupChatHistory)) {
                 if (Array.isArray(v) && v.length) {
                     g.groupChatHistory[k] = v;
