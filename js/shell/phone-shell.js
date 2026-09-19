@@ -6,7 +6,7 @@
  *       桌面 App 图标与小组件全自由长按晃动编辑态、粉白仿Windows甜心弹窗、
  *       🌟 4 格宽专属复古星象塔罗大组件驱动引擎、
  *       🌟 桌面层级自由手拖微调引擎（锁定屏幕条、塔罗、日历、便签、App网格分别手拖并持久化保存与一键重置）、
- *       🌟 独立 App 路由中枢（接通微信、个性主题、系统设置、塔罗牌、忆海 Rememori）。
+ *       🌟 独立 App 路由中枢（接通微信、个性主题、系统设置、塔罗牌、忆海 Rememori 原生沙盒保活）。
  */
 
 (function () {
@@ -264,6 +264,7 @@
 
         window.lockPhoneScreen = function () {
             if (typeof window.closePhoneApp === 'function') window.closePhoneApp();
+            if (typeof window.closeInAppSandbox === 'function') window.closeInAppSandbox();
             screenLock.classList.remove('unlocked');
             screenLock.style.pointerEvents = 'auto';
         };
@@ -1175,6 +1176,50 @@
         daysGrid.innerHTML = cellsHtml;
     };
 
+    // ============================================================
+    // 🛡️ 原生全屏沙盒容器（保活宿主进程，杜绝跳转页面导致生成被杀）
+    // ============================================================
+    window.openInAppSandbox = function(url, title = '应用沙盒') {
+        let sandbox = document.getElementById('phoneAppSandboxContainer');
+        if (!sandbox) {
+            sandbox = document.createElement('div');
+            sandbox.id = 'phoneAppSandboxContainer';
+            sandbox.style.cssText = `
+                position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+                background: #f7f7f7; z-index: 999990; display: flex; flex-direction: column;
+                box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+            `;
+            sandbox.innerHTML = `
+                <div id="phoneSandboxHeader" style="height: 44px; background: #ffffff; border-bottom: 0.5px solid #e0e0e0; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; flex-shrink: 0; z-index: 10;">
+                    <button type="button" onclick="window.closeInAppSandbox()" style="border: none; background: none; color: #07c160; font-size: 14.5px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 3px; padding: 4px 6px;">
+                        ‹ 桌面
+                    </button>
+                    <span id="phoneSandboxTitle" style="font-size: 15px; font-weight: 600; color: #181818;">应用沙盒</span>
+                    <div style="width: 48px;"></div>
+                </div>
+                <div style="flex: 1; width: 100%; height: calc(100% - 44px); position: relative; overflow: hidden;">
+                    <iframe id="phoneSandboxIframe" style="width: 100%; height: 100%; border: none; background: #fff;" src="about:blank"></iframe>
+                </div>
+            `;
+            document.body.appendChild(sandbox);
+        }
+
+        const titleEl = document.getElementById('phoneSandboxTitle');
+        const iframeEl = document.getElementById('phoneSandboxIframe');
+        if (titleEl) titleEl.textContent = title;
+        if (iframeEl && iframeEl.getAttribute('src') !== url) {
+            iframeEl.src = url;
+        }
+        sandbox.style.display = 'flex';
+    };
+
+    window.closeInAppSandbox = function() {
+        const sandbox = document.getElementById('phoneAppSandboxContainer');
+        if (sandbox) {
+            sandbox.style.display = 'none';
+        }
+    };
+
     window.openPhoneApp = function (appKey) {
         if (window._isWidgetEditMode || window._isDesktopBlockAdjustMode) return;
         const appModal = document.getElementById('appModal');
@@ -1182,9 +1227,7 @@
         const appModalBody = document.getElementById('appModalBody');
         if (!appModal || !appModalTitle || !appModalBody) return;
 
-        // 兜底清理：聊天 App 会给 appModal 打上 wechat-seamless-shell 类来隐藏通用顶部退出条，
-        // 换成自己的"‹ 桌面"按钮；如果上次聊天渲染中途报错导致这个类没被正常摘掉，
-        // 会连带其它 App（比如设置）也看不到退出按钮。这里保证每次打开非聊天 App 时强制摘掉。
+        // 兜底清理：聊天 App 会给 appModal 打上 wechat-seamless-shell 类来隐藏通用顶部退出条
         if (appKey !== 'chat') appModal.classList.remove('wechat-seamless-shell');
 
         if (appKey === 'chat' && typeof window.renderChatApp === 'function') {
@@ -1207,22 +1250,15 @@
             return;
         }
 
+        // 🔮 塔罗牌占卜：原生沙盒拉起，保活主页后台生成
         if (appKey === 'tarot') {
-            try {
-                sessionStorage.setItem('mcyt_skip_lock_screen', 'true');
-                sessionStorage.setItem('mcyt_return_desktop_page', '1');
-            } catch (_) {}
-            window.location.href = 'tarot/index.html';
+            window.openInAppSandbox('tarot/index.html', '🔮 塔罗牌占卜');
             return;
         }
 
-        // 🌟 独立记忆中枢：忆海 (Rememori) 独立沙盒 App
+        // 🌟 独立记忆中枢：忆海 (Rememori) 原生沙盒拉起，保活主页后台生成
         if (appKey === 'rememori') {
-            try {
-                sessionStorage.setItem('mcyt_skip_lock_screen', 'true');
-                sessionStorage.setItem('mcyt_return_desktop_page', currentDesktopPage.toString());
-            } catch (_) {}
-            window.location.href = 'rememori/index.html';
+            window.openInAppSandbox('rememori/index.html', '🧠 忆海 (Rememori)');
             return;
         }
 
