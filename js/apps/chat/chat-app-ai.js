@@ -50,7 +50,6 @@
 
     // 🤖 单人私聊 AI 回复触发（带跨时段、隔夜双时间戳感知、塔罗牌解读感知、Rememori 证据链与联网搜索）
     window.triggerAIReplyForSingle = async function(npcId) {
-      try {
         const npc = window.G.npcs[npcId];
         if (!npc) return;
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', region: '中国', name: '主播' };
@@ -139,42 +138,34 @@
             try {
                 if (typeof showToast === 'function') showToast(`对方正在检索网络...`, 'info', 1200);
                 const limit = searchCfg.maxResults || 3;
-                searchResults = await window.webSearch(intent.query, limit);
-                if (searchResults && searchResults.length > 0) {
+                const searchData = await window.webSearch(intent.query, limit);
+                searchResults = (searchData && Array.isArray(searchData.results)) ? searchData.results : [];
+                const searchAnswer = (searchData && searchData.answer) ? searchData.answer.trim() : '';
+                if (searchResults.length > 0 || searchAnswer) {
                     const formattedResults = searchResults.map((item, idx) => {
-                        return `[来源${idx + 1}] ${item.title}\n摘要: ${item.snippet || item.body || ''}\n链接: ${item.url || ''}`;
+                        return `[来源${idx + 1}] ${item.title}\n摘要: ${item.content || ''}\n链接: ${item.url || ''}`;
                     }).join('\n\n');
-                    searchContextPrompt = `\n\n【实时全网联网检索参考（对方刚刚提及了相关内容或触发了搜索指令）】：\n检索关键词：“${intent.query}”\n${formattedResults}\n【要求】：根据你的口吻、人设性格自然吸收并转述上述信息，不要死板报幕，可以像朋友聊天一样介绍。`;
+                    const answerLine = searchAnswer ? `检索概要：${searchAnswer}\n\n` : '';
+                    searchContextPrompt = `\n\n【实时全网联网检索参考（对方刚刚提及了相关内容或触发了搜索指令）】：\n检索关键词：“${intent.query}”\n${answerLine}${formattedResults}\n【要求】：直接用你自己的口吻转述上述真实检索到的信息内容本身，禁止复读或改写对方的请求原话，禁止在回复中出现“角色名：”这类脚本格式，就当作你自己刚刚上网查到的事直接讲给对方听。`;
                 }
             } catch (searchErr) {
                 console.warn('联网搜索检索失败或超时:', searchErr);
-                alert('[诊断-联网搜索环节报错]\n' + (searchErr && searchErr.message || searchErr) + '\n\n(这个环节报错不影响继续生成回复，仅供排查)');
             }
         }
 
-        let promptCtx;
-        try {
-            promptCtx = (window.ChatPromptEngine && typeof window.ChatPromptEngine.buildWechatAIPromptContext === 'function')
-                ? window.ChatPromptEngine.buildWechatAIPromptContext({
-                    npc,
-                    curAcc,
-                    recentDialogueText: recentDialogue + peekNotice + searchContextPrompt,
-                    isBehindActive,
-                    lastMsgTime,
-                    lastMsgTimestamp
-                })
-                : {
-                    sysPrompt: `扮演MC好友「${npc.name}」，严禁句末加句号，严禁括号动作描写。`,
-                    userPrompt: recentDialogue ? `最近对话：\n${recentDialogue}${searchContextPrompt}\n\n回复：` : '打个招呼。'
-                };
-        } catch (promptErr) {
-            alert('[诊断-提示词组装环节报错，这里很可能就是卡死的原因]\n' + (promptErr && promptErr.stack || promptErr));
-            clearTimeout(bannerTimer);
-            delete window._MCYT_CHAT_GENERATING[npcId];
-            window.hideGeneratingBanner();
-            if (window.G.currentChatNpc === npcId) renderSingleChatWindow();
-            return;
-        }
+        const promptCtx = (window.ChatPromptEngine && typeof window.ChatPromptEngine.buildWechatAIPromptContext === 'function')
+            ? window.ChatPromptEngine.buildWechatAIPromptContext({
+                npc,
+                curAcc,
+                recentDialogueText: recentDialogue + peekNotice + searchContextPrompt,
+                isBehindActive,
+                lastMsgTime,
+                lastMsgTimestamp
+            })
+            : {
+                sysPrompt: `扮演MC好友「${npc.name}」，严禁句末加句号，严禁括号动作描写。`,
+                userPrompt: recentDialogue ? `最近对话：\n${recentDialogue}${searchContextPrompt}\n\n回复：` : '打个招呼。'
+            };
 
         try {
             const raw = await callAI([
@@ -308,7 +299,7 @@
                         text: `[分享了网页: ${topPage.title || '网页链接'}]`,
                         webPage: {
                             title: topPage.title || '权威检索结果',
-                            snippet: topPage.snippet || topPage.body || '',
+                            snippet: topPage.content || '',
                             url: topPage.url,
                             source: topPage.source || '全网检索'
                         },
@@ -339,7 +330,6 @@
             if (typeof autoSaveGame === 'function') autoSaveGame();
         } catch(e) {
             console.error('API 回复失败:', e);
-            alert('[诊断-生成主流程报错]\n' + (e && e.stack || e));
             if (typeof showToast === 'function') showToast('回复失败，请检查AI配置', 'error');
         } finally {
             clearTimeout(bannerTimer);
@@ -347,15 +337,6 @@
             window.hideGeneratingBanner();
             if (window.G.currentChatNpc === npcId) renderSingleChatWindow();
         }
-      } catch (outerErr) {
-          alert('[诊断-最外层兜底报错，说明问题出在生成中状态之前]\n' + (outerErr && outerErr.stack || outerErr));
-          try {
-              clearTimeout(bannerTimer);
-              delete window._MCYT_CHAT_GENERATING[npcId];
-              if (typeof window.hideGeneratingBanner === 'function') window.hideGeneratingBanner();
-              if (window.G && window.G.currentChatNpc === npcId && typeof renderSingleChatWindow === 'function') renderSingleChatWindow();
-          } catch (_) {}
-      }
     };
 
 })();
