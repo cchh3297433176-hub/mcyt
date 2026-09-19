@@ -1,6 +1,7 @@
 /**
  * js/apps/chat/chat-app-window.js
  * 💬 微信主应用 · 拆分分片 3/7：单人私聊窗口渲染（renderSingleChatWindow，含消息折叠、防卡顿优化与智能重说切换）、
+ *    微信内嵌全屏浏览器浮层（window.openWebPageLink）、
  *    重新生成回复的确认与执行（confirmRetryLastAIReply / doRetryLastAIReply）。
  * ⚠️ 拆分自 chat-app.js，仅做物理搬家；window.renderSingleChatWindow 的导出位置从原文件末尾就地前移到函数定义处。
  */
@@ -8,17 +9,126 @@
 (function() {
     'use strict';
 
-    // 🌐 打开网页外链安全跳转
-    window.openWebPageLink = function(url) {
+    // 🌐 微信原生质感内嵌网页安全浏览器浮层（In-App Browser）
+    window.openWebPageLink = function(url, pageTitle = '网页浏览') {
         if (!url || url === '#' || !url.startsWith('http')) {
             if (typeof showToast === 'function') showToast('无法打开非 HTTP 网页链接', 'info', 1500);
             return;
         }
-        try {
-            window.open(url, '_blank', 'noopener,noreferrer');
-        } catch (_) {
-            window.location.href = url;
+
+        // 移除已存在的浏览器浮层，防止多开
+        document.getElementById('wechatInAppBrowserModal')?.remove();
+
+        const browserModal = document.createElement('div');
+        browserModal.id = 'wechatInAppBrowserModal';
+        browserModal.style.cssText = `
+            position: fixed; inset: 0; z-index: 100000;
+            background: #ffffff; display: flex; flex-direction: column;
+            animation: wechatBrowserSlideUp 0.22s cubic-bezier(0.1, 0.9, 0.2, 1);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        `;
+
+        browserModal.innerHTML = `
+            <style>
+                @keyframes wechatBrowserSlideUp {
+                    from { transform: translateY(100%); }
+                    to { transform: translateY(0); }
+                }
+                @keyframes browserProgressAnim {
+                    0% { width: 0%; }
+                    50% { width: 70%; }
+                    100% { width: 100%; opacity: 0; }
+                }
+            </style>
+            <!-- 浏览器白灰微绿顶栏 -->
+            <div style="height: 48px; background: #f7f7f7; border-bottom: 0.5px solid #dcdcdc; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; flex-shrink: 0; user-select: none;">
+                <div style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;">
+                    <button type="button" id="closeWechatBrowserBtn" style="border: none; background: none; font-size: 18px; color: #181818; cursor: pointer; padding: 4px 8px; display: flex; align-items: center; justify-content: center; line-height: 1;">✕</button>
+                    <div style="display: flex; flex-direction: column; min-width: 0;">
+                        <span id="wechatBrowserTitle" style="font-size: 13.5px; font-weight: 600; color: #181818; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 210px;">${escapeHtml(pageTitle)}</span>
+                        <span style="font-size: 9.5px; color: #888; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 210px;">${escapeHtml(url)}</span>
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 4px; flex-shrink: 0;">
+                    <button type="button" id="refreshWechatBrowserBtn" title="刷新" style="border: none; background: none; width: 30px; height: 30px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #555;">
+                        <svg viewBox="0 0 24 24" style="width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+                    </button>
+                    <button type="button" id="openExternalBrowserBtn" title="外部浏览器打开" style="border: none; background: none; width: 30px; height: 30px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #07c160;">
+                        <svg viewBox="0 0 24 24" style="width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- 加载微绿进度条 -->
+            <div id="browserProgressBar" style="height: 2px; width: 0%; background: #07c160; transition: width 0.3s ease; flex-shrink: 0;"></div>
+
+            <!-- 网页容器 -->
+            <div style="flex: 1; position: relative; width: 100%; height: 100%; overflow: hidden; background: #f2f2f2;">
+                <iframe id="wechatBrowserIframe" src="${escapeHtml(url)}" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" style="width: 100%; height: 100%; border: none; background: #ffffff;"></iframe>
+                
+                <!-- 跨域防拦截/X-Frame-Options 提示底栏胶囊（当目标站点拒绝嵌入时，方便玩家一键唤起原生访问） -->
+                <div id="browserCspTip" style="position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.72); backdrop-filter: blur(4px); color: #fff; padding: 6px 14px; border-radius: 18px; font-size: 11px; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); pointer-events: auto; white-space: nowrap;">
+                    <span>部分页面若受限无法完全展示</span>
+                    <span id="fallbackOpenLinkBtn" style="color: #6ee7b7; font-weight: 600; cursor: pointer; text-decoration: underline;">唤起系统应用打开 ›</span>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(browserModal);
+
+        const iframe = browserModal.querySelector('#wechatBrowserIframe');
+        const progressBar = browserModal.querySelector('#browserProgressBar');
+
+        // 模拟微信绿进度条
+        if (progressBar) {
+            progressBar.style.width = '30%';
+            setTimeout(() => { if (progressBar) progressBar.style.width = '75%'; }, 400);
         }
+
+        if (iframe) {
+            iframe.onload = () => {
+                if (progressBar) {
+                    progressBar.style.width = '100%';
+                    setTimeout(() => { if (progressBar) progressBar.style.opacity = '0'; }, 300);
+                }
+            };
+        }
+
+        // 关闭按钮
+        browserModal.querySelector('#closeWechatBrowserBtn')?.addEventListener('click', () => {
+            browserModal.style.transform = 'translateY(100%)';
+            browserModal.style.transition = 'transform 0.18s cubic-bezier(0.4, 0, 1, 1)';
+            setTimeout(() => browserModal.remove(), 190);
+        });
+
+        // 刷新按钮
+        browserModal.querySelector('#refreshWechatBrowserBtn')?.addEventListener('click', () => {
+            if (iframe) {
+                if (progressBar) {
+                    progressBar.style.opacity = '1';
+                    progressBar.style.width = '40%';
+                }
+                iframe.src = url;
+            }
+        });
+
+        // 唤起外部应用打开链接通用函数
+        const triggerExternal = () => {
+            try {
+                const a = document.createElement('a');
+                a.href = url;
+                a.target = '_blank';
+                a.rel = 'noopener noreferrer';
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+            } catch (_) {
+                window.location.href = url;
+            }
+        };
+
+        browserModal.querySelector('#openExternalBrowserBtn')?.addEventListener('click', triggerExternal);
+        browserModal.querySelector('#fallbackOpenLinkBtn')?.addEventListener('click', triggerExternal);
     };
 
     // ============================================================
@@ -131,7 +241,7 @@
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
                 </div>`;
             } else if (msg.type === 'web_page') {
-                // 🌐 纯正微信质感网页链接卡片（白灰微绿设计风格）
+                // 🌐 微信原生质感网页链接卡片（点击直接呼出内置全屏浏览器浮层）
                 const wp = msg.webPage || {};
                 const pageUrl = wp.url || '#';
                 const pageTitle = wp.title || '权威检索结果';
@@ -143,7 +253,7 @@
                     ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(npc, 38)}</div>` : ''}
                     <div style="max-width:76%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                         ${quoteHtml}
-                        <div class="wechat-web-card" onclick="window.openWebPageLink('${escapeHtml(pageUrl)}')" style="background:#ffffff;border:0.5px solid #e2e8f0;border-radius:8px;padding:10px 12px;box-shadow:0 1px 4px rgba(0,0,0,0.06);cursor:pointer;width:240px;box-sizing:border-box;">
+                        <div class="wechat-web-card" onclick="window.openWebPageLink('${escapeHtml(pageUrl)}', '${escapeHtml(pageTitle)}')" style="background:#ffffff;border:0.5px solid #e2e8f0;border-radius:8px;padding:10px 12px;box-shadow:0 1px 4px rgba(0,0,0,0.06);cursor:pointer;width:240px;box-sizing:border-box;">
                             <div style="font-size:13.5px;font-weight:600;color:#181818;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;margin-bottom:5px;">
                                 ${escapeHtml(pageTitle)}
                             </div>
