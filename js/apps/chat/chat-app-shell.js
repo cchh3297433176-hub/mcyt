@@ -46,7 +46,7 @@
         const pendingCount = pendingFriendReqCount + (window.G.groupInvites || []).length;
         const isDirect = window.G.chatActiveTab !== 'group';
 
-        if (_activeBottomTab === 'chats') {
+        if (window._activeBottomTab === 'chats') {
             topBarHtml = `
                 <div class="wechat-top-header">
                     <button onclick="closePhoneApp()" style="border:none;background:none;font-size:14px;color:#181818;cursor:pointer;padding:0;display:flex;align-items:center;gap:3px;font-weight:500;">
@@ -68,7 +68,7 @@
                 </div>
             `;
             mainContentHtml = buildChatListHTML();
-        } else if (_activeBottomTab === 'moments') {
+        } else if (window._activeBottomTab === 'moments') {
             topBarHtml = `
                 <div class="wechat-top-header">
                     <button onclick="closePhoneApp()" style="border:none;background:none;font-size:14px;color:#181818;cursor:pointer;padding:0;display:flex;align-items:center;gap:3px;font-weight:500;">
@@ -82,7 +82,7 @@
                 </div>
             `;
             mainContentHtml = (typeof buildMomentsHTML === 'function') ? buildMomentsHTML() : '<div style="padding:40px;text-align:center;color:#999;">动态模块加载中...</div>';
-        } else if (_activeBottomTab === 'profile') {
+        } else if (window._activeBottomTab === 'profile') {
             topBarHtml = `
                 <div class="wechat-top-header">
                     <button onclick="closePhoneApp()" style="border:none;background:none;font-size:14px;color:#181818;cursor:pointer;padding:0;display:flex;align-items:center;gap:3px;font-weight:500;">
@@ -99,17 +99,17 @@
 
         const bottomNavHtml = `
             <div style="height:52px;background:#f7f7f7;border-top:0.5px solid #dcdcdc;display:flex;justify-content:space-around;align-items:center;flex-shrink:0;box-sizing:border-box;">
-                <button onclick="window.switchWechatBottomTab('chats')" style="border:none;background:none;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;color:${_activeBottomTab === 'chats' ? '#07c160' : '#888888'};">
+                <button onclick="window.switchWechatBottomTab('chats')" style="border:none;background:none;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;color:${window._activeBottomTab === 'chats' ? '#07c160' : '#888888'};">
                     <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor;"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/></svg>
-                    <span style="font-size:10.5px;font-weight:${_activeBottomTab === 'chats' ? '600' : 'normal'};">微信</span>
+                    <span style="font-size:10.5px;font-weight:${window._activeBottomTab === 'chats' ? '600' : 'normal'};">微信</span>
                 </button>
-                <button onclick="window.switchWechatBottomTab('moments')" style="border:none;background:none;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;color:${_activeBottomTab === 'moments' ? '#07c160' : '#888888'};">
+                <button onclick="window.switchWechatBottomTab('moments')" style="border:none;background:none;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;color:${window._activeBottomTab === 'moments' ? '#07c160' : '#888888'};">
                     <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor;"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="12" cy="12" r="3"/></svg>
-                    <span style="font-size:10.5px;font-weight:${_activeBottomTab === 'moments' ? '600' : 'normal'};">动态</span>
+                    <span style="font-size:10.5px;font-weight:${window._activeBottomTab === 'moments' ? '600' : 'normal'};">动态</span>
                 </button>
-                <button onclick="window.switchWechatBottomTab('profile')" style="position:relative;border:none;background:none;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;color:${_activeBottomTab === 'profile' ? '#07c160' : '#888888'};">
+                <button onclick="window.switchWechatBottomTab('profile')" style="position:relative;border:none;background:none;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;color:${window._activeBottomTab === 'profile' ? '#07c160' : '#888888'};">
                     <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor;"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
-                    <span style="font-size:10.5px;font-weight:${_activeBottomTab === 'profile' ? '600' : 'normal'};">我</span>
+                    <span style="font-size:10.5px;font-weight:${window._activeBottomTab === 'profile' ? '600' : 'normal'};">我</span>
                     ${totalOtherReqCount > 0 ? `<span style="position:absolute;top:0;right:8px;width:7px;height:7px;background:#fa5151;border-radius:50%;"></span>` : ''}
                 </button>
             </div>
@@ -125,16 +125,16 @@
             </div>
         `;
 
-        if (_activeBottomTab === 'chats') {
+        if (window._activeBottomTab === 'chats') {
             bindSwipeToDeleteEngine(container);
 
             container.querySelectorAll('.chat-item[data-npc-id]').forEach(item => {
                 const id = item.dataset.npcId;
                 if (typeof bindLongPressEvent === 'function') {
                     bindLongPressEvent(item, () => {
-                        if (_activeSwipedItem && _activeSwipedItem.contains(item)) {
-                            _activeSwipedItem.style.transform = 'translateX(0px)';
-                            _activeSwipedItem = null;
+                        if (window._activeSwipedItem && window._activeSwipedItem.contains(item)) {
+                            window._activeSwipedItem.style.transform = 'translateX(0px)';
+                            window._activeSwipedItem = null;
                             return;
                         }
                         window.openChat(id);
@@ -143,9 +143,9 @@
                     });
                 } else {
                     item.onclick = () => {
-                        if (_activeSwipedItem && _activeSwipedItem.contains(item)) {
-                            _activeSwipedItem.style.transform = 'translateX(0px)';
-                            _activeSwipedItem = null;
+                        if (window._activeSwipedItem && window._activeSwipedItem.contains(item)) {
+                            window._activeSwipedItem.style.transform = 'translateX(0px)';
+                            window._activeSwipedItem = null;
                             return;
                         }
                         window.openChat(id);
@@ -167,7 +167,7 @@
     window.renderSocialPanel = renderChatApp;
 
     window.switchWechatBottomTab = function(tabName) {
-        _activeBottomTab = tabName;
+        window._activeBottomTab = tabName;
         window.G.currentChatNpc = null;
         window.G.currentChatGroup = null;
         renderChatApp();

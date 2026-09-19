@@ -12,12 +12,12 @@
 (function() {
     'use strict';
 
-    let _activeBottomTab = 'chats';
+    window._activeBottomTab = 'chats';
     window._stickerDrawerOpen = false;
     window._plusDrawerOpen = false;
     window._activeQuoteMessage = null;
     window._chatExpandAllMap = {}; // 记录哪些会话被用户主动临时展开了历史记录
-    let _activeSwipedItem = null;  // 记录当前处于左滑展开状态的行
+    window._activeSwipedItem = null;  // 记录当前处于左滑展开状态的行
 
     // 🌟 辅助函数：将高价值对话证据沉淀写入 Rememori 存储池
     window.depositRememoriEvidence = function depositRememoriEvidence(npcId, curAccId, content) {
@@ -276,9 +276,9 @@
                 isSwiping = true;
                 isHorizontal = null;
 
-                if (_activeSwipedItem && _activeSwipedItem !== content) {
-                    _activeSwipedItem.style.transform = 'translateX(0px)';
-                    _activeSwipedItem = null;
+                if (window._activeSwipedItem && window._activeSwipedItem !== content) {
+                    window._activeSwipedItem.style.transform = 'translateX(0px)';
+                    window._activeSwipedItem = null;
                 }
             }, { passive: true });
 
@@ -299,7 +299,7 @@
                     const move = Math.max(-72, deltaX);
                     content.style.transform = `translateX(${move}px)`;
                     currentX = move;
-                } else if (_activeSwipedItem === content) {
+                } else if (window._activeSwipedItem === content) {
                     const move = Math.min(0, -72 + deltaX);
                     content.style.transform = `translateX(${move}px)`;
                     currentX = move;
@@ -313,10 +313,10 @@
 
                 if (currentX < -36) {
                     content.style.transform = 'translateX(-72px)';
-                    _activeSwipedItem = content;
+                    window._activeSwipedItem = content;
                 } else {
                     content.style.transform = 'translateX(0px)';
-                    if (_activeSwipedItem === content) _activeSwipedItem = null;
+                    if (window._activeSwipedItem === content) window._activeSwipedItem = null;
                 }
             };
 
@@ -374,7 +374,7 @@
             window.G.currentChatNpc = null;
         }
 
-        _activeSwipedItem = null;
+        window._activeSwipedItem = null;
 
         if (typeof window.syncCustomNpcsToLocalBackup === 'function') window.syncCustomNpcsToLocalBackup();
         if (typeof window.syncChatHistoryToLocalBackup === 'function') window.syncChatHistoryToLocalBackup();
