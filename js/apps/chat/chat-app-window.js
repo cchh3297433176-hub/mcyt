@@ -8,6 +8,18 @@
 (function() {
     'use strict';
 
+    // 🌐 打开网页外链安全跳转
+    window.openWebPageLink = function(url) {
+        if (!url || url === '#' || !url.startsWith('http')) {
+            if (typeof showToast === 'function') showToast('无法打开非 HTTP 网页链接', 'info', 1500);
+            return;
+        }
+        try {
+            window.open(url, '_blank', 'noopener,noreferrer');
+        } catch (_) {
+            window.location.href = url;
+        }
+    };
 
     // ============================================================
     // 💬 单人私聊窗口渲染（带消息折叠、防卡顿优化与智能重说切换）
@@ -114,6 +126,39 @@
                     <div style="max-width:76%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                         ${quoteHtml}
                         ${tarotCardHtml}
+                        <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
+                    </div>
+                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
+                </div>`;
+            } else if (msg.type === 'web_page') {
+                // 🌐 纯正微信质感网页链接卡片（白灰微绿设计风格）
+                const wp = msg.webPage || {};
+                const pageUrl = wp.url || '#';
+                const pageTitle = wp.title || '权威检索结果';
+                const pageSnippet = wp.snippet || '';
+                const pageSource = wp.source || '全网检索';
+
+                messagesHtml += `
+                <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
+                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(npc, 38)}</div>` : ''}
+                    <div style="max-width:76%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
+                        ${quoteHtml}
+                        <div class="wechat-web-card" onclick="window.openWebPageLink('${escapeHtml(pageUrl)}')" style="background:#ffffff;border:0.5px solid #e2e8f0;border-radius:8px;padding:10px 12px;box-shadow:0 1px 4px rgba(0,0,0,0.06);cursor:pointer;width:240px;box-sizing:border-box;">
+                            <div style="font-size:13.5px;font-weight:600;color:#181818;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;margin-bottom:5px;">
+                                ${escapeHtml(pageTitle)}
+                            </div>
+                            ${pageSnippet ? `
+                            <div style="font-size:11.5px;color:#666;line-height:1.45;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;margin-bottom:8px;">
+                                ${escapeHtml(pageSnippet)}
+                            </div>` : ''}
+                            <div style="display:flex;align-items:center;justify-content:space-between;border-top:0.5px solid #f0f0f0;padding-top:6px;font-size:11px;color:#888;">
+                                <div style="display:flex;align-items:center;gap:4px;min-width:0;flex:1;">
+                                    <svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:none;stroke:#07c160;stroke-width:2;flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                                    <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(pageSource)}</span>
+                                </div>
+                                <span style="color:#07c160;font-weight:600;margin-left:8px;flex-shrink:0;">打开 ›</span>
+                            </div>
+                        </div>
                         <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
                     </div>
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
@@ -465,6 +510,5 @@
 
         window.triggerAIReplyForSingle(npcId);
     };
-
 
 })();

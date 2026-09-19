@@ -57,6 +57,7 @@
         else if (msg.type === 'shared_tarot') summaryText = `[塔罗牌阵: ${msg.sharedTarot?.spreadName || '占卜'}]`;
         else if (msg.type === 'shared_moment') summaryText = `[朋友圈分享]`;
         else if (msg.type === 'contact_card') summaryText = `[名片] ${msg.contactCard?.name || ''}`;
+        else if (msg.type === 'web_page') summaryText = `[链接] ${msg.webPage?.title || ''}`;
         else if (msg.type === 'image_flip' || msg.type === 'image_text_only' || msg.imageDesc) summaryText = `[图片] ${msg.imageDesc || msg.text || ''}`;
         else if (msg.type === 'sticker') summaryText = `[表情]`;
 
@@ -118,7 +119,7 @@
         document.querySelector('.wechat-action-sheet-mask')?.remove();
         const history = (type === 'single') ? window.getAccountChatHistory(targetId) : (window.G.groupChatHistory[targetId] || []);
         const idx = history.findIndex(m => m._id === msgId);
-        if (idx !== -1) return;
+        if (idx === -1) return;
 
         const targetMsg = history[idx];
         const now = Date.now();
@@ -196,6 +197,5 @@
             if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
         });
     };
-
 
 })();
