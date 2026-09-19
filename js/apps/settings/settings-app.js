@@ -70,7 +70,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
     // 获取当前联网搜索配置
     function getSafeSearchConfig() {
         const cfg = {
-            enabled: false,
+            enabled: true,
             provider: 'bing_local',
             keys: { bocha: '', metaso: '', tavily: '' },
             maxResults: 3
@@ -327,7 +327,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
 
         const view = new DataView(chunk.buffer);
         view.setUint32(0, dataLen);
-        chunk[4] = 0x74; chunk[5] = 0x45; chunk[6] = 0x58; chunk[7] = 0x74; // 'tEXt'
+        chunk[4] = 0x74; chunk[5] = 0x45; chunk[6] = 0x74; chunk[7] = 0x74; // 'tEXt'
 
         let offset = 8;
         chunk.set(keyBytes, offset);
@@ -737,7 +737,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
                     </button>
                     <button class="settings-tab-btn" data-tab="search" style="flex:1;padding:7px 4px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:transparent;color:#666;border:none;display:inline-flex;align-items:center;justify-content:center;gap:4px;">
                         <svg style="width:14px;height:14px;fill:currentColor;" viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/></svg>
-                        <span>联网搜索</span>
+                        <span>联网检索</span>
                     </button>
                     <button class="settings-tab-btn" data-tab="debug" style="flex:1;padding:7px 4px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:transparent;color:#666;border:none;display:inline-flex;align-items:center;justify-content:center;gap:4px;">
                         <svg style="width:14px;height:14px;fill:currentColor;" viewBox="0 0 24 24"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm1 14h-2v-2h2v2zm0-4h-2V7h2v5z"/></svg>
@@ -837,21 +837,18 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
 
                 </div>
 
-                <!-- 分区 2：联网搜索中枢 -->
+                <!-- 分区 2：联网搜索中枢（渠道选择与全局凭据维护） -->
                 <div id="settingsTabContent_search" class="settings-tab-content" style="display:none;">
                     <div style="background:#ffffff;border-radius:12px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,0.04);border:1px solid #eeeeee;">
-                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                            <span style="font-size:13.5px;font-weight:600;color:#181818;">实时联网检索</span>
-                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-                                <input type="checkbox" id="searchEnableToggle" ${searchCfg.enabled ? 'checked' : ''} style="width:16px;height:16px;accent-color:#07c160;">
-                                <span style="font-size:12px;font-weight:600;color:${searchCfg.enabled ? '#07c160' : '#888'};" id="searchEnableText">${searchCfg.enabled ? '已开启' : '已关闭'}</span>
-                            </label>
+                        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                            <span style="font-size:13.5px;font-weight:600;color:#181818;">联网检索源配置</span>
+                            <span style="font-size:11px;color:#07c160;background:#f0f9eb;padding:2px 8px;border-radius:10px;">独立开关由对话抽屉控制</span>
                         </div>
-                        <div style="font-size:11px;color:#888;margin-bottom:12px;">
-                            开启后在生成主线视频或剧情时探查真实 Minecraft 资讯。
+                        <div style="font-size:11px;color:#888;margin-bottom:14px;line-height:1.5;">
+                            预设全局搜索渠道与凭证。可在各角色对话的加号面板中随时按需开启或关闭联网。
                         </div>
 
-                        <div id="searchConfigBody" style="${searchCfg.enabled ? '' : 'opacity:0.45;pointer-events:none;'}">
+                        <div id="searchConfigBody">
                             <div style="background:#f9f9f9;border-radius:8px;padding:10px;margin-bottom:12px;border:1px solid #eee;">
                                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
                                     <span style="font-size:12px;font-weight:600;color:#333;">检索引用条数</span>
@@ -860,14 +857,14 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
                                 <input type="range" id="searchResultCountSlider" min="1" max="10" value="${searchCfg.maxResults || 3}" style="width:100%;accent-color:#07c160;">
                             </div>
 
-                            <label style="font-size:12px;font-weight:600;color:#333;display:block;margin-bottom:6px;">搜索渠道选择</label>
+                            <label style="font-size:12px;font-weight:600;color:#333;display:block;margin-bottom:6px;">默认搜索渠道</label>
                             
                             <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:12px;">
                                 <label style="display:flex;align-items:flex-start;gap:8px;padding:8px 10px;border:1px solid ${searchCfg.provider === 'bing_local' ? '#07c160' : '#e5e5e5'};border-radius:8px;background:${searchCfg.provider === 'bing_local' ? '#f0f9eb' : '#fff'};cursor:pointer;">
                                     <input type="radio" name="searchProviderRadio" value="bing_local" ${searchCfg.provider === 'bing_local' ? 'checked' : ''} style="margin-top:2px;accent-color:#07c160;">
                                     <div style="font-size:11.5px;">
-                                        <div style="font-weight:600;color:#222;">Bing (Local 直连免密钥)</div>
-                                        <div style="color:#888;font-size:10.5px;">开箱即用，无需配置 API Key。</div>
+                                        <div style="font-weight:600;color:#222;">Bing (免 Key 极速通道)</div>
+                                        <div style="color:#888;font-size:10.5px;">零门槛开箱即用，内置多节点容灾穿透，无需填 Key。</div>
                                     </div>
                                 </label>
 
@@ -1264,9 +1261,6 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
             backupBtn.onclick = () => openConfigBackupModal();
         }
 
-        const searchToggle = document.getElementById('searchEnableToggle');
-        const searchToggleText = document.getElementById('searchEnableText');
-        const searchConfigBody = document.getElementById('searchConfigBody');
         const saveSearchBtn = document.getElementById('saveSearchConfigBtn');
         const resultCountSlider = document.getElementById('searchResultCountSlider');
         const resultCountVal = document.getElementById('searchResultCountVal');
@@ -1277,26 +1271,12 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
             };
         }
 
-        if (searchToggle) {
-            searchToggle.onchange = () => {
-                const checked = searchToggle.checked;
-                if (searchToggleText) {
-                    searchToggleText.textContent = checked ? '已开启' : '已关闭';
-                    searchToggleText.style.color = checked ? '#07c160' : '#888';
-                }
-                if (searchConfigBody) {
-                    searchConfigBody.style.opacity = checked ? '1' : '0.45';
-                    searchConfigBody.style.pointerEvents = checked ? 'auto' : 'none';
-                }
-            };
-        }
-
         if (saveSearchBtn) {
             saveSearchBtn.onclick = () => {
                 const selectedRadio = document.querySelector('input[name="searchProviderRadio"]:checked');
                 const provider = selectedRadio ? selectedRadio.value : 'bing_local';
                 const searchObj = {
-                    enabled: !!(searchToggle && searchToggle.checked),
+                    enabled: true, // 全局保留为底层就绪，具体触发由聊天抽屉按角色独立控制
                     provider: provider,
                     maxResults: parseInt(resultCountSlider?.value) || 3,
                     keys: {
