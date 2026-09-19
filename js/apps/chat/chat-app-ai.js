@@ -50,6 +50,7 @@
 
     // 🤖 单人私聊 AI 回复触发（带跨时段、隔夜双时间戳感知、塔罗牌解读感知、Rememori 证据链与联网搜索）
     window.triggerAIReplyForSingle = async function(npcId) {
+      try {
         const npc = window.G.npcs[npcId];
         if (!npc) return;
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', region: '中国', name: '主播' };
@@ -147,22 +148,33 @@
                 }
             } catch (searchErr) {
                 console.warn('联网搜索检索失败或超时:', searchErr);
+                alert('[诊断-联网搜索环节报错]\n' + (searchErr && searchErr.message || searchErr) + '\n\n(这个环节报错不影响继续生成回复，仅供排查)');
             }
         }
 
-        const promptCtx = (window.ChatPromptEngine && typeof window.ChatPromptEngine.buildWechatAIPromptContext === 'function')
-            ? window.ChatPromptEngine.buildWechatAIPromptContext({
-                npc,
-                curAcc,
-                recentDialogueText: recentDialogue + peekNotice + searchContextPrompt,
-                isBehindActive,
-                lastMsgTime,
-                lastMsgTimestamp
-            })
-            : {
-                sysPrompt: `扮演MC好友「${npc.name}」，严禁句末加句号，严禁括号动作描写。`,
-                userPrompt: recentDialogue ? `最近对话：\n${recentDialogue}${searchContextPrompt}\n\n回复：` : '打个招呼。'
-            };
+        let promptCtx;
+        try {
+            promptCtx = (window.ChatPromptEngine && typeof window.ChatPromptEngine.buildWechatAIPromptContext === 'function')
+                ? window.ChatPromptEngine.buildWechatAIPromptContext({
+                    npc,
+                    curAcc,
+                    recentDialogueText: recentDialogue + peekNotice + searchContextPrompt,
+                    isBehindActive,
+                    lastMsgTime,
+                    lastMsgTimestamp
+                })
+                : {
+                    sysPrompt: `扮演MC好友「${npc.name}」，严禁句末加句号，严禁括号动作描写。`,
+                    userPrompt: recentDialogue ? `最近对话：\n${recentDialogue}${searchContextPrompt}\n\n回复：` : '打个招呼。'
+                };
+        } catch (promptErr) {
+            alert('[诊断-提示词组装环节报错，这里很可能就是卡死的原因]\n' + (promptErr && promptErr.stack || promptErr));
+            clearTimeout(bannerTimer);
+            delete window._MCYT_CHAT_GENERATING[npcId];
+            window.hideGeneratingBanner();
+            if (window.G.currentChatNpc === npcId) renderSingleChatWindow();
+            return;
+        }
 
         try {
             const raw = await callAI([
@@ -327,6 +339,7 @@
             if (typeof autoSaveGame === 'function') autoSaveGame();
         } catch(e) {
             console.error('API 回复失败:', e);
+            alert('[诊断-生成主流程报错]\n' + (e && e.stack || e));
             if (typeof showToast === 'function') showToast('回复失败，请检查AI配置', 'error');
         } finally {
             clearTimeout(bannerTimer);
@@ -334,6 +347,15 @@
             window.hideGeneratingBanner();
             if (window.G.currentChatNpc === npcId) renderSingleChatWindow();
         }
+      } catch (outerErr) {
+          alert('[诊断-最外层兜底报错，说明问题出在生成中状态之前]\n' + (outerErr && outerErr.stack || outerErr));
+          try {
+              clearTimeout(bannerTimer);
+              delete window._MCYT_CHAT_GENERATING[npcId];
+              if (typeof window.hideGeneratingBanner === 'function') window.hideGeneratingBanner();
+              if (window.G && window.G.currentChatNpc === npcId && typeof renderSingleChatWindow === 'function') renderSingleChatWindow();
+          } catch (_) {}
+      }
     };
 
 })();
