@@ -1177,8 +1177,10 @@
     };
 
     // ============================================================
-    // 🛡️ 原生全屏沉浸沙盒容器（保活宿主后台生成，杜绝套娃顶栏与历史堆栈污染）
+    // 🛡️ 原生全屏沉浸沙盒容器（零白屏、零闪烁、秒级保活唤起）
     // ============================================================
+    let _activeSandboxUrl = null;
+
     window.openInAppSandbox = function(url, title = '应用沙盒') {
         let sandbox = document.getElementById('phoneAppSandboxContainer');
         if (!sandbox) {
@@ -1186,21 +1188,19 @@
             sandbox.id = 'phoneAppSandboxContainer';
             sandbox.style.cssText = `
                 position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-                background: #f7f7f7; z-index: 999990; display: none; flex-direction: column;
+                background: #08090d; z-index: 999990; display: none; flex-direction: column;
                 box-sizing: border-box; font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
-                overflow: hidden;
+                overflow: hidden; opacity: 0; transition: opacity 0.2s ease;
             `;
-            // 彻底去除多余的外部套娃顶栏，沙盒内部应用原生顶栏即为唯一控制栏
             sandbox.innerHTML = `
                 <div id="phoneSandboxActiveTaskCapsule" style="display: none; position: absolute; top: 12px; left: 50%; transform: translateX(-50%); z-index: 999999; background: rgba(18, 24, 20, 0.88); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border: 0.5px solid rgba(7, 193, 96, 0.35); border-radius: 20px; padding: 5px 14px; box-shadow: 0 4px 18px rgba(0,0,0,0.18); align-items: center; gap: 8px; cursor: pointer; pointer-events: auto;">
                     <div style="width: 7px; height: 7px; border-radius: 50%; background: #07c160; box-shadow: 0 0 8px #07c160; animation: phoneTaskPulse 1.4s ease-in-out infinite;"></div>
                     <span id="phoneSandboxActiveTaskText" style="font-size: 12px; font-weight: 500; color: #ffffff; letter-spacing: 0.2px;">后台正在生成回复...</span>
                 </div>
-                <iframe id="phoneSandboxIframe" style="width: 100vw; height: 100vh; border: none; background: #ffffff; display: block;" src="about:blank"></iframe>
+                <iframe id="phoneSandboxIframe" style="width: 100vw; height: 100vh; border: none; background: #08090d; display: block;" src="about:blank"></iframe>
             `;
             document.body.appendChild(sandbox);
 
-            // 监听沙盒点击后台胶囊快速切回微信
             const capsule = document.getElementById('phoneSandboxActiveTaskCapsule');
             if (capsule) {
                 capsule.addEventListener('click', () => {
@@ -1209,7 +1209,6 @@
                 });
             }
 
-            // 注入脉冲动画（如不存在）
             if (!document.getElementById('phoneTaskPulseAnim')) {
                 const st = document.createElement('style');
                 st.id = 'phoneTaskPulseAnim';
@@ -1226,10 +1225,13 @@
 
         const iframeEl = document.getElementById('phoneSandboxIframe');
         if (iframeEl) {
-            // 每次拉起全新实例，避免在同一个 iframe 历史堆栈里跳转导致后退回到上一 App
-            iframeEl.src = url;
+            // 🌟 核心防白屏策略：若 URL 相同则复用已有页面状态秒开，若不同才进行切换
+            if (_activeSandboxUrl !== url || iframeEl.getAttribute('src') === 'about:blank') {
+                _activeSandboxUrl = url;
+                iframeEl.src = url;
+            }
 
-            // 拦截内部误跳转回宿主主页，防止沙盒内套娃主站
+            // 监听 iframe 内部加载，严禁沙盒内重载宿主主页套娃
             iframeEl.onload = function () {
                 try {
                     const curLoc = iframeEl.contentWindow.location.href;
@@ -1241,22 +1243,24 @@
         }
 
         sandbox.style.display = 'flex';
+        requestAnimationFrame(() => {
+            sandbox.style.opacity = '1';
+        });
         window.syncPhoneSandboxTaskState();
     };
 
     window.closeInAppSandbox = function() {
         const sandbox = document.getElementById('phoneAppSandboxContainer');
-        const iframeEl = document.getElementById('phoneSandboxIframe');
         if (sandbox) {
-            sandbox.style.display = 'none';
+            sandbox.style.opacity = '0';
+            setTimeout(() => {
+                sandbox.style.display = 'none';
+            }, 180);
         }
-        if (iframeEl) {
-            // 彻底清空源地址，重置 iframe 历史栈，彻底杜绝回退到上一沙盒应用
-            iframeEl.src = 'about:blank';
-        }
+        // 🌟 严禁使用 iframe.src = 'about:blank'，避免在 Android WebView 中引起下次打开时严重白屏
     };
 
-    // 监听子沙盒发来的关闭与通知消息，实现内部原生“< 桌面”按钮丝滑返回
+    // 🌟 监听子沙盒（塔罗、忆海）发来的关闭指令，实现原生无缝收起
     window.addEventListener('message', function (e) {
         if (!e || !e.data) return;
         const data = e.data;
@@ -1281,7 +1285,6 @@
 
         let isGenerating = false;
         try {
-            // 检测是否有角色正在私聊生成
             if (window._isAnyChatGenerating || (window.G && window.G.isGenerating)) {
                 isGenerating = true;
             }
@@ -1301,7 +1304,6 @@
         const appModalBody = document.getElementById('appModalBody');
         if (!appModal || !appModalTitle || !appModalBody) return;
 
-        // 兜底清理：聊天 App 会给 appModal 打上 wechat-seamless-shell 类来隐藏通用顶部退出条
         if (appKey !== 'chat') appModal.classList.remove('wechat-seamless-shell');
 
         if (appKey === 'chat' && typeof window.renderChatApp === 'function') {
