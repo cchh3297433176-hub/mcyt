@@ -4,8 +4,9 @@
  * 规范功能：
  * 1. 微信原生白灰微绿设计质感，消除所有复古土味 UI 与原生 select。
  * 2. 顶栏右侧三个点（···）呼出群资料，集成微绿细线矢量齿轮【群高级设置】。
- * 3. 支持编辑群头像、群名称、群介绍，支持成员增删、群管理任命、QQ式群头衔赋予。
- * 4. 高级设置支持设置最少/最多角色发言人数，支持统一/单独调用切换与记忆隔离开关。
+ * 3. 支持编辑群头像（含相册导入、网络URL与🎲一键随机头像）、群名称、群介绍。
+ * 4. 高级设置集成【群内 NPC 行为与属性管理】、每次发言角色人数范围、群管理任命、仿QQ群头衔。
+ * 5. 头衔与管理变动即时生成微信/QQ原生居中灰色通知条并写入群历史。
  */
 
 (function() {
@@ -26,8 +27,9 @@
             syncToRememori: false,
             minSpeakers: 1,
             maxSpeakers: 3,
-            admins: [],       // 管理员角色 ID 列表
-            titles: {}        // 各角色专属群头衔，如 { 'groxmc': '红石暴躁老哥' }
+            allowStickers: true, // NPC 是否允许发表情包
+            admins: [],          // 管理员角色 ID 列表
+            titles: {}           // 各角色专属群头衔
         };
     }
 
@@ -45,7 +47,7 @@
     }
 
     /**
-     * 👥 打开群聊信息与资料面板（右上角增加齿轮设置入口）
+     * 👥 打开群聊信息与资料面板
      */
     window.openGroupSettingsModal = function(gid) {
         const group = window.G.groups && window.G.groups[gid];
@@ -127,7 +129,7 @@
                 <!-- 群介绍 -->
                 <div style="display:flex;flex-direction:column;gap:6px;padding:4px 0;border-bottom:0.5px solid #eeeeee;">
                     <div style="display:flex;align-items:center;justify-content:space-between;">
-                        <span style="font-size:13.5px;color:#333;">群介绍/群公告</span>
+                        <span style="font-size:13.5px;color:#333;">群介绍/公告</span>
                         <span onclick="window.openEditGroupDescModal('${gid}')" style="font-size:12px;color:#07c160;cursor:pointer;">编辑</span>
                     </div>
                     <div style="font-size:12px;color:#777;line-height:1.45;background:#f9f9f9;padding:8px 10px;border-radius:5px;">
@@ -142,7 +144,7 @@
                             <circle cx="12" cy="12" r="3"></circle>
                             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                         </svg>
-                        <span style="font-size:13.5px;color:#181818;font-weight:500;">群聊高级设定（发言人数 / 管理 / 群头衔）</span>
+                        <span style="font-size:13.5px;color:#181818;font-weight:500;">群聊高级设定（NPC管理 / 发言人数 / 头衔）</span>
                     </div>
                     <span style="color:#aaa;font-size:13px;">›</span>
                 </div>
@@ -156,7 +158,7 @@
             </div>
         `, () => {});
 
-        // 在弹窗右上角关闭叉号左边注入矢量齿轮快捷入口
+        // 右上角关闭叉号左边注入矢量齿轮快捷入口
         setTimeout(() => {
             const modalHeader = document.querySelector('.wechat-clean-modal-header');
             if (modalHeader && !modalHeader.querySelector('.group-quick-gear-btn')) {
@@ -177,7 +179,7 @@
     };
 
     /**
-     * ⚙️ 群聊高级设置浮层
+     * ⚙️ 群聊高级设置浮层（含明确的 NPC 功能与属性管理）
      */
     window.openGroupAdvancedSettingsModal = function(gid) {
         document.querySelector('.wechat-clean-modal-mask')?.remove();
@@ -202,18 +204,54 @@
             const currentTitle = (cfg.titles || {})[m.id] || '';
             return `
             <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:0.5px dashed #eee;">
-                <span style="font-size:12px;color:#333;width:70px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(m.name)}</span>
+                <span style="font-size:12px;color:#333;width:75px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(m.name)}</span>
                 <input type="text" class="wclean-title-input wechat-clean-input" data-npcid="${m.id}" value="${escapeHtml(currentTitle)}" placeholder="如：首席红石/话痨/鸽王" style="flex:1;padding:4px 8px;font-size:12px;">
             </div>
             `;
         }).join('') || '<div style="font-size:11px;color:#999;">暂无可配置头衔的成员</div>';
 
+        // NPC 状态与属性列表展示
+        const npcListSummaryHtml = members.map(m => `
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:0.5px solid #f2f2f2;font-size:12px;">
+                <div style="display:flex;align-items:center;gap:6px;">
+                    ${window.renderAvatarBadge(m, 26)}
+                    <span style="font-weight:600;color:#222;">${escapeHtml(m.name)}</span>
+                </div>
+                <span style="color:#07c160;font-size:11px;">好感度: ${m.favor || 50} · 活跃</span>
+            </div>
+        `).join('') || '<div style="font-size:11px;color:#999;">群内暂无NPC成员</div>';
+
         window.openWechatCleanModal('群聊高级设定', `
-            <div style="display:flex;flex-direction:column;gap:15px;text-align:left;max-height:360px;overflow-y:auto;padding-right:4px;">
+            <div style="display:flex;flex-direction:column;gap:15px;text-align:left;max-height:380px;overflow-y:auto;padding-right:4px;">
+                
+                <!-- 🤖 群内 NPC 属性与行为配置 -->
+                <div style="border-bottom:0.5px solid #f0f0f0;padding-bottom:12px;">
+                    <div style="font-size:13.5px;font-weight:600;color:#181818;margin-bottom:4px;display:flex;align-items:center;gap:5px;">
+                        <span>群内 NPC 状态与行为</span>
+                        <span style="font-size:11px;color:#07c160;font-weight:normal;">(${members.length} 位NPC)</span>
+                    </div>
+                    <div style="background:#f9f9f9;padding:6px 10px;border-radius:6px;margin-bottom:8px;">
+                        ${npcListSummaryHtml}
+                    </div>
+
+                    <div style="display:flex;align-items:center;justify-content:space-between;padding-top:4px;">
+                        <div>
+                            <div style="font-size:12.5px;color:#333;font-weight:500;">允许 NPC 发送群表情包</div>
+                            <div style="font-size:11px;color:#888;">群友可根据聊天氛围甩猫狗/沙雕表情斗图</div>
+                        </div>
+                        <label style="position:relative;display:inline-block;width:38px;height:22px;">
+                            <input type="checkbox" id="chkGroupNpcStickers" ${cfg.allowStickers !== false ? 'checked' : ''} style="opacity:0;width:0;height:0;">
+                            <span style="position:absolute;cursor:pointer;inset:0;background:${cfg.allowStickers !== false ? '#07c160' : '#ccc'};border-radius:22px;transition:.3s;">
+                                <span style="position:absolute;height:18px;width:18px;left:${cfg.allowStickers !== false ? '18px' : '2px'};bottom:2px;background:white;border-radius:50%;transition:.3s;"></span>
+                            </span>
+                        </label>
+                    </div>
+                </div>
+
                 <!-- 每次发言角色人数控制 -->
                 <div style="border-bottom:0.5px solid #f0f0f0;padding-bottom:12px;">
-                    <div style="font-size:13.5px;font-weight:600;color:#181818;margin-bottom:4px;">每次发言角色人数设置</div>
-                    <div style="font-size:11px;color:#888;margin-bottom:8px;">系统将在此范围内随机抽取在场角色交错发言接话：</div>
+                    <div style="font-size:13.5px;font-weight:600;color:#181818;margin-bottom:4px;">每次接话角色人数范围</div>
+                    <div style="font-size:11px;color:#888;margin-bottom:8px;">系统将随机抽取角色交错接话（每人连发2~5条）：</div>
                     <div style="display:flex;align-items:center;gap:10px;">
                         <span style="font-size:12px;color:#555;">最少</span>
                         <input type="number" id="wcleanMinSpeakers" value="${cfg.minSpeakers || 1}" min="1" max="5" class="wechat-clean-input" style="width:65px;padding:4px 6px;">
@@ -226,7 +264,7 @@
                 <!-- 群管理员设置 -->
                 <div style="border-bottom:0.5px solid #f0f0f0;padding-bottom:12px;">
                     <div style="font-size:13.5px;font-weight:600;color:#181818;margin-bottom:4px;">设置群管理员</div>
-                    <div style="font-size:11px;color:#888;margin-bottom:8px;">勾选的角色将具有管理员身份，角色会知晓并在适当时刻维护群纪律：</div>
+                    <div style="font-size:11px;color:#888;margin-bottom:8px;">任命后会有群系统灰字提示，角色会知晓并在适当时刻起哄维护纪律：</div>
                     <div style="display:flex;flex-wrap:wrap;gap:6px;">
                         ${adminCheckboxesHtml}
                     </div>
@@ -235,7 +273,7 @@
                 <!-- 专属群头衔设置 -->
                 <div style="border-bottom:0.5px solid #f0f0f0;padding-bottom:12px;">
                     <div style="font-size:13.5px;font-weight:600;color:#181818;margin-bottom:4px;">群成员专属头衔（仿QQ群头衔）</div>
-                    <div style="font-size:11px;color:#888;margin-bottom:8px;">给群友颁发专属名号，换新时角色会吐槽，吵架时也会拿头衔互损：</div>
+                    <div style="font-size:11px;color:#888;margin-bottom:8px;">换新时产生系统通知，当事角色随口吐槽，吵架时也会拿头衔互损：</div>
                     <div style="display:flex;flex-direction:column;gap:4px;">
                         ${titleInputsHtml}
                     </div>
@@ -253,7 +291,7 @@
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                         <div id="apiModeOptUnified" onclick="window.selectGroupApiMode('unified')" style="border:${cfg.apiMode === 'unified' ? '1.5px solid #07c160' : '0.5px solid #ddd'};background:${cfg.apiMode === 'unified' ? '#f0faf4' : '#fff'};border-radius:6px;padding:10px 8px;cursor:pointer;text-align:center;">
                             <div style="font-size:12.5px;font-weight:600;color:#181818;">统一调用</div>
-                            <div style="font-size:10.5px;color:#888;margin-top:3px;">单次生成全员·极省Token</div>
+                            <div style="font-size:10.5px;color:#888;margin-top:3px;">单次生成交错对话·极省Token</div>
                         </div>
                         <div id="apiModeOptIndividual" onclick="window.selectGroupApiMode('individual')" style="border:${cfg.apiMode === 'individual' ? '1.5px solid #07c160' : '0.5px solid #ddd'};background:${cfg.apiMode === 'individual' ? '#f0faf4' : '#fff'};border-radius:6px;padding:10px 8px;cursor:pointer;text-align:center;">
                             <div style="font-size:12.5px;font-weight:600;color:#181818;">单独调用</div>
@@ -265,8 +303,8 @@
                 <!-- 角色连发多条消息 -->
                 <div style="display:flex;align-items:center;justify-content:space-between;padding-top:4px;border-top:0.5px solid #f0f0f0;">
                     <div>
-                        <div style="font-size:13px;font-weight:500;color:#181818;">允许角色连续发言</div>
-                        <div style="font-size:11px;color:#888;">情绪激动或吐槽时可连续发 2 条短消息</div>
+                        <div style="font-size:13px;font-weight:500;color:#181818;">允许角色自由连发 (2~5条)</div>
+                        <div style="font-size:11px;color:#888;">依据人设性格连发多条短消息，自然穿插互回</div>
                     </div>
                     <label style="position:relative;display:inline-block;width:38px;height:22px;">
                         <input type="checkbox" id="chkGroupMultiMsgs" ${cfg.allowMultiMsgs ? 'checked' : ''} style="opacity:0;width:0;height:0;">
@@ -307,20 +345,59 @@
 
             const chkMulti = document.getElementById('chkGroupMultiMsgs')?.checked ?? true;
             const chkSync = document.getElementById('chkGroupSyncRememori')?.checked ?? false;
+            const chkStickers = document.getElementById('chkGroupNpcStickers')?.checked ?? true;
             const currentSelectedMode = window._tempSelectedGroupApiMode || cfg.apiMode;
+
+            // 🌟 检查是否有变动的头衔或管理，生成微信居中系统小灰条提示
+            const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { name: '群主' };
+            const oldAdmins = cfg.admins || [];
+            const oldTitles = cfg.titles || {};
+
+            if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
+            if (!window.G.groupChatHistory[gid]) window.G.groupChatHistory[gid] = [];
+
+            // 1. 管理员变更提示
+            selectedAdmins.forEach(mid => {
+                if (!oldAdmins.includes(mid)) {
+                    const mName = window.G.npcs[mid]?.name || '群成员';
+                    window.G.groupChatHistory[gid].push({
+                        _id: 'sys_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
+                        from: 'action',
+                        text: `"${curAcc.name}" 设置 "${mName}" 为群管理员`,
+                        time: new Date().toLocaleTimeString().slice(0, 5)
+                    });
+                }
+            });
+
+            // 2. 头衔变更提示
+            Object.keys(newTitles).forEach(mid => {
+                if (newTitles[mid] !== oldTitles[mid]) {
+                    const mName = window.G.npcs[mid]?.name || '群成员';
+                    window.G.groupChatHistory[gid].push({
+                        _id: 'sys_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
+                        from: 'action',
+                        text: `"${mName}" 获得了专属群头衔 "${newTitles[mid]}"`,
+                        time: new Date().toLocaleTimeString().slice(0, 5)
+                    });
+                }
+            });
 
             saveGroupConfig(gid, {
                 apiMode: currentSelectedMode,
                 allowMultiMsgs: chkMulti,
                 syncToRememori: chkSync,
+                allowStickers: chkStickers,
                 minSpeakers: minSpk,
                 maxSpeakers: maxSpk,
                 admins: selectedAdmins,
                 titles: newTitles
             });
 
-            if (typeof showToast === 'function') showToast('群高级设置已保存', 'success', 1200);
+            window.syncGroupChatsToLocalBackup();
+            if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+            if (typeof showToast === 'function') showToast('群高级设置已更新', 'success', 1200);
             window.openGroupSettingsModal(gid);
+            if (window.G.currentChatGroup === gid && typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
         });
 
         window._tempSelectedGroupApiMode = cfg.apiMode;
@@ -342,6 +419,7 @@
         };
         setupSwitchToggle('chkGroupMultiMsgs');
         setupSwitchToggle('chkGroupSyncRememori');
+        setupSwitchToggle('chkGroupNpcStickers');
     };
 
     window.selectGroupApiMode = function(mode) {
@@ -367,26 +445,39 @@
         if (typeof window.openWechatCleanModal === 'function') {
             window.openWechatCleanModal('API 调用说明', `
                 <div style="font-size:13px;line-height:1.6;color:#333;text-align:left;padding:4px 0;">
-                    <p style="margin:0 0 10px;"><b>• 统一调用</b>：单次 API 请求生成在场角色交错对话，响应迅速，最省 Token 额度。</p>
+                    <p style="margin:0 0 10px;"><b>• 统一调用</b>：单次 API 请求生成交错对话，角色你一言我一语自然穿插，响应迅速，最省 Token 额度。</p>
                     <p style="margin:0 0 10px;"><b>• 单独调用</b>：依据发言人数设定，独立调用大模型推进各角色思路，角色个性极强，但成倍消耗 API 额度。</p>
                 </div>
             `, () => {});
         }
     };
 
-    // 编辑群头像
+    // 🎲 编辑群头像（增加一键“随机头像”按钮）
     window.openEditGroupAvatarModal = function(gid) {
         const group = window.G.groups && window.G.groups[gid];
         if (!group) return;
         document.querySelector('.wechat-clean-modal-mask')?.remove();
 
+        const randomAvatars = [
+            'assets/icons/chat.png',
+            'assets/icons/theme.png',
+            'assets/icons/tarot.png',
+            'assets/icons/settings.png'
+        ];
+
         window.openWechatCleanModal('更换群头像', `
             <div style="display:flex;flex-direction:column;gap:12px;text-align:left;">
+                <!-- 🎲 随机生成头像 -->
+                <button type="button" id="btnGroupRandomAvatar" style="border:1px dashed #07c160;background:#f0faf4;color:#07c160;padding:10px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
+                    <span>🎲 随机生成精选群头像</span>
+                </button>
+
                 <label style="border:1px solid #dcdcdc;background:#f9f9f9;padding:12px;border-radius:6px;font-size:13px;font-weight:500;color:#333;cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
                     <span>从手机相册选择新头像</span>
                     <input type="file" id="groupAvatarFileInput" accept="image/*" style="display:none;">
                     <span style="color:#07c160;font-size:15px;">›</span>
                 </label>
+
                 <div style="font-size:12px;color:#666;">或输入网络图片链接：</div>
                 <input type="text" id="wcleanGroupAvatarUrlInput" placeholder="https://..." value="${escapeHtml(group.avatar || '')}" class="wechat-clean-input">
             </div>
@@ -402,6 +493,26 @@
         });
 
         setTimeout(() => {
+            // 绑定随机头像按钮
+            const btnRand = document.getElementById('btnGroupRandomAvatar');
+            if (btnRand) {
+                btnRand.onclick = () => {
+                    let newAvatar = '';
+                    if (typeof window.getRandomAvatar === 'function') {
+                        newAvatar = window.getRandomAvatar();
+                    } else {
+                        newAvatar = randomAvatars[Math.floor(Math.random() * randomAvatars.length)];
+                    }
+                    group.avatar = newAvatar;
+                    if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
+                    if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+                    if (typeof showToast === 'function') showToast('已随机更换群头像', 'success', 1000);
+                    document.querySelector('.wechat-clean-modal-mask')?.remove();
+                    window.openGroupSettingsModal(gid);
+                    if (window.G.currentChatGroup === gid && typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
+                };
+            }
+
             const fileInput = document.getElementById('groupAvatarFileInput');
             if (fileInput) {
                 fileInput.onchange = (e) => {

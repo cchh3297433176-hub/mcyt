@@ -1,12 +1,12 @@
 /**
  * js/apps/chat/chat-group.js
- * 💬 微信多人群聊独立模块（群窗口渲染 · 去中心化双轨AI驱动 · 群持久化防丢门禁 · 群消息流转）
- * 🌟 重构升级：
- * 1. 彻底根治杀后台建群消失 Bug：建立双轨原子级持久化槽，冷启动自愈装载。
- * 2. 顶栏右上角纯正三个点（···），唤起群资料与原生矢量微绿齿轮高级设定。
- * 3. 顶栏⚡闪电定位为【推进群聊流转】：无论用户发不发消息，群友都能自然多线程互聊与接话。
- * 4. 支持统一调用（极省Token）与单独调用双轨调度，支持人数上下限抽取交错发言。
- * 5. 输入栏新增扩展交互图标（预留转账红包等未来功能）。
+ * 💬 微信多人群聊独立模块（仿QQ上下分层工具栏 · 具体角色输入提示 · 多角色2~5条交错发言 · 群斗图与配图）
+ * 🌟 重构特性：
+ * 1. 仿 QQ 式双层输入栏：上层输入框与发送键，下层语音/设置/加号/表情抽屉。
+ * 2. 顶栏动态显示「XXX 正在输入中...」，活人感十足。
+ * 3. 完整支持群内角色发送表情包 [STICKER] 与文字图片 [IMAGE_TEXT]。
+ * 4. 彻底放开每人两条限制，支持自由连发 2~5 条交错发言。
+ * 5. 加号抽屉收纳转账、发红包等未来聊天扩展功能。
  */
 
 (function() {
@@ -78,6 +78,7 @@
         const history = window.G.groupChatHistory[gid] || [];
         const memberCount = (group.members || []).length + 1;
         const isGenerating = !!(window._MCYT_CHAT_GENERATING && window._MCYT_CHAT_GENERATING[gid]);
+        const generatingSpeaker = window._MCYT_GROUP_CURRENT_SPEAKER?.[gid] || '';
 
         const cfg = (window.ChatGroupSettings && typeof window.ChatGroupSettings.getGroupConfig === 'function')
             ? window.ChatGroupSettings.getGroupConfig(gid)
@@ -95,7 +96,6 @@
             const senderName = isSelf ? '我' : (msg.senderName || senderNpc?.name || '群友');
             const avatarObj = isSelf ? { isPlayer: true } : (senderNpc || { avatarUrl: window.getRandomAvatar() });
 
-            // 获取群头衔与管理徽标
             const title = (!isSelf && msg.senderId) ? groupTitles[msg.senderId] : (isSelf ? '群主' : '');
             const isAdmin = (!isSelf && msg.senderId) ? groupAdmins.includes(msg.senderId) : false;
 
@@ -110,7 +110,7 @@
             if (msg.from === 'action') {
                 messagesHtml += `
                 <div style="text-align:center;margin:8px 0;">
-                    <span style="display:inline-block;background:rgba(0,0,0,0.05);color:#888;padding:3px 10px;border-radius:4px;font-size:11.5px;max-width:85%;">${escapeHtml(msg.text || '')}</span>
+                    <span style="display:inline-block;background:rgba(0,0,0,0.06);color:#888;padding:3px 10px;border-radius:4px;font-size:11.5px;max-width:85%;">${escapeHtml(msg.text || '')}</span>
                 </div>`;
             } else if (msg.type === 'voice') {
                 const seconds = Math.min(60, Math.max(1, parseInt(msg.seconds) || 3));
@@ -159,8 +159,8 @@
                             </div>
                         ` : ''}
                         ${quoteHtml}
-                        <div class="wechat-desc-card">
-                            <div style="font-size:10.5px;color:#07c160;font-weight:600;margin-bottom:3px;">📷 配图画面描述</div>
+                        <div class="wechat-desc-card" onclick="if(typeof window.openChatImageViewer==='function'){ window.openChatImageViewer('assets/icons/chat.png', '${escapeHtml(desc).replace(/'/g, "\\'")}'); }" style="cursor:pointer;">
+                            <div style="font-size:10.5px;color:#07c160;font-weight:600;margin-bottom:3px;">📷 配图画面描述 · 点击放大</div>
                             <div style="font-size:13px;color:#2c3e50;line-height:1.45;word-break:break-word;">${escapeHtml(desc)}</div>
                         </div>
                         <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
@@ -224,6 +224,13 @@
             </div>`;
         }
 
+        // 🌟 动态计算顶栏状态（精确到角色名字正在输入）
+        let headerTitleHtml = `${escapeHtml(group.name)} (${memberCount})`;
+        if (isGenerating) {
+            const speakerName = generatingSpeaker ? `${generatingSpeaker} ` : '';
+            headerTitleHtml = `<span style="color:#07c160;font-size:14px;">${escapeHtml(speakerName)}正在输入中...</span>`;
+        }
+
         const html = `
         <div style="background:#ededed;display:flex;flex-direction:column;height:100%;min-height:100%;overflow:hidden;font-family:-apple-system,sans-serif;">
             <div class="wechat-top-header">
@@ -232,7 +239,7 @@
                         <span>‹</span> <span>微信</span>
                     </button>
                     <div style="font-weight:600;font-size:15px;color:#181818;margin-left:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-                        ${escapeHtml(group.name)} (${memberCount})
+                        ${headerTitleHtml}
                     </div>
                     <span style="background:#e0e0e0;color:#666;font-size:10px;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:normal;white-space:nowrap;">
                         ${tokenDisplay}t
@@ -258,38 +265,52 @@
             ${stickerDrawerHtml}
             ${plusDrawerHtml}
 
-            <!-- 微信标准输入栏 -->
-            <div style="padding:8px 10px;background:#f7f7f7;border-top:0.5px solid #dcdcdc;display:flex;gap:7px;align-items:center;flex-shrink:0;">
-                <button onclick="window.openVoiceInputModal('group','${gid}')" title="发送语音" style="border:none;background:none;width:28px;height:28px;cursor:pointer;flex-shrink:0;padding:0;display:flex;align-items:center;justify-content:center;color:#555;">
-                    <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-                </button>
-
-                <!-- 🌟 新增：未来扩展功能槽位（转账/红包） -->
-                <button onclick="window.onGroupFeaturePlaceholderClick()" title="群互动功能" style="border:none;background:none;width:28px;height:28px;cursor:pointer;flex-shrink:0;padding:0;display:flex;align-items:center;justify-content:center;color:#e11d48;">
-                    <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">
-                        <rect x="2" y="5" width="20" height="14" rx="2"></rect>
-                        <line x1="2" y1="10" x2="22" y2="10"></line>
-                        <circle cx="12" cy="15" r="1.5" fill="currentColor"></circle>
-                    </svg>
-                </button>
-
-                <button onclick="window.toggleChatPlusDrawer('group','${gid}')" title="更多功能" style="border:none;background:none;width:28px;height:28px;cursor:pointer;flex-shrink:0;padding:0;display:flex;align-items:center;justify-content:center;">
-                    <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#555;stroke-width:1.8;stroke-linecap:round;"><circle cx="12" cy="12" r="9.5"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>
-                </button>
-
-                <div style="flex:1;position:relative;display:flex;align-items:center;">
-                    <textarea id="groupChatInput" rows="1" placeholder="发消息..." style="width:100%;padding:8px 34px 8px 10px;border-radius:5px;border:none;background:#ffffff;font-size:14px;resize:none;outline:none;font-family:inherit;box-shadow:inset 0 0 0 0.5px #dcdcdc;box-sizing:border-box;"></textarea>
-                    <button onclick="window.toggleChatStickerDrawer('group','${gid}')" title="表情" style="position:absolute;right:6px;border:none;background:none;width:24px;height:24px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">
-                        <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:#666666;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">
-                            <circle cx="12" cy="12" r="9.5"></circle>
-                            <path d="M8 14.5c1 1.5 2.5 2.2 4 2.2s3-0.7 4-2.2"></path>
-                            <circle cx="9" cy="9.5" r="1.2" fill="#666666" stroke="none"></circle>
-                            <circle cx="15" cy="9.5" r="1.2" fill="#666666" stroke="none"></circle>
-                        </svg>
-                    </button>
+            <!-- 🌟 仿 QQ 式双层输入区域（上层输入+发送，下层语音/设置/加号/表情） -->
+            <div style="background:#f7f7f7;border-top:0.5px solid #dcdcdc;display:flex;flex-direction:column;padding:6px 10px 8px;flex-shrink:0;gap:6px;">
+                <!-- 上层：输入框与发送按钮 -->
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <textarea id="groupChatInput" rows="1" placeholder="发消息..." style="flex:1;padding:8px 12px;border-radius:6px;border:none;background:#ffffff;font-size:14px;resize:none;outline:none;font-family:inherit;box-shadow:inset 0 0 0 0.5px #dcdcdc;box-sizing:border-box;max-height:80px;"></textarea>
+                    <button onclick="window.doSendGroupChat('${gid}')" style="border:none;background:#07c160;color:#fff;padding:7px 14px;border-radius:5px;font-size:13.5px;font-weight:600;cursor:pointer;flex-shrink:0;">发送</button>
                 </div>
 
-                <button onclick="window.doSendGroupChat('${gid}')" style="border:none;background:#07c160;color:#fff;padding:6px 13px;border-radius:4px;font-size:13px;font-weight:600;cursor:pointer;flex-shrink:0;">发送</button>
+                <!-- 下层：功能图标工具栏 -->
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:0 4px;">
+                    <div style="display:flex;align-items:center;gap:18px;">
+                        <!-- 🎙️ 语音输入 -->
+                        <button onclick="window.openVoiceInputModal('group','${gid}')" title="发送语音" style="border:none;background:none;cursor:pointer;padding:0;display:flex;align-items:center;color:#555;">
+                            <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                        </button>
+
+                        <!-- ⚙️ 设置图标（直通群聊高级设定） -->
+                        <button onclick="window.openGroupAdvancedSettingsModal('${gid}')" title="群高级设置" style="border:none;background:none;cursor:pointer;padding:0;display:flex;align-items:center;color:#555;">
+                            <svg viewBox="0 0 24 24" style="width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                            </svg>
+                        </button>
+
+                        <!-- 😊 表情抽屉 -->
+                        <button onclick="window.toggleChatStickerDrawer('group','${gid}')" title="表情" style="border:none;background:none;cursor:pointer;padding:0;display:flex;align-items:center;color:#555;">
+                            <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">
+                                <circle cx="12" cy="12" r="9.5"></circle>
+                                <path d="M8 14.5c1 1.5 2.5 2.2 4 2.2s3-0.7 4-2.2"></path>
+                                <circle cx="9" cy="9.5" r="1.2" fill="#555" stroke="none"></circle>
+                                <circle cx="15" cy="9.5" r="1.2" fill="#555" stroke="none"></circle>
+                            </svg>
+                        </button>
+                    </div>
+
+                    <!-- ➕ 加号功能扩展（装入转账、发红包、排版等） -->
+                    <div>
+                        <button onclick="window.toggleChatPlusDrawer('group','${gid}')" title="更多功能" style="border:none;background:none;cursor:pointer;padding:0;display:flex;align-items:center;color:#555;">
+                            <svg viewBox="0 0 24 24" style="width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;">
+                                <circle cx="12" cy="12" r="9.5"></circle>
+                                <line x1="12" y1="8" x2="12" y2="16"></line>
+                                <line x1="8" y1="12" x2="16" y2="12"></line>
+                            </svg>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
         `;
@@ -321,15 +342,20 @@
         }
     }
 
-    // 🌟 新增：未来扩展功能点击提示
-    window.onGroupFeaturePlaceholderClick = function() {
-        if (typeof showToast === 'function') {
-            showToast('转账、发红包等趣味交互正在紧密筹备中，敬请期待！', 'info', 2200);
-        }
-    };
+    // 在全局记录当前正在输入的 NPC 名字
+    if (!window._MCYT_GROUP_CURRENT_SPEAKER) window._MCYT_GROUP_CURRENT_SPEAKER = {};
+
+    // 辅助解析 AI 输出中的表情包直链
+    function findStickerUrlByDesc(cat, desc) {
+        if (!window.G.stickerLibrary) return null;
+        const matched = window.G.stickerLibrary.find(s => s && s.category === cat && (s.desc || '').includes(desc));
+        if (matched) return matched.url;
+        const fallbackCat = window.G.stickerLibrary.find(s => s && s.category === cat);
+        return fallbackCat ? fallbackCat.url : null;
+    }
 
     /**
-     * 👥 群聊 AI 回复推进核心（支持统一调度 vs 单独调度，严格按发言人数抽取多角色）
+     * 👥 群聊 AI 回复推进核心（支持统一调度 vs 单独调度，多角色自由连发2~5条交错发言）
      */
     window.triggerGroupAIReply = async function(gid) {
         const group = window.G.groups && window.G.groups[gid];
@@ -347,34 +373,36 @@
 
         if (!window._MCYT_CHAT_GENERATING) window._MCYT_CHAT_GENERATING = {};
         window._MCYT_CHAT_GENERATING[gid] = true;
-        if (window.G.currentChatGroup === gid) renderGroupChatWindow();
-
-        let bannerTimer = setTimeout(() => {
-            if (window._MCYT_CHAT_GENERATING && window._MCYT_CHAT_GENERATING[gid]) {
-                window.showGeneratingBanner(group.name);
-            }
-        }, 2500);
 
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { name: '我' };
         const cfg = (window.ChatGroupSettings && typeof window.ChatGroupSettings.getGroupConfig === 'function')
             ? window.ChatGroupSettings.getGroupConfig(gid)
-            : { apiMode: 'unified', allowMultiMsgs: true, minSpeakers: 1, maxSpeakers: 3 };
+            : { apiMode: 'unified', allowMultiMsgs: true, minSpeakers: 1, maxSpeakers: 3, allowStickers: true };
 
         const history = (window.G.groupChatHistory && window.G.groupChatHistory[gid]) || [];
-        const recentDialogue = history.slice(-10).map(m => `${m.senderName || '群友'}: ${m.text || ''}`).join('\n');
+        const recentDialogue = history.slice(-12).map(m => {
+            if (m.from === 'action') return `[系统提示]: ${m.text}`;
+            return `${m.senderName || '群友'}: ${m.text || ''}`;
+        }).join('\n');
 
         try {
             const minSpk = Math.max(1, cfg.minSpeakers || 1);
             const maxSpk = Math.max(minSpk, Math.min(members.length, cfg.maxSpeakers || 3));
-            // 随机抽取本次发言人数
             const targetCount = Math.floor(Math.random() * (maxSpk - minSpk + 1)) + minSpk;
             const shuffledMembers = [...members].sort(() => Math.random() - 0.5).slice(0, targetCount);
 
+            // 设置初始输入态提示
+            window._MCYT_GROUP_CURRENT_SPEAKER[gid] = shuffledMembers.map(m => m.name).slice(0, 2).join('、');
+            if (window.G.currentChatGroup === gid) renderGroupChatWindow();
+
             if (cfg.apiMode === 'individual') {
-                // 🌟 模式一：单独调用模式（按抽取的角色逐个调用独立 API）
+                // 🌟 模式一：单独调用模式（每位角色可自主发 2~5 条）
                 let rollingDialogue = recentDialogue;
 
                 for (const member of shuffledMembers) {
+                    window._MCYT_GROUP_CURRENT_SPEAKER[gid] = member.name;
+                    if (window.G.currentChatGroup === gid) renderGroupChatWindow();
+
                     const otherMembers = members.filter(m => m.id !== member.id);
                     const promptBundle = window.ChatPromptGroup.buildGroupSingleMemberPrompt({
                         group,
@@ -389,34 +417,70 @@
                     const raw = await callAI([
                         { role: 'system', content: promptBundle.sysPrompt },
                         { role: 'user', content: promptBundle.userPrompt }
-                    ], { maxTokens: 450, temperature: 0.88, silent: true });
+                    ], { maxTokens: 600, temperature: 0.88, silent: true });
 
                     let clean = (typeof stripThought === 'function') ? stripThought(raw.trim()) : raw.trim();
 
-                    // 解析 [MSG]
-                    const msgRegex = /\[MSG\]([\s\S]*?)\[\/MSG\]/gi;
-                    let mMatch;
+                    // 流式实体解析：消息、表情包、文字图片
+                    const entityRegex = /\[(MSG|STICKER|IMAGE_TEXT)([\s\S]*?)\]([\s\S]*?)\[\/\1\]|\[STICKER\s+([^\]]+)\]/gi;
+                    let match;
                     let foundAny = false;
 
-                    while ((mMatch = msgRegex.exec(clean)) !== null) {
-                        const txt = mMatch[1].trim();
-                        if (txt) {
-                            foundAny = true;
-                            const newMsg = {
+                    while ((match = entityRegex.exec(clean)) !== null) {
+                        foundAny = true;
+                        const tag = match[1] || 'STICKER';
+
+                        if (tag === 'MSG') {
+                            const txt = match[3].trim();
+                            if (txt) {
+                                window.G.groupChatHistory[gid].push({
+                                    _id: 'gmsg_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
+                                    from: 'npc',
+                                    senderId: member.id,
+                                    senderName: member.name,
+                                    text: txt,
+                                    time: new Date().toLocaleTimeString().slice(0, 5)
+                                });
+                                rollingDialogue += `\n${member.name}: ${txt}`;
+                            }
+                        } else if (tag === 'STICKER' && cfg.allowStickers !== false) {
+                            const fullAttr = (match[2] || '') + (match[4] || '');
+                            const catMatch = fullAttr.match(/category=["']([^"']+)["']/i);
+                            const descMatch = fullAttr.match(/desc=["']([^"']+)["']/i);
+                            const cat = catMatch ? catMatch[1] : '猪猪';
+                            const desc = descMatch ? descMatch[1] : (match[3]?.trim() || '表情');
+                            const sUrl = findStickerUrlByDesc(cat, desc) || 'assets/icons/chat.png';
+
+                            window.G.groupChatHistory[gid].push({
                                 _id: 'gmsg_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
                                 from: 'npc',
                                 senderId: member.id,
                                 senderName: member.name,
-                                text: txt,
+                                type: 'sticker',
+                                stickerUrl: sUrl,
+                                stickerDesc: desc,
                                 time: new Date().toLocaleTimeString().slice(0, 5)
-                            };
-                            window.G.groupChatHistory[gid].push(newMsg);
-                            rollingDialogue += `\n${member.name}: ${txt}`;
+                            });
+                            rollingDialogue += `\n${member.name}: [发了表情: ${desc}]`;
+                        } else if (tag === 'IMAGE_TEXT') {
+                            const imgDesc = match[3].trim();
+                            if (imgDesc) {
+                                window.G.groupChatHistory[gid].push({
+                                    _id: 'gmsg_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
+                                    from: 'npc',
+                                    senderId: member.id,
+                                    senderName: member.name,
+                                    type: 'image_text_only',
+                                    imageDesc: imgDesc,
+                                    time: new Date().toLocaleTimeString().slice(0, 5)
+                                });
+                                rollingDialogue += `\n${member.name}: [分享了图片: ${imgDesc.slice(0, 20)}...]`;
+                            }
                         }
                     }
 
                     if (!foundAny && clean) {
-                        const pureTxt = clean.replace(/\[\/?MSG.*?\]/gi, '').trim();
+                        const pureTxt = clean.replace(/\[\/?(MSG|STICKER|IMAGE_TEXT).*?\]/gi, '').trim();
                         if (pureTxt) {
                             window.G.groupChatHistory[gid].push({
                                 _id: 'gmsg_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
@@ -431,7 +495,7 @@
                     }
                 }
             } else {
-                // 🌟 模式二：统一调用模式（单次 API 生成多角色发言）
+                // 🌟 模式二：统一调用模式（单次 API 生成多角色 2~5 条自由交错发言）
                 const promptBundle = window.ChatPromptGroup.buildGroupUnifiedPrompt({
                     group,
                     members: shuffledMembers.length > 0 ? shuffledMembers : members,
@@ -443,26 +507,58 @@
                 const raw = await callAI([
                     { role: 'system', content: promptBundle.sysPrompt },
                     { role: 'user', content: promptBundle.userPrompt }
-                ], { maxTokens: 600, temperature: 0.86, silent: true });
+                ], { maxTokens: 900, temperature: 0.88, silent: true });
 
                 let clean = (typeof stripThought === 'function') ? stripThought(raw.trim()) : raw.trim();
 
-                const msgRegex = /\[MSG sender="([^"]+)"\]([\s\S]*?)\[\/MSG\]/gi;
+                const tagRegex = /\[(MSG|STICKER|IMAGE_TEXT)([\s\S]*?)\]([\s\S]*?)\[\/\1\]|\[STICKER\s+([^\]]+)\]/gi;
                 let match;
                 let found = false;
 
-                while ((match = msgRegex.exec(clean)) !== null) {
+                while ((match = tagRegex.exec(clean)) !== null) {
                     found = true;
-                    const senderName = match[1].trim();
-                    const text = match[2].trim();
-                    if (text) {
-                        const matchedNpc = members.find(m => m.name === senderName) || shuffledMembers[0] || members[0];
+                    const tagType = match[1] || 'STICKER';
+                    const attr = (match[2] || '') + (match[4] || '');
+                    const content = match[3] ? match[3].trim() : '';
+
+                    const senderMatch = attr.match(/sender=["']([^"']+)["']/i);
+                    const senderName = senderMatch ? senderMatch[1].trim() : '';
+                    const matchedNpc = members.find(m => m.name === senderName) || shuffledMembers[0] || members[0];
+
+                    if (tagType === 'MSG' && content) {
                         window.G.groupChatHistory[gid].push({
                             _id: 'gmsg_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
                             from: 'npc',
                             senderId: matchedNpc.id,
                             senderName: matchedNpc.name,
-                            text: text,
+                            text: content,
+                            time: new Date().toLocaleTimeString().slice(0, 5)
+                        });
+                    } else if (tagType === 'STICKER' && cfg.allowStickers !== false) {
+                        const catMatch = attr.match(/category=["']([^"']+)["']/i);
+                        const descMatch = attr.match(/desc=["']([^"']+)["']/i);
+                        const cat = catMatch ? catMatch[1] : '抽象';
+                        const desc = descMatch ? descMatch[1] : (content || '群友表情');
+                        const sUrl = findStickerUrlByDesc(cat, desc) || 'assets/icons/chat.png';
+
+                        window.G.groupChatHistory[gid].push({
+                            _id: 'gmsg_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
+                            from: 'npc',
+                            senderId: matchedNpc.id,
+                            senderName: matchedNpc.name,
+                            type: 'sticker',
+                            stickerUrl: sUrl,
+                            stickerDesc: desc,
+                            time: new Date().toLocaleTimeString().slice(0, 5)
+                        });
+                    } else if (tagType === 'IMAGE_TEXT' && content) {
+                        window.G.groupChatHistory[gid].push({
+                            _id: 'gmsg_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
+                            from: 'npc',
+                            senderId: matchedNpc.id,
+                            senderName: matchedNpc.name,
+                            type: 'image_text_only',
+                            imageDesc: content,
                             time: new Date().toLocaleTimeString().slice(0, 5)
                         });
                     }
@@ -475,13 +571,12 @@
                         from: 'npc',
                         senderId: fallbackNpc.id,
                         senderName: fallbackNpc.name,
-                        text: clean.replace(/\[\/?MSG.*?\]/gi, '').trim(),
+                        text: clean.replace(/\[\/?(MSG|STICKER|IMAGE_TEXT).*?\]/gi, '').trim(),
                         time: new Date().toLocaleTimeString().slice(0, 5)
                     });
                 }
             }
 
-            // 双轨存档与持久化保障
             window.syncGroupChatsToLocalBackup();
             if (typeof autoSaveGame === 'function') autoSaveGame();
             if (window.G.currentChatGroup === gid) renderGroupChatWindow();
@@ -490,9 +585,8 @@
             console.error('群聊推进失败:', e);
             if (typeof showToast === 'function') showToast('群友接话失败，请检查网络或API', 'error');
         } finally {
-            clearTimeout(bannerTimer);
+            delete window._MCYT_GROUP_CURRENT_SPEAKER[gid];
             if (window._MCYT_CHAT_GENERATING) delete window._MCYT_CHAT_GENERATING[gid];
-            if (typeof window.hideGeneratingBanner === 'function') window.hideGeneratingBanner();
             if (window.G.currentChatGroup === gid) renderGroupChatWindow();
         }
     };
