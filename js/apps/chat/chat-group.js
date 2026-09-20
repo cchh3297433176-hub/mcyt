@@ -4,9 +4,10 @@
  * 🌟 升级特性：
  * 1. 仿 QQ 式双层输入栏：上层为打字框、【重说】与【发送】键；下层为语音/设置/表情/加号工具栏。
  * 2. ⚡ 重说按钮：一键撤回上一轮全部 AI 发言并重新唤起接话流，群友重新搭腔，单聊不受影响。
- * 3. 🛡️ 数据防蒸发自愈门禁：群消息全面注入标准 timestamp，生成完优先解除 generating 临时态再落盘，彻底解决换头像吞上一轮发言 Bug。
- * 4. 🖼️ 真实图片直显与假图片（文字画片）全屏相框灯箱阅读。
- * 5. 顶栏动态显示「XXX 正在输入中...」，朋友圈轻量 NPC 自由协同交错发言。
+ * 3. 🛡️ 数据防蒸发自愈门禁：采用 _id + timestamp 智能原子双向合并，多节点动态自愈，消灭清后台吞消息 Bug。
+ * 4. 🎲 表情包模糊匹配与随机采样引擎：消除 .find() 返回首项索引 0 的死穴，多变表情自然契合语境。
+ * 5. 🖼️ 真实图片直显与假图片（文字画片）全屏相框灯箱阅读。
+ * 6. 顶栏动态显示「XXX 正在输入中...」，朋友圈轻量 NPC 自由协同交错发言。
  */
 
 (function() {
@@ -15,7 +16,7 @@
     const GROUPS_STORAGE_KEY = 'mcyt_wechat_group_chats';
     const GROUP_HISTORY_STORAGE_KEY = 'mcyt_wechat_group_histories';
 
-    // 🛡️ 群聊冷启动自动恢复与容灾自愈门禁
+    // 🛡️ 群聊冷启动自动恢复与容灾自愈门禁（原子级增量合并，永不被冲刷截断）
     function restoreGroupsFromStorage() {
         if (!window.G) window.G = {};
         if (!window.G.groups) window.G.groups = {};
@@ -38,7 +39,31 @@
             if (rawHist) {
                 const parsedHist = JSON.parse(rawHist);
                 if (parsedHist && typeof parsedHist === 'object') {
-                    window.G.groupChatHistory = Object.assign({}, parsedHist, window.G.groupChatHistory);
+                    for (const gid in parsedHist) {
+                        const storedList = parsedHist[gid];
+                        if (!Array.isArray(storedList)) continue;
+                        
+                        const currentList = window.G.groupChatHistory[gid];
+                        if (!currentList || !Array.isArray(currentList) || currentList.length === 0) {
+                            window.G.groupChatHistory[gid] = storedList;
+                        } else {
+                            // 采用 _id + timestamp 唯一标识融合，绝不让旧内存覆写丢失新历史
+                            const map = new Map();
+                            storedList.forEach(m => {
+                                if (m) {
+                                    const key = m._id || `${m.time}_${m.senderName || m.from}_${(m.text || '').slice(0, 15)}`;
+                                    map.set(key, m);
+                                }
+                            });
+                            currentList.forEach(m => {
+                                if (m) {
+                                    const key = m._id || `${m.time}_${m.senderName || m.from}_${(m.text || '').slice(0, 15)}`;
+                                    map.set(key, m);
+                                }
+                            });
+                            window.G.groupChatHistory[gid] = Array.from(map.values());
+                        }
+                    }
                 }
             }
         } catch (e) {
@@ -69,7 +94,6 @@
             return;
         }
 
-        // 兜底全屏原生白灰微绿大图查看弹窗（轻触秒退）
         document.querySelectorAll('.group-image-viewer-mask').forEach(el => el.remove());
         const mask = document.createElement('div');
         mask.className = 'group-image-viewer-mask';
@@ -108,6 +132,11 @@
         const gid = window.G.currentChatGroup;
         const group = window.G.groups && window.G.groups[gid];
         if (!group) { window.closeGroupChat(); return; }
+
+        // 动态唤醒兜底门禁：确保历史消息在渲染前从本地原子备份中加载完备
+        if (!window.G.groupChatHistory || !window.G.groupChatHistory[gid] || window.G.groupChatHistory[gid].length <= 1) {
+            restoreGroupsFromStorage();
+        }
 
         if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
         const history = window.G.groupChatHistory[gid] || [];
@@ -172,7 +201,7 @@
                 continue;
             }
 
-            // 提取文字图片特征（同时兼容对象属性与 [IMAGE_TEXT: xxx] 标签）
+            // 提取文字图片特征
             let textImgDesc = '';
             let rawMsgText = msg.text || '';
             if (msg.type === 'image_text_only' || msg.imageDesc) {
@@ -225,7 +254,7 @@
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
                 </div>`;
             }
-            // 3. 真实图片直显（支持相册 Base64 与网络直链，点击放大）
+            // 3. 真实图片直显
             else if (msg.imageUrl && (msg.type === 'image' || msg.text === '[图片]')) {
                 const safeImgUrl = escapeHtml(msg.imageUrl);
                 messagesHtml += `
@@ -243,7 +272,7 @@
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
                 </div>`;
             }
-            // 4. 文字画片（假图片：相框微缩卡片，点击放大沉浸阅读文字画面）
+            // 4. 文字画片（假图片）
             else if (textImgDesc) {
                 const safeDesc = escapeHtml(textImgDesc);
                 const descAttr = safeDesc.replace(/'/g, "\\'");
@@ -288,7 +317,7 @@
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
                 </div>`;
             }
-            // 6. 普通文本消息 / 推荐名片 / 排版卡片
+            // 6. 普通文本消息
             else {
                 let text = isSelf ? escapeHtml(msg.text || '').replace(/\n/g, '<br>') : ((typeof renderContentWithThoughts === 'function') ? renderContentWithThoughts(msg.text || '') : escapeHtml(msg.text || ''));
                 messagesHtml += `
@@ -387,7 +416,7 @@
                             <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
                         </button>
 
-                        <!-- ⚙️ 设置图标（打开 7 大系统/排版/配置抽屉） -->
+                        <!-- ⚙️ 设置图标 -->
                         <button onclick="window.toggleChatSettingsDrawer('group','${gid}')" title="系统设置与排版" style="border:none;background:none;cursor:pointer;padding:0;display:flex;align-items:center;color:#555;">
                             <svg viewBox="0 0 24 24" style="width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">
                                 <circle cx="12" cy="12" r="3"></circle>
@@ -406,7 +435,7 @@
                         </button>
                     </div>
 
-                    <!-- ➕ 加号功能扩展（群互动扩展槽：发送图片/群转账/群收款/群待办/群接龙） -->
+                    <!-- ➕ 加号功能扩展 -->
                     <div>
                         <button onclick="window.toggleChatPlusDrawer('group','${gid}')" title="群聊天扩展" style="border:none;background:none;cursor:pointer;padding:0;display:flex;align-items:center;color:#555;">
                             <svg viewBox="0 0 24 24" style="width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;">
@@ -450,18 +479,66 @@
 
     if (!window._MCYT_GROUP_CURRENT_SPEAKER) window._MCYT_GROUP_CURRENT_SPEAKER = {};
 
+    /**
+     * 🎲 表情包模糊匹配与随机采样引擎（彻底消灭第 0 项死锁 Bug）
+     */
     function findStickerUrlByDesc(cat, desc) {
-        if (!window.G.stickerLibrary) return null;
-        const matched = window.G.stickerLibrary.find(s => s && s.category === cat && (s.desc || '').includes(desc));
-        if (matched) return matched.url;
-        const fallbackCat = window.G.stickerLibrary.find(s => s && s.category === cat);
-        return fallbackCat ? fallbackCat.url : null;
+        if (!window.G.stickerLibrary || !Array.isArray(window.G.stickerLibrary) || window.G.stickerLibrary.length === 0) {
+            return 'assets/icons/chat.png';
+        }
+        const lib = window.G.stickerLibrary;
+        const safeDesc = (desc || '').trim();
+
+        // 1. 同分类检索与模糊匹配
+        if (cat) {
+            const catList = lib.filter(s => s && s.category === cat);
+            if (catList.length > 0) {
+                if (safeDesc) {
+                    // 双向子串包含匹配
+                    const matched = catList.find(s => s.desc && (s.desc.includes(safeDesc) || safeDesc.includes(s.desc)));
+                    if (matched) return matched.url;
+
+                    // 关键词分词匹配
+                    const words = safeDesc.split(/[\s，,。！!？?~、\-—_]+/);
+                    for (const w of words) {
+                        if (w && w.length >= 2) {
+                            const kwMatch = catList.find(s => s.desc && (s.desc.includes(w) || w.includes(s.desc)));
+                            if (kwMatch) return kwMatch.url;
+                        }
+                    }
+                }
+                // 🎲 若未完全命中词汇，绝不能永远死板返回第 0 项！在此分类中加权随机挑选一张
+                const randomInCat = catList[Math.floor(Math.random() * catList.length)];
+                return randomInCat ? randomInCat.url : 'assets/icons/chat.png';
+            }
+        }
+
+        // 2. 跨分类全局模糊搜索描述
+        if (safeDesc) {
+            const crossMatch = lib.find(s => s.desc && (s.desc.includes(safeDesc) || safeDesc.includes(s.desc)));
+            if (crossMatch) return crossMatch.url;
+
+            const words = safeDesc.split(/[\s，,。！!？?~、\-—_]+/);
+            for (const w of words) {
+                if (w && w.length >= 2) {
+                    const kwMatch = lib.find(s => s.desc && s.desc.includes(w));
+                    if (kwMatch) return kwMatch.url;
+                }
+            }
+        }
+
+        // 3. 全局随机挑选兜底，确保生动多变
+        const randomGlobal = lib[Math.floor(Math.random() * lib.length)];
+        return randomGlobal ? randomGlobal.url : 'assets/icons/chat.png';
     }
 
     /**
      * 👥 群聊 AI 回复推进核心
      */
     window.triggerGroupAIReply = async function(gid) {
+        // 执行前唤醒最新记录，保证历史无缝衔接
+        restoreGroupsFromStorage();
+
         const group = window.G.groups && window.G.groups[gid];
         if (!group) return;
 
@@ -564,7 +641,7 @@
                             const descMatch = fullAttr.match(/desc=["']([^"']+)["']/i);
                             const cat = catMatch ? catMatch[1] : '猪猪';
                             const desc = descMatch ? descMatch[1] : (match[3]?.trim() || '表情');
-                            const sUrl = findStickerUrlByDesc(cat, desc) || 'assets/icons/chat.png';
+                            const sUrl = findStickerUrlByDesc(cat, desc);
 
                             window.G.groupChatHistory[gid].push({
                                 _id: 'gmsg_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
@@ -662,7 +739,7 @@
                         const descMatch = attr.match(/desc=["']([^"']+)["']/i);
                         const cat = catMatch ? catMatch[1] : '抽象';
                         const desc = descMatch ? descMatch[1] : (content || '群友表情');
-                        const sUrl = findStickerUrlByDesc(cat, desc) || 'assets/icons/chat.png';
+                        const sUrl = findStickerUrlByDesc(cat, desc);
 
                         window.G.groupChatHistory[gid].push({
                             _id: 'gmsg_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
@@ -711,11 +788,9 @@
             console.error('群聊推进失败:', e);
             if (typeof showToast === 'function') showToast('群友接话失败，请检查网络或API', 'error');
         } finally {
-            // 🛡️ 优先解除生成状态，彻底防止存档引擎触发临时态净化而蒸发对白
             delete window._MCYT_GROUP_CURRENT_SPEAKER[gid];
             if (window._MCYT_CHAT_GENERATING) delete window._MCYT_CHAT_GENERATING[gid];
 
-            // 状态安全解除后，再无损持久化落盘
             window.syncGroupChatsToLocalBackup();
             if (typeof autoSaveGame === 'function') autoSaveGame();
             if (window.G.currentChatGroup === gid) renderGroupChatWindow();
@@ -724,7 +799,6 @@
 
     /**
      * 🔄 群聊专属：重说上一轮发言
-     * 自动回退上一轮全部 NPC 接话，并重新唤醒群聊交错发言流
      */
     window.regenerateLastGroupAIReply = function(gid) {
         if (!gid) gid = window.G.currentChatGroup;
@@ -741,16 +815,13 @@
             return;
         }
 
-        // 寻找末尾连续的 NPC 发言
         let removeCount = 0;
         for (let i = hist.length - 1; i >= 0; i--) {
             if (hist[i].from === 'npc') {
                 removeCount++;
             } else if (hist[i].from === 'action') {
-                // 如果夹杂系统提示，一并跨越或视情况移除
                 continue;
             } else {
-                // 碰到了玩家消息，截止
                 break;
             }
         }
@@ -761,7 +832,6 @@
             return;
         }
 
-        // 从后往前剔除末尾这轮 NPC 消息
         while (removeCount > 0 && hist.length > 0) {
             const last = hist[hist.length - 1];
             if (last.from === 'npc') {
@@ -790,10 +860,12 @@
         const quote = window._activeQuoteMessage ? Object.assign({}, window._activeQuoteMessage) : null;
         window._activeQuoteMessage = null;
 
+        // 发送前先自愈合并，防止内存陈旧
+        restoreGroupsFromStorage();
+
         if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
         if (!window.G.groupChatHistory[gid]) window.G.groupChatHistory[gid] = [];
 
-        // 识别用户直接手动输入的 [图片描述：xxx] 格式
         let msgPayload = {
             _id: 'gmsg_' + Date.now() + '_' + (Math.floor(Math.random() * 899) + 100),
             from: 'player',
@@ -819,6 +891,7 @@
 
     window.renderGroupChatWindow = renderGroupChatWindow;
     
+    // 打开群聊时强力唤醒本地原子备份，彻底免疫冷启动被全局存档冲刷
     window.openGroupChat = function(gid) {
         if (!window.G.groups || !window.G.groups[gid]) return;
         window.G.currentChatGroup = gid;
@@ -826,6 +899,10 @@
         window._settingsDrawerOpen = false;
         window._plusDrawerOpen = false;
         window._activeQuoteMessage = null;
+
+        // 🛡️ 关键门禁：进入群聊时强制同步最新的群聊历史持久化数据
+        restoreGroupsFromStorage();
+
         window.renderChatApp();
     };
 
@@ -838,5 +915,5 @@
         window.renderChatApp();
     };
 
-    console.log('✅ ChatGroup 多人群聊独立模块已成功升级');
+    console.log('✅ ChatGroup 多人群聊独立模块已成功升级（防吞消息自愈 + 表情包随机引擎）');
 })();
