@@ -538,6 +538,9 @@
             syncChatHistoryToLocalBackup();
             syncCustomNpcsToLocalBackup();
             syncMomentsFeedToLocalBackup();
+            // 🛡️ 修复：切后台兜底落盘此前漏掉了群聊独立备份，
+            // 是"清后台重进群聊只剩第一条消息"的根因——单聊有这道保险所以没事，群聊没有。
+            if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
             if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
         }
     });
@@ -545,6 +548,7 @@
         syncChatHistoryToLocalBackup();
         syncCustomNpcsToLocalBackup();
         syncMomentsFeedToLocalBackup();
+        if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
         if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
     });
 
