@@ -1,13 +1,72 @@
 /**
  * js/apps/chat/chat-group.js
- * 💬 微信多人群聊独立模块（群窗口渲染 · 群内多角色接话AI驱动 · 群设置与解散 · 群消息发送）
+ * 💬 微信多人群聊独立模块（群窗口渲染 · 去中心化双轨AI驱动 · 群持久化防丢门禁 · 群消息流转）
+ * 🌟 重构升级：
+ * 1. 彻底根治杀后台建群消失 Bug：建立双轨原子级持久化槽，冷启动自愈装载。
+ * 2. 顶栏右上角纯正三个点（···），唤起群资料与原生矢量微绿齿轮高级设定。
+ * 3. 顶栏⚡闪电定位为【推进群聊流转】：无论用户发不发消息，群友都能自然多线程互聊与接话。
+ * 4. 支持统一调用（极省Token）与单独调用（多角色独立思考高张力）双轨调度。
+ * 5. 加号抽屉群聊环境适配，杜绝报错。
  */
 
 (function() {
     'use strict';
 
-    // 多人群聊窗口渲染
-    function renderGroupChatWindow(container) {
+    const GROUPS_STORAGE_KEY = 'mcyt_wechat_group_chats';
+    const GROUP_HISTORY_STORAGE_KEY = 'mcyt_wechat_group_histories';
+
+    // 🛡️ 群聊冷启动自动恢复与容灾自愈门禁
+    function restoreGroupsFromStorage() {
+        if (!window.G) window.G = {};
+        if (!window.G.groups) window.G.groups = {};
+        if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
+
+        try {
+            const rawGroups = localStorage.getItem(GROUPS_STORAGE_KEY);
+            if (rawGroups) {
+                const parsed = JSON.parse(rawGroups);
+                if (parsed && typeof parsed === 'object') {
+                    window.G.groups = Object.assign({}, parsed, window.G.groups);
+                }
+            }
+        } catch (e) {
+            console.warn('⚠️ 读取群聊列表本地缓存失败:', e);
+        }
+
+        try {
+            const rawHist = localStorage.getItem(GROUP_HISTORY_STORAGE_KEY);
+            if (rawHist) {
+                const parsedHist = JSON.parse(rawHist);
+                if (parsedHist && typeof parsedHist === 'object') {
+                    window.G.groupChatHistory = Object.assign({}, parsedHist, window.G.groupChatHistory);
+                }
+            }
+        } catch (e) {
+            console.warn('⚠️ 读取群聊记录本地缓存失败:', e);
+        }
+    }
+
+    // 💾 群聊双轨持久化备份
+    window.syncGroupChatsToLocalBackup = function() {
+        try {
+            if (window.G && window.G.groups) {
+                localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(window.G.groups));
+            }
+            if (window.G && window.G.groupChatHistory) {
+                localStorage.setItem(GROUP_HISTORY_STORAGE_KEY, JSON.stringify(window.G.groupChatHistory));
+            }
+        } catch (e) {
+            console.warn('⚠️ 同步群聊到本地备份失败:', e);
+        }
+    };
+
+    // 立即执行冷启动恢复
+    restoreGroupsFromStorage();
+
+    /**
+     * 💬 多人群聊窗口主渲染
+     */
+    function renderGroupChatWindow(container, renderOpts = {}) {
         if (!container) container = document.getElementById('appModalBody') || document.getElementById('socialTab');
         if (!container) return;
 
@@ -15,9 +74,13 @@
         const group = window.G.groups && window.G.groups[gid];
         if (!group) { window.closeGroupChat(); return; }
 
-        const history = (window.G.groupChatHistory && window.G.groupChatHistory[gid]) || [];
+        if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
+        const history = window.G.groupChatHistory[gid] || [];
         const memberCount = (group.members || []).length + 1;
-        const isGenerating = !!window._MCYT_CHAT_GENERATING[gid];
+        const isGenerating = !!(window._MCYT_CHAT_GENERATING && window._MCYT_CHAT_GENERATING[gid]);
+
+        const tokensCount = (typeof window.calculateHistoryTokens === 'function') ? window.calculateHistoryTokens(history) : 0;
+        const tokenDisplay = (typeof window.formatTokenString === 'function') ? window.formatTokenString(tokensCount) : '0';
 
         let messagesHtml = '';
         for (const msg of history) {
@@ -46,7 +109,7 @@
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
                     ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
-                    <div style="max-width:65%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
+                    <div style="max-width:68%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                         ${!isSelf ? `<div style="font-size:11px;color:#888;margin-bottom:2px;">${escapeHtml(senderName)}</div>` : ''}
                         ${quoteHtml}
                         <div class="wechat-voice-bubble" onclick="window.toggleVoiceMessageDetailsDirect('${msg._id}')" style="width:${bubbleWidth}px;background:${isSelf ? '#95ec69' : '#ffffff'};color:${isSelf ? '#111' : '#222'};justify-content:${isSelf ? 'flex-end' : 'flex-start'};">
@@ -71,7 +134,7 @@
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
                     ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
-                    <div style="max-width:65%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
+                    <div style="max-width:68%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                         ${!isSelf ? `<div style="font-size:11px;color:#888;margin-bottom:2px;">${escapeHtml(senderName)}</div>` : ''}
                         ${quoteHtml}
                         <div class="wechat-desc-card">
@@ -87,25 +150,10 @@
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
                     ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
-                    <div style="max-width:65%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
+                    <div style="max-width:68%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                         ${!isSelf ? `<div style="font-size:11px;color:#888;margin-bottom:2px;">${escapeHtml(senderName)}</div>` : ''}
                         ${quoteHtml}
                         <img src="${escapeHtml(sUrl)}" alt="${escapeHtml(msg.stickerDesc || '表情')}" style="width:100px;height:100px;object-fit:contain;border-radius:6px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,0.05);">
-                        <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
-                    </div>
-                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
-                </div>`;
-            } else if (msg.type === 'image' || msg.imageUrl) {
-                const imgSrc = msg.imageUrl || msg.url || 'assets/icons/chat.png';
-                messagesHtml += `
-                <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
-                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
-                    <div style="max-width:65%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
-                        ${!isSelf ? `<div style="font-size:11px;color:#888;margin-bottom:2px;">${escapeHtml(senderName)}</div>` : ''}
-                        ${quoteHtml}
-                        <div style="background:#fff;padding:3px;border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,0.06);">
-                            <img src="${imgSrc}" style="max-width:180px;max-height:220px;border-radius:4px;object-fit:cover;display:block;" />
-                        </div>
                         <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
                     </div>
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
@@ -118,7 +166,7 @@
                     <div style="max-width:74%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                         ${!isSelf ? `<div style="font-size:11px;color:#888;margin-bottom:2px;">${escapeHtml(senderName)}</div>` : ''}
                         ${quoteHtml}
-                        <div style="background:${isSelf ? '#95ec69' : '#ffffff'};color:#111;padding:8px 12px;border-radius:5px;box-shadow:0 1px 2px rgba(0,0,0,0.05);font-size:14.5px;line-height:1.5;word-break:break-word;">
+                        <div class="chat-bubble ${isSelf ? 'self-bubble' : ''}" data-msgid="${msg._id || ''}" style="width:fit-content;max-width:100%;display:inline-block;background:${isSelf ? '#95ec69' : '#ffffff'};color:#111;padding:8px 12px;border-radius:5px;box-shadow:0 1px 2px rgba(0,0,0,0.05);font-size:14.5px;line-height:1.5;word-break:break-word;">
                             ${text}
                         </div>
                         <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
@@ -152,19 +200,24 @@
                     <div style="font-weight:600;font-size:15px;color:#181818;margin-left:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
                         ${escapeHtml(group.name)} (${memberCount})
                     </div>
+                    <span style="background:#e0e0e0;color:#666;font-size:10px;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:normal;white-space:nowrap;">
+                        ${tokenDisplay}t
+                    </span>
                 </div>
                 <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
-                    <button id="btnGroupLightningTrigger" onclick="window.triggerGroupAIReply('${gid}')" style="border:none;background:#07c160;color:#fff;width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="生成群聊回复">
+                    <!-- ⚡ 闪电推进群聊流转 -->
+                    <button id="btnGroupLightningTrigger" onclick="window.triggerGroupAIReply('${gid}')" style="border:none;background:#07c160;color:#fff;width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="推动群聊推进">
                         ${isGenerating ? `<div class="wechat-spin-ring"></div>` : `<svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`}
                     </button>
-                    <button onclick="window.openGroupSettingsModal('${gid}')" style="border:none;background:none;width:32px;height:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">
-                        <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:#181818;stroke-width:2;"><circle cx="5" cy="12" r="1.5"/><circle cx="12" cy="12" r="1.5"/><circle cx="19" cy="12" r="1.5"/></svg>
+                    <!-- 微信原生三个点（···） -->
+                    <button onclick="window.openGroupSettingsModal('${gid}')" style="border:none;background:none;width:32px;height:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;" title="群信息">
+                        <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:#181818;stroke-width:2.2;stroke-linecap:round;"><circle cx="5" cy="12" r="1.2" fill="#181818"/><circle cx="12" cy="12" r="1.2" fill="#181818"/><circle cx="19" cy="12" r="1.2" fill="#181818"/></svg>
                     </button>
                 </div>
             </div>
 
             <div id="groupChatMessageArea" style="flex:1;overflow-y:auto;padding:12px;">
-                ${messagesHtml || '<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">群聊开启啦，向大家打个招呼吧！</div>'}
+                ${messagesHtml || '<div style="text-align:center;color:#aaa;padding:40px 0;font-size:13px;">群聊开启啦，向大家打个招呼或点击右上角⚡推动聊天吧！</div>'}
             </div>
 
             ${quotePreviewHtml}
@@ -200,7 +253,9 @@
         container.innerHTML = html;
 
         const msgArea = document.getElementById('groupChatMessageArea');
-        if (msgArea) setTimeout(() => { msgArea.scrollTop = msgArea.scrollHeight; }, 50);
+        if (msgArea && !renderOpts.keepScroll) {
+            setTimeout(() => { msgArea.scrollTop = msgArea.scrollHeight; }, 50);
+        }
 
         container.querySelectorAll('.chat-msg-row[data-msgid]').forEach(row => {
             const mid = row.dataset.msgid;
@@ -223,7 +278,9 @@
         }
     }
 
-    // 群聊 AI 生成
+    /**
+     * 👥 群聊 AI 回复推进核心（支持统一调度 vs 单独调度）
+     */
     window.triggerGroupAIReply = async function(gid) {
         const group = window.G.groups && window.G.groups[gid];
         if (!group) return;
@@ -233,133 +290,189 @@
             return;
         }
 
-        if (window._MCYT_CHAT_GENERATING[gid]) {
-            if (typeof showToast === 'function') showToast('群友正在回复中...', 'info', 1000);
+        if (window._MCYT_CHAT_GENERATING && window._MCYT_CHAT_GENERATING[gid]) {
+            if (typeof showToast === 'function') showToast('群友正在热烈聊天中...', 'info', 1000);
             return;
         }
 
+        if (!window._MCYT_CHAT_GENERATING) window._MCYT_CHAT_GENERATING = {};
         window._MCYT_CHAT_GENERATING[gid] = true;
         if (window.G.currentChatGroup === gid) renderGroupChatWindow();
 
         let bannerTimer = setTimeout(() => {
-            if (window._MCYT_CHAT_GENERATING[gid]) {
+            if (window._MCYT_CHAT_GENERATING && window._MCYT_CHAT_GENERATING[gid]) {
                 window.showGeneratingBanner(group.name);
             }
-        }, 3000);
+        }, 2500);
+
+        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { name: '我' };
+        const cfg = (window.ChatGroupSettings && typeof window.ChatGroupSettings.getGroupConfig === 'function')
+            ? window.ChatGroupSettings.getGroupConfig(gid)
+            : { apiMode: 'unified', allowMultiMsgs: true };
 
         const history = (window.G.groupChatHistory && window.G.groupChatHistory[gid]) || [];
-        const memberDesc = members.map(m => `「${m.name}」(人设:${m.persona || 'MC同伴'})`).join('、');
-        const recentDialogue = history.slice(-8).map(m => `${m.senderName || '群友'}: ${m.text || ''}`).join('\n');
-
-        const sysPrompt = `你正在模拟Minecraft多人微信群聊「${group.name}」。群内NPC成员有：${memberDesc}。
-【微信群聊活人打字准则】：
-1. 挑选 1 到 2 位群成员依次发言，每句用 [MSG sender="成员名字"]发言正文[/MSG]。
-2. 绝对严禁在句尾加句号！句内优先用空格停顿！
-3. 绝对严禁出现任何括号动作描写或思维链！`;
+        const recentDialogue = history.slice(-10).map(m => `${m.senderName || '群友'}: ${m.text || ''}`).join('\n');
 
         try {
-            const raw = await callAI([
-                { role: 'system', content: sysPrompt },
-                { role: 'user', content: recentDialogue ? `【最近群聊记录】：\n${recentDialogue}\n\n请群友们接话：` : '群里有人在吗？' }
-            ], { maxTokens: 400, temperature: 0.85, silent: true });
+            if (cfg.apiMode === 'individual') {
+                // 🌟 模式一：单独调用（挑 1~2 位成员依次单独调用大模型）
+                const countToSpeak = Math.min(members.length, Math.random() < 0.45 ? 1 : 2);
+                const shuffled = [...members].sort(() => Math.random() - 0.5);
+                const selectedMembers = shuffled.slice(0, countToSpeak);
 
-            let clean = (typeof stripThought === 'function') ? stripThought(raw.trim()) : raw.trim();
+                let rollingDialogue = recentDialogue;
 
-            const estInputTokens = Math.round((sysPrompt.length + recentDialogue.length) * 1.35);
-            const estOutputTokens = Math.round(clean.length * 1.35);
-            window.recordTokenHistoryEntry({
-                time: new Date().toLocaleTimeString().slice(0, 5),
-                targetName: group.name,
-                type: '群聊',
-                inTokens: estInputTokens,
-                outTokens: estOutputTokens,
-                totalTokens: estInputTokens + estOutputTokens
-            });
+                for (const member of selectedMembers) {
+                    const otherMembers = members.filter(m => m.id !== member.id);
+                    const promptBundle = window.ChatPromptGroup.buildGroupSingleMemberPrompt({
+                        group,
+                        currentMember: member,
+                        otherMembers,
+                        recentDialogueText: rollingDialogue,
+                        currentUserName: curAcc.name,
+                        allowMultiMsgs: cfg.allowMultiMsgs
+                    });
 
-            const msgRegex = /\[MSG sender="([^"]+)"\]([\s\S]*?)\[\/MSG\]/gi;
-            let match;
-            let found = false;
+                    const raw = await callAI([
+                        { role: 'system', content: promptBundle.sysPrompt },
+                        { role: 'user', content: promptBundle.userPrompt }
+                    ], { maxTokens: 450, temperature: 0.88, silent: true });
 
-            while ((match = msgRegex.exec(clean)) !== null) {
-                found = true;
-                const senderName = match[1].trim();
-                const text = match[2].trim();
-                if (text) {
-                    const matchedNpc = members.find(m => m.name === senderName) || members[0];
+                    let clean = (typeof stripThought === 'function') ? stripThought(raw.trim()) : raw.trim();
+
+                    // 解析 [MSG]
+                    const msgRegex = /\[MSG\]([\s\S]*?)\[\/MSG\]/gi;
+                    let mMatch;
+                    let foundAny = false;
+
+                    while ((mMatch = msgRegex.exec(clean)) !== null) {
+                        const txt = mMatch[1].trim();
+                        if (txt) {
+                            foundAny = true;
+                            const newMsg = {
+                                _id: 'gmsg_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
+                                from: 'npc',
+                                senderId: member.id,
+                                senderName: member.name,
+                                text: txt,
+                                time: new Date().toLocaleTimeString().slice(0, 5)
+                            };
+                            window.G.groupChatHistory[gid].push(newMsg);
+                            rollingDialogue += `\n${member.name}: ${txt}`;
+                        }
+                    }
+
+                    if (!foundAny && clean) {
+                        const pureTxt = clean.replace(/\[\/?MSG.*?\]/gi, '').trim();
+                        if (pureTxt) {
+                            window.G.groupChatHistory[gid].push({
+                                _id: 'gmsg_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
+                                from: 'npc',
+                                senderId: member.id,
+                                senderName: member.name,
+                                text: pureTxt,
+                                time: new Date().toLocaleTimeString().slice(0, 5)
+                            });
+                            rollingDialogue += `\n${member.name}: ${pureTxt}`;
+                        }
+                    }
+                }
+            } else {
+                // 🌟 模式二：统一调用（单次 API 生成多角色对话）
+                const promptBundle = window.ChatPromptGroup.buildGroupUnifiedPrompt({
+                    group,
+                    members,
+                    recentDialogueText: recentDialogue,
+                    currentUserName: curAcc.name
+                });
+
+                const raw = await callAI([
+                    { role: 'system', content: promptBundle.sysPrompt },
+                    { role: 'user', content: promptBundle.userPrompt }
+                ], { maxTokens: 600, temperature: 0.86, silent: true });
+
+                let clean = (typeof stripThought === 'function') ? stripThought(raw.trim()) : raw.trim();
+
+                const msgRegex = /\[MSG sender="([^"]+)"\]([\s\S]*?)\[\/MSG\]/gi;
+                let match;
+                let found = false;
+
+                while ((match = msgRegex.exec(clean)) !== null) {
+                    found = true;
+                    const senderName = match[1].trim();
+                    const text = match[2].trim();
+                    if (text) {
+                        const matchedNpc = members.find(m => m.name === senderName) || members[0];
+                        window.G.groupChatHistory[gid].push({
+                            _id: 'gmsg_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
+                            from: 'npc',
+                            senderId: matchedNpc.id,
+                            senderName: matchedNpc.name,
+                            text: text,
+                            time: new Date().toLocaleTimeString().slice(0, 5)
+                        });
+                    }
+                }
+
+                if (!found && clean) {
+                    const randomNpc = members[Math.floor(Math.random() * members.length)];
                     window.G.groupChatHistory[gid].push({
                         _id: 'gmsg_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
                         from: 'npc',
-                        senderId: matchedNpc.id,
-                        senderName: matchedNpc.name,
-                        text: text,
+                        senderId: randomNpc.id,
+                        senderName: randomNpc.name,
+                        text: clean.replace(/\[\/?MSG.*?\]/gi, '').trim(),
                         time: new Date().toLocaleTimeString().slice(0, 5)
                     });
                 }
             }
 
-            if (!found && clean) {
-                const randomNpc = members[Math.floor(Math.random() * members.length)];
-                window.G.groupChatHistory[gid].push({
-                    _id: 'gmsg_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
-                    from: 'npc',
-                    senderId: randomNpc.id,
-                    senderName: randomNpc.name,
-                    text: clean.replace(/\[\/?MSG.*?\]/gi, '').trim(),
-                    time: new Date().toLocaleTimeString().slice(0, 5)
-                });
-            }
-
-            window.syncChatHistoryToLocalBackup();
+            // 双轨存档与持久化保障
+            window.syncGroupChatsToLocalBackup();
             if (typeof autoSaveGame === 'function') autoSaveGame();
             if (window.G.currentChatGroup === gid) renderGroupChatWindow();
+
         } catch (e) {
-            console.error('群聊回复生成失败:', e);
-            if (typeof showToast === 'function') showToast('群聊回复失败', 'error');
+            console.error('群聊推进失败:', e);
+            if (typeof showToast === 'function') showToast('群友接话失败，请检查网络或API', 'error');
         } finally {
             clearTimeout(bannerTimer);
-            delete window._MCYT_CHAT_GENERATING[gid];
-            window.hideGeneratingBanner();
+            if (window._MCYT_CHAT_GENERATING) delete window._MCYT_CHAT_GENERATING[gid];
+            if (typeof window.hideGeneratingBanner === 'function') window.hideGeneratingBanner();
             if (window.G.currentChatGroup === gid) renderGroupChatWindow();
         }
     };
 
-    window.openGroupSettingsModal = function(gid) {
-        const group = window.G.groups && window.G.groups[gid];
-        if (!group) return;
+    /**
+     * 发送群消息
+     */
+    window.doSendGroupChat = function(gid) {
+        const input = document.getElementById('groupChatInput');
+        if (!input) return;
+        const text = input.value.trim();
+        if (!text) return;
+        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { name: '我' };
 
-        const members = (group.members || []).map(mid => window.G.npcs[mid]).filter(Boolean);
-        let membersGrid = members.map(m => `
-            <div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:52px;">
-                ${window.renderAvatarBadge(m, 44)}
-                <span style="font-size:11px;color:#666;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;text-align:center;">${escapeHtml(m.name)}</span>
-            </div>
-        `).join('');
+        const quote = window._activeQuoteMessage ? Object.assign({}, window._activeQuoteMessage) : null;
+        window._activeQuoteMessage = null;
 
-        window.openWechatCleanModal('群聊信息', `
-            <div style="display:flex;flex-direction:column;gap:14px;text-align:left;">
-                <div style="display:flex;align-items:center;justify-content:space-between;padding-bottom:10px;border-bottom:0.5px solid #ededed;">
-                    <span style="font-size:14px;color:#333;">群聊名称</span>
-                    <span onclick="window.openEditGroupNameModal('${gid}')" style="font-size:14px;font-weight:600;color:#181818;cursor:pointer;display:flex;align-items:center;gap:3px;">
-                        ${escapeHtml(group.name)} <span style="color:#07c160;font-size:11px;">✎</span>
-                    </span>
-                </div>
-                <div>
-                    <div style="font-size:12px;color:#888;margin-bottom:8px;">群成员 (${members.length + 1}人)</div>
-                    <div style="display:flex;flex-wrap:wrap;gap:10px;">
-                        <div style="display:flex;flex-direction:column;align-items:center;gap:4px;width:52px;">
-                            ${window.renderAvatarBadge({ isPlayer: true }, 44)}
-                            <span style="font-size:11px;color:#666;text-align:center;">我</span>
-                        </div>
-                        ${membersGrid}
-                    </div>
-                </div>
-                <div style="margin-top:10px;">
-                    <button type="button" onclick="window.dismissGroup('${gid}')" style="width:100%;border:none;background:#fff1f0;color:#fa5151;padding:9px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">
-                        解散并删除群聊
-                    </button>
-                </div>
-            </div>
-        `, () => {});
+        if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
+        if (!window.G.groupChatHistory[gid]) window.G.groupChatHistory[gid] = [];
+
+        window.G.groupChatHistory[gid].push({
+            _id: 'gmsg_' + Date.now() + '_' + (Math.floor(Math.random() * 899) + 100),
+            from: 'player',
+            senderName: curAcc.name,
+            text,
+            time: new Date().toLocaleTimeString().slice(0, 5),
+            timestamp: Date.now(),
+            quote
+        });
+
+        window.syncGroupChatsToLocalBackup();
+        input.value = '';
+        renderGroupChatWindow();
+        if (typeof autoSaveGame === 'function') autoSaveGame();
     };
 
     window.openEditGroupNameModal = function(gid) {
@@ -372,8 +485,10 @@
             const val = document.getElementById('wcleanGroupNameInput').value.trim();
             if (!val) return false;
             group.name = val;
+            window.syncGroupChatsToLocalBackup();
             if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
             window.openGroupSettingsModal(gid);
+            if (window.G.currentChatGroup === gid) renderGroupChatWindow();
         });
     };
 
@@ -397,34 +512,12 @@
             delete window.G.groups[gid];
             if (window.G.groupChatHistory) delete window.G.groupChatHistory[gid];
             if (window.G.currentChatGroup === gid) window.G.currentChatGroup = null;
+
+            window.syncGroupChatsToLocalBackup();
             if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
             if (typeof showToast === 'function') showToast('群聊已解散', 'info', 1200);
             window.renderChatApp();
         };
-    };
-
-    window.doSendGroupChat = function(gid) {
-        const input = document.getElementById('groupChatInput');
-        if (!input) return;
-        const text = input.value.trim();
-        if (!text) return;
-        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { name: '我' };
-
-        const quote = window._activeQuoteMessage ? Object.assign({}, window._activeQuoteMessage) : null;
-        window._activeQuoteMessage = null;
-
-        if (!window.G.groupChatHistory[gid]) window.G.groupChatHistory[gid] = [];
-        window.G.groupChatHistory[gid].push({
-            _id: 'gmsg_' + Date.now() + '_' + (Math.floor(Math.random() * 899) + 100),
-            from: 'player', senderName: curAcc.name,
-            text, time: new Date().toLocaleTimeString().slice(0, 5),
-            timestamp: Date.now(),
-            quote
-        });
-        window.syncChatHistoryToLocalBackup();
-        input.value = '';
-        renderGroupChatWindow();
-        if (typeof autoSaveGame === 'function') autoSaveGame();
     };
 
     window.renderGroupChatWindow = renderGroupChatWindow;
@@ -445,4 +538,5 @@
         window.renderChatApp();
     };
 
+    console.log('✅ ChatGroup 多人群聊独立模块已成功升级');
 })();

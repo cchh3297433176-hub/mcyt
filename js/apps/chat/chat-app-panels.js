@@ -3,7 +3,7 @@
  * 💬 微信主应用 · 拆分分片 6/7：表情抽屉（buildChatStickerDrawerHTML 及分类/添加/备注/新建分类/图床导入/长按红叉删除表情与分组）、
  *    加号功能面板 8 大格子（buildChatPlusDrawerHTML）、记忆设置弹窗、联网设置弹窗、聊天折叠设置弹窗、
  *    推荐名片选择弹窗、发送名片、最近 Token 统计弹窗、拟真生活排版卡片设置弹窗。
- * ⚠️ 拆分自 chat-app.js，包含加号面板入口与角色专属联网搜索配置弹窗。
+ * 🌟 升级特性：全面适配单人私聊与去中心化多人群聊，群聊下点击加号模块自然导流至群聊高级设定与通用配置。
  */
 
 (function() {
@@ -194,7 +194,6 @@
         e.stopPropagation();
         if (!window.G.stickerLibrary) return;
 
-        // 依据当前分组和索引定位全局库中对应项
         let curCount = -1;
         const globalIdx = window.G.stickerLibrary.findIndex(s => {
             if (s && s.category === cat) {
@@ -220,7 +219,6 @@
             const drawer = document.getElementById('chatStickerDrawer');
             if (!drawer) return;
 
-            // 1. 卡片长按进入红叉管理模式
             drawer.querySelectorAll('.wechat-sticker-item-box').forEach(card => {
                 if (typeof bindLongPressEvent === 'function') {
                     bindLongPressEvent(card, null, () => {
@@ -229,7 +227,6 @@
                 }
             });
 
-            // 2. 分组长按弹出删除分组确认
             drawer.querySelectorAll('.wechat-sticker-tab-pill').forEach(pill => {
                 const catName = pill.getAttribute('data-cat');
                 if (!catName) return;
@@ -275,7 +272,7 @@
     window.toggleChatStickerDrawer = function(type, id) {
         window._stickerDrawerOpen = !window._stickerDrawerOpen;
         window._plusDrawerOpen = false;
-        window._stickerManageMode = false; // 打开关闭时重置管理状态
+        window._stickerManageMode = false;
         if (type === 'single' && typeof renderSingleChatWindow === 'function') renderSingleChatWindow();
         else if (typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
         if (window._stickerDrawerOpen) bindStickerGestures(type, id);
@@ -459,10 +456,14 @@
         else if (typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
     };
 
-    // 🧾 角色独立拟真排版卡片设置弹窗
+    // 🧾 拟真排版卡片设置弹窗（单聊与群聊双向适配）
     window.openNpcUiCardSettingsModal = function(type, id) {
-        if (type !== 'single') {
-            if (typeof showToast === 'function') showToast('拟真排版设置目前支持专属好友单人私聊', 'info', 1500);
+        if (type === 'group') {
+            if (typeof window.openGroupAdvancedSettingsModal === 'function') {
+                window.openGroupAdvancedSettingsModal(id);
+            } else {
+                if (typeof showToast === 'function') showToast('群聊已默认支持仿真物品解析', 'info', 1500);
+            }
             return;
         }
 
@@ -519,10 +520,15 @@
         }
     };
 
-    // 🌐 角色独立联网设置弹窗
+    // 🌐 角色独立联网设置弹窗（单聊与群聊双向适配）
     window.openNpcSearchSettingsModal = function(type, id) {
-        if (type !== 'single') {
-            if (typeof showToast === 'function') showToast('联网设置目前支持专属好友单人私聊', 'info', 1500);
+        if (type === 'group') {
+            window.openWechatCleanModal('群聊联网检索', `
+                <div style="font-size:13px;color:#333;line-height:1.6;text-align:left;">
+                    <p style="margin:0 0 8px;">群聊环境下采用<b>系统全局联网通道</b>。当群内出现明确的实时事实检索意图时，将自动联动后台搜索服务。</p>
+                    <p style="margin:0;font-size:11.5px;color:#888;">如需修改联网 API 密钥或搜索引擎通道，请前往手机「系统设置」-「联网搜索设置」。</p>
+                </div>
+            `, () => {});
             return;
         }
 
@@ -600,10 +606,14 @@
         }
     };
 
-    // 🧠 角色独立记忆总结设置弹窗
+    // 🧠 角色独立记忆总结设置弹窗（群聊环境下无缝唤起群高级设置）
     window.openNpcMemorySettingsModal = function(type, id) {
-        if (type !== 'single') {
-            if (typeof showToast === 'function') showToast('记忆设置目前支持专属好友单人私聊', 'info', 1500);
+        if (type === 'group') {
+            if (typeof window.openGroupAdvancedSettingsModal === 'function') {
+                window.openGroupAdvancedSettingsModal(id);
+            } else {
+                if (typeof showToast === 'function') showToast('群聊记忆隔离请在右上角群设置中调整', 'info', 1500);
+            }
             return;
         }
 
@@ -827,8 +837,10 @@
             }
             if (typeof renderSingleChatWindow === 'function') renderSingleChatWindow();
         } else {
+            if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
             if (!window.G.groupChatHistory[targetId]) window.G.groupChatHistory[targetId] = [];
             window.G.groupChatHistory[targetId].push(cardMsg);
+            if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
             if (typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
         }
 
@@ -869,4 +881,5 @@
         `, () => {});
     };
 
+    console.log('✅ ChatAppPanels 微信加号抽屉模块已升级兼容群聊环境');
 })();
