@@ -32,6 +32,10 @@
 
         try {
             localStorage.removeItem('mcyt_autosave');
+            // 🛡️ 修复：新开一局时一并清空群聊独立备份，避免上一局的群聊
+            // 数据残留在本地缓存里，被自愈合并逻辑重新拉回来
+            localStorage.removeItem('mcyt_wechat_group_chats');
+            localStorage.removeItem('mcyt_wechat_group_histories');
         } catch (_) {}
 
         if (typeof window.resetGameState === 'function') {
