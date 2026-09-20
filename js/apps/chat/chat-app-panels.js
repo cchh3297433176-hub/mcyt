@@ -1,10 +1,11 @@
 /**
  * js/apps/chat/chat-app-panels.js
- * 💬 微信主应用 · 拆分分片 6/7：表情抽屉、设置抽屉（8大系统配置面板）、
- *    加号互动抽屉（单聊与群聊各自独立的聊天互动预留槽位）、记忆/联网/排版/折叠/名片/Token等弹窗。
+ * 💬 微信主应用 · 拆分分片 6/7：表情抽屉、设置抽屉（7大系统配置面板）、
+ *    加号互动抽屉（单聊与群聊各自独立的聊天互动槽位，已接入发送图片/文字画片）、记忆/联网/排版/折叠/名片/Token等弹窗。
  * 🌟 升级特性：
- * 1. ⚙️ 设置抽屉（buildChatSettingsDrawerHTML）：包含 发送图片、推荐名片、记忆设置、联网设置、拟真排版、聊天折叠、Token统计、共创视频。
- * 2. ➕ 加号抽屉（buildChatPlusDrawerHTML）：单聊专享【红包、转账、戳一戳、亲密度、情侣空间、特别关心】；群聊专享【群转账、群收款、群待办、群接龙、群投票、群打卡】。
+ * 1. ⚙️ 设置抽屉（buildChatSettingsDrawerHTML）：聚焦纯系统排版（推荐名片、记忆设置、联网设置、拟真排版、聊天折叠、Token统计、共创视频）。
+ * 2. ➕ 加号抽屉（buildChatPlusDrawerHTML）：发送图片正式迁移至加号抽屉首位；群聊专享【发送图片、群转账、群收款、群待办、群接龙、群投票、群打卡】；单聊专享【发送图片、红包、转账、戳一戳、亲密度、情侣空间、特别关心】。
+ * 3. 📷 发送图片统一弹窗（openChatSendImageModal）：支持本地图片导入、网络图片导入、文字画片（假图片，输入画面描述）发送。
  */
 
 (function() {
@@ -105,18 +106,12 @@
     window.saveNpcUiCardConfig = saveNpcUiCardConfig;
 
     // ==========================================
-    // ⚙️ 设置抽屉（原 8 大系统/排版/配置模块）
+    // ⚙️ 设置抽屉（纯系统/排版/配置模块，移除发送图片）
     // ==========================================
     function buildChatSettingsDrawerHTML(type, id) {
         return `
         <div id="chatSettingsDrawer" style="background:#f7f7f7;border-top:0.5px solid #dcdcdc;flex-shrink:0;animation:wechatSlideUp 0.18s ease-out;">
             <div class="wechat-plus-grid">
-                <div class="wechat-plus-item" onclick="window.openChatSendImageModal('${type}','${id}')">
-                    <div class="wechat-plus-icon-box">
-                        <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#07c160;stroke-width:1.8;stroke-linecap:round;"><rect x="3" y="3" width="18" height="18" rx="3"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-                    </div>
-                    <span class="wechat-plus-label">发送图片</span>
-                </div>
                 <div class="wechat-plus-item" onclick="window.openRecommendContactModal('${type}','${id}')">
                     <div class="wechat-plus-icon-box">
                         <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#0284c7;stroke-width:1.8;stroke-linecap:round;"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="8.5" cy="7" r="4"></circle><line x1="20" y1="8" x2="20" y2="14"></line><line x1="23" y1="11" x2="17" y2="11"></line></svg>
@@ -174,14 +169,20 @@
     };
 
     // ==========================================
-    // ➕ 加号抽屉（纯聊天互动预留槽位）
+    // ➕ 加号抽屉（已将“发送图片”加入首位）
     // ==========================================
     function buildChatPlusDrawerHTML(type, id) {
         if (type === 'group') {
-            // 群聊聊天专属互动槽位
+            // 群聊专属互动槽位
             return `
             <div id="chatPlusDrawer" style="background:#f7f7f7;border-top:0.5px solid #dcdcdc;flex-shrink:0;animation:wechatSlideUp 0.18s ease-out;">
                 <div class="wechat-plus-grid">
+                    <div class="wechat-plus-item" onclick="window.openChatSendImageModal('${type}','${id}')">
+                        <div class="wechat-plus-icon-box">
+                            <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#07c160;stroke-width:1.8;stroke-linecap:round;"><rect x="3" y="3" width="18" height="18" rx="3"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                        </div>
+                        <span class="wechat-plus-label">发送图片</span>
+                    </div>
                     <div class="wechat-plus-item" onclick="window.triggerChatFeaturePlaceholder('群转账')">
                         <div class="wechat-plus-icon-box">
                             <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#f59e0b;stroke-width:1.8;stroke-linecap:round;"><rect x="2" y="6" width="20" height="12" rx="2"></rect><circle cx="12" cy="12" r="2"></circle><path d="M6 12h.01M18 12h.01"></path></svg>
@@ -225,6 +226,12 @@
             return `
             <div id="chatPlusDrawer" style="background:#f7f7f7;border-top:0.5px solid #dcdcdc;flex-shrink:0;animation:wechatSlideUp 0.18s ease-out;">
                 <div class="wechat-plus-grid">
+                    <div class="wechat-plus-item" onclick="window.openChatSendImageModal('${type}','${id}')">
+                        <div class="wechat-plus-icon-box">
+                            <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#07c160;stroke-width:1.8;stroke-linecap:round;"><rect x="3" y="3" width="18" height="18" rx="3"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                        </div>
+                        <span class="wechat-plus-label">发送图片</span>
+                    </div>
                     <div class="wechat-plus-item" onclick="window.triggerChatFeaturePlaceholder('红包')">
                         <div class="wechat-plus-icon-box">
                             <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#fa5151;stroke-width:1.8;stroke-linecap:round;"><rect x="4" y="2" width="16" height="20" rx="3"></rect><circle cx="12" cy="11" r="2.5"></circle><path d="M4 7c4 2 12 2 16 0"></path></svg>
@@ -266,6 +273,121 @@
         }
     }
     window.buildChatPlusDrawerHTML = buildChatPlusDrawerHTML;
+
+    // 📷 全局统一图片与文字画片发送弹窗（支持群聊与单聊）
+    window.openChatSendImageModal = function(type, id) {
+        window._plusDrawerOpen = false;
+        window._settingsDrawerOpen = false;
+        document.querySelectorAll('.wechat-clean-modal-mask').forEach(el => el.remove());
+
+        const modalHtml = `
+            <div style="display:flex;flex-direction:column;gap:12px;text-align:left;">
+                <label style="border:1px solid #dcdcdc;background:#f9f9f9;padding:12px;border-radius:6px;font-size:13px;font-weight:500;color:#333;cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
+                    <span>📷 从手机相册选择真实图片</span>
+                    <input type="file" id="localChatImageFileInput" accept="image/*" style="display:none;">
+                    <span style="color:#07c160;font-size:15px;">›</span>
+                </label>
+
+                <div style="border-top:0.5px solid #eee;padding-top:10px;">
+                    <div style="font-size:12px;color:#666;margin-bottom:4px;">或输入网络图片链接：</div>
+                    <input type="text" id="wcleanWebImageUrlInput" placeholder="https://..." class="wechat-clean-input" style="font-size:12px;">
+                </div>
+
+                <div style="border-top:0.5px solid #eee;padding-top:10px;">
+                    <div style="font-size:12.5px;color:#181818;font-weight:600;margin-bottom:4px;">或发送配图文字画片（假图片）：</div>
+                    <textarea id="wcleanTextImageDescInput" rows="3" class="wechat-clean-input" placeholder="输入你想给对方展示的画面细节描述（如：阳光晒在木质书桌上，一杯热气腾腾的红茶）..." style="width:100%;resize:none;font-size:12px;line-height:1.45;"></textarea>
+                    <div style="font-size:11px;color:#888;margin-top:4px;">聊天中将以相框卡片呈现，点击即可放大查看文字画面。</div>
+                </div>
+            </div>
+        `;
+
+        window.openWechatCleanModal('发送图片', modalHtml, () => {
+            const urlVal = document.getElementById('wcleanWebImageUrlInput')?.value.trim();
+            const descVal = document.getElementById('wcleanTextImageDescInput')?.value.trim();
+
+            if (urlVal) {
+                window.doSendImageMessageDirect(type, id, {
+                    type: 'image',
+                    imageUrl: urlVal,
+                    text: '[图片]'
+                });
+                return;
+            }
+
+            if (descVal) {
+                window.doSendImageMessageDirect(type, id, {
+                    type: 'image_text_only',
+                    imageDesc: descVal,
+                    text: `[图片描述：${descVal}]`
+                });
+                return;
+            }
+
+            if (typeof showToast === 'function') showToast('请选择相册图片或输入描述', 'info', 1200);
+            return false;
+        });
+
+        setTimeout(() => {
+            const fileInput = document.getElementById('localChatImageFileInput');
+            if (fileInput) {
+                fileInput.onchange = (e) => {
+                    const file = e.target.files && e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (evt) => {
+                        document.querySelector('.wechat-clean-modal-mask')?.remove();
+                        window.doSendImageMessageDirect(type, id, {
+                            type: 'image',
+                            imageUrl: evt.target.result,
+                            text: '[图片]'
+                        });
+                    };
+                    reader.readAsDataURL(file);
+                };
+            }
+        }, 30);
+    };
+
+    // 🚀 底层派发图片/文字画片消息（单聊与群聊原子分流）
+    window.doSendImageMessageDirect = function(type, id, payload) {
+        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '我' };
+        const time = new Date().toLocaleTimeString().slice(0, 5);
+        const timestamp = Date.now();
+
+        const msgObj = {
+            _id: (type === 'group' ? 'gmsg_' : 'msg_') + timestamp + '_' + Math.floor(Math.random() * 899 + 100),
+            from: 'player',
+            isPlayer: true,
+            senderName: curAcc.name,
+            senderAvatar: curAcc.avatar || 'assets/icons/chat.png',
+            type: payload.type || 'image',
+            text: payload.text || '[图片]',
+            time,
+            timestamp
+        };
+
+        if (payload.imageUrl) msgObj.imageUrl = payload.imageUrl;
+        if (payload.imageDesc) msgObj.imageDesc = payload.imageDesc;
+
+        if (type === 'single') {
+            if (typeof window.pushChatMessageSafe === 'function') {
+                window.pushChatMessageSafe(id, msgObj, curAcc.id);
+            }
+            if (typeof depositRememoriEvidence === 'function') {
+                depositRememoriEvidence(id, curAcc.id, `${curAcc.name}[发送了${payload.type === 'image' ? '图片' : '文字画片'}]`);
+            }
+            if (typeof renderSingleChatWindow === 'function') renderSingleChatWindow();
+        } else {
+            if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
+            if (!window.G.groupChatHistory[id]) window.G.groupChatHistory[id] = [];
+            window.G.groupChatHistory[id].push(msgObj);
+            if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
+            if (typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
+        }
+
+        if (typeof showToast === 'function') showToast('已发送', 'success', 1000);
+        if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+    };
 
     // 槽位点击轻量提示
     window.triggerChatFeaturePlaceholder = function(name) {
@@ -988,5 +1110,5 @@
         `, () => {});
     };
 
-    console.log('✅ ChatAppPanels 微信功能抽屉（设置抽屉+加号互动抽屉）已成功升级');
+    console.log('✅ ChatAppPanels 微信抽屉架构升级成功：发送图片已平滑迁入加号互动抽屉');
 })();

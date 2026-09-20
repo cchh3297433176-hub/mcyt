@@ -1,11 +1,13 @@
 /**
  * js/apps/chat/chat-group.js
  * 💬 微信多人群聊独立模块（仿QQ上下分层工具栏 · 具体角色输入提示 · 多角色2~5条交错发言 · 群斗图与配图 · 朋友圈轻量NPC生态协同）
- * 🌟 重构特性：
+ * 🌟 升级特性：
  * 1. 仿 QQ 式双层输入栏：上层输入框与发送键，下层语音/设置/表情/加号工具栏。
- * 2. ⚙️ 设置按钮打开 8 大系统配置抽屉；➕ 加号按钮打开群专属聊天扩展互动槽位（群转账/收款/待办/接龙等）。
- * 3. 顶栏动态显示「XXX 正在输入中...」，活人感十足。
- * 4. 朋友圈轻量 NPC 深度参与群聊流转与接话。
+ * 2. ⚙️ 设置按钮打开 7 大系统配置抽屉；➕ 加号按钮打开群专属聊天扩展互动槽位（首位为发送图片，后接群转账/收款/待办/接龙等）。
+ * 3. 🖼️ 真实图片原生直显：支持点击直接唤起全屏大图查看器，彻底解决显示为文本"[图片]"的问题。
+ * 4. 📷 配图文字画片（假图片）：渲染为精致微缩相框卡片，点击即可放大在灯箱中沉浸阅读文字画面描述，体验对齐单独聊天。
+ * 5. 顶栏动态显示「XXX 正在输入中...」，活人感十足。
+ * 6. 朋友圈轻量 NPC 深度参与群聊流转与接话。
  */
 
 (function() {
@@ -61,6 +63,42 @@
 
     restoreGroupsFromStorage();
 
+    // 🔍 辅助：安全打开大图/假图片查看器
+    window.openGroupImageViewerSafe = function(imgSrc, textDesc) {
+        if (typeof window.openChatImageViewer === 'function') {
+            window.openChatImageViewer(imgSrc || '', textDesc || '');
+            return;
+        }
+
+        // 兜底全屏原生白灰微绿大图查看弹窗（轻触秒退）
+        document.querySelectorAll('.group-image-viewer-mask').forEach(el => el.remove());
+        const mask = document.createElement('div');
+        mask.className = 'group-image-viewer-mask';
+        mask.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.85);display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:999999;padding:20px;box-sizing:border-box;animation:wechatFadeIn 0.15s ease-out;';
+
+        let innerContent = '';
+        if (imgSrc && imgSrc !== 'assets/icons/chat.png') {
+            innerContent = `<img src="${escapeHtml(imgSrc)}" style="max-width:92%;max-height:80vh;border-radius:6px;object-fit:contain;box-shadow:0 8px 30px rgba(0,0,0,0.5);">`;
+        } else {
+            innerContent = `
+                <div style="background:#ffffff;border-radius:12px;padding:24px 20px;max-width:320px;width:100%;box-shadow:0 12px 32px rgba(0,0,0,0.3);position:relative;">
+                    <div style="display:flex;align-items:center;gap:6px;margin-bottom:12px;color:#07c160;font-size:13px;font-weight:600;">
+                        <svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:none;stroke:#07c160;stroke-width:2;stroke-linecap:round;"><rect x="3" y="3" width="18" height="18" rx="3"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                        <span>画面详情预览</span>
+                    </div>
+                    <div style="font-size:14.5px;color:#222;line-height:1.6;max-height:55vh;overflow-y:auto;word-break:break-word;">
+                        ${escapeHtml(textDesc || '')}
+                    </div>
+                    <div style="text-align:center;font-size:11.5px;color:#999;margin-top:16px;">轻触任意空白区域关闭</div>
+                </div>
+            `;
+        }
+
+        mask.innerHTML = innerContent;
+        mask.onclick = () => mask.remove();
+        document.body.appendChild(mask);
+    };
+
     /**
      * 💬 多人群聊窗口主渲染
      */
@@ -106,7 +144,7 @@
                 } else if (msg.senderId && group.momentNpcs) {
                     const matchedMnpc = group.momentNpcs.find(m => m.id === msg.senderId || m.name === msg.senderName);
                     if (matchedMnpc) {
-                        avatarObj = { avatarUrl: matchedMnpc.avatar, name: matchedMnpc.name };
+                        avatarObj = { avatarUrl: matchedMnpc.avatar || matchedMnpc.avatarUrl, name: matchedMnpc.name };
                     }
                 }
                 if (!avatarObj) {
@@ -126,12 +164,41 @@
                 </div>`;
             }
 
+            // 1. 居中小灰字通知（撤回式系统提示）
             if (msg.from === 'action') {
                 messagesHtml += `
-                <div style="text-align:center;margin:8px 0;">
-                    <span style="display:inline-block;background:rgba(0,0,0,0.06);color:#888;padding:3px 10px;border-radius:4px;font-size:11.5px;max-width:85%;">${escapeHtml(msg.text || '')}</span>
+                <div style="text-align:center;margin:10px 0;">
+                    <span style="display:inline-block;background:rgba(0,0,0,0.06);color:#888888;padding:3px 10px;border-radius:4px;font-size:11.5px;max-width:85%;line-height:1.4;">${escapeHtml(msg.text || '')}</span>
                 </div>`;
-            } else if (msg.type === 'voice') {
+                continue;
+            }
+
+            // 提取文字图片特征（同时兼容对象属性与 [IMAGE_TEXT: xxx] 标签）
+            let textImgDesc = '';
+            let rawMsgText = msg.text || '';
+            if (msg.type === 'image_text_only' || msg.imageDesc) {
+                textImgDesc = msg.imageDesc || msg.text || '';
+                textImgDesc = textImgDesc.replace(/^\[图片描述：|\]$/g, '').trim();
+            } else if (typeof rawMsgText === 'string') {
+                const imgTextTagMatch = rawMsgText.match(/\[IMAGE_TEXT(?::\s*|\s+)?([\s\S]*?)\]([\s\S]*?)(?:\[\/IMAGE_TEXT\]|$)/i);
+                if (imgTextTagMatch) {
+                    textImgDesc = (imgTextTagMatch[2] || imgTextTagMatch[1] || '').trim();
+                } else if (rawMsgText.startsWith('[图片描述：') && rawMsgText.endsWith(']')) {
+                    textImgDesc = rawMsgText.slice(6, -1).trim();
+                }
+            }
+
+            // 发言人顶部署名与头衔
+            const senderHeaderHtml = !isSelf ? `
+                <div style="display:flex;align-items:center;gap:4px;margin-bottom:2px;">
+                    ${isAdmin ? `<span style="font-size:9px;background:#07c160;color:#fff;padding:0 3px;border-radius:3px;font-weight:600;">管</span>` : ''}
+                    ${title ? `<span style="font-size:9px;background:#eef7ee;color:#07c160;padding:0 4px;border-radius:3px;font-weight:500;">${escapeHtml(title)}</span>` : ''}
+                    <span style="font-size:11px;color:#888;">${escapeHtml(senderName)}</span>
+                </div>
+            ` : '';
+
+            // 2. 语音消息气泡
+            if (msg.type === 'voice') {
                 const seconds = Math.min(60, Math.max(1, parseInt(msg.seconds) || 3));
                 const bubbleWidth = Math.min(220, 68 + seconds * 4.5);
 
@@ -139,13 +206,7 @@
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
                     ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
                     <div style="max-width:68%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
-                        ${!isSelf ? `
-                            <div style="display:flex;align-items:center;gap:4px;margin-bottom:2px;">
-                                ${isAdmin ? `<span style="font-size:9px;background:#07c160;color:#fff;padding:0 3px;border-radius:3px;font-weight:600;">管</span>` : ''}
-                                ${title ? `<span style="font-size:9px;background:#eef7ee;color:#07c160;padding:0 4px;border-radius:3px;font-weight:500;">${escapeHtml(title)}</span>` : ''}
-                                <span style="font-size:11px;color:#888;">${escapeHtml(senderName)}</span>
-                            </div>
-                        ` : ''}
+                        ${senderHeaderHtml}
                         ${quoteHtml}
                         <div class="wechat-voice-bubble" onclick="window.toggleVoiceMessageDetailsDirect('${msg._id}')" style="width:${bubbleWidth}px;background:${isSelf ? '#95ec69' : '#ffffff'};color:${isSelf ? '#111' : '#222'};justify-content:${isSelf ? 'flex-end' : 'flex-start'};">
                             ${!isSelf ? `
@@ -164,60 +225,78 @@
                     </div>
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
                 </div>`;
-            } else if (msg.type === 'image_text_only' || (!msg.imageUrl && (msg.type === 'image' || msg.imageDesc))) {
-                const desc = msg.imageDesc || msg.text || '画片描述';
+            }
+            // 3. 真实图片直显（支持相册 Base64 与网络直链，点击放大）
+            else if (msg.imageUrl && (msg.type === 'image' || msg.text === '[图片]')) {
+                const safeImgUrl = escapeHtml(msg.imageUrl);
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
                     ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
                     <div style="max-width:68%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
-                        ${!isSelf ? `
-                            <div style="display:flex;align-items:center;gap:4px;margin-bottom:2px;">
-                                ${isAdmin ? `<span style="font-size:9px;background:#07c160;color:#fff;padding:0 3px;border-radius:3px;font-weight:600;">管</span>` : ''}
-                                ${title ? `<span style="font-size:9px;background:#eef7ee;color:#07c160;padding:0 4px;border-radius:3px;font-weight:500;">${escapeHtml(title)}</span>` : ''}
-                                <span style="font-size:11px;color:#888;">${escapeHtml(senderName)}</span>
-                            </div>
-                        ` : ''}
+                        ${senderHeaderHtml}
                         ${quoteHtml}
-                        <div class="wechat-desc-card" onclick="if(typeof window.openChatImageViewer==='function'){ window.openChatImageViewer('assets/icons/chat.png', '${escapeHtml(desc).replace(/'/g, "\\'")}'); }" style="cursor:pointer;">
-                            <div style="font-size:10.5px;color:#07c160;font-weight:600;margin-bottom:3px;">📷 配图画面描述 · 点击放大</div>
-                            <div style="font-size:13px;color:#2c3e50;line-height:1.45;word-break:break-word;">${escapeHtml(desc)}</div>
+                        <div style="border-radius:6px;overflow:hidden;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,0.08);cursor:pointer;line-height:0;" 
+                             onclick="window.openGroupImageViewerSafe('${safeImgUrl.replace(/'/g, "\\'")}', '')">
+                            <img src="${safeImgUrl}" style="max-width:180px;max-height:220px;object-fit:cover;display:block;" loading="lazy" onerror="this.src='assets/icons/chat.png';">
                         </div>
                         <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
                     </div>
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
                 </div>`;
-            } else if (msg.type === 'sticker' || msg.stickerUrl) {
+            }
+            // 4. 文字画片（假图片：相框微缩卡片，点击放大沉浸阅读文字画面）
+            else if (textImgDesc) {
+                const safeDesc = escapeHtml(textImgDesc);
+                const descAttr = safeDesc.replace(/'/g, "\\'");
+                messagesHtml += `
+                <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
+                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
+                    <div style="max-width:68%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
+                        ${senderHeaderHtml}
+                        ${quoteHtml}
+                        <div class="wechat-fake-image-card" onclick="window.openGroupImageViewerSafe('', '${descAttr}')" style="background:#ffffff;border:0.5px solid #dcdcdc;border-radius:8px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06);cursor:pointer;width:170px;user-select:none;-webkit-user-select:none;transition:transform 0.15s ease;">
+                            <div style="height:88px;background:linear-gradient(135deg, #e8f5e9 0%, #f0fdf4 100%);display:flex;flex-direction:column;align-items:center;justify-content:center;position:relative;border-bottom:0.5px solid #eef2ee;">
+                                <svg viewBox="0 0 24 24" style="width:34px;height:34px;fill:none;stroke:#07c160;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;"><rect x="3" y="3" width="18" height="18" rx="3"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                                <span style="position:absolute;bottom:4px;right:6px;background:rgba(0,0,0,0.45);color:#fff;font-size:9.5px;padding:1px 5px;border-radius:4px;backdrop-filter:blur(2px);">配图画面</span>
+                            </div>
+                            <div style="padding:7px 9px;">
+                                <div style="font-size:12px;color:#333333;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;word-break:break-word;">
+                                    ${safeDesc}
+                                </div>
+                                <div style="display:flex;align-items:center;justify-content:space-between;margin-top:5px;font-size:10px;color:#07c160;font-weight:500;">
+                                    <span>轻触查看大图</span>
+                                    <span>›</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
+                    </div>
+                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
+                </div>`;
+            }
+            // 5. 表情包直显
+            else if (msg.type === 'sticker' || msg.stickerUrl) {
                 const sUrl = msg.stickerUrl || 'assets/icons/chat.png';
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
                     ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
                     <div style="max-width:68%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
-                        ${!isSelf ? `
-                            <div style="display:flex;align-items:center;gap:4px;margin-bottom:2px;">
-                                ${isAdmin ? `<span style="font-size:9px;background:#07c160;color:#fff;padding:0 3px;border-radius:3px;font-weight:600;">管</span>` : ''}
-                                ${title ? `<span style="font-size:9px;background:#eef7ee;color:#07c160;padding:0 4px;border-radius:3px;font-weight:500;">${escapeHtml(title)}</span>` : ''}
-                                <span style="font-size:11px;color:#888;">${escapeHtml(senderName)}</span>
-                            </div>
-                        ` : ''}
+                        ${senderHeaderHtml}
                         ${quoteHtml}
                         <img src="${escapeHtml(sUrl)}" alt="${escapeHtml(msg.stickerDesc || '表情')}" style="width:100px;height:100px;object-fit:contain;border-radius:6px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,0.05);">
                         <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
                     </div>
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
                 </div>`;
-            } else {
+            }
+            // 6. 普通文本消息 / 推荐名片 / 排版卡片
+            else {
                 let text = isSelf ? escapeHtml(msg.text || '').replace(/\n/g, '<br>') : ((typeof renderContentWithThoughts === 'function') ? renderContentWithThoughts(msg.text || '') : escapeHtml(msg.text || ''));
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
                     ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
                     <div style="max-width:74%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
-                        ${!isSelf ? `
-                            <div style="display:flex;align-items:center;gap:4px;margin-bottom:2px;">
-                                ${isAdmin ? `<span style="font-size:9px;background:#07c160;color:#fff;padding:0 3px;border-radius:3px;font-weight:600;">管</span>` : ''}
-                                ${title ? `<span style="font-size:9px;background:#eef7ee;color:#07c160;padding:0 4px;border-radius:3px;font-weight:500;">${escapeHtml(title)}</span>` : ''}
-                                <span style="font-size:11px;color:#888;">${escapeHtml(senderName)}</span>
-                            </div>
-                        ` : ''}
+                        ${senderHeaderHtml}
                         ${quoteHtml}
                         <div class="chat-bubble ${isSelf ? 'self-bubble' : ''}" data-msgid="${msg._id || ''}" style="width:fit-content;max-width:100%;display:inline-block;background:${isSelf ? '#95ec69' : '#ffffff'};color:#111;padding:8px 12px;border-radius:5px;box-shadow:0 1px 2px rgba(0,0,0,0.05);font-size:14.5px;line-height:1.5;word-break:break-word;">
                             ${text}
@@ -301,7 +380,7 @@
                             <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
                         </button>
 
-                        <!-- ⚙️ 设置图标（打开 8 大系统/排版/配置面板） -->
+                        <!-- ⚙️ 设置图标（打开 7 大系统/排版/配置抽屉） -->
                         <button onclick="window.toggleChatSettingsDrawer('group','${gid}')" title="系统设置与排版" style="border:none;background:none;cursor:pointer;padding:0;display:flex;align-items:center;color:#555;">
                             <svg viewBox="0 0 24 24" style="width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">
                                 <circle cx="12" cy="12" r="3"></circle>
@@ -320,7 +399,7 @@
                         </button>
                     </div>
 
-                    <!-- ➕ 加号功能扩展（群互动扩展槽：群转账/群收款/群待办/群接龙） -->
+                    <!-- ➕ 加号功能扩展（群互动扩展槽：发送图片/群转账/群收款/群待办/群接龙） -->
                     <div>
                         <button onclick="window.toggleChatPlusDrawer('group','${gid}')" title="群聊天扩展" style="border:none;background:none;cursor:pointer;padding:0;display:flex;align-items:center;color:#555;">
                             <svg viewBox="0 0 24 24" style="width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;">
@@ -384,7 +463,7 @@
             id: mn.id,
             name: mn.name,
             persona: mn.persona,
-            avatarUrl: mn.avatar,
+            avatarUrl: mn.avatar || mn.avatarUrl || 'assets/icons/chat.png',
             isMomentNpc: true
         }));
 
@@ -411,6 +490,7 @@
         const history = (window.G.groupChatHistory && window.G.groupChatHistory[gid]) || [];
         const recentDialogue = history.slice(-12).map(m => {
             if (m.from === 'action') return `[系统提示]: ${m.text}`;
+            if (m.type === 'image_text_only' || m.imageDesc) return `${m.senderName || '群友'}: [配图描述: ${m.imageDesc || m.text}]`;
             return `${m.senderName || '群友'}: ${m.text || ''}`;
         }).join('\n');
 
@@ -501,6 +581,7 @@
                                     senderAvatar: member.avatarUrl,
                                     type: 'image_text_only',
                                     imageDesc: imgDesc,
+                                    text: `[图片描述：${imgDesc}]`,
                                     time: new Date().toLocaleTimeString().slice(0, 5)
                                 });
                                 rollingDialogue += `\n${member.name}: [分享了图片: ${imgDesc.slice(0, 20)}...]`;
@@ -591,6 +672,7 @@
                             senderAvatar: matchedNpc.avatarUrl,
                             type: 'image_text_only',
                             imageDesc: content,
+                            text: `[图片描述：${content}]`,
                             time: new Date().toLocaleTimeString().slice(0, 5)
                         });
                     }
@@ -637,7 +719,8 @@
         if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
         if (!window.G.groupChatHistory[gid]) window.G.groupChatHistory[gid] = [];
 
-        window.G.groupChatHistory[gid].push({
+        // 识别用户直接手动输入的 [图片描述：xxx] 格式
+        let msgPayload = {
             _id: 'gmsg_' + Date.now() + '_' + (Math.floor(Math.random() * 899) + 100),
             from: 'player',
             senderName: curAcc.name,
@@ -645,7 +728,14 @@
             time: new Date().toLocaleTimeString().slice(0, 5),
             timestamp: Date.now(),
             quote
-        });
+        };
+
+        if (text.startsWith('[图片描述：') && text.endsWith(']')) {
+            msgPayload.type = 'image_text_only';
+            msgPayload.imageDesc = text.slice(6, -1).trim();
+        }
+
+        window.G.groupChatHistory[gid].push(msgPayload);
 
         window.syncGroupChatsToLocalBackup();
         input.value = '';
@@ -653,52 +743,8 @@
         if (typeof autoSaveGame === 'function') autoSaveGame();
     };
 
-    window.openEditGroupNameModal = function(gid) {
-        const group = window.G.groups && window.G.groups[gid];
-        if (!group) return;
-        document.querySelector('.wechat-clean-modal-mask')?.remove();
-        window.openWechatCleanModal('修改群聊名称', `
-            <input type="text" id="wcleanGroupNameInput" value="${escapeHtml(group.name)}" class="wechat-clean-input">
-        `, () => {
-            const val = document.getElementById('wcleanGroupNameInput').value.trim();
-            if (!val) return false;
-            group.name = val;
-            window.syncGroupChatsToLocalBackup();
-            if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
-            window.openGroupSettingsModal(gid);
-            if (window.G.currentChatGroup === gid) renderGroupChatWindow();
-        });
-    };
-
-    window.dismissGroup = function(gid) {
-        document.querySelector('.wechat-clean-modal-mask')?.remove();
-        let mask = document.createElement('div');
-        mask.className = 'wechat-clean-modal-mask';
-        mask.innerHTML = `
-            <div class="wechat-clean-modal-card">
-                <div class="wechat-clean-modal-title">解散群聊</div>
-                <div style="font-size:13px;color:#666;text-align:center;margin:8px 0 16px;">确定要解散该群聊并清空聊天记录吗？</div>
-                <div class="wechat-clean-modal-btns">
-                    <button type="button" class="wechat-clean-btn-cancel" onclick="this.closest('.wechat-clean-modal-mask')?.remove()">取消</button>
-                    <button type="button" class="wechat-clean-btn-confirm" style="background:#fa5151;" id="wcleanConfirmDismiss">确定解散</button>
-                </div>
-            </div>
-        `;
-        document.body.appendChild(mask);
-        mask.querySelector('#wcleanConfirmDismiss').onclick = () => {
-            mask.remove();
-            delete window.G.groups[gid];
-            if (window.G.groupChatHistory) delete window.G.groupChatHistory[gid];
-            if (window.G.currentChatGroup === gid) window.G.currentChatGroup = null;
-
-            window.syncGroupChatsToLocalBackup();
-            if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
-            if (typeof showToast === 'function') showToast('群聊已解散', 'info', 1200);
-            window.renderChatApp();
-        };
-    };
-
     window.renderGroupChatWindow = renderGroupChatWindow;
+    
     window.openGroupChat = function(gid) {
         if (!window.G.groups || !window.G.groups[gid]) return;
         window.G.currentChatGroup = gid;

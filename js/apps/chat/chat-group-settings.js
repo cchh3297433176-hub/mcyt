@@ -3,11 +3,11 @@
  * ⚙️ 微信群聊资料中心与高级设置独立模块
  * 规范功能：
  * 1. 微信原生白灰微绿设计质感，消除所有复古土味 UI、原生 select 与冗余死板的括号说明。
- * 2. 聊天信息原生弹窗：右上角坚固渲染微绿矢量齿轮与关闭叉号（✕），彻底移除底部多余的取消/确定按钮。
- * 3. 完美弹窗层级（z-index）：修改群名、修改公告、更换头像、解散群聊均置于顶层，彻底解决遮挡问题。
- * 4. 修改群名即时在群聊天流中生成微信原生居中小灰字提示（如：""我" 修改群名为 "XXX""）并落盘持久化。
- * 5. 高级设定：群成员网格、接话人数范围、朋友圈轻量 NPC 折叠栏（含添加与折叠）、群管理员任命、群成员专属头衔。
- * 6. 默认角色始终允许发表情包（无多余开关）。
+ * 2. 聊天信息原生弹窗：右上角渲染微绿矢量齿轮与关闭叉号（✕），彻底移除底部多余的取消/确定按钮。
+ * 3. 完美弹窗层级（z-index: 99999）：修改群名、修改公告、更换头像、解散群聊置于顶层，绝不被底层遮挡。
+ * 4. 群主操作全量接入居中小灰字通知（撤回样式提示）：改群名、换头像、改公告、任命/撤销管理员、设置/清除群头衔、增删成员即时生成灰条并落盘。
+ * 5. 群头像双轨落盘同步（group.avatar 与 group.avatarUrl），全站会话列表与群聊窗口即时同步更新。
+ * 6. 高级设定：群成员网格、接话人数范围、朋友圈轻量 NPC 折叠栏（含添加与折叠）、群管理员任命、群成员专属头衔。
  */
 
 (function() {
@@ -48,8 +48,29 @@
         } catch (_) {}
     }
 
+    // 📣 向群聊追加居中小灰字系统提示（仿撤回样式）
+    function pushGroupActionNotice(gid, text) {
+        if (!gid || !text) return;
+        if (!window.G) window.G = {};
+        if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
+        if (!window.G.groupChatHistory[gid]) window.G.groupChatHistory[gid] = [];
+
+        window.G.groupChatHistory[gid].push({
+            _id: 'sys_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
+            from: 'action',
+            text: text,
+            time: new Date().toLocaleTimeString().slice(0, 5)
+        });
+
+        if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
+        if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+        if (window.G.currentChatGroup === gid && typeof window.renderGroupChatWindow === 'function') {
+            window.renderGroupChatWindow();
+        }
+    }
+
     /**
-     * 👥 打开群聊信息与基础资料面板（图一）
+     * 👥 打开群聊信息与基础资料面板
      */
     window.openGroupSettingsModal = function(gid) {
         document.querySelectorAll('.wechat-clean-modal-mask, .group-info-modal-mask').forEach(el => el.remove());
@@ -57,7 +78,7 @@
         const group = window.G.groups && window.G.groups[gid];
         if (!group) return;
 
-        const groupAvatar = group.avatar || 'assets/icons/chat.png';
+        const groupAvatar = group.avatar || group.avatarUrl || 'assets/icons/chat.png';
 
         const mask = document.createElement('div');
         mask.className = 'group-info-modal-mask';
@@ -146,7 +167,7 @@
     };
 
     /**
-     * ⚙️ 群聊高级设定弹窗（图二）
+     * ⚙️ 群聊高级设定弹窗
      */
     window.openGroupAdvancedSettingsModal = function(gid) {
         document.querySelectorAll('.wechat-clean-modal-mask, .group-info-modal-mask').forEach(el => el.remove());
@@ -216,7 +237,7 @@
             momentNpcCardsHtml = momentNpcs.map((mn, idx) => `
                 <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 8px;background:#ffffff;border:0.5px solid #eee;border-radius:6px;margin-bottom:5px;">
                     <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1;">
-                        <img src="${mn.avatar || 'assets/icons/chat.png'}" style="width:30px;height:30px;border-radius:4px;object-fit:cover;flex-shrink:0;" onerror="this.src='assets/icons/chat.png';">
+                        <img src="${mn.avatar || mn.avatarUrl || 'assets/icons/chat.png'}" style="width:30px;height:30px;border-radius:4px;object-fit:cover;flex-shrink:0;" onerror="this.src='assets/icons/chat.png';">
                         <div style="min-width:0;flex:1;">
                             <div style="font-size:12.5px;font-weight:600;color:#222;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(mn.name)}</div>
                             <div style="font-size:10.5px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(mn.persona || '轻量NPC')}</div>
@@ -285,7 +306,7 @@
                 <!-- 设置群管理员 -->
                 <div style="border-bottom:0.5px solid #f0f0f0;padding-bottom:12px;">
                     <div style="font-size:14px;font-weight:600;color:#181818;margin-bottom:4px;">设置群管理员</div>
-                    <div style="font-size:11.5px;color:#888;margin-bottom:8px;">任命后会有群系统提示：</div>
+                    <div style="font-size:11.5px;color:#888;margin-bottom:8px;">任命或取消将产生居中系统通知：</div>
                     <div style="display:flex;flex-wrap:wrap;gap:6px;">
                         ${adminCheckboxesHtml}
                     </div>
@@ -294,7 +315,7 @@
                 <!-- 专属群头衔设置 -->
                 <div style="border-bottom:0.5px solid #f0f0f0;padding-bottom:12px;">
                     <div style="font-size:14px;font-weight:600;color:#181818;margin-bottom:4px;">群成员专属头衔</div>
-                    <div style="font-size:11.5px;color:#888;margin-bottom:8px;">换新时产生系统通知：</div>
+                    <div style="font-size:11.5px;color:#888;margin-bottom:8px;">换新时产生居中系统通知：</div>
                     <div style="display:flex;flex-direction:column;gap:4px;">
                         ${titleInputsHtml}
                     </div>
@@ -355,30 +376,32 @@
             const oldAdmins = cfg.admins || [];
             const oldTitles = cfg.titles || {};
 
-            if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
-            if (!window.G.groupChatHistory[gid]) window.G.groupChatHistory[gid] = [];
-
+            // 📣 管理员任命通知
             selectedAdmins.forEach(mid => {
                 if (!oldAdmins.includes(mid)) {
                     const mName = window.G.npcs[mid]?.name || '群成员';
-                    window.G.groupChatHistory[gid].push({
-                        _id: 'sys_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
-                        from: 'action',
-                        text: `"${curAcc.name}" 设置 "${mName}" 为群管理员`,
-                        time: new Date().toLocaleTimeString().slice(0, 5)
-                    });
+                    pushGroupActionNotice(gid, `"${curAcc.name}" 设置 "${mName}" 为群管理员`);
+                }
+            });
+            // 📣 管理员取消通知
+            oldAdmins.forEach(mid => {
+                if (!selectedAdmins.includes(mid)) {
+                    const mName = window.G.npcs[mid]?.name || '群成员';
+                    pushGroupActionNotice(gid, `"${curAcc.name}" 取消了 "${mName}" 的管理员身份`);
                 }
             });
 
+            // 📣 群头衔变更通知
             Object.keys(newTitles).forEach(mid => {
                 if (newTitles[mid] !== oldTitles[mid]) {
                     const mName = window.G.npcs[mid]?.name || '群成员';
-                    window.G.groupChatHistory[gid].push({
-                        _id: 'sys_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
-                        from: 'action',
-                        text: `"${mName}" 获得了专属群头衔 "${newTitles[mid]}"`,
-                        time: new Date().toLocaleTimeString().slice(0, 5)
-                    });
+                    pushGroupActionNotice(gid, `"${mName}" 获得了专属群头衔 "${newTitles[mid]}"`);
+                }
+            });
+            Object.keys(oldTitles).forEach(mid => {
+                if (!newTitles[mid] && oldTitles[mid]) {
+                    const mName = window.G.npcs[mid]?.name || '群成员';
+                    pushGroupActionNotice(gid, `"${curAcc.name}" 清除了 "${mName}" 的群头衔`);
                 }
             });
 
@@ -393,7 +416,7 @@
                 momentNpcs: group.momentNpcs || []
             });
 
-            window.syncGroupChatsToLocalBackup();
+            if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
             if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
             if (typeof showToast === 'function') showToast('群高级设置已更新', 'success', 1200);
             window.openGroupSettingsModal(gid);
@@ -447,7 +470,7 @@
             return `
             <label style="display:flex;align-items:center;justify-content:space-between;padding:8px;border-bottom:0.5px solid #eee;cursor:pointer;">
                 <div style="display:flex;align-items:center;gap:8px;min-width:0;flex:1;">
-                    <img src="${n.avatar || 'assets/icons/chat.png'}" style="width:32px;height:32px;border-radius:4px;object-fit:cover;flex-shrink:0;">
+                    <img src="${n.avatar || n.avatarUrl || 'assets/icons/chat.png'}" style="width:32px;height:32px;border-radius:4px;object-fit:cover;flex-shrink:0;">
                     <div style="min-width:0;flex:1;">
                         <div style="font-size:13px;font-weight:600;color:#181818;">${escapeHtml(n.name)}</div>
                         <div style="font-size:11px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(n.persona || '日常互动圈友')}</div>
@@ -472,8 +495,10 @@
                 </div>
             </div>
         `, () => {
+            const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { name: '我' };
             const checkedIndexes = Array.from(document.querySelectorAll('.wclean-mnpc-pick:checked:not(:disabled)')).map(c => parseInt(c.value));
-            let addedCount = 0;
+            const newlyAddedNames = [];
+
             checkedIndexes.forEach(idx => {
                 const target = pool[idx];
                 if (target && !group.momentNpcs.some(m => m.name === target.name)) {
@@ -481,9 +506,10 @@
                         id: 'mnpc_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
                         name: target.name,
                         persona: target.persona,
-                        avatar: target.avatar || 'assets/icons/chat.png'
+                        avatar: target.avatar || target.avatarUrl || 'assets/icons/chat.png',
+                        avatarUrl: target.avatar || target.avatarUrl || 'assets/icons/chat.png'
                     });
-                    addedCount++;
+                    newlyAddedNames.push(target.name);
                 }
             });
 
@@ -495,15 +521,19 @@
                     id: 'mnpc_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
                     name: customName,
                     persona: customPersona,
-                    avatar
+                    avatar,
+                    avatarUrl: avatar
                 });
-                addedCount++;
+                newlyAddedNames.push(customName);
             }
 
-            if (addedCount > 0) {
-                window.syncGroupChatsToLocalBackup();
+            if (newlyAddedNames.length > 0) {
+                // 📣 添加朋友圈NPC居中小灰字通知
+                pushGroupActionNotice(gid, `"${curAcc.name}" 邀请 "${newlyAddedNames.join('、')}" 加入了群聊`);
+
+                if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
                 if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
-                if (typeof showToast === 'function') showToast(`已添加 ${addedCount} 位朋友圈 NPC`, 'success', 1000);
+                if (typeof showToast === 'function') showToast(`已添加 ${newlyAddedNames.length} 位朋友圈 NPC`, 'success', 1000);
             }
 
             window.openGroupAdvancedSettingsModal(gid);
@@ -519,8 +549,15 @@
     window.removeGroupMomentNpc = function(gid, idx) {
         const group = window.G.groups && window.G.groups[gid];
         if (!group || !group.momentNpcs) return;
-        group.momentNpcs.splice(idx, 1);
-        window.syncGroupChatsToLocalBackup();
+        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { name: '我' };
+        const removed = group.momentNpcs.splice(idx, 1)[0];
+
+        if (removed) {
+            // 📣 移出朋友圈NPC居中小灰字通知
+            pushGroupActionNotice(gid, `"${curAcc.name}" 将 "${removed.name}" 移出了群聊`);
+        }
+
+        if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
         if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
         window.openGroupAdvancedSettingsModal(gid);
         setTimeout(() => {
@@ -561,13 +598,25 @@
         }
     };
 
-    // 🎲 应用新群头像并同步刷新全站
+    // 🎲 应用新群头像并实现全生态双轨同步落盘
     function applyNewGroupAvatar(gid, newAvatarUrl) {
         const group = window.G.groups && window.G.groups[gid];
         if (!group || !newAvatarUrl) return;
 
+        // 双轨设置，消灭字段名不一致导致的列表不同步
         group.avatar = newAvatarUrl;
-        window.syncGroupChatsToLocalBackup();
+        group.avatarUrl = newAvatarUrl;
+
+        if (window.G.groupChats && window.G.groupChats[gid]) {
+            window.G.groupChats[gid].avatar = newAvatarUrl;
+            window.G.groupChats[gid].avatarUrl = newAvatarUrl;
+        }
+
+        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { name: '我' };
+        // 📣 更换头像居中小灰字通知
+        pushGroupActionNotice(gid, `"${curAcc.name}" 更换了群头像`);
+
+        if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
         if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
 
         const modalPreview = document.getElementById('modalGroupAvatarPreview');
@@ -577,7 +626,8 @@
             window.renderGroupChatWindow();
         }
 
-        if (typeof window.renderChatApp === 'function' && !window.G.currentChatGroup) {
+        // 无条件刷新全站会话列表，确保外部主会话列表即时展示新头像
+        if (typeof window.renderChatApp === 'function') {
             window.renderChatApp();
         }
     }
@@ -608,7 +658,7 @@
                 </label>
 
                 <div style="font-size:12px;color:#666;">或输入网络图片链接：</div>
-                <input type="text" id="wcleanGroupAvatarUrlInput" placeholder="https://..." value="${escapeHtml(group.avatar || '')}" class="wechat-clean-input">
+                <input type="text" id="wcleanGroupAvatarUrlInput" placeholder="https://..." value="${escapeHtml(group.avatar || group.avatarUrl || '')}" class="wechat-clean-input">
             </div>
         `, () => {
             const urlVal = document.getElementById('wcleanGroupAvatarUrlInput')?.value.trim();
@@ -618,7 +668,6 @@
             window.openGroupSettingsModal(gid);
         });
 
-        // 调整层级确保不被覆盖
         const activeModal = document.querySelector('.wechat-clean-modal-mask');
         if (activeModal) activeModal.style.zIndex = '99999';
 
@@ -656,7 +705,7 @@
         }, 30);
     };
 
-    // ✏️ 编辑群聊名称（增加居中系统通知条 + 彻底解决弹窗遮挡）
+    // ✏️ 编辑群聊名称
     window.openEditGroupNameModal = function(gid) {
         const group = window.G.groups && window.G.groups[gid];
         if (!group) return;
@@ -675,20 +724,11 @@
 
             if (val !== oldName) {
                 group.name = val;
-
-                // 🌟 像撤回消息一样生成居中系统灰条通知并落盘
                 const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { name: '我' };
-                if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
-                if (!window.G.groupChatHistory[gid]) window.G.groupChatHistory[gid] = [];
+                // 📣 改名居中小灰字通知
+                pushGroupActionNotice(gid, `"${curAcc.name}" 修改群名为 "${val}"`);
 
-                window.G.groupChatHistory[gid].push({
-                    _id: 'sys_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
-                    from: 'action',
-                    text: `"${curAcc.name}" 修改群名为 "${val}"`,
-                    time: new Date().toLocaleTimeString().slice(0, 5)
-                });
-
-                window.syncGroupChatsToLocalBackup();
+                if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
                 if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
                 if (typeof showToast === 'function') showToast('群名称已更新', 'success', 1200);
 
@@ -704,19 +744,28 @@
         if (activeModal) activeModal.style.zIndex = '99999';
     };
 
-    // 编辑群介绍/公告
+    // 📝 编辑群介绍/公告
     window.openEditGroupDescModal = function(gid) {
         const group = window.G.groups && window.G.groups[gid];
         if (!group) return;
         document.querySelectorAll('.wechat-clean-modal-mask, .group-info-modal-mask').forEach(el => el.remove());
 
+        const oldDesc = group.description || '';
+
         window.openWechatCleanModal('修改群介绍/公告', `
-            <textarea id="wcleanGroupDescInput" rows="4" class="wechat-clean-input" style="width:100%;resize:none;line-height:1.45;" placeholder="输入群介绍或群公告...">${escapeHtml(group.description || '')}</textarea>
+            <textarea id="wcleanGroupDescInput" rows="4" class="wechat-clean-input" style="width:100%;resize:none;line-height:1.45;" placeholder="输入群介绍或群公告...">${escapeHtml(oldDesc)}</textarea>
         `, () => {
             const val = document.getElementById('wcleanGroupDescInput')?.value.trim();
-            group.description = val || '';
-            if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
-            if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+            if (val !== oldDesc) {
+                group.description = val || '';
+                const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { name: '我' };
+                // 📣 更新群公告居中小灰字通知
+                pushGroupActionNotice(gid, `"${curAcc.name}" 更新了群公告`);
+
+                if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
+                if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+                if (typeof showToast === 'function') showToast('群公告已更新', 'success', 1000);
+            }
             window.openGroupSettingsModal(gid);
         });
 
@@ -754,16 +803,22 @@
             </div>
         `, () => {
             const checkedBoxes = document.querySelectorAll('.wechat-remove-member-checkbox:checked');
-            let removedCount = 0;
+            const removedNames = [];
+            const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { name: '我' };
+
             checkedBoxes.forEach(box => {
+                const targetNpc = window.G.npcs[box.value];
+                if (targetNpc) removedNames.push(targetNpc.name);
                 group.members = group.members.filter(id => id !== box.value);
-                removedCount++;
             });
 
-            if (removedCount > 0) {
+            if (removedNames.length > 0) {
+                // 📣 移出成员居中小灰字通知
+                pushGroupActionNotice(gid, `"${curAcc.name}" 将 "${removedNames.join('、')}" 移出了群聊`);
+
                 if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
                 if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
-                if (typeof showToast === 'function') showToast(`已移出 ${removedCount} 位成员`, 'info');
+                if (typeof showToast === 'function') showToast(`已移出 ${removedNames.length} 位成员`, 'info');
             }
             window.openGroupAdvancedSettingsModal(gid);
             if (window.G.currentChatGroup === gid && typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
@@ -812,18 +867,24 @@
             </div>
         `, () => {
             const checkedBoxes = document.querySelectorAll('.wechat-group-member-checkbox:checked:not(:disabled)');
-            let addedCount = 0;
+            const addedNames = [];
+            const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { name: '我' };
+
             checkedBoxes.forEach(box => {
                 if (!group.members.includes(box.value)) {
                     group.members.push(box.value);
-                    addedCount++;
+                    const targetNpc = window.G.npcs[box.value];
+                    if (targetNpc) addedNames.push(targetNpc.name);
                 }
             });
 
-            if (addedCount > 0) {
+            if (addedNames.length > 0) {
+                // 📣 添加成员居中小灰字通知
+                pushGroupActionNotice(gid, `"${curAcc.name}" 邀请 "${addedNames.join('、')}" 加入了群聊`);
+
                 if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
                 if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
-                if (typeof showToast === 'function') showToast(`已成功添加 ${addedCount} 位新成员`, 'success');
+                if (typeof showToast === 'function') showToast(`已成功添加 ${addedNames.length} 位新成员`, 'success');
             }
             window.openGroupAdvancedSettingsModal(gid);
             if (window.G.currentChatGroup === gid && typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
@@ -862,7 +923,7 @@
             if (window.G.groupChatHistory) delete window.G.groupChatHistory[gid];
             if (window.G.currentChatGroup === gid) window.G.currentChatGroup = null;
 
-            window.syncGroupChatsToLocalBackup();
+            if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
             if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
             if (typeof showToast === 'function') showToast('群聊已解散', 'info', 1200);
             window.renderChatApp();
@@ -871,7 +932,8 @@
 
     window.ChatGroupSettings = {
         getGroupConfig,
-        saveGroupConfig
+        saveGroupConfig,
+        pushGroupActionNotice
     };
 
     console.log('✅ ChatGroupSettings 微信群聊资料中心与高级设定模块已成功装载');
