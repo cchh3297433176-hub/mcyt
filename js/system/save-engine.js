@@ -141,21 +141,30 @@
         }
     }
 
-    // 🛡️ 深度消息净化（剔除临时生成中、残缺对象，防止损坏落盘数据导致全盘蒸发）
+    // 🛡️ 深度消息净化（全面放行表情包、假图片、语音及居中小灰字，绝不误杀真实对白）
     function sanitizeChatHistoryForPersist(historyMap) {
         if (!historyMap || typeof historyMap !== 'object') return {};
         const safeMap = {};
         for (const [key, msgList] of Object.entries(historyMap)) {
             if (!Array.isArray(msgList)) continue;
-            // 过滤掉尚未完成生成的残缺临时态对象
             const cleanedList = msgList.filter(m => {
                 if (!m || typeof m !== 'object') return false;
+                // 仅过滤生成中的中间流，绝不剔除已经生成的正常消息
                 if (m.isGenerating === true || m._isPendingStream === true) return false;
-                // 确保拥有最基本的内容或结构
-                if (m.text === undefined && m.type !== 'image' && m.type !== 'contact_card' && m.type !== 'tarot_card' && m.type !== 'voice' && !m.sticker) {
-                    return false;
-                }
-                return true;
+
+                // 只要满足以下任一合法特征，即视为必须落盘的真实历史
+                if (typeof m.text === 'string' && m.text.trim().length > 0) return true;
+                if (m.type === 'sticker' || m.stickerUrl || m.sticker) return true;
+                if (m.type === 'image_text_only' || m.imageDesc) return true;
+                if (m.type === 'image' || m.imageUrl) return true;
+                if (m.type === 'voice') return true;
+                if (m.type === 'contact_card' || m.type === 'tarot_card') return true;
+                if (m.from === 'action') return true;
+
+                // 兜底：只要带 _id 或 timestamp 的对象均予以保护
+                if (m._id || m.timestamp) return true;
+
+                return false;
             });
             safeMap[key] = cleanedList;
         }
@@ -443,7 +452,6 @@
             if (!g.player.pov) g.player.pov = 'second';
             if (!g.player.avatarLive2d) g.player.avatarLive2d = '';
             if (!g.player.appearanceReal) g.player.appearanceReal = '';
-            // 补全三维人设字段防空
             if (g.player.offlinePersona === undefined) g.player.offlinePersona = g.player.persona || '';
             if (g.player.onlinePersona === undefined) g.player.onlinePersona = g.player.avatarLive2d || '';
             if (g.player.gameSkinPersona === undefined) g.player.gameSkinPersona = g.player.skin || '';
@@ -462,7 +470,6 @@
             g.npcs = Object.assign({}, g.npcs, data.npcs);
         }
 
-        // 🛡️ 聊天记录恢复防御：先校验格式，绝不轻易清空已有记录
         if (!g.chatHistory) g.chatHistory = {};
         if (data.chatHistory && typeof data.chatHistory === 'object') {
             for (const [k, v] of Object.entries(data.chatHistory)) {
@@ -472,13 +479,11 @@
             }
         }
 
-        // 小号与多身份强校验恢复
         g.currentAccountId = String(data.currentAccountId || 'main');
         g.altAccounts = Array.isArray(data.altAccounts)
             ? data.altAccounts.map(a => ({ ...a, id: String(a.id) }))
             : [];
         
-        // 再次呼叫微信独立人设恢复引擎，实现双重保障
         if (typeof window.restoreWechatProfileData === 'function') {
             window.restoreWechatProfileData();
         }
@@ -510,17 +515,57 @@
         if (Array.isArray(data.ytExternalVideos)) g.ytExternalVideos = data.ytExternalVideos;
         if (Array.isArray(data.ytCustomChannels)) g.ytCustomChannels = data.ytCustomChannels;
 
+        // 🛡️ 群聊基础数据恢复：优先结合独立本地持久化进行智能合并
         if (!g.groups) g.groups = {};
         if (data.groups) g.groups = Object.assign({}, g.groups, data.groups);
+        try {
+            const rawLocalGroups = localStorage.getItem('mcyt_wechat_group_chats');
+            if (rawLocalGroups) {
+                const parsedLocalGroups = JSON.parse(rawLocalGroups);
+                if (parsedLocalGroups && typeof parsedLocalGroups === 'object') {
+                    g.groups = Object.assign({}, g.groups, parsedLocalGroups);
+                }
+            }
+        } catch (_) {}
 
+        // 🛡️ 群聊历史记录深度防冲刷自愈门禁：融合独立持久化数据，绝不让冷启动覆盖丢失发言！
         if (!g.groupChatHistory) g.groupChatHistory = {};
         if (data.groupChatHistory && typeof data.groupChatHistory === 'object') {
             for (const [k, v] of Object.entries(data.groupChatHistory)) {
-                if (Array.isArray(v) && v.length) {
+                if (Array.isArray(v)) {
                     g.groupChatHistory[k] = v;
                 }
             }
         }
+        try {
+            const rawLocalHist = localStorage.getItem('mcyt_wechat_group_histories');
+            if (rawLocalHist) {
+                const parsedLocalHist = JSON.parse(rawLocalHist);
+                if (parsedLocalHist && typeof parsedLocalHist === 'object') {
+                    for (const gid in parsedLocalHist) {
+                        const localMsgs = parsedLocalHist[gid];
+                        if (!Array.isArray(localMsgs)) continue;
+
+                        const currentMsgs = g.groupChatHistory[gid] || [];
+                        const msgMap = new Map();
+                        // 优先填入局部更完整的消息
+                        localMsgs.forEach(m => {
+                            if (m) {
+                                const key = m._id || `${m.time}_${m.senderName || m.from}_${(m.text || '').slice(0, 15)}`;
+                                msgMap.set(key, m);
+                            }
+                        });
+                        currentMsgs.forEach(m => {
+                            if (m) {
+                                const key = m._id || `${m.time}_${m.senderName || m.from}_${(m.text || '').slice(0, 15)}`;
+                                msgMap.set(key, m);
+                            }
+                        });
+                        g.groupChatHistory[gid] = Array.from(msgMap.values());
+                    }
+                }
+            }
+        } catch (_) {}
 
         if (!g.groupMemories) g.groupMemories = {};
         if (data.groupMemories) g.groupMemories = Object.assign({}, g.groupMemories, data.groupMemories);
