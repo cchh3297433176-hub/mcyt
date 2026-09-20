@@ -263,6 +263,9 @@
         })();
     </script>
 
+    <!-- 0. 存储引擎第三方库：localForage（IndexedDB 优先，自动降级 localStorage），必须在所有业务脚本之前加载 -->
+    <script src="js/lib/localforage.min.js"></script>
+
     <!-- 1. 底层核心数据与网络 -->
     <script src="js/01-state-config.js"></script>
     <script src="js/02-ai-network.js"></script>
