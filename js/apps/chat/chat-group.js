@@ -133,8 +133,10 @@
         const group = window.G.groups && window.G.groups[gid];
         if (!group) { window.closeGroupChat(); return; }
 
-        // 动态唤醒兜底门禁：确保历史消息在渲染前从本地原子备份中加载完备
-        if (!window.G.groupChatHistory || !window.G.groupChatHistory[gid] || window.G.groupChatHistory[gid].length <= 1) {
+        // 🛡️ 修复：仅在历史记录完全缺失时才从本地备份兜底恢复一次；
+        // 旧版在 length <= 1 时也会触发，导致群友接话期间（此时长度恰好为1）
+        // 被反复重新合并/覆盖，是"清后台后只剩第一条消息"的根因之一。
+        if (!window.G.groupChatHistory || !window.G.groupChatHistory[gid]) {
             restoreGroupsFromStorage();
         }
 
@@ -884,9 +886,11 @@
         window.G.groupChatHistory[gid].push(msgPayload);
 
         window.syncGroupChatsToLocalBackup();
+        // 🛡️ 修复：autoSaveGame 提前到 render 之前，避免渲染环节偶发异常
+        // 导致这条消息始终没能写入 mcyt_autosave 主存档
+        if (typeof autoSaveGame === 'function') autoSaveGame();
         input.value = '';
         renderGroupChatWindow();
-        if (typeof autoSaveGame === 'function') autoSaveGame();
     };
 
     window.renderGroupChatWindow = renderGroupChatWindow;

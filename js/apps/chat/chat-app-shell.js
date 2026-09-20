@@ -352,6 +352,9 @@
                 if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
                 window.G.groupChatHistory[gid] = [];
 
+                // 🛡️ 修复：建群时必须同步独立本地备份，否则该群在后续
+                // 自愈合并中会被判定为"无本地记录"，存在被旧数据覆盖的风险
+                if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
                 if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
                 if (typeof showToast === 'function') showToast('群聊已建立', 'success', 1200);
                 window.G.chatActiveTab = 'group';
@@ -453,6 +456,8 @@
                 };
                 if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
                 window.G.groupChatHistory[gid] = [];
+                // 🛡️ 修复：同上，建群/入群必须立刻落盘独立备份
+                if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
                 if (typeof showToast === 'function') showToast('已加入群聊', 'success', 1200);
             }
             window.G.groupInvites.splice(idx, 1);
