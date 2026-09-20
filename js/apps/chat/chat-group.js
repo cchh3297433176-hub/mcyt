@@ -2,11 +2,10 @@
  * js/apps/chat/chat-group.js
  * 💬 微信多人群聊独立模块（仿QQ上下分层工具栏 · 具体角色输入提示 · 多角色2~5条交错发言 · 群斗图与配图 · 朋友圈轻量NPC生态协同）
  * 🌟 重构特性：
- * 1. 仿 QQ 式双层输入栏：上层输入框与发送键，下层语音/设置/加号/表情抽屉。
- * 2. 顶栏动态显示「XXX 正在输入中...」，活人感十足。
- * 3. 完整支持群内角色发送表情包 [STICKER] 与文字图片 [IMAGE_TEXT]。
- * 4. 彻底放开每人两条限制，支持自由连发 2~5 条交错发言。
- * 5. 全面对齐朋友圈轻量 NPC 参与群聊互动，人数统计与对话生成全链路覆盖。
+ * 1. 仿 QQ 式双层输入栏：上层输入框与发送键，下层语音/设置/表情/加号工具栏。
+ * 2. ⚙️ 设置按钮打开 8 大系统配置抽屉；➕ 加号按钮打开群专属聊天扩展互动槽位（群转账/收款/待办/接龙等）。
+ * 3. 顶栏动态显示「XXX 正在输入中...」，活人感十足。
+ * 4. 朋友圈轻量 NPC 深度参与群聊流转与接话。
  */
 
 (function() {
@@ -60,7 +59,6 @@
         }
     };
 
-    // 立即执行冷启动恢复
     restoreGroupsFromStorage();
 
     /**
@@ -77,7 +75,6 @@
         if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
         const history = window.G.groupChatHistory[gid] || [];
         
-        // 成员总数：正式成员 + 朋友圈轻量NPC + 我
         const formalCount = (group.members || []).length;
         const momentNpcCount = (group.momentNpcs || []).length;
         const memberCount = formalCount + momentNpcCount + 1;
@@ -233,6 +230,7 @@
         }
 
         const stickerDrawerHtml = window._stickerDrawerOpen ? window.buildChatStickerDrawerHTML('group', gid) : '';
+        const settingsDrawerHtml = window._settingsDrawerOpen ? window.buildChatSettingsDrawerHTML('group', gid) : '';
         const plusDrawerHtml = window._plusDrawerOpen ? window.buildChatPlusDrawerHTML('group', gid) : '';
 
         let quotePreviewHtml = '';
@@ -246,7 +244,6 @@
             </div>`;
         }
 
-        // 🌟 动态计算顶栏状态
         let headerTitleHtml = `${escapeHtml(group.name)} (${memberCount})`;
         if (isGenerating) {
             const speakerName = generatingSpeaker ? `${generatingSpeaker} ` : '';
@@ -268,11 +265,11 @@
                     </span>
                 </div>
                 <div style="display:flex;gap:8px;align-items:center;flex-shrink:0;">
-                    <!-- ⚡ 闪电推进群聊流转 -->
+                    <!-- ⚡ 推进群聊 -->
                     <button id="btnGroupLightningTrigger" onclick="window.triggerGroupAIReply('${gid}')" style="border:none;background:#07c160;color:#fff;width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="推动群聊推进">
                         ${isGenerating ? `<div class="wechat-spin-ring"></div>` : `<svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`}
                     </button>
-                    <!-- 微信原生三个点（···） -->
+                    <!-- 微信原生三个点（···）打开聊天信息 -->
                     <button onclick="window.openGroupSettingsModal('${gid}')" style="border:none;background:none;width:32px;height:32px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;" title="群资料与设置">
                         <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:#181818;stroke-width:2.2;stroke-linecap:round;"><circle cx="5" cy="12" r="1.2" fill="#181818"/><circle cx="12" cy="12" r="1.2" fill="#181818"/><circle cx="19" cy="12" r="1.2" fill="#181818"/></svg>
                     </button>
@@ -285,9 +282,10 @@
 
             ${quotePreviewHtml}
             ${stickerDrawerHtml}
+            ${settingsDrawerHtml}
             ${plusDrawerHtml}
 
-            <!-- 仿 QQ 式双层输入区域（上层输入+发送，下层语音/设置/加号/表情） -->
+            <!-- 仿 QQ 式双层输入区域 -->
             <div style="background:#f7f7f7;border-top:0.5px solid #dcdcdc;display:flex;flex-direction:column;padding:6px 10px 8px;flex-shrink:0;gap:6px;">
                 <!-- 上层：输入框与发送按钮 -->
                 <div style="display:flex;align-items:center;gap:8px;">
@@ -303,8 +301,8 @@
                             <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
                         </button>
 
-                        <!-- ⚙️ 设置图标（直通群聊高级设定） -->
-                        <button onclick="window.openGroupAdvancedSettingsModal('${gid}')" title="群高级设置" style="border:none;background:none;cursor:pointer;padding:0;display:flex;align-items:center;color:#555;">
+                        <!-- ⚙️ 设置图标（打开 8 大系统/排版/配置面板） -->
+                        <button onclick="window.toggleChatSettingsDrawer('group','${gid}')" title="系统设置与排版" style="border:none;background:none;cursor:pointer;padding:0;display:flex;align-items:center;color:#555;">
                             <svg viewBox="0 0 24 24" style="width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">
                                 <circle cx="12" cy="12" r="3"></circle>
                                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
@@ -322,9 +320,9 @@
                         </button>
                     </div>
 
-                    <!-- ➕ 加号功能扩展 -->
+                    <!-- ➕ 加号功能扩展（群互动扩展槽：群转账/群收款/群待办/群接龙） -->
                     <div>
-                        <button onclick="window.toggleChatPlusDrawer('group','${gid}')" title="更多功能" style="border:none;background:none;cursor:pointer;padding:0;display:flex;align-items:center;color:#555;">
+                        <button onclick="window.toggleChatPlusDrawer('group','${gid}')" title="群聊天扩展" style="border:none;background:none;cursor:pointer;padding:0;display:flex;align-items:center;color:#555;">
                             <svg viewBox="0 0 24 24" style="width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;">
                                 <circle cx="12" cy="12" r="9.5"></circle>
                                 <line x1="12" y1="8" x2="12" y2="16"></line>
@@ -375,13 +373,12 @@
     }
 
     /**
-     * 👥 群聊 AI 回复推进核心（正式角色 + 朋友圈轻量NPC生态协同，多角色自由连发2~5条交错发言）
+     * 👥 群聊 AI 回复推进核心
      */
     window.triggerGroupAIReply = async function(gid) {
         const group = window.G.groups && window.G.groups[gid];
         if (!group) return;
 
-        // 整理所有在群成员：正式角色 + 朋友圈轻量NPC
         const formalMembers = (group.members || []).map(mid => window.G.npcs[mid]).filter(Boolean);
         const momentNpcs = (group.momentNpcs || []).map(mn => ({
             id: mn.id,
@@ -423,12 +420,10 @@
             const targetCount = Math.floor(Math.random() * (maxSpk - minSpk + 1)) + minSpk;
             const shuffledMembers = [...allAvailableSpeakers].sort(() => Math.random() - 0.5).slice(0, targetCount);
 
-            // 设置初始输入态提示
             window._MCYT_GROUP_CURRENT_SPEAKER[gid] = shuffledMembers.map(m => m.name).slice(0, 2).join('、');
             if (window.G.currentChatGroup === gid) renderGroupChatWindow();
 
             if (cfg.apiMode === 'individual') {
-                // 模式一：单独调用模式
                 let rollingDialogue = recentDialogue;
 
                 for (const member of shuffledMembers) {
@@ -530,7 +525,6 @@
                     }
                 }
             } else {
-                // 模式二：统一调用模式
                 const promptBundle = window.ChatPromptGroup.buildGroupUnifiedPrompt({
                     group,
                     members: shuffledMembers.length > 0 ? shuffledMembers : allAvailableSpeakers,
@@ -630,9 +624,6 @@
         }
     };
 
-    /**
-     * 发送群消息
-     */
     window.doSendGroupChat = function(gid) {
         const input = document.getElementById('groupChatInput');
         if (!input) return;
@@ -712,6 +703,7 @@
         if (!window.G.groups || !window.G.groups[gid]) return;
         window.G.currentChatGroup = gid;
         window._stickerDrawerOpen = false;
+        window._settingsDrawerOpen = false;
         window._plusDrawerOpen = false;
         window._activeQuoteMessage = null;
         window.renderChatApp();
@@ -720,6 +712,7 @@
     window.closeGroupChat = function() {
         window.G.currentChatGroup = null;
         window._stickerDrawerOpen = false;
+        window._settingsDrawerOpen = false;
         window._plusDrawerOpen = false;
         window._activeQuoteMessage = null;
         window.renderChatApp();

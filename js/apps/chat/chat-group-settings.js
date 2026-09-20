@@ -3,10 +3,10 @@
  * ⚙️ 微信群聊资料中心与高级设置独立模块
  * 规范功能：
  * 1. 微信原生白灰微绿设计质感，消除所有复古土味 UI 与原生 select。
- * 2. 顶栏右侧设置微绿细线矢量齿轮与关闭叉号，点击直通【群聊高级设定】。
- * 3. 聊天信息基础页：群头像（含相册导入、网络URL与🎲一键随机头像）、群名称、群介绍/公告、解散群聊。
+ * 2. 顶栏右侧清晰布局微绿齿轮与关闭叉号：齿轮直通【高级设定】，叉号秒关弹窗。
+ * 3. 聊天信息基础页：群头像（相册/网络URL/🎲一键随机，全生态即时同步）、群名称、群介绍/公告、解散群聊。
  * 4. 高级设定页：群成员网格、每次发言角色人数范围、设置群管理员、仿QQ专属群头衔。
- * 5. 默认角色可发表情包（已移除冗余手动开关，默认全放开）。
+ * 5. 默认角色可发表情包（已移除手动开关）。
  * 6. 朋友圈轻量 NPC 折叠栏：带添加(+)与三角形折叠图标，支持从朋友圈池挑选或即兴创作加入群聊。
  */
 
@@ -63,7 +63,7 @@
                 <div onclick="window.openEditGroupAvatarModal('${gid}')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid #f0f0f0;cursor:pointer;">
                     <span style="font-size:15px;color:#181818;font-weight:500;">群头像</span>
                     <div style="display:flex;align-items:center;gap:8px;">
-                        <img src="${escapeHtml(groupAvatar)}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;background:#eee;box-shadow:0 1px 3px rgba(0,0,0,0.05);" onerror="this.src='assets/icons/chat.png';">
+                        <img id="modalGroupAvatarPreview" src="${escapeHtml(groupAvatar)}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;background:#eee;box-shadow:0 1px 3px rgba(0,0,0,0.05);" onerror="this.src='assets/icons/chat.png';">
                         <span style="color:#b2b2b2;font-size:16px;">›</span>
                     </div>
                 </div>
@@ -97,19 +97,22 @@
             </div>
         `, () => {});
 
-        // 右上角注入齿轮与叉号协调对齐
+        // 顶栏注入右侧齿轮与关闭叉号
         setTimeout(() => {
-            const modalCard = document.querySelector('.wechat-clean-modal-card');
             const modalHeader = document.querySelector('.wechat-clean-modal-header');
-            if (modalHeader && !modalHeader.querySelector('.group-quick-gear-btn')) {
+            if (modalHeader && !modalHeader.querySelector('.group-modal-header-actions')) {
                 modalHeader.style.position = 'relative';
                 modalHeader.style.display = 'flex';
                 modalHeader.style.alignItems = 'center';
                 modalHeader.style.justifyContent = 'center';
 
+                const actionsWrap = document.createElement('div');
+                actionsWrap.className = 'group-modal-header-actions';
+                actionsWrap.style.cssText = 'position:absolute;right:14px;top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:12px;z-index:10;';
+
+                // ⚙️ 齿轮按钮
                 const gearBtn = document.createElement('div');
-                gearBtn.className = 'group-quick-gear-btn';
-                gearBtn.style.cssText = 'position:absolute;right:38px;top:50%;transform:translateY(-50%);cursor:pointer;display:flex;align-items:center;justify-content:center;color:#07c160;padding:4px;z-index:10;';
+                gearBtn.style.cssText = 'cursor:pointer;display:flex;align-items:center;justify-content:center;color:#07c160;padding:2px;';
                 gearBtn.title = '群聊高级设定';
                 gearBtn.innerHTML = `
                     <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:none;stroke:#07c160;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;">
@@ -118,7 +121,21 @@
                     </svg>
                 `;
                 gearBtn.onclick = () => window.openGroupAdvancedSettingsModal(gid);
-                modalHeader.appendChild(gearBtn);
+
+                // ✕ 叉号按钮
+                const closeBtn = document.createElement('div');
+                closeBtn.style.cssText = 'cursor:pointer;display:flex;align-items:center;justify-content:center;color:#888;padding:2px;';
+                closeBtn.title = '关闭';
+                closeBtn.innerHTML = `
+                    <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                `;
+                closeBtn.onclick = () => {
+                    document.querySelector('.wechat-clean-modal-mask')?.remove();
+                };
+
+                actionsWrap.appendChild(gearBtn);
+                actionsWrap.appendChild(closeBtn);
+                modalHeader.appendChild(actionsWrap);
             }
         }, 20);
     };
@@ -132,15 +149,12 @@
         if (!group) return;
         const cfg = getGroupConfig(gid);
 
-        // 确保朋友圈轻量 NPC 容器存在
         if (!group.momentNpcs) group.momentNpcs = cfg.momentNpcs || [];
         const momentNpcs = group.momentNpcs || [];
 
-        // 正式角色成员
         const members = (group.members || []).map(mid => window.G.npcs[mid]).filter(Boolean);
-        const totalMemberCount = members.length + 1; // 加上自己
+        const totalMemberCount = members.length + 1;
 
-        // 群成员网格
         const membersGrid = members.map(m => {
             const isAdmin = (cfg.admins || []).includes(m.id);
             const title = (cfg.titles || {})[m.id];
@@ -154,7 +168,6 @@
             `;
         }).join('');
 
-        // ➕ 添加角色按钮
         const addMemberBtn = `
             <div onclick="window.openAddGroupMemberModal('${gid}')" style="display:flex;flex-direction:column;align-items:center;gap:3px;width:54px;cursor:pointer;">
                 <div style="width:44px;height:44px;border-radius:6px;border:1px dashed #c0c0c0;background:#fafafa;display:flex;align-items:center;justify-content:center;color:#888;">
@@ -164,7 +177,6 @@
             </div>
         `;
 
-        // ➖ 移除角色按钮
         const removeMemberBtn = `
             <div onclick="window.openRemoveGroupMemberModal('${gid}')" style="display:flex;flex-direction:column;align-items:center;gap:3px;width:54px;cursor:pointer;">
                 <div style="width:44px;height:44px;border-radius:6px;border:1px dashed #c0c0c0;background:#fafafa;display:flex;align-items:center;justify-content:center;color:#888;">
@@ -174,7 +186,6 @@
             </div>
         `;
 
-        // 管理员勾选列表
         const adminCheckboxesHtml = members.map(m => {
             const isAdm = (cfg.admins || []).includes(m.id);
             return `
@@ -185,7 +196,6 @@
             `;
         }).join('') || '<span style="font-size:11px;color:#999;">群内暂无可指派成员</span>';
 
-        // 专属头衔编辑列表
         const titleInputsHtml = members.map(m => {
             const currentTitle = (cfg.titles || {})[m.id] || '';
             return `
@@ -196,7 +206,6 @@
             `;
         }).join('') || '<div style="font-size:11px;color:#999;">暂无可配置头衔的成员</div>';
 
-        // 朋友圈 NPC 列表卡片
         let momentNpcCardsHtml = '';
         if (momentNpcs.length > 0) {
             momentNpcCardsHtml = momentNpcs.map((mn, idx) => `
@@ -246,7 +255,7 @@
                     </div>
                 </div>
 
-                <!-- 🌟 朋友圈 NPC 折叠管理栏 -->
+                <!-- 朋友圈 NPC 折叠管理栏 -->
                 <div style="border-bottom:0.5px solid #f0f0f0;padding-bottom:12px;">
                     <div style="display:flex;align-items:center;justify-content:space-between;">
                         <div>
@@ -254,18 +263,15 @@
                             <div style="font-size:11px;color:#888;">仅具备头像、名字与一条简短人设的轻量圈友</div>
                         </div>
                         <div style="display:flex;align-items:center;gap:12px;">
-                            <!-- ➕ 添加朋友圈 NPC 按钮 -->
                             <div onclick="window.openAddGroupMomentNpcModal('${gid}')" title="添加朋友圈NPC" style="width:26px;height:26px;border-radius:4px;border:1px dashed #07c160;background:#f0faf4;color:#07c160;display:flex;align-items:center;justify-content:center;cursor:pointer;">
                                 <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:#07c160;stroke-width:2.2;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                             </div>
-                            <!-- 三角形展开/收起折叠图标 -->
-                            <div id="btnToggleMomentNpcCollapse" onclick="window.toggleGroupMomentNpcCollapse()" title="展开/收起" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#888;transition:transform .2s;">
+                            <div id="btnToggleMomentNpcCollapse" onclick="window.toggleGroupMomentNpcCollapse()" title="展开/收起" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#888;">
                                 <svg id="iconMomentNpcArrow" viewBox="0 0 24 24" style="width:15px;height:15px;fill:currentColor;transform:rotate(0deg);transition:transform .2s;"><path d="M7 10l5 5 5-5z"/></svg>
                             </div>
                         </div>
                     </div>
 
-                    <!-- 折叠展开区域（默认收起或按状态） -->
                     <div id="groupMomentNpcCollapseBody" style="display:none;margin-top:10px;background:#f9f9f9;padding:8px;border-radius:6px;">
                         ${momentNpcCardsHtml}
                     </div>
@@ -340,7 +346,6 @@
             const chkMulti = document.getElementById('chkGroupMultiMsgs')?.checked ?? true;
             const currentSelectedMode = window._tempSelectedGroupApiMode || cfg.apiMode;
 
-            // 检查是否有变动的头衔或管理，生成居中小灰字通知
             const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { name: '我' };
             const oldAdmins = cfg.admins || [];
             const oldTitles = cfg.titles || {};
@@ -375,7 +380,7 @@
             saveGroupConfig(gid, {
                 apiMode: currentSelectedMode,
                 allowMultiMsgs: chkMulti,
-                allowStickers: true, // 始终开启表情包
+                allowStickers: true,
                 minSpeakers: minSpk,
                 maxSpeakers: maxSpk,
                 admins: selectedAdmins,
@@ -392,7 +397,6 @@
 
         window._tempSelectedGroupApiMode = cfg.apiMode;
 
-        // 开关滑动逻辑
         const setupSwitchToggle = (inputId) => {
             const input = document.getElementById(inputId);
             if (!input) return;
@@ -411,9 +415,6 @@
         setupSwitchToggle('chkGroupMultiMsgs');
     };
 
-    /**
-     * 🔽 展开/收起朋友圈 NPC 折叠栏
-     */
     window.toggleGroupMomentNpcCollapse = function() {
         const body = document.getElementById('groupMomentNpcCollapseBody');
         const arrow = document.getElementById('iconMomentNpcArrow');
@@ -428,9 +429,6 @@
         }
     };
 
-    /**
-     * ➕ 添加朋友圈轻量 NPC 弹窗（支持从朋友圈池直接挑选，或现场自行创作）
-     */
     window.openAddGroupMomentNpcModal = function(gid) {
         const group = window.G.groups && window.G.groups[gid];
         if (!group) return;
@@ -469,7 +467,6 @@
                 </div>
             </div>
         `, () => {
-            // 1. 处理从池子勾选
             const checkedIndexes = Array.from(document.querySelectorAll('.wclean-mnpc-pick:checked:not(:disabled)')).map(c => parseInt(c.value));
             let addedCount = 0;
             checkedIndexes.forEach(idx => {
@@ -485,7 +482,6 @@
                 }
             });
 
-            // 2. 处理即兴创作
             const customName = document.getElementById('wcleanNewMnpcName')?.value.trim();
             const customPersona = document.getElementById('wcleanNewMnpcPersona')?.value.trim() || '活跃的MC圈友';
             if (customName && !group.momentNpcs.some(m => m.name === customName)) {
@@ -506,7 +502,6 @@
             }
 
             window.openGroupAdvancedSettingsModal(gid);
-            // 自动保持展开状态
             setTimeout(() => {
                 const body = document.getElementById('groupMomentNpcCollapseBody');
                 const arrow = document.getElementById('iconMomentNpcArrow');
@@ -516,9 +511,6 @@
         });
     };
 
-    /**
-     * ❌ 移出群聊中的朋友圈 NPC
-     */
     window.removeGroupMomentNpc = function(gid, idx) {
         const group = window.G.groups && window.G.groups[gid];
         if (!group || !group.momentNpcs) return;
@@ -526,7 +518,6 @@
         window.syncGroupChatsToLocalBackup();
         if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
         window.openGroupAdvancedSettingsModal(gid);
-        // 自动保持展开状态
         setTimeout(() => {
             const body = document.getElementById('groupMomentNpcCollapseBody');
             const arrow = document.getElementById('iconMomentNpcArrow');
@@ -565,7 +556,30 @@
         }
     };
 
-    // 🎲 编辑群头像
+    // 🎲 编辑群头像（即时落盘与全生态刷新同步）
+    function applyNewGroupAvatar(gid, newAvatarUrl) {
+        const group = window.G.groups && window.G.groups[gid];
+        if (!group || !newAvatarUrl) return;
+
+        group.avatar = newAvatarUrl;
+        window.syncGroupChatsToLocalBackup();
+        if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+
+        // 1. 同步更新图一正在显示的头像
+        const modalPreview = document.getElementById('modalGroupAvatarPreview');
+        if (modalPreview) modalPreview.src = newAvatarUrl;
+
+        // 2. 刷新聊天窗口
+        if (window.G.currentChatGroup === gid && typeof window.renderGroupChatWindow === 'function') {
+            window.renderGroupChatWindow();
+        }
+
+        // 3. 刷新微信会话主列表里的群头像
+        if (typeof window.renderChatApp === 'function' && !window.G.currentChatGroup) {
+            window.renderChatApp();
+        }
+    }
+
     window.openEditGroupAvatarModal = function(gid) {
         const group = window.G.groups && window.G.groups[gid];
         if (!group) return;
@@ -596,12 +610,9 @@
         `, () => {
             const urlVal = document.getElementById('wcleanGroupAvatarUrlInput')?.value.trim();
             if (urlVal) {
-                group.avatar = urlVal;
-                if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
-                if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+                applyNewGroupAvatar(gid, urlVal);
             }
             window.openGroupSettingsModal(gid);
-            if (window.G.currentChatGroup === gid && typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
         });
 
         setTimeout(() => {
@@ -614,13 +625,10 @@
                     } else {
                         newAvatar = randomAvatars[Math.floor(Math.random() * randomAvatars.length)];
                     }
-                    group.avatar = newAvatar;
-                    if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
-                    if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+                    applyNewGroupAvatar(gid, newAvatar);
                     if (typeof showToast === 'function') showToast('已随机更换群头像', 'success', 1000);
                     document.querySelector('.wechat-clean-modal-mask')?.remove();
                     window.openGroupSettingsModal(gid);
-                    if (window.G.currentChatGroup === gid && typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
                 };
             }
 
@@ -631,12 +639,9 @@
                     if (!file) return;
                     const reader = new FileReader();
                     reader.onload = (evt) => {
-                        group.avatar = evt.target.result;
-                        if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
-                        if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+                        applyNewGroupAvatar(gid, evt.target.result);
                         if (typeof showToast === 'function') showToast('群头像已更新', 'success', 1200);
                         window.openGroupSettingsModal(gid);
-                        if (window.G.currentChatGroup === gid && typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
                     };
                     reader.readAsDataURL(file);
                 };
