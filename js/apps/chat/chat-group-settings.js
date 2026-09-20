@@ -3,11 +3,11 @@
  * ⚙️ 微信群聊资料中心与高级设置独立模块
  * 规范功能：
  * 1. 微信原生白灰微绿设计质感，消除所有复古土味 UI 与原生 select。
- * 2. 顶栏右侧清晰布局微绿齿轮与关闭叉号：齿轮直通【高级设定】，叉号秒关弹窗。
- * 3. 聊天信息基础页：群头像（相册/网络URL/🎲一键随机，全生态即时同步）、群名称、群介绍/公告、解散群聊。
- * 4. 高级设定页：群成员网格、每次发言角色人数范围、设置群管理员、仿QQ专属群头衔。
- * 5. 默认角色可发表情包（已移除手动开关）。
- * 6. 朋友圈轻量 NPC 折叠栏：带添加(+)与三角形折叠图标，支持从朋友圈池挑选或即兴创作加入群聊。
+ * 2. 聊天信息原生弹窗：右上角坚固渲染微绿矢量齿轮与关闭叉号（✕），彻底移除底部多余的取消/确定按钮。
+ * 3. 点击齿轮秒开【群聊高级设定】，点击叉号秒关。
+ * 4. 基础资料：群头像（含相册导入、网络URL与🎲一键随机头像，即时落盘与全生态刷新）、群名称、群介绍/公告、解散群聊。
+ * 5. 高级设定：群成员网格、接话人数范围、朋友圈轻量 NPC 折叠栏（含添加与折叠）、群管理员任命、仿QQ专属群头衔。
+ * 6. 默认角色始终允许发表情包（已剔除冗余手动开关）。
  */
 
 (function() {
@@ -23,15 +23,15 @@
             if (raw) store = JSON.parse(raw);
         } catch (_) {}
         return store[gid] || {
-            apiMode: 'unified', // 'unified' (统一调用) | 'individual' (单独调用)
+            apiMode: 'unified',
             allowMultiMsgs: true,
             syncToRememori: false,
             minSpeakers: 1,
             maxSpeakers: 3,
-            allowStickers: true, // 默认始终允许发表情包
-            admins: [],          // 管理员角色 ID 列表
-            titles: {},          // 各角色专属群头衔
-            momentNpcs: []       // 群内朋友圈轻量 NPC 列表 [{ id, name, persona, avatar }]
+            allowStickers: true,
+            admins: [],
+            titles: {},
+            momentNpcs: []
         };
     }
 
@@ -49,102 +49,110 @@
     }
 
     /**
-     * 👥 打开群聊信息与基础资料面板（图一）
+     * 👥 打开群聊信息与基础资料面板（图一：独立专属白灰微绿卡片，免去通用弹窗的底部按钮干扰）
      */
     window.openGroupSettingsModal = function(gid) {
+        // 先清理可能残存的旧弹窗遮罩
+        document.querySelectorAll('.wechat-clean-modal-mask, .group-info-modal-mask').forEach(el => el.remove());
+
         const group = window.G.groups && window.G.groups[gid];
         if (!group) return;
 
         const groupAvatar = group.avatar || 'assets/icons/chat.png';
 
-        window.openWechatCleanModal('聊天信息', `
-            <div style="display:flex;flex-direction:column;gap:16px;text-align:left;padding-top:4px;">
-                <!-- 群头像修改 -->
-                <div onclick="window.openEditGroupAvatarModal('${gid}')" style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:0.5px solid #f0f0f0;cursor:pointer;">
-                    <span style="font-size:15px;color:#181818;font-weight:500;">群头像</span>
-                    <div style="display:flex;align-items:center;gap:8px;">
-                        <img id="modalGroupAvatarPreview" src="${escapeHtml(groupAvatar)}" style="width:48px;height:48px;border-radius:8px;object-fit:cover;background:#eee;box-shadow:0 1px 3px rgba(0,0,0,0.05);" onerror="this.src='assets/icons/chat.png';">
-                        <span style="color:#b2b2b2;font-size:16px;">›</span>
+        const mask = document.createElement('div');
+        mask.className = 'group-info-modal-mask';
+        mask.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px;box-sizing:border-box;animation:wechatFadeIn 0.18s ease-out;';
+
+        mask.innerHTML = `
+            <div class="group-info-modal-card" style="background:#ffffff;border-radius:14px;width:100%;max-width:330px;box-shadow:0 12px 36px rgba(0,0,0,0.22);overflow:hidden;display:flex;flex-direction:column;position:relative;animation:wechatScaleUp 0.18s ease-out;">
+                
+                <!-- 顶栏：居中标题 + 右侧齿轮与关闭叉号 -->
+                <div style="position:relative;height:52px;display:flex;align-items:center;justify-content:center;border-bottom:0.5px solid #f2f2f2;padding:0 16px;">
+                    <span style="font-size:16px;font-weight:600;color:#181818;">聊天信息</span>
+                    
+                    <div style="position:absolute;right:14px;top:0;height:100%;display:flex;align-items:center;gap:14px;">
+                        <!-- ⚙️ 微绿矢量齿轮（直通群聊高级设定） -->
+                        <div id="btnGroupHeaderGear" title="群聊高级设定" style="cursor:pointer;display:flex;align-items:center;justify-content:center;color:#07c160;padding:2px;-webkit-tap-highlight-color:transparent;">
+                            <svg viewBox="0 0 24 24" style="width:23px;height:23px;fill:none;stroke:#07c160;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                            </svg>
+                        </div>
+
+                        <!-- ✕ 优雅细线关闭叉号 -->
+                        <div id="btnGroupHeaderClose" title="关闭" style="cursor:pointer;display:flex;align-items:center;justify-content:center;color:#888;padding:2px;-webkit-tap-highlight-color:transparent;">
+                            <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:none;stroke:#666666;stroke-width:2.2;stroke-linecap:round;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                        </div>
                     </div>
                 </div>
 
-                <!-- 群聊名称 -->
-                <div onclick="window.openEditGroupNameModal('${gid}')" style="display:flex;align-items:center;justify-content:space-between;padding:12px 0;border-bottom:0.5px solid #f0f0f0;cursor:pointer;">
-                    <span style="font-size:15px;color:#181818;font-weight:500;">群聊名称</span>
-                    <div style="font-size:15px;color:#181818;display:flex;align-items:center;gap:6px;">
-                        <span style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500;">${escapeHtml(group.name)}</span>
-                        <svg viewBox="0 0 24 24" style="width:15px;height:15px;fill:none;stroke:#07c160;stroke-width:2.2;"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                <!-- 内容主体 -->
+                <div style="padding:16px;display:flex;flex-direction:column;gap:14px;max-height:70vh;overflow-y:auto;">
+                    <!-- 群头像修改 -->
+                    <div onclick="window.openEditGroupAvatarModal('${gid}')" style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:0.5px solid #f2f2f2;cursor:pointer;">
+                        <span style="font-size:14.5px;color:#181818;font-weight:500;">群头像</span>
+                        <div style="display:flex;align-items:center;gap:8px;">
+                            <img id="modalGroupAvatarPreview" src="${escapeHtml(groupAvatar)}" style="width:46px;height:46px;border-radius:8px;object-fit:cover;background:#eee;box-shadow:0 1px 3px rgba(0,0,0,0.06);" onerror="this.src='assets/icons/chat.png';">
+                            <span style="color:#b2b2b2;font-size:16px;">›</span>
+                        </div>
                     </div>
-                </div>
 
-                <!-- 群介绍/公告 -->
-                <div style="display:flex;flex-direction:column;gap:8px;padding:8px 0;border-bottom:0.5px solid #f0f0f0;">
-                    <div style="display:flex;align-items:center;justify-content:space-between;">
-                        <span style="font-size:15px;color:#181818;font-weight:500;">群介绍/公告</span>
-                        <span onclick="window.openEditGroupDescModal('${gid}')" style="font-size:13.5px;color:#07c160;cursor:pointer;font-weight:500;">编辑</span>
+                    <!-- 群聊名称 -->
+                    <div onclick="window.openEditGroupNameModal('${gid}')" style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:0.5px solid #f2f2f2;cursor:pointer;">
+                        <span style="font-size:14.5px;color:#181818;font-weight:500;">群聊名称</span>
+                        <div style="font-size:14.5px;color:#181818;display:flex;align-items:center;gap:6px;">
+                            <span style="max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:500;">${escapeHtml(group.name)}</span>
+                            <svg viewBox="0 0 24 24" style="width:15px;height:15px;fill:none;stroke:#07c160;stroke-width:2.2;"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+                        </div>
                     </div>
-                    <div style="font-size:13px;color:#777;line-height:1.5;background:#f9f9f9;padding:12px 14px;border-radius:6px;min-height:54px;word-break:break-word;">
-                        ${escapeHtml(group.description || '暂无群介绍，点击上方编辑完善群公告。')}
-                    </div>
-                </div>
 
-                <!-- 解散并删除群聊 -->
-                <div style="margin-top:14px;">
-                    <button type="button" onclick="window.dismissGroup('${gid}')" style="width:100%;border:none;background:#fff1f0;color:#fa5151;padding:10px;border-radius:8px;font-size:13.5px;font-weight:600;cursor:pointer;">
-                        解散并删除群聊
-                    </button>
+                    <!-- 群介绍/公告 -->
+                    <div style="display:flex;flex-direction:column;gap:6px;padding:6px 0;border-bottom:0.5px solid #f2f2f2;">
+                        <div style="display:flex;align-items:center;justify-content:space-between;">
+                            <span style="font-size:14.5px;color:#181818;font-weight:500;">群介绍/公告</span>
+                            <span onclick="window.openEditGroupDescModal('${gid}')" style="font-size:13px;color:#07c160;cursor:pointer;font-weight:500;">编辑</span>
+                        </div>
+                        <div style="font-size:12.5px;color:#777;line-height:1.5;background:#f9f9f9;padding:10px 12px;border-radius:6px;min-height:50px;word-break:break-word;">
+                            ${escapeHtml(group.description || '暂无群介绍，点击上方编辑完善群公告。')}
+                        </div>
+                    </div>
+
+                    <!-- 解散并删除群聊 -->
+                    <div style="margin-top:10px;padding-bottom:4px;">
+                        <button type="button" onclick="window.dismissGroup('${gid}')" style="width:100%;border:none;background:#fff1f0;color:#fa5151;padding:10px;border-radius:8px;font-size:13.5px;font-weight:600;cursor:pointer;">
+                            解散并删除群聊
+                        </button>
+                    </div>
                 </div>
             </div>
-        `, () => {});
+        `;
 
-        // 顶栏注入右侧齿轮与关闭叉号
-        setTimeout(() => {
-            const modalHeader = document.querySelector('.wechat-clean-modal-header');
-            if (modalHeader && !modalHeader.querySelector('.group-modal-header-actions')) {
-                modalHeader.style.position = 'relative';
-                modalHeader.style.display = 'flex';
-                modalHeader.style.alignItems = 'center';
-                modalHeader.style.justifyContent = 'center';
+        document.body.appendChild(mask);
 
-                const actionsWrap = document.createElement('div');
-                actionsWrap.className = 'group-modal-header-actions';
-                actionsWrap.style.cssText = 'position:absolute;right:14px;top:50%;transform:translateY(-50%);display:flex;align-items:center;gap:12px;z-index:10;';
+        // 绑定齿轮与叉号事件
+        mask.querySelector('#btnGroupHeaderGear').onclick = (e) => {
+            e.stopPropagation();
+            mask.remove();
+            window.openGroupAdvancedSettingsModal(gid);
+        };
 
-                // ⚙️ 齿轮按钮
-                const gearBtn = document.createElement('div');
-                gearBtn.style.cssText = 'cursor:pointer;display:flex;align-items:center;justify-content:center;color:#07c160;padding:2px;';
-                gearBtn.title = '群聊高级设定';
-                gearBtn.innerHTML = `
-                    <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:none;stroke:#07c160;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;">
-                        <circle cx="12" cy="12" r="3"></circle>
-                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                    </svg>
-                `;
-                gearBtn.onclick = () => window.openGroupAdvancedSettingsModal(gid);
+        mask.querySelector('#btnGroupHeaderClose').onclick = (e) => {
+            e.stopPropagation();
+            mask.remove();
+        };
 
-                // ✕ 叉号按钮
-                const closeBtn = document.createElement('div');
-                closeBtn.style.cssText = 'cursor:pointer;display:flex;align-items:center;justify-content:center;color:#888;padding:2px;';
-                closeBtn.title = '关闭';
-                closeBtn.innerHTML = `
-                    <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-                `;
-                closeBtn.onclick = () => {
-                    document.querySelector('.wechat-clean-modal-mask')?.remove();
-                };
-
-                actionsWrap.appendChild(gearBtn);
-                actionsWrap.appendChild(closeBtn);
-                modalHeader.appendChild(actionsWrap);
-            }
-        }, 20);
+        // 点击外部遮罩直接关闭
+        mask.onclick = (e) => {
+            if (e.target === mask) mask.remove();
+        };
     };
 
     /**
      * ⚙️ 群聊高级设定弹窗（图二）
      */
     window.openGroupAdvancedSettingsModal = function(gid) {
-        document.querySelector('.wechat-clean-modal-mask')?.remove();
+        document.querySelectorAll('.wechat-clean-modal-mask, .group-info-modal-mask').forEach(el => el.remove());
         const group = window.G.groups && window.G.groups[gid];
         if (!group) return;
         const cfg = getGroupConfig(gid);
@@ -556,7 +564,7 @@
         }
     };
 
-    // 🎲 编辑群头像（即时落盘与全生态刷新同步）
+    // 🎲 应用新群头像并同步刷新列表
     function applyNewGroupAvatar(gid, newAvatarUrl) {
         const group = window.G.groups && window.G.groups[gid];
         if (!group || !newAvatarUrl) return;
@@ -580,10 +588,11 @@
         }
     }
 
+    // 🎲 编辑群头像
     window.openEditGroupAvatarModal = function(gid) {
         const group = window.G.groups && window.G.groups[gid];
         if (!group) return;
-        document.querySelector('.wechat-clean-modal-mask')?.remove();
+        document.querySelectorAll('.wechat-clean-modal-mask, .group-info-modal-mask').forEach(el => el.remove());
 
         const randomAvatars = [
             'assets/icons/chat.png',
@@ -653,7 +662,8 @@
     window.openEditGroupDescModal = function(gid) {
         const group = window.G.groups && window.G.groups[gid];
         if (!group) return;
-        document.querySelector('.wechat-clean-modal-mask')?.remove();
+        document.querySelectorAll('.wechat-clean-modal-mask, .group-info-modal-mask').forEach(el => el.remove());
+
         window.openWechatCleanModal('修改群介绍/公告', `
             <textarea id="wcleanGroupDescInput" rows="4" class="wechat-clean-input" style="width:100%;resize:none;line-height:1.45;" placeholder="输入群介绍或群公告...">${escapeHtml(group.description || '')}</textarea>
         `, () => {
@@ -669,7 +679,7 @@
     window.openRemoveGroupMemberModal = function(gid) {
         const group = window.G.groups && window.G.groups[gid];
         if (!group) return;
-        document.querySelector('.wechat-clean-modal-mask')?.remove();
+        document.querySelectorAll('.wechat-clean-modal-mask, .group-info-modal-mask').forEach(el => el.remove());
 
         const currentMembers = (group.members || []).map(mid => window.G.npcs[mid]).filter(Boolean);
         if (currentMembers.length === 0) {
@@ -715,7 +725,7 @@
     window.openAddGroupMemberModal = function(gid) {
         const group = window.G.groups && window.G.groups[gid];
         if (!group) return;
-        document.querySelector('.wechat-clean-modal-mask')?.remove();
+        document.querySelectorAll('.wechat-clean-modal-mask, .group-info-modal-mask').forEach(el => el.remove());
 
         const currentMembers = new Set(group.members || []);
         const allNpcKeys = Object.keys(window.G.npcs || {});
