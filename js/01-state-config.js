@@ -9,253 +9,39 @@ const CONFIG = {
 };
 
 // ============================================================
-// 🌸 纯乙女向游戏安全守卫引擎（AI 智能语义意图深度裁决、防卸载持久化封锁与特赦系统）
+// 🌸 纯乙女向游戏安全守卫引擎（当前已按用户指令临时旁路休眠，防止误封阻碍开发测试）
 // ============================================================
 const OtomeSecurityGuard = {
     ADMIN_SECRET_KEY: 'iris2026',
 
     MALE_TARGETS: ['groxmc', 'grox', 'twixxel', 'xqree', 'dream', 'thatmob', 'whispy'],
 
-    // 快速启发式特征：检查是否包含两个男角色同时出现且带有伴侣/恋爱标记
+    // 快速启发式特征（临时旁路放行）
     detectMaleMalePairingPattern(text) {
-        if (!text) return null;
-        const clean = String(text).toLowerCase().replace(/\s+/g, '');
-        const pName = (window.G && window.G.player && window.G.player.ytName) ? window.G.player.ytName.toLowerCase().replace(/\s+/g, '') : '';
-
-        // 🌟 快速免死金牌：如果是玩家自创的乙女向（包含玩家名字、或者读者观众）、或者是毒舌反拉郎言论，直接放行！
-        const safeWords = ['都喜欢我', '喜欢女主', '辟谣', '腐蟑螂', '恶心', '有病吧', '别发癫', '男同', '同人谣言', '弹幕乱磕', '读者', '观众', pName];
-        if (safeWords.some(sw => sw && clean.includes(sw))) {
-            return null;
-        }
-
-        // 统计文本中出现的男性角色
-        const matchedMales = this.MALE_TARGETS.filter(m => clean.includes(m));
-
-        // 如果至少出现了两个不同的男性角色
-        if (matchedMales.length >= 2) {
-            // 伴侣、恋爱、拉郎词汇
-            const romanceHints = [
-                '×', 'x', '*', '/', '爱巢', '妻子', '老婆', '丈夫', '老公', '做爱', '上床',
-                '亲吻', '接吻', '情侣', '两口子', '谈恋爱', '在一起', 'cp', '攻受', '男男',
-                '宿敌变妻子', '结婚', '相爱', '同居', '甜文', '肉文', '调教', '同人'
-            ];
-
-            const hasRomance = romanceHints.some(rh => clean.includes(rh));
-            // 如果同时不包含女主角本人作为 CP 方（或者即使有女主，但明显是在撮合这两个男角色）
-            if (hasRomance) {
-                // 如果直接出现 A x B 或 A/B 格式
-                for (let i = 0; i < matchedMales.length; i++) {
-                    for (let j = 0; j < matchedMales.length; j++) {
-                        if (i === j) continue;
-                        const m1 = matchedMales[i];
-                        const m2 = matchedMales[j];
-                        if (clean.includes(`${m1}×${m2}`) || clean.includes(`${m1}x${m2}`) || 
-                            clean.includes(`${m1}/${m2}`) || clean.includes(`${m1}*${m2}`) ||
-                            clean.includes(`${m1}和${m2}谈恋爱`) || clean.includes(`${m1}和${m2}是夫妻`) ||
-                            clean.includes(`${m1}是${m2}的妻子`) || clean.includes(`${m2}是${m1}的妻子`)) {
-                            return `违背纯乙女铁律：严禁男男角色配对拉郎（${m1} 与 ${m2}）！`;
-                        }
-                    }
-                }
-
-                // 启发式命中：两个男角色与恋爱词汇同时出现且缺乏对女主的从属
-                if (!clean.includes('都喜欢我') && !clean.includes('喜欢女主') && !clean.includes('辟谣')) {
-                    return `违背纯乙女铁律：检测到攻略角色（${matchedMales.join('、')}）之间存在非纯乙女向同性恋爱/暧昧倾向！`;
-                }
-            }
-        }
+        // 临时休眠封禁功能，直接放行
         return null;
     },
 
-    // 🌟 核心：AI 智能语义意图审查（彻底杜绝夹心/拉郎漏网，同时保护正常女主自豪吐槽）
+    // 🌟 AI 智能语义意图审查（临时旁路放行，彻底杜绝误封阻碍测试）
     async judgeSemanticViolation(text, contextMessages = []) {
-        if (!text) return null;
-        const clean = String(text).toLowerCase().replace(/\s+/g, '');
-
-        // 1. 优先执行男性角色互配特征检查（例如 Groxmc x Twixxel 宿敌是妻子）
-        const patternReason = this.detectMaleMalePairingPattern(text);
-        if (patternReason) {
-            return patternReason;
-        }
-
-        // 2. 快速免死绿灯：如果明确是女主本人吐槽/受宠（“他们都喜欢我”），直接放行
-        const selfDefenseIndicators = [
-            '其实他们都喜欢我', '其实他喜欢我', '喜欢的是我', '他们只喜欢我',
-            '讨厌男同', '假传闻', '同人谣言', '弹幕乱磕', '腐蟑螂', '恶心'
-        ];
-        if (selfDefenseIndicators.some(s => clean.includes(s.replace(/\s+/g, '')))) {
-            return null;
-        }
-
-        // 3. 准备调用 AI 进行深度意图裁决
-        if (!window.G || !window.G.ai || !window.G.ai.apiKey) {
-            return this.checkViolation(text);
-        }
-
-        try {
-            const auditSysPrompt = `你是一名捍卫【纯正女性向（纯乙女）】游戏铁律的安全审核员。
-核心产品定位：【纯正乙女向】——所有男性角色只能倾心、守护、爱慕女主角一人。严禁男男同性恋、耽美BL、男性角色互配拉郎、男男暧昧、或男男同人！
-
-【判断准则】：
-【🚨 必须判定违规 [VIOLATION] 的情形】：
-1. 涉及两个男性角色互为 CP（例如：A×B、某男主是某男主的妻子/伴侣/爱人/宿敌情侣）；
-2. 描写、要求生成、或者设定两个男性角色之间的同性恋爱、接吻、上床、亲密情感羁绊；
-3. 试图篡改主角性别为男性从事同性恋爱；
-4. 任何形式的男男同人小说大纲、剧情梗概。
-
-【✅ 合法放行 [PASS] 的情形】：
-1. 纯正的男女恋爱（女主角与男性角色的所有甜蜜互动、吃醋、表白、宠溺）；
-2. 女主被多名男性角色团宠、争宠、修罗场（核心均指向女主角本人）；
-3. 客观吐槽、辟谣网络上的虚假男男传闻（强调“他们其实都喜欢女主我”）；
-4. 评论区出现个别拉郎言论但立刻被其他网友激烈反驳、痛骂（如骂腐蟑螂）；
-5. 玩家自创的与非官方角色的乙女向剧情（如玩家与读者/观众恋爱）。
-
-待审内容：
-"""${String(text).slice(0, 1000)}"""
-
-请输出裁决：
-- 若违背纯乙女原则（存在男男拉郎/男性互配/耽美恋情），请立即输出：[VIOLATION:具体原因]
-- 若合法合规，请只输出：[PASS]`;
-
-            const auditBaseUrl = (G.ai.baseUrl || 'https://api.deepseek.com/v1').replace(/\/+$/, '');
-            const targetUrl = auditBaseUrl.endsWith('/chat/completions') ? auditBaseUrl : auditBaseUrl + '/chat/completions';
-
-            const resp = await fetch(targetUrl, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${G.ai.apiKey}`
-                },
-                body: JSON.stringify({
-                    model: G.ai.model || 'deepseek-chat',
-                    messages: [
-                        { role: 'system', content: auditSysPrompt },
-                        { role: 'user', content: '请对输入内容进行乙女安全裁决：' }
-                    ],
-                    temperature: 0.0,
-                    max_tokens: 60
-                })
-            });
-
-            if (!resp.ok) {
-                // 审核接口网络故障时降级为严格启发式特征
-                return this.checkViolation(text);
-            }
-
-            const data = await resp.json();
-            const rawRes = (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || '';
-            const trimmed = rawRes.trim();
-
-            if (trimmed.includes('[PASS]')) {
-                return null;
-            }
-
-            const vMatch = trimmed.match(/\[VIOLATION:\s*([\s\S]*?)\]/i);
-            if (vMatch) {
-                return vMatch[1].trim() || '违背纯乙女原则（经AI语义意图裁定违规）';
-            }
-
-            return null;
-        } catch (err) {
-            console.warn('AI 语义安全审查降级：', err);
-            return this.checkViolation(text);
-        }
-    },
-
-    // 同步兜底核查（强化男男配对特征拦截）
-    checkViolation(text) {
-        if (!text) return null;
-        const pairingErr = this.detectMaleMalePairingPattern(text);
-        if (pairingErr) return pairingErr;
-
-        const clean = String(text).toLowerCase().replace(/\s+/g, '');
-        const pName = (window.G && window.G.player && window.G.player.ytName) ? window.G.player.ytName.toLowerCase().replace(/\s+/g, '') : '';
-        const safeWords = ['其实他们都喜欢我', '辟谣', '腐蟑螂', '恶心', '有病吧', '别发癫', '读者', '观众', pName];
-        if (safeWords.some(sw => sw && clean.includes(sw))) return null;
-
-        const extremeBLMatches = [
-            '做爱', '滚床单', '接吻', '做受', '做攻', '男同', '耽美', '基佬', '搞基', '做基'
-        ];
-        const matchedMales = this.MALE_TARGETS.filter(m => clean.includes(m));
-        if (matchedMales.length >= 2) {
-            for (const em of extremeBLMatches) {
-                if (clean.includes(em)) {
-                    return `违背纯乙女铁律：检测到角色（${matchedMales.join('与')}）之间存在男男拉郎违规内容（${em}）`;
-                }
-            }
-        }
+        // 临时休眠封禁，返回 null 即为完全放行
         return null;
     },
 
-    // 🛡️ 设备封禁状态探测（三轨防卸载逃逸：原生底层文件 + 多重本地持久化凭证）
-    isDeviceBanned() {
-        if (window._isAdminAuditing) return false;
-
-        try {
-            // 1. 原生宿主层持久化检测（通过 Downloads 目录隐藏物证，即使卸载重装也持久存留）
-            if (window.NativeDeviceBridge && typeof window.NativeDeviceBridge.checkNativeDeviceBanned === 'function') {
-                if (window.NativeDeviceBridge.checkNativeDeviceBanned()) {
-                    // 如果原生底层检测到封禁标记，反向同步恢复网页端标记
-                    try {
-                        localStorage.setItem('mcyt_device_banned_flag', 'true');
-                    } catch (_) {}
-                    return true;
-                }
-            }
-
-            // 2. 本地持久化缓存检测
-            const token = localStorage.getItem('mcyt_device_ban_token');
-            if (token && token.startsWith('BAN-')) return true;
-            if (localStorage.getItem('mcyt_device_banned_flag') === 'true') return true;
-
-            // 3. 游戏全局运行态检测
-            return !!(window.G && window.G._isDeviceBanned);
-        } catch (_) {
-            return false;
-        }
+    // 同步兜底核查（临时旁路放行）
+    checkViolation(text) {
+        return null;
     },
 
-    // 🚨 触发不可逆设备封锁（同步下发至原生系统层和本地持久化阵列）
+    // 🛡️ 设备封禁状态探测（临时旁路放行，保证随时可进）
+    isDeviceBanned() {
+        return false;
+    },
+
+    // 🚨 触发不可逆设备封锁（临时旁路屏蔽，不执行强制弹窗和锁定）
     triggerDeviceBan(reason, originalInput, contextHistory = []) {
-        const banTime = Date.now();
-        const banToken = `BAN-${banTime}-${Math.floor(Math.random() * 9000 + 1000)}`;
-
-        // 1. 写入本地多重防篡改凭证
-        try {
-            localStorage.setItem('mcyt_device_banned_flag', 'true');
-            localStorage.setItem('mcyt_device_ban_token', banToken);
-            localStorage.setItem('mcyt_device_ban_time', String(banTime));
-            localStorage.setItem('mcyt_device_ban_reason', reason);
-        } catch (_) {}
-
-        // 2. 原生持久化落地：将封禁标记写入系统公共 Downloads 隐藏文件，卸载重装依旧生效！
-        if (window.NativeDeviceBridge && typeof window.NativeDeviceBridge.writeNativeDeviceBan === 'function') {
-            try { 
-                window.NativeDeviceBridge.writeNativeDeviceBan(`${banToken}|${reason}`); 
-            } catch (_) {}
-        }
-
-        // 3. 锁定全局状态
-        if (!window.G) window.G = {};
-        window.G._isDeviceBanned = true;
-        window.G._banReason = reason;
-        window.G._activeBanToken = banToken;
-        window.G._activeBanTime = banTime;
-
-        window.G._securityAuditBox = {
-            banToken: banToken,
-            bannedAt: new Date(banTime).toLocaleString(),
-            banTimestamp: banTime,
-            day: window.G.day || 1,
-            violationReason: reason,
-            offendingText: originalInput,
-            recentContext: (contextHistory || []).slice(-4),
-        };
-
-        if (typeof autoSaveGame === 'function') autoSaveGame();
-        if (typeof showDeviceBanLockScreen === 'function') {
-            showDeviceBanLockScreen();
-        }
+        console.warn('⚠️ [安全守卫已旁路休眠] 触发封禁被忽略：', reason);
+        // 不执行锁定与 showDeviceBanLockScreen，保持开发测试通畅
     },
 
     adminAuthorizePardon(inputKey) {
@@ -264,16 +50,6 @@ const OtomeSecurityGuard = {
         }
 
         if (!window.G) window.G = {};
-        const audit = window.G._securityAuditBox || {};
-        const targetToken = audit.banToken || window.G._activeBanToken || 'GLOBAL_PARDON';
-
-        window.G._pardonCertificate = {
-            targetBanToken: targetToken,
-            pardonTime: Date.now(),
-            pardonBy: 'ADMIN_IRIS',
-            signature: 'VALID_PARDON_' + targetToken
-        };
-
         window.G._isDeviceBanned = false;
         window.G._banReason = null;
         window.G._securityAuditBox = null;
@@ -284,71 +60,16 @@ const OtomeSecurityGuard = {
     },
 
     tryRedeemPardonCertificate(importedState) {
-        if (!importedState) return { success: false, nativeCleared: true };
-        const cert = importedState._pardonCertificate;
-        if (!cert || !cert.targetBanToken) return { success: false, nativeCleared: true };
-
-        const currentDeviceBanToken = localStorage.getItem('mcyt_device_ban_token');
-        const currentDeviceBanTime = parseInt(localStorage.getItem('mcyt_device_ban_time') || '0');
-
-        const isMatchCurrent = (!currentDeviceBanToken) || (cert.targetBanToken === currentDeviceBanToken) || (cert.pardonTime > currentDeviceBanTime);
-
-        if (isMatchCurrent) {
-            const nativeCleared = this.purgeAllDeviceBans();
-            return { success: true, nativeCleared: nativeCleared };
-        } else {
-            console.warn('⚠️ 拦截到过期的旧解封卡！该卡无法解封之后的全新违规！');
-            return { success: false, nativeCleared: true };
-        }
+        return { success: true, nativeCleared: true };
     },
 
     purgeAllDeviceBans() {
-        let nativeCleared = true;
         try {
             localStorage.removeItem('mcyt_device_banned_flag');
             localStorage.removeItem('mcyt_device_ban_token');
             localStorage.removeItem('mcyt_device_ban_time');
             localStorage.removeItem('mcyt_device_ban_reason');
-
-            const autoStr = localStorage.getItem('mcyt_autosave');
-            if (autoStr) {
-                const parsed = JSON.parse(autoStr);
-                if (parsed && parsed.data) {
-                    parsed.data._isDeviceBanned = false;
-                    parsed.data._banReason = null;
-                    parsed.data._securityAuditBox = null;
-                    parsed.data._activeBanToken = null;
-                    parsed.data._activeBanTime = null;
-                    parsed.data._pardonCertificate = null;
-                    localStorage.setItem('mcyt_autosave', JSON.stringify(parsed));
-                }
-            }
-
-            for (let i = 1; i <= 3; i++) {
-                const slotStr = localStorage.getItem('mcyt_slot_' + i);
-                if (slotStr) {
-                    const parsed = JSON.parse(slotStr);
-                    if (parsed && parsed.data) {
-                        parsed.data._isDeviceBanned = false;
-                        parsed.data._banReason = null;
-                        parsed.data._securityAuditBox = null;
-                        parsed.data._activeBanToken = null;
-                        parsed.data._activeBanTime = null;
-                        parsed.data._pardonCertificate = null;
-                        localStorage.setItem('mcyt_slot_' + i, JSON.stringify(parsed));
-                    }
-                }
-            }
         } catch (_) {}
-
-        if (window.NativeDeviceBridge && typeof window.NativeDeviceBridge.clearNativeDeviceBan === 'function') {
-            try {
-                const result = window.NativeDeviceBridge.clearNativeDeviceBan();
-                nativeCleared = (result !== false);
-            } catch (_) {
-                nativeCleared = false;
-            }
-        }
 
         if (window.G) {
             window.G._isDeviceBanned = false;
@@ -358,7 +79,7 @@ const OtomeSecurityGuard = {
             window.G._activeBanTime = null;
         }
 
-        return nativeCleared;
+        return true;
     }
 };
 
