@@ -2,12 +2,12 @@
  * js/apps/chat/chat-group-settings.js
  * ⚙️ 微信群聊资料中心与高级设置独立模块
  * 规范功能：
- * 1. 微信原生白灰微绿设计质感，消除所有复古土味 UI 与原生 select。
+ * 1. 微信原生白灰微绿设计质感，消除所有复古土味 UI、原生 select 与冗余死板的括号说明。
  * 2. 聊天信息原生弹窗：右上角坚固渲染微绿矢量齿轮与关闭叉号（✕），彻底移除底部多余的取消/确定按钮。
- * 3. 点击齿轮秒开【群聊高级设定】，点击叉号秒关。
- * 4. 基础资料：群头像（含相册导入、网络URL与🎲一键随机头像，即时落盘与全生态刷新）、群名称、群介绍/公告、解散群聊。
- * 5. 高级设定：群成员网格、接话人数范围、朋友圈轻量 NPC 折叠栏（含添加与折叠）、群管理员任命、仿QQ专属群头衔。
- * 6. 默认角色始终允许发表情包（已剔除冗余手动开关）。
+ * 3. 完美弹窗层级（z-index）：修改群名、修改公告、更换头像、解散群聊均置于顶层，彻底解决遮挡问题。
+ * 4. 修改群名即时在群聊天流中生成微信原生居中小灰字提示（如：""我" 修改群名为 "XXX""）并落盘持久化。
+ * 5. 高级设定：群成员网格、接话人数范围、朋友圈轻量 NPC 折叠栏（含添加与折叠）、群管理员任命、群成员专属头衔。
+ * 6. 默认角色始终允许发表情包（无多余开关）。
  */
 
 (function() {
@@ -49,10 +49,9 @@
     }
 
     /**
-     * 👥 打开群聊信息与基础资料面板（图一：独立专属白灰微绿卡片，免去通用弹窗的底部按钮干扰）
+     * 👥 打开群聊信息与基础资料面板（图一）
      */
     window.openGroupSettingsModal = function(gid) {
-        // 先清理可能残存的旧弹窗遮罩
         document.querySelectorAll('.wechat-clean-modal-mask, .group-info-modal-mask').forEach(el => el.remove());
 
         const group = window.G.groups && window.G.groups[gid];
@@ -62,7 +61,7 @@
 
         const mask = document.createElement('div');
         mask.className = 'group-info-modal-mask';
-        mask.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:99999;padding:16px;box-sizing:border-box;animation:wechatFadeIn 0.18s ease-out;';
+        mask.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.55);display:flex;align-items:center;justify-content:center;z-index:9000;padding:16px;box-sizing:border-box;animation:wechatFadeIn 0.18s ease-out;';
 
         mask.innerHTML = `
             <div class="group-info-modal-card" style="background:#ffffff;border-radius:14px;width:100%;max-width:330px;box-shadow:0 12px 36px rgba(0,0,0,0.22);overflow:hidden;display:flex;flex-direction:column;position:relative;animation:wechatScaleUp 0.18s ease-out;">
@@ -130,7 +129,6 @@
 
         document.body.appendChild(mask);
 
-        // 绑定齿轮与叉号事件
         mask.querySelector('#btnGroupHeaderGear').onclick = (e) => {
             e.stopPropagation();
             mask.remove();
@@ -142,7 +140,6 @@
             mask.remove();
         };
 
-        // 点击外部遮罩直接关闭
         mask.onclick = (e) => {
             if (e.target === mask) mask.remove();
         };
@@ -209,7 +206,7 @@
             return `
             <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 0;border-bottom:0.5px dashed #eee;">
                 <span style="font-size:12px;color:#333;width:75px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(m.name)}</span>
-                <input type="text" class="wclean-title-input wechat-clean-input" data-npcid="${m.id}" value="${escapeHtml(currentTitle)}" placeholder="如：后宫一号/首席红石/鸽王" style="flex:1;padding:4px 8px;font-size:12px;">
+                <input type="text" class="wclean-title-input wechat-clean-input" data-npcid="${m.id}" value="${escapeHtml(currentTitle)}" placeholder="设置专属头衔..." style="flex:1;padding:4px 8px;font-size:12px;">
             </div>
             `;
         }).join('') || '<div style="font-size:11px;color:#999;">暂无可配置头衔的成员</div>';
@@ -222,7 +219,7 @@
                         <img src="${mn.avatar || 'assets/icons/chat.png'}" style="width:30px;height:30px;border-radius:4px;object-fit:cover;flex-shrink:0;" onerror="this.src='assets/icons/chat.png';">
                         <div style="min-width:0;flex:1;">
                             <div style="font-size:12.5px;font-weight:600;color:#222;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(mn.name)}</div>
-                            <div style="font-size:10.5px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(mn.persona || '朋友圈轻量NPC')}</div>
+                            <div style="font-size:10.5px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(mn.persona || '轻量NPC')}</div>
                         </div>
                     </div>
                     <button type="button" onclick="window.removeGroupMomentNpc('${gid}', ${idx})" style="border:none;background:#fee2e2;color:#ef4444;padding:3px 7px;border-radius:4px;font-size:11px;cursor:pointer;flex-shrink:0;">移出</button>
@@ -253,7 +250,7 @@
                 <!-- 每次接话角色人数范围 -->
                 <div style="border-bottom:0.5px solid #f0f0f0;padding-bottom:12px;">
                     <div style="font-size:14px;font-weight:600;color:#181818;margin-bottom:4px;">每次接话角色人数范围</div>
-                    <div style="font-size:11.5px;color:#888;margin-bottom:8px;">系统将随机抽取角色交错接话（每人连发2~5条）：</div>
+                    <div style="font-size:11.5px;color:#888;margin-bottom:8px;">系统将随机抽取角色交错接话：</div>
                     <div style="display:flex;align-items:center;gap:10px;">
                         <span style="font-size:13px;color:#555;">最少</span>
                         <input type="number" id="wcleanMinSpeakers" value="${cfg.minSpeakers || 1}" min="1" max="5" class="wechat-clean-input" style="width:65px;padding:5px 8px;font-size:13px;text-align:center;">
@@ -268,7 +265,7 @@
                     <div style="display:flex;align-items:center;justify-content:space-between;">
                         <div>
                             <div style="font-size:14px;font-weight:600;color:#181818;">朋友圈 NPC (${momentNpcs.length}人)</div>
-                            <div style="font-size:11px;color:#888;">仅具备头像、名字与一条简短人设的轻量圈友</div>
+                            <div style="font-size:11px;color:#888;">具备简短人设的轻量圈友</div>
                         </div>
                         <div style="display:flex;align-items:center;gap:12px;">
                             <div onclick="window.openAddGroupMomentNpcModal('${gid}')" title="添加朋友圈NPC" style="width:26px;height:26px;border-radius:4px;border:1px dashed #07c160;background:#f0faf4;color:#07c160;display:flex;align-items:center;justify-content:center;cursor:pointer;">
@@ -288,7 +285,7 @@
                 <!-- 设置群管理员 -->
                 <div style="border-bottom:0.5px solid #f0f0f0;padding-bottom:12px;">
                     <div style="font-size:14px;font-weight:600;color:#181818;margin-bottom:4px;">设置群管理员</div>
-                    <div style="font-size:11.5px;color:#888;margin-bottom:8px;">任命后会有群系统灰字提示，角色会知晓并在适当时刻起哄维护纪律：</div>
+                    <div style="font-size:11.5px;color:#888;margin-bottom:8px;">任命后会有群系统提示：</div>
                     <div style="display:flex;flex-wrap:wrap;gap:6px;">
                         ${adminCheckboxesHtml}
                     </div>
@@ -296,8 +293,8 @@
 
                 <!-- 专属群头衔设置 -->
                 <div style="border-bottom:0.5px solid #f0f0f0;padding-bottom:12px;">
-                    <div style="font-size:14px;font-weight:600;color:#181818;margin-bottom:4px;">群成员专属头衔（仿QQ群头衔）</div>
-                    <div style="font-size:11.5px;color:#888;margin-bottom:8px;">换新时产生系统通知，当事角色随口吐槽，吵架时也会拿头衔互损：</div>
+                    <div style="font-size:14px;font-weight:600;color:#181818;margin-bottom:4px;">群成员专属头衔</div>
+                    <div style="font-size:11.5px;color:#888;margin-bottom:8px;">换新时产生系统通知：</div>
                     <div style="display:flex;flex-direction:column;gap:4px;">
                         ${titleInputsHtml}
                     </div>
@@ -313,11 +310,11 @@
                     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
                         <div id="apiModeOptUnified" onclick="window.selectGroupApiMode('unified')" style="border:${cfg.apiMode === 'unified' ? '1.5px solid #07c160' : '0.5px solid #ddd'};background:${cfg.apiMode === 'unified' ? '#f0faf4' : '#fff'};border-radius:6px;padding:10px 8px;cursor:pointer;text-align:center;">
                             <div style="font-size:12.5px;font-weight:600;color:#181818;">统一调用</div>
-                            <div style="font-size:10.5px;color:#888;margin-top:3px;">单次生成交错对话·极省Token</div>
+                            <div style="font-size:10.5px;color:#888;margin-top:3px;">单次生成交错对话</div>
                         </div>
                         <div id="apiModeOptIndividual" onclick="window.selectGroupApiMode('individual')" style="border:${cfg.apiMode === 'individual' ? '1.5px solid #07c160' : '0.5px solid #ddd'};background:${cfg.apiMode === 'individual' ? '#f0faf4' : '#fff'};border-radius:6px;padding:10px 8px;cursor:pointer;text-align:center;">
                             <div style="font-size:12.5px;font-weight:600;color:#181818;">单独调用</div>
-                            <div style="font-size:10.5px;color:#888;margin-top:3px;">多角色独立思考·细节更生动</div>
+                            <div style="font-size:10.5px;color:#888;margin-top:3px;">多角色独立思考</div>
                         </div>
                     </div>
                 </div>
@@ -325,8 +322,8 @@
                 <!-- 角色自由连发 -->
                 <div style="display:flex;align-items:center;justify-content:space-between;padding-top:4px;border-top:0.5px solid #f0f0f0;">
                     <div>
-                        <div style="font-size:13px;font-weight:500;color:#181818;">允许角色自由连发 (2~5条)</div>
-                        <div style="font-size:11px;color:#888;">依据人设性格连发多条短消息，自然穿插互回</div>
+                        <div style="font-size:13px;font-weight:500;color:#181818;">允许角色自由连发</div>
+                        <div style="font-size:11px;color:#888;">依据人设性格连发多条短消息</div>
                     </div>
                     <label style="position:relative;display:inline-block;width:38px;height:22px;">
                         <input type="checkbox" id="chkGroupMultiMsgs" ${cfg.allowMultiMsgs !== false ? 'checked' : ''} style="opacity:0;width:0;height:0;">
@@ -470,8 +467,8 @@
 
                 <div style="border-top:0.5px solid #eee;padding-top:10px;">
                     <div style="font-size:12.5px;color:#181818;font-weight:600;margin-bottom:6px;">或者直接自行创作：</div>
-                    <input type="text" id="wcleanNewMnpcName" placeholder="NPC 名字（如：矿坑幽灵、佛系老农）" class="wechat-clean-input" style="margin-bottom:6px;font-size:12px;">
-                    <input type="text" id="wcleanNewMnpcPersona" placeholder="简短性格人设（如：爱抬杠的红石萌新，说话幽默）" class="wechat-clean-input" style="font-size:12px;">
+                    <input type="text" id="wcleanNewMnpcName" placeholder="NPC 名字..." class="wechat-clean-input" style="margin-bottom:6px;font-size:12px;">
+                    <input type="text" id="wcleanNewMnpcPersona" placeholder="简短性格人设..." class="wechat-clean-input" style="font-size:12px;">
                 </div>
             </div>
         `, () => {
@@ -557,14 +554,14 @@
         if (typeof window.openWechatCleanModal === 'function') {
             window.openWechatCleanModal('API 调用说明', `
                 <div style="font-size:13px;line-height:1.6;color:#333;text-align:left;padding:4px 0;">
-                    <p style="margin:0 0 10px;"><b>• 统一调用</b>：单次 API 请求生成交错对话，角色与 NPC 自然穿插，响应迅速，最省 Token 额度。</p>
-                    <p style="margin:0 0 10px;"><b>• 单独调用</b>：依据发言人数设定，独立调用大模型推进各角色思路，角色个性极强，但成倍消耗 API 额度。</p>
+                    <p style="margin:0 0 10px;"><b>• 统一调用</b>：单次 API 请求生成交错对话，响应迅速，极省 Token。</p>
+                    <p style="margin:0 0 10px;"><b>• 单独调用</b>：多角色独立思考，细节更生动，但消耗更多额度。</p>
                 </div>
             `, () => {});
         }
     };
 
-    // 🎲 应用新群头像并同步刷新列表
+    // 🎲 应用新群头像并同步刷新全站
     function applyNewGroupAvatar(gid, newAvatarUrl) {
         const group = window.G.groups && window.G.groups[gid];
         if (!group || !newAvatarUrl) return;
@@ -573,16 +570,13 @@
         window.syncGroupChatsToLocalBackup();
         if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
 
-        // 1. 同步更新图一正在显示的头像
         const modalPreview = document.getElementById('modalGroupAvatarPreview');
         if (modalPreview) modalPreview.src = newAvatarUrl;
 
-        // 2. 刷新聊天窗口
         if (window.G.currentChatGroup === gid && typeof window.renderGroupChatWindow === 'function') {
             window.renderGroupChatWindow();
         }
 
-        // 3. 刷新微信会话主列表里的群头像
         if (typeof window.renderChatApp === 'function' && !window.G.currentChatGroup) {
             window.renderChatApp();
         }
@@ -624,6 +618,10 @@
             window.openGroupSettingsModal(gid);
         });
 
+        // 调整层级确保不被覆盖
+        const activeModal = document.querySelector('.wechat-clean-modal-mask');
+        if (activeModal) activeModal.style.zIndex = '99999';
+
         setTimeout(() => {
             const btnRand = document.getElementById('btnGroupRandomAvatar');
             if (btnRand) {
@@ -658,6 +656,54 @@
         }, 30);
     };
 
+    // ✏️ 编辑群聊名称（增加居中系统通知条 + 彻底解决弹窗遮挡）
+    window.openEditGroupNameModal = function(gid) {
+        const group = window.G.groups && window.G.groups[gid];
+        if (!group) return;
+        document.querySelectorAll('.wechat-clean-modal-mask, .group-info-modal-mask').forEach(el => el.remove());
+
+        const oldName = group.name || '群聊';
+
+        window.openWechatCleanModal('修改群聊名称', `
+            <input type="text" id="wcleanGroupNameInput" value="${escapeHtml(oldName)}" placeholder="输入新的群聊名称..." class="wechat-clean-input" style="font-size:14px;padding:8px 10px;">
+        `, () => {
+            const val = document.getElementById('wcleanGroupNameInput')?.value.trim();
+            if (!val) {
+                if (typeof showToast === 'function') showToast('群名称不能为空', 'warning');
+                return false;
+            }
+
+            if (val !== oldName) {
+                group.name = val;
+
+                // 🌟 像撤回消息一样生成居中系统灰条通知并落盘
+                const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { name: '我' };
+                if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
+                if (!window.G.groupChatHistory[gid]) window.G.groupChatHistory[gid] = [];
+
+                window.G.groupChatHistory[gid].push({
+                    _id: 'sys_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
+                    from: 'action',
+                    text: `"${curAcc.name}" 修改群名为 "${val}"`,
+                    time: new Date().toLocaleTimeString().slice(0, 5)
+                });
+
+                window.syncGroupChatsToLocalBackup();
+                if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+                if (typeof showToast === 'function') showToast('群名称已更新', 'success', 1200);
+
+                if (window.G.currentChatGroup === gid && typeof window.renderGroupChatWindow === 'function') {
+                    window.renderGroupChatWindow();
+                }
+            }
+
+            window.openGroupSettingsModal(gid);
+        });
+
+        const activeModal = document.querySelector('.wechat-clean-modal-mask');
+        if (activeModal) activeModal.style.zIndex = '99999';
+    };
+
     // 编辑群介绍/公告
     window.openEditGroupDescModal = function(gid) {
         const group = window.G.groups && window.G.groups[gid];
@@ -673,6 +719,9 @@
             if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
             window.openGroupSettingsModal(gid);
         });
+
+        const activeModal = document.querySelector('.wechat-clean-modal-mask');
+        if (activeModal) activeModal.style.zIndex = '99999';
     };
 
     // 移除正式群角色
@@ -719,6 +768,9 @@
             window.openGroupAdvancedSettingsModal(gid);
             if (window.G.currentChatGroup === gid && typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
         });
+
+        const activeModal = document.querySelector('.wechat-clean-modal-mask');
+        if (activeModal) activeModal.style.zIndex = '99999';
     };
 
     // 添加正式群角色
@@ -776,6 +828,45 @@
             window.openGroupAdvancedSettingsModal(gid);
             if (window.G.currentChatGroup === gid && typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
         });
+
+        const activeModal = document.querySelector('.wechat-clean-modal-mask');
+        if (activeModal) activeModal.style.zIndex = '99999';
+    };
+
+    // 解散群聊确认弹窗（顶层安全渲染，绝不被挡）
+    window.dismissGroup = function(gid) {
+        document.querySelectorAll('.wechat-clean-modal-mask, .group-info-modal-mask').forEach(el => el.remove());
+        let mask = document.createElement('div');
+        mask.className = 'wechat-clean-modal-mask';
+        mask.style.zIndex = '99999';
+        mask.innerHTML = `
+            <div class="wechat-clean-modal-card">
+                <div class="wechat-clean-modal-title">解散群聊</div>
+                <div style="font-size:13px;color:#666;text-align:center;margin:8px 0 16px;">确定要解散该群聊并清空聊天记录吗？</div>
+                <div class="wechat-clean-modal-btns">
+                    <button type="button" class="wechat-clean-btn-cancel" id="wcleanCancelDismiss">取消</button>
+                    <button type="button" class="wechat-clean-btn-confirm" style="background:#fa5151;" id="wcleanConfirmDismiss">确定解散</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(mask);
+
+        mask.querySelector('#wcleanCancelDismiss').onclick = () => {
+            mask.remove();
+            window.openGroupSettingsModal(gid);
+        };
+
+        mask.querySelector('#wcleanConfirmDismiss').onclick = () => {
+            mask.remove();
+            delete window.G.groups[gid];
+            if (window.G.groupChatHistory) delete window.G.groupChatHistory[gid];
+            if (window.G.currentChatGroup === gid) window.G.currentChatGroup = null;
+
+            window.syncGroupChatsToLocalBackup();
+            if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+            if (typeof showToast === 'function') showToast('群聊已解散', 'info', 1200);
+            window.renderChatApp();
+        };
     };
 
     window.ChatGroupSettings = {
