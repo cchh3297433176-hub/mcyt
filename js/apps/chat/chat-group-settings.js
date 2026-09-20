@@ -59,7 +59,8 @@
             _id: 'sys_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
             from: 'action',
             text: text,
-            time: new Date().toLocaleTimeString().slice(0, 5)
+            time: new Date().toLocaleTimeString().slice(0, 5),
+            timestamp: Date.now()
         });
 
         if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
@@ -598,7 +599,7 @@
         }
     };
 
-    // 🎲 应用新群头像并实现全生态双轨同步落盘
+    // 🎲 应用新群头像并实现全生态双轨同步落盘（消灭吞发言与重复冲刷）
     function applyNewGroupAvatar(gid, newAvatarUrl) {
         const group = window.G.groups && window.G.groups[gid];
         if (!group || !newAvatarUrl) return;
@@ -613,21 +614,20 @@
         }
 
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { name: '我' };
-        // 📣 更换头像居中小灰字通知
+        // 📣 更换头像居中小灰字通知（带标准 timestamp 防止被净化）
         pushGroupActionNotice(gid, `"${curAcc.name}" 更换了群头像`);
 
+        // 同步落盘备份
         if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
         if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
 
         const modalPreview = document.getElementById('modalGroupAvatarPreview');
         if (modalPreview) modalPreview.src = newAvatarUrl;
 
+        // 如果群聊处于前台窗口，仅平滑局部重绘群聊窗口自身，绝不强行重构全局会话根节点
         if (window.G.currentChatGroup === gid && typeof window.renderGroupChatWindow === 'function') {
             window.renderGroupChatWindow();
-        }
-
-        // 无条件刷新全站会话列表，确保外部主会话列表即时展示新头像
-        if (typeof window.renderChatApp === 'function') {
+        } else if (typeof window.renderChatApp === 'function') {
             window.renderChatApp();
         }
     }
@@ -697,6 +697,7 @@
                     reader.onload = (evt) => {
                         applyNewGroupAvatar(gid, evt.target.result);
                         if (typeof showToast === 'function') showToast('群头像已更新', 'success', 1200);
+                        document.querySelector('.wechat-clean-modal-mask')?.remove();
                         window.openGroupSettingsModal(gid);
                     };
                     reader.readAsDataURL(file);
