@@ -390,7 +390,7 @@
         });
     };
 
-    // 完整的 8 大功能加号抽屉面板
+    // 完整的 8 大功能加号抽屉面板（拟真排版绑定准确）
     function buildChatPlusDrawerHTML(type, id) {
         return `
         <div id="chatPlusDrawer" style="background:#f7f7f7;border-top:0.5px solid #dcdcdc;flex-shrink:0;animation:wechatSlideUp 0.18s ease-out;">
@@ -456,14 +456,15 @@
         else if (typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
     };
 
-    // 🧾 拟真排版卡片设置弹窗（单聊与群聊双向适配）
+    // 🧾 拟真排版卡片设置弹窗（修正：单聊配置独立面板；群聊导流清晰说明）
     window.openNpcUiCardSettingsModal = function(type, id) {
         if (type === 'group') {
-            if (typeof window.openGroupAdvancedSettingsModal === 'function') {
-                window.openGroupAdvancedSettingsModal(id);
-            } else {
-                if (typeof showToast === 'function') showToast('群聊已默认支持仿真物品解析', 'info', 1500);
-            }
+            window.openWechatCleanModal('群聊拟真排版', `
+                <div style="text-align:left;font-size:13px;color:#333;line-height:1.6;">
+                    <p style="margin:0 0 8px;">群聊环境下已<b>全自动开启生活排版解析</b>（小票、清单、电影票等自动渲染美化）。</p>
+                    <p style="margin:0;font-size:11.5px;color:#888;">如需调整群聊 API 模式或成员偏好，可点击右上角三个点进入【群聊高级设定】。</p>
+                </div>
+            `, () => {});
             return;
         }
 
