@@ -1,12 +1,12 @@
 /**
  * js/apps/chat/chat-group.js
- * 💬 微信多人群聊独立模块（仿QQ上下分层工具栏 · 具体角色输入提示 · 多角色2~5条交错发言 · 群斗图与配图）
+ * 💬 微信多人群聊独立模块（仿QQ上下分层工具栏 · 具体角色输入提示 · 多角色2~5条交错发言 · 群斗图与配图 · 朋友圈轻量NPC生态协同）
  * 🌟 重构特性：
  * 1. 仿 QQ 式双层输入栏：上层输入框与发送键，下层语音/设置/加号/表情抽屉。
  * 2. 顶栏动态显示「XXX 正在输入中...」，活人感十足。
  * 3. 完整支持群内角色发送表情包 [STICKER] 与文字图片 [IMAGE_TEXT]。
  * 4. 彻底放开每人两条限制，支持自由连发 2~5 条交错发言。
- * 5. 加号抽屉收纳转账、发红包等未来聊天扩展功能。
+ * 5. 全面对齐朋友圈轻量 NPC 参与群聊互动，人数统计与对话生成全链路覆盖。
  */
 
 (function() {
@@ -76,7 +76,12 @@
 
         if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
         const history = window.G.groupChatHistory[gid] || [];
-        const memberCount = (group.members || []).length + 1;
+        
+        // 成员总数：正式成员 + 朋友圈轻量NPC + 我
+        const formalCount = (group.members || []).length;
+        const momentNpcCount = (group.momentNpcs || []).length;
+        const memberCount = formalCount + momentNpcCount + 1;
+
         const isGenerating = !!(window._MCYT_CHAT_GENERATING && window._MCYT_CHAT_GENERATING[gid]);
         const generatingSpeaker = window._MCYT_GROUP_CURRENT_SPEAKER?.[gid] || '';
 
@@ -92,10 +97,27 @@
         let messagesHtml = '';
         for (const msg of history) {
             const isSelf = msg.from === 'player';
-            const senderNpc = (!isSelf && msg.senderId) ? window.G.npcs[msg.senderId] : null;
-            const senderName = isSelf ? '我' : (msg.senderName || senderNpc?.name || '群友');
-            const avatarObj = isSelf ? { isPlayer: true } : (senderNpc || { avatarUrl: window.getRandomAvatar() });
+            let senderNpc = null;
+            let avatarObj = null;
 
+            if (isSelf) {
+                avatarObj = { isPlayer: true };
+            } else {
+                if (msg.senderId && window.G.npcs && window.G.npcs[msg.senderId]) {
+                    senderNpc = window.G.npcs[msg.senderId];
+                    avatarObj = senderNpc;
+                } else if (msg.senderId && group.momentNpcs) {
+                    const matchedMnpc = group.momentNpcs.find(m => m.id === msg.senderId || m.name === msg.senderName);
+                    if (matchedMnpc) {
+                        avatarObj = { avatarUrl: matchedMnpc.avatar, name: matchedMnpc.name };
+                    }
+                }
+                if (!avatarObj) {
+                    avatarObj = { avatarUrl: msg.senderAvatar || 'assets/icons/chat.png', name: msg.senderName || '群友' };
+                }
+            }
+
+            const senderName = isSelf ? '我' : (msg.senderName || senderNpc?.name || '群友');
             const title = (!isSelf && msg.senderId) ? groupTitles[msg.senderId] : (isSelf ? '群主' : '');
             const isAdmin = (!isSelf && msg.senderId) ? groupAdmins.includes(msg.senderId) : false;
 
@@ -224,7 +246,7 @@
             </div>`;
         }
 
-        // 🌟 动态计算顶栏状态（精确到角色名字正在输入）
+        // 🌟 动态计算顶栏状态
         let headerTitleHtml = `${escapeHtml(group.name)} (${memberCount})`;
         if (isGenerating) {
             const speakerName = generatingSpeaker ? `${generatingSpeaker} ` : '';
@@ -265,7 +287,7 @@
             ${stickerDrawerHtml}
             ${plusDrawerHtml}
 
-            <!-- 🌟 仿 QQ 式双层输入区域（上层输入+发送，下层语音/设置/加号/表情） -->
+            <!-- 仿 QQ 式双层输入区域（上层输入+发送，下层语音/设置/加号/表情） -->
             <div style="background:#f7f7f7;border-top:0.5px solid #dcdcdc;display:flex;flex-direction:column;padding:6px 10px 8px;flex-shrink:0;gap:6px;">
                 <!-- 上层：输入框与发送按钮 -->
                 <div style="display:flex;align-items:center;gap:8px;">
@@ -300,7 +322,7 @@
                         </button>
                     </div>
 
-                    <!-- ➕ 加号功能扩展（装入转账、发红包、排版等） -->
+                    <!-- ➕ 加号功能扩展 -->
                     <div>
                         <button onclick="window.toggleChatPlusDrawer('group','${gid}')" title="更多功能" style="border:none;background:none;cursor:pointer;padding:0;display:flex;align-items:center;color:#555;">
                             <svg viewBox="0 0 24 24" style="width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;">
@@ -342,10 +364,8 @@
         }
     }
 
-    // 在全局记录当前正在输入的 NPC 名字
     if (!window._MCYT_GROUP_CURRENT_SPEAKER) window._MCYT_GROUP_CURRENT_SPEAKER = {};
 
-    // 辅助解析 AI 输出中的表情包直链
     function findStickerUrlByDesc(cat, desc) {
         if (!window.G.stickerLibrary) return null;
         const matched = window.G.stickerLibrary.find(s => s && s.category === cat && (s.desc || '').includes(desc));
@@ -355,14 +375,26 @@
     }
 
     /**
-     * 👥 群聊 AI 回复推进核心（支持统一调度 vs 单独调度，多角色自由连发2~5条交错发言）
+     * 👥 群聊 AI 回复推进核心（正式角色 + 朋友圈轻量NPC生态协同，多角色自由连发2~5条交错发言）
      */
     window.triggerGroupAIReply = async function(gid) {
         const group = window.G.groups && window.G.groups[gid];
         if (!group) return;
-        const members = (group.members || []).map(mid => window.G.npcs[mid]).filter(Boolean);
-        if (members.length === 0) {
-            if (typeof showToast === 'function') showToast('群内没有其他成员', 'info');
+
+        // 整理所有在群成员：正式角色 + 朋友圈轻量NPC
+        const formalMembers = (group.members || []).map(mid => window.G.npcs[mid]).filter(Boolean);
+        const momentNpcs = (group.momentNpcs || []).map(mn => ({
+            id: mn.id,
+            name: mn.name,
+            persona: mn.persona,
+            avatarUrl: mn.avatar,
+            isMomentNpc: true
+        }));
+
+        const allAvailableSpeakers = [...formalMembers, ...momentNpcs];
+
+        if (allAvailableSpeakers.length === 0) {
+            if (typeof showToast === 'function') showToast('群内没有其他成员或NPC', 'info');
             return;
         }
 
@@ -387,23 +419,23 @@
 
         try {
             const minSpk = Math.max(1, cfg.minSpeakers || 1);
-            const maxSpk = Math.max(minSpk, Math.min(members.length, cfg.maxSpeakers || 3));
+            const maxSpk = Math.max(minSpk, Math.min(allAvailableSpeakers.length, cfg.maxSpeakers || 3));
             const targetCount = Math.floor(Math.random() * (maxSpk - minSpk + 1)) + minSpk;
-            const shuffledMembers = [...members].sort(() => Math.random() - 0.5).slice(0, targetCount);
+            const shuffledMembers = [...allAvailableSpeakers].sort(() => Math.random() - 0.5).slice(0, targetCount);
 
             // 设置初始输入态提示
             window._MCYT_GROUP_CURRENT_SPEAKER[gid] = shuffledMembers.map(m => m.name).slice(0, 2).join('、');
             if (window.G.currentChatGroup === gid) renderGroupChatWindow();
 
             if (cfg.apiMode === 'individual') {
-                // 🌟 模式一：单独调用模式（每位角色可自主发 2~5 条）
+                // 模式一：单独调用模式
                 let rollingDialogue = recentDialogue;
 
                 for (const member of shuffledMembers) {
                     window._MCYT_GROUP_CURRENT_SPEAKER[gid] = member.name;
                     if (window.G.currentChatGroup === gid) renderGroupChatWindow();
 
-                    const otherMembers = members.filter(m => m.id !== member.id);
+                    const otherMembers = allAvailableSpeakers.filter(m => m.id !== member.id);
                     const promptBundle = window.ChatPromptGroup.buildGroupSingleMemberPrompt({
                         group,
                         currentMember: member,
@@ -421,7 +453,6 @@
 
                     let clean = (typeof stripThought === 'function') ? stripThought(raw.trim()) : raw.trim();
 
-                    // 流式实体解析：消息、表情包、文字图片
                     const entityRegex = /\[(MSG|STICKER|IMAGE_TEXT)([\s\S]*?)\]([\s\S]*?)\[\/\1\]|\[STICKER\s+([^\]]+)\]/gi;
                     let match;
                     let foundAny = false;
@@ -438,12 +469,13 @@
                                     from: 'npc',
                                     senderId: member.id,
                                     senderName: member.name,
+                                    senderAvatar: member.avatarUrl,
                                     text: txt,
                                     time: new Date().toLocaleTimeString().slice(0, 5)
                                 });
                                 rollingDialogue += `\n${member.name}: ${txt}`;
                             }
-                        } else if (tag === 'STICKER' && cfg.allowStickers !== false) {
+                        } else if (tag === 'STICKER') {
                             const fullAttr = (match[2] || '') + (match[4] || '');
                             const catMatch = fullAttr.match(/category=["']([^"']+)["']/i);
                             const descMatch = fullAttr.match(/desc=["']([^"']+)["']/i);
@@ -456,6 +488,7 @@
                                 from: 'npc',
                                 senderId: member.id,
                                 senderName: member.name,
+                                senderAvatar: member.avatarUrl,
                                 type: 'sticker',
                                 stickerUrl: sUrl,
                                 stickerDesc: desc,
@@ -470,6 +503,7 @@
                                     from: 'npc',
                                     senderId: member.id,
                                     senderName: member.name,
+                                    senderAvatar: member.avatarUrl,
                                     type: 'image_text_only',
                                     imageDesc: imgDesc,
                                     time: new Date().toLocaleTimeString().slice(0, 5)
@@ -487,6 +521,7 @@
                                 from: 'npc',
                                 senderId: member.id,
                                 senderName: member.name,
+                                senderAvatar: member.avatarUrl,
                                 text: pureTxt,
                                 time: new Date().toLocaleTimeString().slice(0, 5)
                             });
@@ -495,10 +530,10 @@
                     }
                 }
             } else {
-                // 🌟 模式二：统一调用模式（单次 API 生成多角色 2~5 条自由交错发言）
+                // 模式二：统一调用模式
                 const promptBundle = window.ChatPromptGroup.buildGroupUnifiedPrompt({
                     group,
-                    members: shuffledMembers.length > 0 ? shuffledMembers : members,
+                    members: shuffledMembers.length > 0 ? shuffledMembers : allAvailableSpeakers,
                     recentDialogueText: recentDialogue,
                     currentUserName: curAcc.name,
                     groupConfig: cfg
@@ -523,7 +558,7 @@
 
                     const senderMatch = attr.match(/sender=["']([^"']+)["']/i);
                     const senderName = senderMatch ? senderMatch[1].trim() : '';
-                    const matchedNpc = members.find(m => m.name === senderName) || shuffledMembers[0] || members[0];
+                    const matchedNpc = allAvailableSpeakers.find(m => m.name === senderName) || shuffledMembers[0] || allAvailableSpeakers[0];
 
                     if (tagType === 'MSG' && content) {
                         window.G.groupChatHistory[gid].push({
@@ -531,10 +566,11 @@
                             from: 'npc',
                             senderId: matchedNpc.id,
                             senderName: matchedNpc.name,
+                            senderAvatar: matchedNpc.avatarUrl,
                             text: content,
                             time: new Date().toLocaleTimeString().slice(0, 5)
                         });
-                    } else if (tagType === 'STICKER' && cfg.allowStickers !== false) {
+                    } else if (tagType === 'STICKER') {
                         const catMatch = attr.match(/category=["']([^"']+)["']/i);
                         const descMatch = attr.match(/desc=["']([^"']+)["']/i);
                         const cat = catMatch ? catMatch[1] : '抽象';
@@ -546,6 +582,7 @@
                             from: 'npc',
                             senderId: matchedNpc.id,
                             senderName: matchedNpc.name,
+                            senderAvatar: matchedNpc.avatarUrl,
                             type: 'sticker',
                             stickerUrl: sUrl,
                             stickerDesc: desc,
@@ -557,6 +594,7 @@
                             from: 'npc',
                             senderId: matchedNpc.id,
                             senderName: matchedNpc.name,
+                            senderAvatar: matchedNpc.avatarUrl,
                             type: 'image_text_only',
                             imageDesc: content,
                             time: new Date().toLocaleTimeString().slice(0, 5)
@@ -565,12 +603,13 @@
                 }
 
                 if (!found && clean) {
-                    const fallbackNpc = shuffledMembers[0] || members[Math.floor(Math.random() * members.length)];
+                    const fallbackNpc = shuffledMembers[0] || allAvailableSpeakers[Math.floor(Math.random() * allAvailableSpeakers.length)];
                     window.G.groupChatHistory[gid].push({
                         _id: 'gmsg_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
                         from: 'npc',
                         senderId: fallbackNpc.id,
                         senderName: fallbackNpc.name,
+                        senderAvatar: fallbackNpc.avatarUrl,
                         text: clean.replace(/\[\/?(MSG|STICKER|IMAGE_TEXT).*?\]/gi, '').trim(),
                         time: new Date().toLocaleTimeString().slice(0, 5)
                     });
