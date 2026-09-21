@@ -5,14 +5,12 @@
 (function(window) {
     'use strict';
 
-    // 🌟 版本号统一读取设置中心唯一真源 window.CURRENT_APP_VERSION
     function getAppVersion() {
         return window.CURRENT_APP_VERSION || '1.611';
     }
 
     let _gameInitialized = false;
 
-    // 游戏开局人设与运行态装配
     function initGame() {
         const $ = window.$;
         const newYtName = $('ytNameInput')?.value.trim() || 'MC_CraftMaster';
@@ -32,7 +30,6 @@
 
         try {
             localStorage.removeItem('mcyt_autosave');
-            // 🛡️ 新开一局时一并清空群聊独立备份，避免上一局的残留
             localStorage.removeItem('mcyt_wechat_group_chats');
             localStorage.removeItem('mcyt_wechat_group_histories');
         } catch (_) {}
@@ -60,7 +57,6 @@
         window.G.player.pov = newPov;
         window.G.player._nameHistory = [newYtName];
 
-        // 默认补齐微信三维人设初始值
         window.G.player.offlinePersona = newPersona;
         window.G.player.onlinePersona = newLive2d || newPersona;
         window.G.player.gameSkinPersona = newSkin || '默认MC皮肤形象';
@@ -144,7 +140,6 @@
         }
     }
 
-    // 🛡️ 深度消息净化（全面放行表情包、假图片、语音及居中小灰字，绝不误杀真实对白）
     function sanitizeChatHistoryForPersist(historyMap) {
         if (!historyMap || typeof historyMap !== 'object') return {};
         const safeMap = {};
@@ -152,10 +147,7 @@
             if (!Array.isArray(msgList)) continue;
             const cleanedList = msgList.filter(m => {
                 if (!m || typeof m !== 'object') return false;
-                // 仅过滤生成中的中间流，绝不剔除已经生成的正常消息
                 if (m.isGenerating === true || m._isPendingStream === true) return false;
-
-                // 只要满足以下任一合法特征，即视为必须落盘的真实历史
                 if (typeof m.text === 'string' && m.text.trim().length > 0) return true;
                 if (m.type === 'sticker' || m.stickerUrl || m.sticker) return true;
                 if (m.type === 'image_text_only' || m.imageDesc) return true;
@@ -163,10 +155,7 @@
                 if (m.type === 'voice') return true;
                 if (m.type === 'contact_card' || m.type === 'tarot_card') return true;
                 if (m.from === 'action') return true;
-
-                // 兜底：只要带 _id 或 timestamp 的对象均予以保护
                 if (m._id || m.timestamp) return true;
-
                 return false;
             });
             safeMap[key] = cleanedList;
@@ -191,19 +180,14 @@
             }
         } catch(e) {
             console.warn('自动存档写入失败', e);
-            if (typeof window.showToast === 'function') {
-                window.showToast('⚠️ 自动落盘失败，请前往设置中心导出记忆卡备份', 'error', 4000);
-            }
         }
     }
 
     function buildAuditSanitizedPayload(originalPayload) {
         const cloned = JSON.parse(JSON.stringify(originalPayload));
-
         if (Array.isArray(cloned.storyHistory)) {
             cloned.storyHistory = cloned.storyHistory.slice(-10);
         }
-
         if (cloned.chatHistory && typeof cloned.chatHistory === 'object') {
             const trimmedChat = {};
             for (const [npcId, msgs] of Object.entries(cloned.chatHistory)) {
@@ -213,7 +197,6 @@
             }
             cloned.chatHistory = trimmedChat;
         }
-
         if (cloned.groupChatHistory && typeof cloned.groupChatHistory === 'object') {
             const trimmedGroup = {};
             for (const [grpId, msgs] of Object.entries(cloned.groupChatHistory)) {
@@ -223,23 +206,18 @@
             }
             cloned.groupChatHistory = trimmedGroup;
         }
-
         return cloned;
     }
 
     function openBackupModal() {
         if (typeof window.openMemoryCardExportModal === 'function') {
             window.openMemoryCardExportModal();
-        } else if (typeof window.showToast === 'function') {
-            window.showToast('请在系统设置中心中导出记忆卡', 'info');
         }
     }
 
     function openRestoreModal() {
         if (typeof window.openMemoryCardImportModal === 'function') {
             window.openMemoryCardImportModal();
-        } else if (typeof window.showToast === 'function') {
-            window.showToast('请在系统设置中心中导入记忆卡', 'info');
         }
     }
 
@@ -249,29 +227,20 @@
             return;
         }
 
-        let isPardonRedemption = false;
         let isIncomingBannedCard = false;
-
         if (typeof window.OtomeSecurityGuard !== 'undefined') {
             if (stateData._pardonCertificate) {
-                const { success, nativeCleared } = window.OtomeSecurityGuard.tryRedeemPardonCertificate(stateData);
+                const { success } = window.OtomeSecurityGuard.tryRedeemPardonCertificate(stateData);
                 if (success) {
-                    isPardonRedemption = true;
                     delete stateData._pardonCertificate;
                     delete stateData._isDeviceBanned;
                     delete stateData._banReason;
                     delete stateData._activeBanToken;
                     delete stateData._activeBanTime;
                     delete stateData._securityAuditBox;
-
                     const lockMask = document.getElementById('otomeDeviceBanMask');
                     if (lockMask) lockMask.remove();
-
-                    if (typeof window.showToast === 'function') {
-                        window.showToast('🎉 特赦令核验成功！设备已恢复正常', 'success', 3000);
-                    }
                 } else {
-                    if (typeof window.showToast === 'function') window.showToast('⚠️ 特赦令失效', 'error');
                     return;
                 }
             } else if (stateData._isDeviceBanned) {
@@ -390,7 +359,6 @@
 
     function serializeGameState() {
         const g = window.G;
-        // 🛡️ 对单聊与群聊记录进行安全过滤后再落盘
         const safeChatHistory = sanitizeChatHistoryForPersist(g.chatHistory);
         const safeGroupChatHistory = sanitizeChatHistoryForPersist(g.groupChatHistory);
 
@@ -501,14 +469,6 @@
         g._securityAuditBox = data._securityAuditBox || null;
         g._pardonCertificate = data._pardonCertificate || null;
 
-        if (g._isDeviceBanned) {
-            try {
-                localStorage.setItem('mcyt_device_banned_flag', 'true');
-                if (g._activeBanToken) localStorage.setItem('mcyt_device_ban_token', g._activeBanToken);
-                if (g._activeBanTime) localStorage.setItem('mcyt_device_ban_time', String(g._activeBanTime));
-            } catch (_) {}
-        }
-
         if (data.browserState) g.browserState = Object.assign({}, g.browserState, data.browserState);
         if (Array.isArray(data.fanworks)) g.fanworks = data.fanworks;
         if (data.ao3User) g.ao3User = Object.assign({}, g.ao3User, data.ao3User);
@@ -518,7 +478,7 @@
         if (Array.isArray(data.ytExternalVideos)) g.ytExternalVideos = data.ytExternalVideos;
         if (Array.isArray(data.ytCustomChannels)) g.ytCustomChannels = data.ytCustomChannels;
 
-        // 🛡️ 群聊基础字典恢复：优先从独立持久化恢复，主存档作为兜底补齐
+        // 🛡️ 群组字典恢复：优先从独立持久化恢复
         if (!g.groups) g.groups = {};
         if (data.groups && typeof data.groups === 'object') {
             g.groups = Object.assign({}, data.groups, g.groups);
@@ -533,8 +493,9 @@
             }
         } catch (_) {}
 
-        // 🛡️ 架构对齐：群聊历史对齐单聊模式（单聊权威源在独立备份，主存档绝不倒灌污染！）
-        // 1. 先用主存档做基础兜底
+        // 🛡️ 终极绝杀：群聊历史 100% 对齐单聊机制！
+        // 主存档里的 groupChatHistory 仅作为兜底；
+        // 只要独立存储 mcyt_wechat_group_histories 存在，直接以独立存储为绝对权威源，绝不允许主存档旧数据覆盖！
         if (!g.groupChatHistory) g.groupChatHistory = {};
         if (data.groupChatHistory && typeof data.groupChatHistory === 'object') {
             for (const [k, v] of Object.entries(data.groupChatHistory)) {
@@ -544,7 +505,6 @@
             }
         }
 
-        // 2. 权威合并：读取群聊独立备份 mcyt_wechat_group_histories，以独立备份为高优先级！
         try {
             const rawLocalHist = localStorage.getItem('mcyt_wechat_group_histories');
             if (rawLocalHist) {
@@ -552,33 +512,10 @@
                 if (parsedLocalHist && typeof parsedLocalHist === 'object') {
                     for (const gid in parsedLocalHist) {
                         const localMsgs = parsedLocalHist[gid];
-                        if (!Array.isArray(localMsgs)) continue;
-
-                        const autosaveMsgs = g.groupChatHistory[gid] || [];
-                        
-                        // 若主存档为空，或独立存储消息数量更多/更新，直接以独立存储为权威源
-                        if (autosaveMsgs.length === 0) {
+                        if (Array.isArray(localMsgs) && localMsgs.length > 0) {
+                            // 🌟 核心：直接以独立存储为准（就地赋予最新最全的历史）
                             g.groupChatHistory[gid] = localMsgs;
-                            continue;
                         }
-
-                        // 若两者皆有数据，按 _id 安全并集融合，绝不让主存档的旧数据挤掉新发言
-                        const msgMap = new Map();
-                        // 1. 先放主存档的消息
-                        autosaveMsgs.forEach(m => {
-                            if (m) {
-                                const key = m._id || `${m.time}_${m.senderName || m.from}_${(m.text || '').slice(0, 15)}`;
-                                msgMap.set(key, m);
-                            }
-                        });
-                        // 2. 用独立持久化的新消息进行后置覆盖/追加更新
-                        localMsgs.forEach(m => {
-                            if (m) {
-                                const key = m._id || `${m.time}_${m.senderName || m.from}_${(m.text || '').slice(0, 15)}`;
-                                msgMap.set(key, m);
-                            }
-                        });
-                        g.groupChatHistory[gid] = Array.from(msgMap.values());
                     }
                 }
             }
