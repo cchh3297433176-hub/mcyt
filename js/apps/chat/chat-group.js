@@ -1,13 +1,9 @@
 /**
  * js/apps/chat/chat-group.js
  * 💬 微信多人群聊独立模块（仿QQ上下分层工具栏 · 具体角色输入提示 · 多角色2~5条交错发言 · 群斗图与配图 · 朋友圈轻量NPC生态协同）
- * 🌟 升级特性：
- * 1. 仿 QQ 式双层输入栏：上层为打字框、【重说】与【发送】键；下层为语音/设置/表情/加号工具栏。
- * 2. ⚡ 重说按钮：一键撤回上一轮全部 AI 发言并重新唤起接话流，群友重新搭腔，单聊不受影响。
- * 3. 🛡️ 纯净原子落盘：彻底拔除导致旧快照覆写新历史的锁死逻辑，全面采用实时真实落盘。
- * 4. 🎲 表情包模糊匹配与随机采样引擎：消除 .find() 返回首项索引 0 的死穴，多变表情自然契合语境。
- * 5. 🖼️ 真实图片直显与假图片（文字画片）全屏相框灯箱阅读。
- * 6. 顶栏动态显示「XXX 正在输入中...」，朋友圈轻量 NPC 自由协同交错发言。
+ * 🌟 存储架构升级（Phase 1）：
+ * 群聊历史对白（mcyt_wechat_group_histories）已平滑迁移至 IndexedDB (via localforage)！
+ * 兼容旧版 localStorage 自动无损迁移，保持单一权威源与就地指针保活。
  */
 
 (function() {
@@ -16,12 +12,21 @@
     const GROUPS_STORAGE_KEY = 'mcyt_wechat_group_chats';
     const GROUP_HISTORY_STORAGE_KEY = 'mcyt_wechat_group_histories';
 
-    // 🛡️ 群聊冷启动自动恢复
-    function restoreGroupsFromStorage() {
+    // 🛡️ 辅助：localforage 统一获取器
+    function getStorageDriver() {
+        if (typeof window.localforage !== 'undefined') {
+            return window.localforage;
+        }
+        return null;
+    }
+
+    // 🛡️ 群聊冷启动自动恢复（支持平滑从 localStorage 迁移至 IndexedDB）
+    async function restoreGroupsFromStorage() {
         if (!window.G) window.G = {};
         if (!window.G.groups) window.G.groups = {};
         if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
 
+        // 1. 群列表基础字典（暂留 localStorage，后续阶段迁移）
         try {
             const rawGroups = localStorage.getItem(GROUPS_STORAGE_KEY);
             if (rawGroups) {
@@ -34,44 +39,75 @@
             console.warn('⚠️ 读取群聊列表本地缓存失败:', e);
         }
 
-        try {
-            const rawHist = localStorage.getItem(GROUP_HISTORY_STORAGE_KEY);
-            if (rawHist) {
-                const parsedHist = JSON.parse(rawHist);
-                if (parsedHist && typeof parsedHist === 'object') {
-                    for (const gid in parsedHist) {
-                        const storedList = parsedHist[gid];
-                        if (!Array.isArray(storedList)) continue;
-                        
-                        // 🌟 纯净装载：只要本地有独立记录，以独立记录为最新真源
-                        window.G.groupChatHistory[gid] = storedList;
+        // 2. 群历史记录：优先从 IndexedDB 读取，若无则从旧 localStorage 迁移
+        const storage = getStorageDriver();
+        let loadedHist = null;
+
+        if (storage) {
+            try {
+                loadedHist = await storage.getItem(GROUP_HISTORY_STORAGE_KEY);
+            } catch (err) {
+                console.warn('⚠️ 从 IndexedDB 读取群聊历史失败:', err);
+            }
+        }
+
+        // 兼容回退与冷迁移机制
+        if (!loadedHist) {
+            try {
+                const rawHist = localStorage.getItem(GROUP_HISTORY_STORAGE_KEY);
+                if (rawHist) {
+                    loadedHist = JSON.parse(rawHist);
+                    // 🌟 无感将旧数据自动迁移到 IndexedDB
+                    if (loadedHist && storage) {
+                        storage.setItem(GROUP_HISTORY_STORAGE_KEY, loadedHist).catch(e => {
+                            console.warn('⚠️ 自动迁移群历史至 IndexedDB 失败:', e);
+                        });
                     }
                 }
+            } catch (e) {
+                console.warn('⚠️ 读取群聊记录 localStorage 缓存失败:', e);
             }
-        } catch (e) {
-            console.warn('⚠️ 读取群聊记录本地缓存失败:', e);
+        }
+
+        if (loadedHist && typeof loadedHist === 'object') {
+            for (const gid in loadedHist) {
+                const storedList = loadedHist[gid];
+                if (!Array.isArray(storedList)) continue;
+                
+                // 🌟 纯净装载：就地赋给运行态，保持绝对权威
+                window.G.groupChatHistory[gid] = storedList;
+            }
         }
     }
     window.restoreGroupsFromStorage = restoreGroupsFromStorage;
 
-    // 💾 群聊双轨持久化备份（真实全量落盘，彻底对齐单聊模式）
-    window.syncGroupChatsToLocalBackup = function() {
+    // 💾 群聊持久化备份（群历史已全面接入 IndexedDB，保持原子异步落盘）
+    window.syncGroupChatsToLocalBackup = async function() {
         try {
             if (!window.G) return;
 
+            // 基础信息仍然落盘到 localStorage
             if (window.G.groups && typeof window.G.groups === 'object') {
                 localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(window.G.groups));
             }
 
+            // 群历史全面接入 IndexedDB
             if (window.G.groupChatHistory && typeof window.G.groupChatHistory === 'object') {
-                localStorage.setItem(GROUP_HISTORY_STORAGE_KEY, JSON.stringify(window.G.groupChatHistory));
+                const storage = getStorageDriver();
+                if (storage) {
+                    await storage.setItem(GROUP_HISTORY_STORAGE_KEY, window.G.groupChatHistory);
+                } else {
+                    // 兜底降级
+                    localStorage.setItem(GROUP_HISTORY_STORAGE_KEY, JSON.stringify(window.G.groupChatHistory));
+                }
             }
         } catch (e) {
             console.warn('⚠️ 同步群聊到本地备份失败:', e);
         }
     };
 
-    restoreGroupsFromStorage();
+    // 初始化静默自恢复
+    restoreGroupsFromStorage().catch(err => console.warn('初始化群聊恢复异常:', err));
 
     // 🔍 辅助：安全打开大图/假图片查看器
     window.openGroupImageViewerSafe = function(imgSrc, textDesc) {
@@ -719,7 +755,7 @@
             delete window._MCYT_GROUP_CURRENT_SPEAKER[gid];
             if (window._MCYT_CHAT_GENERATING) delete window._MCYT_CHAT_GENERATING[gid];
 
-            window.syncGroupChatsToLocalBackup();
+            await window.syncGroupChatsToLocalBackup();
             if (typeof autoSaveGame === 'function') autoSaveGame();
             if (window.G.currentChatGroup === gid) renderGroupChatWindow();
         }
@@ -728,7 +764,7 @@
     /**
      * 🔄 群聊专属：重说上一轮发言
      */
-    window.regenerateLastGroupAIReply = function(gid) {
+    window.regenerateLastGroupAIReply = async function(gid) {
         if (!gid) gid = window.G.currentChatGroup;
         if (!gid) return;
 
@@ -772,13 +808,13 @@
             }
         }
 
-        window.syncGroupChatsToLocalBackup();
+        await window.syncGroupChatsToLocalBackup();
         renderGroupChatWindow();
         if (typeof showToast === 'function') showToast('正在重新组织群聊接话...', 'info', 1000);
         window.triggerGroupAIReply(gid);
     };
 
-    window.doSendGroupChat = function(gid) {
+    window.doSendGroupChat = async function(gid) {
         const input = document.getElementById('groupChatInput');
         if (!input) return;
         const text = input.value.trim();
@@ -801,6 +837,7 @@
         }
 
         window.pushGroupChatMessageSafe(gid, msgPayload);
+        await window.syncGroupChatsToLocalBackup();
 
         if (typeof autoSaveGame === 'function') autoSaveGame();
         input.value = '';
@@ -809,7 +846,7 @@
 
     window.renderGroupChatWindow = renderGroupChatWindow;
     
-    window.openGroupChat = function(gid) {
+    window.openGroupChat = async function(gid) {
         if (!window.G.groups || !window.G.groups[gid]) return;
         window.G.currentChatGroup = gid;
         window._stickerDrawerOpen = false;
@@ -817,7 +854,7 @@
         window._plusDrawerOpen = false;
         window._activeQuoteMessage = null;
 
-        restoreGroupsFromStorage();
+        await restoreGroupsFromStorage();
 
         window.renderChatApp();
     };
@@ -831,5 +868,5 @@
         window.renderChatApp();
     };
 
-    console.log('✅ ChatGroup 多人群聊独立模块已成功升级（纯净真实原子落盘引擎）');
+    console.log('✅ ChatGroup 多人群聊独立模块已成功升级（群历史对白 IndexedDB 驱动）');
 })();
