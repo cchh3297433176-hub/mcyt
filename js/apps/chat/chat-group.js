@@ -1,9 +1,10 @@
 /**
  * js/apps/chat/chat-group.js
  * 💬 微信多人群聊独立模块（仿QQ上下分层工具栏 · 具体角色输入提示 · 多角色2~5条交错发言 · 群斗图与配图 · 朋友圈轻量NPC生态协同）
- * 🌟 存储架构升级（Phase 1）：
- * 群聊历史对白（mcyt_wechat_group_histories）已平滑迁移至 IndexedDB (via localforage)！
- * 兼容旧版 localStorage 自动无损迁移，保持单一权威源与就地指针保活。
+ * 🌟 存储架构升级（Phase 1 & 2）：
+ * 1. 群聊历史对白（mcyt_wechat_group_histories）全面接入 IndexedDB！
+ * 2. 群基础信息字典（mcyt_wechat_group_chats）全面接入 IndexedDB！
+ * 均具备旧版 localStorage 自动无损迁移与防绞杀指针就地保活机制。
  */
 
 (function() {
@@ -20,29 +21,44 @@
         return null;
     }
 
-    // 🛡️ 群聊冷启动自动恢复（支持平滑从 localStorage 迁移至 IndexedDB）
+    // 🛡️ 群聊冷启动自动恢复（群列表与群历史双轨无损迁移至 IndexedDB）
     async function restoreGroupsFromStorage() {
         if (!window.G) window.G = {};
         if (!window.G.groups) window.G.groups = {};
         if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
 
-        // 1. 群列表基础字典（暂留 localStorage，后续阶段迁移）
-        try {
-            const rawGroups = localStorage.getItem(GROUPS_STORAGE_KEY);
-            if (rawGroups) {
-                const parsed = JSON.parse(rawGroups);
-                if (parsed && typeof parsed === 'object') {
-                    window.G.groups = Object.assign({}, parsed, window.G.groups);
-                }
+        const storage = getStorageDriver();
+
+        // 1. 群列表基础字典：优先 IndexedDB，无感迁移旧版 localStorage
+        let loadedGroups = null;
+        if (storage) {
+            try {
+                loadedGroups = await storage.getItem(GROUPS_STORAGE_KEY);
+            } catch (err) {
+                console.warn('⚠️ 从 IndexedDB 读取群聊列表失败:', err);
             }
-        } catch (e) {
-            console.warn('⚠️ 读取群聊列表本地缓存失败:', e);
+        }
+        if (!loadedGroups) {
+            try {
+                const rawGroups = localStorage.getItem(GROUPS_STORAGE_KEY);
+                if (rawGroups) {
+                    loadedGroups = JSON.parse(rawGroups);
+                    if (loadedGroups && storage) {
+                        storage.setItem(GROUPS_STORAGE_KEY, loadedGroups).catch(e => {
+                            console.warn('⚠️ 自动迁移群列表至 IndexedDB 失败:', e);
+                        });
+                    }
+                }
+            } catch (e) {
+                console.warn('⚠️ 读取群聊列表 localStorage 缓存失败:', e);
+            }
+        }
+        if (loadedGroups && typeof loadedGroups === 'object') {
+            window.G.groups = Object.assign({}, loadedGroups, window.G.groups);
         }
 
-        // 2. 群历史记录：优先从 IndexedDB 读取，若无则从旧 localStorage 迁移
-        const storage = getStorageDriver();
+        // 2. 群历史记录：优先 IndexedDB，无感迁移旧版 localStorage
         let loadedHist = null;
-
         if (storage) {
             try {
                 loadedHist = await storage.getItem(GROUP_HISTORY_STORAGE_KEY);
@@ -50,14 +66,11 @@
                 console.warn('⚠️ 从 IndexedDB 读取群聊历史失败:', err);
             }
         }
-
-        // 兼容回退与冷迁移机制
         if (!loadedHist) {
             try {
                 const rawHist = localStorage.getItem(GROUP_HISTORY_STORAGE_KEY);
                 if (rawHist) {
                     loadedHist = JSON.parse(rawHist);
-                    // 🌟 无感将旧数据自动迁移到 IndexedDB
                     if (loadedHist && storage) {
                         storage.setItem(GROUP_HISTORY_STORAGE_KEY, loadedHist).catch(e => {
                             console.warn('⚠️ 自动迁移群历史至 IndexedDB 失败:', e);
@@ -68,7 +81,6 @@
                 console.warn('⚠️ 读取群聊记录 localStorage 缓存失败:', e);
             }
         }
-
         if (loadedHist && typeof loadedHist === 'object') {
             for (const gid in loadedHist) {
                 const storedList = loadedHist[gid];
@@ -81,23 +93,26 @@
     }
     window.restoreGroupsFromStorage = restoreGroupsFromStorage;
 
-    // 💾 群聊持久化备份（群历史已全面接入 IndexedDB，保持原子异步落盘）
+    // 💾 群聊双轨持久化备份（群基础字典与群历史全面接入 IndexedDB 异步原子落盘）
     window.syncGroupChatsToLocalBackup = async function() {
         try {
             if (!window.G) return;
+            const storage = getStorageDriver();
 
-            // 基础信息仍然落盘到 localStorage
+            // 1. 群基础字典落盘至 IndexedDB（兜底兼容 localStorage）
             if (window.G.groups && typeof window.G.groups === 'object') {
-                localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(window.G.groups));
+                if (storage) {
+                    await storage.setItem(GROUPS_STORAGE_KEY, window.G.groups);
+                } else {
+                    localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(window.G.groups));
+                }
             }
 
-            // 群历史全面接入 IndexedDB
+            // 2. 群历史对白落盘至 IndexedDB（兜底兼容 localStorage）
             if (window.G.groupChatHistory && typeof window.G.groupChatHistory === 'object') {
-                const storage = getStorageDriver();
                 if (storage) {
                     await storage.setItem(GROUP_HISTORY_STORAGE_KEY, window.G.groupChatHistory);
                 } else {
-                    // 兜底降级
                     localStorage.setItem(GROUP_HISTORY_STORAGE_KEY, JSON.stringify(window.G.groupChatHistory));
                 }
             }
@@ -868,5 +883,5 @@
         window.renderChatApp();
     };
 
-    console.log('✅ ChatGroup 多人群聊独立模块已成功升级（群历史对白 IndexedDB 驱动）');
+    console.log('✅ ChatGroup 多人群聊独立模块已成功升级（群基础字典与群历史 IndexedDB 驱动）');
 })();
