@@ -71,14 +71,79 @@
         }
     }
 
-    // 💾 群聊双轨持久化备份
+    // 💾 群聊双轨持久化备份（增设单群防缩水与原子级防覆盖落盘保护）
     window.syncGroupChatsToLocalBackup = function() {
         try {
-            if (window.G && window.G.groups) {
-                localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(window.G.groups));
+            if (!window.G) return;
+
+            // 1. 群组基础信息安全落盘（防止空对象擦除已有备份）
+            if (window.G.groups && typeof window.G.groups === 'object') {
+                const curKeys = Object.keys(window.G.groups);
+                if (curKeys.length === 0) {
+                    const rawExistingGroups = localStorage.getItem(GROUPS_STORAGE_KEY);
+                    if (!rawExistingGroups || rawExistingGroups.length <= 2) {
+                        localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(window.G.groups));
+                    }
+                } else {
+                    localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(window.G.groups));
+                }
             }
-            if (window.G && window.G.groupChatHistory) {
-                localStorage.setItem(GROUP_HISTORY_STORAGE_KEY, JSON.stringify(window.G.groupChatHistory));
+
+            // 2. 群历史对白防缩水原子落盘门禁（彻底解决清后台只剩第一句话的 Bug）
+            if (window.G.groupChatHistory && typeof window.G.groupChatHistory === 'object') {
+                let diskHistories = {};
+                try {
+                    const rawDisk = localStorage.getItem(GROUP_HISTORY_STORAGE_KEY);
+                    if (rawDisk) {
+                        diskHistories = JSON.parse(rawDisk) || {};
+                    }
+                } catch (_) {}
+
+                const finalHistoriesToSave = {};
+
+                // 优先继承磁盘上存在、而当前内存中可能尚未被加载到的其他历史群聊
+                for (const gid in diskHistories) {
+                    if (Array.isArray(diskHistories[gid])) {
+                        finalHistoriesToSave[gid] = diskHistories[gid];
+                    }
+                }
+
+                // 针对内存中的每个群进行严格的防缩水与去重合并
+                for (const gid in window.G.groupChatHistory) {
+                    const memoryMsgs = window.G.groupChatHistory[gid];
+                    if (!Array.isArray(memoryMsgs)) continue;
+
+                    const diskMsgs = diskHistories[gid] || [];
+
+                    // 若内存中消息数量明显少于磁盘已有数量（例如内存由于时序问题只有第一句话），
+                    // 启动防退化合并，坚决阻止以少冲多！
+                    if (diskMsgs.length > memoryMsgs.length) {
+                        const mergedMap = new Map();
+                        // 1. 先注入磁盘已有历史全集
+                        diskMsgs.forEach(m => {
+                            if (m) {
+                                const key = m._id || `${m.time}_${m.senderName || m.from}_${(m.text || '').slice(0, 15)}`;
+                                mergedMap.set(key, m);
+                            }
+                        });
+                        // 2. 将内存中的新消息补入并更新
+                        memoryMsgs.forEach(m => {
+                            if (m) {
+                                const key = m._id || `${m.time}_${m.senderName || m.from}_${(m.text || '').slice(0, 15)}`;
+                                mergedMap.set(key, m);
+                            }
+                        });
+
+                        const fullList = Array.from(mergedMap.values());
+                        finalHistoriesToSave[gid] = fullList;
+                        // 同时反哺修正当前运行态内存，消除内存中的滞后快照
+                        window.G.groupChatHistory[gid] = fullList;
+                    } else {
+                        finalHistoriesToSave[gid] = memoryMsgs;
+                    }
+                }
+
+                localStorage.setItem(GROUP_HISTORY_STORAGE_KEY, JSON.stringify(finalHistoriesToSave));
             }
         } catch (e) {
             console.warn('⚠️ 同步群聊到本地备份失败:', e);
@@ -133,9 +198,6 @@
         const group = window.G.groups && window.G.groups[gid];
         if (!group) { window.closeGroupChat(); return; }
 
-        // 🛡️ 修复：仅在历史记录完全缺失时才从本地备份兜底恢复一次；
-        // 旧版在 length <= 1 时也会触发，导致群友接话期间（此时长度恰好为1）
-        // 被反复重新合并/覆盖，是"清后台后只剩第一条消息"的根因之一。
         if (!window.G.groupChatHistory || !window.G.groupChatHistory[gid]) {
             restoreGroupsFromStorage();
         }
@@ -886,8 +948,7 @@
         window.G.groupChatHistory[gid].push(msgPayload);
 
         window.syncGroupChatsToLocalBackup();
-        // 🛡️ 修复：autoSaveGame 提前到 render 之前，避免渲染环节偶发异常
-        // 导致这条消息始终没能写入 mcyt_autosave 主存档
+        // 提前落盘，避免渲染环节偶发异常导致消息丢失
         if (typeof autoSaveGame === 'function') autoSaveGame();
         input.value = '';
         renderGroupChatWindow();
@@ -904,7 +965,7 @@
         window._plusDrawerOpen = false;
         window._activeQuoteMessage = null;
 
-        // 🛡️ 关键门禁：进入群聊时强制同步最新的群聊历史持久化数据
+        // 关键门禁：进入群聊时强制同步最新的群聊历史持久化数据
         restoreGroupsFromStorage();
 
         window.renderChatApp();
@@ -919,5 +980,5 @@
         window.renderChatApp();
     };
 
-    console.log('✅ ChatGroup 多人群聊独立模块已成功升级（防吞消息自愈 + 表情包随机引擎）');
+    console.log('✅ ChatGroup 多人群聊独立模块已成功升级（防吞消息自愈 + 防缩水落盘门禁 + 表情包随机引擎）');
 })();
