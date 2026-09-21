@@ -2,9 +2,8 @@
  * js/apps/chat/chat-app-media.js
  * 💬 微信主应用 · 拆分分片 7/7：聊天发图片（3 种模式）、隐藏屏幕对话框切换、发送表情、单聊文字发送、
  *    底部Tab入口（switchChatTab / openChat / closeChat）。
- * ⚠️ 拆分自 chat-app.js，仅做物理搬家。原文件末尾 window.renderChatApp / window.renderSocialPanel /
- *    window.renderSingleChatWindow 三行导出语句，已就地前移到 chat-app-shell.js 与 chat-app-window.js
- *    对应函数定义处（提前导出不影响任何调用方，行为完全不变），本文件不再重复导出。
+ * ⚠️ 拆分自 chat-app.js，仅做物理搬家。
+ * 🛡️ 关键修复：修正群聊发表情、发图片时错误的单聊备份调用与落盘漏调，确保群聊即时落盘。
  */
 
 (function() {
@@ -58,6 +57,7 @@
                     return false;
                 }
                 msgObj = {
+                    _id: 'cmsg_' + Date.now() + '_' + Math.floor(Math.random() * 8999 + 1000),
                     from: 'player',
                     isPlayer: true,
                     type: 'image_flip',
@@ -75,6 +75,7 @@
                     return false;
                 }
                 msgObj = {
+                    _id: 'cmsg_' + Date.now() + '_' + Math.floor(Math.random() * 8999 + 1000),
                     from: 'player',
                     isPlayer: true,
                     type: 'image',
@@ -93,6 +94,7 @@
                 }
                 const desc = document.getElementById('wchatRealDescInput').value.trim() || 'MC截图';
                 msgObj = {
+                    _id: 'cmsg_' + Date.now() + '_' + Math.floor(Math.random() * 8999 + 1000),
                     from: 'player',
                     isPlayer: true,
                     type: 'image',
@@ -110,12 +112,15 @@
 
             if (type === 'single') {
                 window.pushChatMessageSafe(id, msgObj, curAcc.id);
-                if (msgObj.imageDesc) {
+                if (msgObj.imageDesc && typeof depositRememoriEvidence === 'function') {
                     depositRememoriEvidence(id, curAcc.id, `${curAcc.name}[发送了图片]: ${msgObj.imageDesc}`);
                 }
             } else {
+                if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
                 if (!window.G.groupChatHistory[id]) window.G.groupChatHistory[id] = [];
                 window.G.groupChatHistory[id].push(msgObj);
+                // 🛡️ 关键修复：群聊发图片必须同步群聊独立备份，绝不漏掉！
+                if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
             }
 
             window._plusDrawerOpen = false;
@@ -194,17 +199,32 @@
         const quote = window._activeQuoteMessage ? Object.assign({}, window._activeQuoteMessage) : null;
         window._activeQuoteMessage = null;
 
+        const stickerMsg = {
+            _id: 'cmsg_' + Date.now() + '_' + Math.floor(Math.random() * 8999 + 1000),
+            from: 'player',
+            isPlayer: true,
+            type: 'sticker',
+            stickerUrl: url,
+            stickerDesc: desc,
+            text: `[表情: ${desc}]`,
+            time,
+            timestamp: Date.now(),
+            quote
+        };
+
         if (type === 'single') {
             const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
             if (window.isAccountBlockedByNpc(id, curAcc.id)) {
                 if (typeof showToast === 'function') showToast('对方已拒收你的消息', 'error');
                 return;
             }
-            window.pushChatMessageSafe(id, { from: 'player', isPlayer: true, type: 'sticker', stickerUrl: url, stickerDesc: desc, text: `[表情: ${desc}]`, time, timestamp: Date.now(), quote }, curAcc.id);
+            window.pushChatMessageSafe(id, stickerMsg, curAcc.id);
         } else {
+            if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
             if (!window.G.groupChatHistory[id]) window.G.groupChatHistory[id] = [];
-            window.G.groupChatHistory[id].push({ from: 'player', isPlayer: true, type: 'sticker', stickerUrl: url, stickerDesc: desc, text: `[表情: ${desc}]`, time, timestamp: Date.now(), quote });
-            window.syncChatHistoryToLocalBackup();
+            window.G.groupChatHistory[id].push(stickerMsg);
+            // 🛡️ 关键修复：群聊发表情必须调用群聊专用落盘函数，彻底纠正此前错调单聊的 Bug！
+            if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
         }
         window._stickerDrawerOpen = false;
         if (type === 'single') renderSingleChatWindow();
@@ -231,7 +251,9 @@
         }
 
         window.pushChatMessageSafe(npcId, { from: 'player', isPlayer: true, text, time: new Date().toLocaleTimeString().slice(0, 5), timestamp: Date.now(), quote }, curAcc.id);
-        depositRememoriEvidence(npcId, curAcc.id, `${curAcc.name}: ${text}`);
+        if (typeof depositRememoriEvidence === 'function') {
+            depositRememoriEvidence(npcId, curAcc.id, `${curAcc.name}: ${text}`);
+        }
         input.value = '';
         renderSingleChatWindow();
         if (typeof autoSaveGame === 'function') autoSaveGame();
