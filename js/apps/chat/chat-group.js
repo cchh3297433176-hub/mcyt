@@ -4,7 +4,7 @@
  * 🌟 升级特性：
  * 1. 仿 QQ 式双层输入栏：上层为打字框、【重说】与【发送】键；下层为语音/设置/表情/加号工具栏。
  * 2. ⚡ 重说按钮：一键撤回上一轮全部 AI 发言并重新唤起接话流，群友重新搭腔，单聊不受影响。
- * 3. 🛡️ 稳固管道接入：全面接入 window.getGroupChatHistorySafe / window.pushGroupChatMessageSafe，采用就地更新数组消除指针断裂 Bug。
+ * 3. 🛡️ 纯净原子落盘：彻底拔除导致旧快照覆写新历史的锁死逻辑，全面采用实时真实落盘。
  * 4. 🎲 表情包模糊匹配与随机采样引擎：消除 .find() 返回首项索引 0 的死穴，多变表情自然契合语境。
  * 5. 🖼️ 真实图片直显与假图片（文字画片）全屏相框灯箱阅读。
  * 6. 顶栏动态显示「XXX 正在输入中...」，朋友圈轻量 NPC 自由协同交错发言。
@@ -16,7 +16,7 @@
     const GROUPS_STORAGE_KEY = 'mcyt_wechat_group_chats';
     const GROUP_HISTORY_STORAGE_KEY = 'mcyt_wechat_group_histories';
 
-    // 🛡️ 群聊冷启动自动恢复与容灾自愈门禁（就地更新内存数组，永不切断全局引用）
+    // 🛡️ 群聊冷启动自动恢复
     function restoreGroupsFromStorage() {
         if (!window.G) window.G = {};
         if (!window.G.groups) window.G.groups = {};
@@ -43,31 +43,8 @@
                         const storedList = parsedHist[gid];
                         if (!Array.isArray(storedList)) continue;
                         
-                        // 🌟 核心：永远使用安全管道获取稳定的内存数组引用
-                        const currentList = window.getGroupChatHistorySafe(gid);
-
-                        if (currentList.length === 0) {
-                            // 保持数组指针，就地注入
-                            storedList.forEach(m => { if (m) currentList.push(m); });
-                        } else {
-                            const map = new Map();
-                            storedList.forEach(m => {
-                                if (m) {
-                                    const key = m._id || `${m.time}_${m.senderName || m.from}_${(m.text || '').slice(0, 15)}`;
-                                    map.set(key, m);
-                                }
-                            });
-                            currentList.forEach(m => {
-                                if (m) {
-                                    const key = m._id || `${m.time}_${m.senderName || m.from}_${(m.text || '').slice(0, 15)}`;
-                                    map.set(key, m);
-                                }
-                            });
-                            const mergedAll = Array.from(map.values());
-                            // 就地清空并重新填入全量数据，绝不破坏 currentList 的原始引用！
-                            currentList.length = 0;
-                            mergedAll.forEach(m => currentList.push(m));
-                        }
+                        // 🌟 纯净装载：只要本地有独立记录，以独立记录为最新真源
+                        window.G.groupChatHistory[gid] = storedList;
                     }
                 }
             }
@@ -77,75 +54,17 @@
     }
     window.restoreGroupsFromStorage = restoreGroupsFromStorage;
 
-    // 💾 群聊双轨持久化备份（增设单群防缩水落盘门禁）
+    // 💾 群聊双轨持久化备份（真实全量落盘，彻底对齐单聊模式）
     window.syncGroupChatsToLocalBackup = function() {
         try {
             if (!window.G) return;
 
-            // 1. 群组信息落盘
             if (window.G.groups && typeof window.G.groups === 'object') {
-                const curKeys = Object.keys(window.G.groups);
-                if (curKeys.length === 0) {
-                    const rawExistingGroups = localStorage.getItem(GROUPS_STORAGE_KEY);
-                    if (!rawExistingGroups || rawExistingGroups.length <= 2) {
-                        localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(window.G.groups));
-                    }
-                } else {
-                    localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(window.G.groups));
-                }
+                localStorage.setItem(GROUPS_STORAGE_KEY, JSON.stringify(window.G.groups));
             }
 
-            // 2. 群历史对白防缩水落盘
             if (window.G.groupChatHistory && typeof window.G.groupChatHistory === 'object') {
-                let diskHistories = {};
-                try {
-                    const rawDisk = localStorage.getItem(GROUP_HISTORY_STORAGE_KEY);
-                    if (rawDisk) {
-                        diskHistories = JSON.parse(rawDisk) || {};
-                    }
-                } catch (_) {}
-
-                const finalHistoriesToSave = {};
-
-                for (const gid in diskHistories) {
-                    if (Array.isArray(diskHistories[gid])) {
-                        finalHistoriesToSave[gid] = diskHistories[gid];
-                    }
-                }
-
-                for (const gid in window.G.groupChatHistory) {
-                    const memoryMsgs = window.G.groupChatHistory[gid];
-                    if (!Array.isArray(memoryMsgs)) continue;
-
-                    const diskMsgs = diskHistories[gid] || [];
-
-                    // 若内存中记录少于磁盘已有记录（防退化）
-                    if (diskMsgs.length > memoryMsgs.length) {
-                        const mergedMap = new Map();
-                        diskMsgs.forEach(m => {
-                            if (m) {
-                                const key = m._id || `${m.time}_${m.senderName || m.from}_${(m.text || '').slice(0, 15)}`;
-                                mergedMap.set(key, m);
-                            }
-                        });
-                        memoryMsgs.forEach(m => {
-                            if (m) {
-                                const key = m._id || `${m.time}_${m.senderName || m.from}_${(m.text || '').slice(0, 15)}`;
-                                mergedMap.set(key, m);
-                            }
-                        });
-
-                        const fullList = Array.from(mergedMap.values());
-                        finalHistoriesToSave[gid] = fullList;
-                        // 就地反哺内存，保持指针
-                        memoryMsgs.length = 0;
-                        fullList.forEach(m => memoryMsgs.push(m));
-                    } else {
-                        finalHistoriesToSave[gid] = memoryMsgs;
-                    }
-                }
-
-                localStorage.setItem(GROUP_HISTORY_STORAGE_KEY, JSON.stringify(finalHistoriesToSave));
+                localStorage.setItem(GROUP_HISTORY_STORAGE_KEY, JSON.stringify(window.G.groupChatHistory));
             }
         } catch (e) {
             console.warn('⚠️ 同步群聊到本地备份失败:', e);
@@ -200,7 +119,9 @@
         const group = window.G.groups && window.G.groups[gid];
         if (!group) { window.closeGroupChat(); return; }
 
-        const history = window.getGroupChatHistorySafe(gid);
+        if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
+        if (!window.G.groupChatHistory[gid]) window.G.groupChatHistory[gid] = [];
+        const history = window.G.groupChatHistory[gid];
         
         const formalCount = (group.members || []).length;
         const momentNpcCount = (group.momentNpcs || []).length;
@@ -253,7 +174,6 @@
                 </div>`;
             }
 
-            // 1. 居中小灰字通知（撤回式系统提示）
             if (msg.from === 'action') {
                 messagesHtml += `
                 <div style="text-align:center;margin:10px 0;">
@@ -262,7 +182,6 @@
                 continue;
             }
 
-            // 提取文字图片特征
             let textImgDesc = '';
             let rawMsgText = msg.text || '';
             if (msg.type === 'image_text_only' || msg.imageDesc) {
@@ -285,7 +204,6 @@
                 </div>
             ` : '';
 
-            // 2. 语音消息气泡
             if (msg.type === 'voice') {
                 const seconds = Math.min(60, Math.max(1, parseInt(msg.seconds) || 3));
                 const bubbleWidth = Math.min(220, 68 + seconds * 4.5);
@@ -314,7 +232,6 @@
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
                 </div>`;
             }
-            // 3. 真实图片直显
             else if (msg.imageUrl && (msg.type === 'image' || msg.text === '[图片]')) {
                 const safeImgUrl = escapeHtml(msg.imageUrl);
                 messagesHtml += `
@@ -332,7 +249,6 @@
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
                 </div>`;
             }
-            // 4. 文字画片（假图片）
             else if (textImgDesc) {
                 const safeDesc = escapeHtml(textImgDesc);
                 const descAttr = safeDesc.replace(/'/g, "\\'");
@@ -362,7 +278,6 @@
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
                 </div>`;
             }
-            // 5. 表情包直显
             else if (msg.type === 'sticker' || msg.stickerUrl) {
                 const sUrl = msg.stickerUrl || 'assets/icons/chat.png';
                 messagesHtml += `
@@ -377,7 +292,6 @@
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
                 </div>`;
             }
-            // 6. 普通文本消息
             else {
                 let text = isSelf ? escapeHtml(msg.text || '').replace(/\n/g, '<br>') : ((typeof renderContentWithThoughts === 'function') ? renderContentWithThoughts(msg.text || '') : escapeHtml(msg.text || ''));
                 messagesHtml += `
@@ -886,7 +800,6 @@
             msgPayload.imageDesc = text.slice(6, -1).trim();
         }
 
-        // 🌟 核心：使用安全管道写入，自动赋上唯一 _id 与时间戳并触发落盘
         window.pushGroupChatMessageSafe(gid, msgPayload);
 
         if (typeof autoSaveGame === 'function') autoSaveGame();
@@ -904,7 +817,6 @@
         window._plusDrawerOpen = false;
         window._activeQuoteMessage = null;
 
-        // 恢复数据时就地保持引用
         restoreGroupsFromStorage();
 
         window.renderChatApp();
@@ -919,5 +831,5 @@
         window.renderChatApp();
     };
 
-    console.log('✅ ChatGroup 多人群聊独立模块已成功升级（安全管道总线 + 就地指针保持 + 防缩水门禁）');
+    console.log('✅ ChatGroup 多人群聊独立模块已成功升级（纯净真实原子落盘引擎）');
 })();
