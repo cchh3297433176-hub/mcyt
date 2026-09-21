@@ -1,6 +1,6 @@
 // js/system/save-engine.js
 // 📱 小手机系统底层存档引擎（全量数据序列化、冷启动自动恢复、特赦合规核验、记忆卡调度中枢）
-// 🌟 存储架构升级（Phase 1）：群聊历史优先对接 IndexedDB (localforage)，杜绝配额溢出与旧快照污染
+// 🌟 存储架构升级（Phase 1 & 2）：群聊字典与群历史优先对接 IndexedDB (localforage)，杜绝配额溢出与旧快照污染
 // ============================================================
 
 (function(window) {
@@ -34,6 +34,7 @@
             localStorage.removeItem('mcyt_wechat_group_chats');
             localStorage.removeItem('mcyt_wechat_group_histories');
             if (typeof window.localforage !== 'undefined') {
+                window.localforage.removeItem('mcyt_wechat_group_chats').catch(() => {});
                 window.localforage.removeItem('mcyt_wechat_group_histories').catch(() => {});
             }
         } catch (_) {}
@@ -482,7 +483,7 @@
         if (Array.isArray(data.ytExternalVideos)) g.ytExternalVideos = data.ytExternalVideos;
         if (Array.isArray(data.ytCustomChannels)) g.ytCustomChannels = data.ytCustomChannels;
 
-        // 🛡️ 群组字典恢复：优先从独立持久化恢复
+        // 🛡️ 群组字典恢复：优先从独立持久化 (IndexedDB) 恢复，主存档只做兜底
         if (!g.groups) g.groups = {};
         if (data.groups && typeof data.groups === 'object') {
             g.groups = Object.assign({}, data.groups, g.groups);
@@ -497,9 +498,21 @@
             }
         } catch (_) {}
 
+        // 异步以 IndexedDB 绝对权威覆写群组字典
+        if (typeof window.localforage !== 'undefined') {
+            window.localforage.getItem('mcyt_wechat_group_chats').then(idbGroups => {
+                if (idbGroups && typeof idbGroups === 'object') {
+                    g.groups = Object.assign({}, g.groups, idbGroups);
+                    if (typeof window.renderChatApp === 'function' && window._activeBottomTab === 'chats') {
+                        window.renderChatApp();
+                    }
+                }
+            }).catch(() => {});
+        }
+
         // 🛡️ 终极绝杀：群聊历史 100% 对齐单聊机制！
         // 主存档里的 groupChatHistory 仅作为兜底；
-        // 独立持久化为绝对真源，优先从 IndexedDB (localforage) 加载，旧版 localStorage 作为迁移兜底
+        // 独立持久化为绝对真源，优先从 IndexedDB (localforage) 加载
         if (!g.groupChatHistory) g.groupChatHistory = {};
         if (data.groupChatHistory && typeof data.groupChatHistory === 'object') {
             for (const [k, v] of Object.entries(data.groupChatHistory)) {
@@ -525,7 +538,7 @@
             }
         } catch (_) {}
 
-        // 异步以绝对权威 IndexedDB 覆写就地校准
+        // 异步以绝对权威 IndexedDB 覆写就地校准群聊历史
         if (typeof window.localforage !== 'undefined') {
             window.localforage.getItem('mcyt_wechat_group_histories').then(idbHist => {
                 if (idbHist && typeof idbHist === 'object') {
