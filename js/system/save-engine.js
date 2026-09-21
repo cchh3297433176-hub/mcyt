@@ -1,6 +1,8 @@
 // js/system/save-engine.js
 // 📱 小手机系统底层存档引擎（全量数据序列化、冷启动自动恢复、特赦合规核验、记忆卡调度中枢）
-// 🌟 存储架构升级（Phase 1, 2 & 3）：群聊历史、群字典、单聊历史全面接入 IndexedDB (localforage)！
+// 🌟 存储架构升级（收官战 · Phase 4）：
+// 主自动存档 mcyt_autosave 全面迁移至 IndexedDB (via localforage)！
+// 冷启动实现全流程 async/await 预加载，在界面出现前将群聊、单聊与主存档全部装入内存，秒开无延迟！
 // ============================================================
 
 (function(window) {
@@ -11,6 +13,14 @@
     }
 
     let _gameInitialized = false;
+
+    // 🛡️ 辅助：localforage 统一获取器
+    function getStorageDriver() {
+        if (typeof window.localforage !== 'undefined') {
+            return window.localforage;
+        }
+        return null;
+    }
 
     function initGame() {
         const $ = window.$;
@@ -34,10 +44,13 @@
             localStorage.removeItem('mcyt_wechat_group_chats');
             localStorage.removeItem('mcyt_wechat_group_histories');
             localStorage.removeItem('mcyt_wechat_chathistory_v2');
-            if (typeof window.localforage !== 'undefined') {
-                window.localforage.removeItem('mcyt_wechat_group_chats').catch(() => {});
-                window.localforage.removeItem('mcyt_wechat_group_histories').catch(() => {});
-                window.localforage.removeItem('mcyt_wechat_chathistory_v2').catch(() => {});
+            
+            const storage = getStorageDriver();
+            if (storage) {
+                storage.removeItem('mcyt_autosave').catch(() => {});
+                storage.removeItem('mcyt_wechat_group_chats').catch(() => {});
+                storage.removeItem('mcyt_wechat_group_histories').catch(() => {});
+                storage.removeItem('mcyt_wechat_chathistory_v2').catch(() => {});
             }
         } catch (_) {}
 
@@ -170,17 +183,25 @@
         return safeMap;
     }
 
-    function autoSaveGame() {
+    // 💾 主全局存档落盘（全面接入 IndexedDB，彻底解除 5MB 限制）
+    async function autoSaveGame() {
         if (window._isAdminAuditing) return;
         if (!window.G || window.G.phase !== 'playing') return;
         try {
             const payload = serializeGameState();
-            localStorage.setItem('mcyt_autosave', JSON.stringify({
+            const saveRecord = {
                 timestamp: new Date().toLocaleString(),
                 day: window.G.day,
                 version: getAppVersion(),
                 data: payload
-            }));
+            };
+
+            const storage = getStorageDriver();
+            if (storage) {
+                await storage.setItem('mcyt_autosave', saveRecord);
+            } else {
+                localStorage.setItem('mcyt_autosave', JSON.stringify(saveRecord));
+            }
             
             if (typeof window.checkBackupReminderOnDayAdvance === 'function') {
                 window.checkBackupReminderOnDayAdvance();
@@ -228,7 +249,7 @@
         }
     }
 
-    function _applyImportedStateData(stateData) {
+    async function _applyImportedStateData(stateData) {
         if (!stateData || (!stateData.player && !stateData.npcs)) {
             if (typeof window.showToast === 'function') window.showToast('存档数据损坏或为空', 'error');
             return;
@@ -264,7 +285,7 @@
             window.resetGameState(true);
         }
 
-        applyDeserializedGameState(stateData);
+        await applyDeserializedGameState(stateData);
         _gameInitialized = true;
         window.G.phase = 'playing';
 
@@ -284,7 +305,7 @@
         if (typeof window.switchTab === 'function') window.switchTab('story');
 
         if (!isIncomingBannedCard) {
-            autoSaveGame();
+            await autoSaveGame();
         }
 
         if (stateData._isDeviceBanned && typeof window.showDeviceBanLockScreen === 'function') {
@@ -292,21 +313,48 @@
         }
     }
 
-    function getAutoSaveInfo() {
+    // 🛡️ 异步读取自动存档（优先 IndexedDB，平滑无感从旧版 localStorage 迁移）
+    async function getAutoSaveInfo() {
+        const storage = getStorageDriver();
+        if (storage) {
+            try {
+                const idbSave = await storage.getItem('mcyt_autosave');
+                if (idbSave && typeof idbSave === 'object') {
+                    return idbSave;
+                }
+            } catch (err) {
+                console.warn('⚠️ 从 IndexedDB 读取主存档失败:', err);
+            }
+        }
+
+        // 冷迁移机制
         try {
             const raw = localStorage.getItem('mcyt_autosave');
-            return raw ? JSON.parse(raw) : null;
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && typeof parsed === 'object') {
+                    if (storage) {
+                        storage.setItem('mcyt_autosave', parsed).catch(e => {
+                            console.warn('⚠️ 自动迁移主存档至 IndexedDB 失败:', e);
+                        });
+                    }
+                    return parsed;
+                }
+            }
         } catch(e) {
             return null;
         }
+        return null;
     }
 
-    function hasAnySaveData() {
-        return !!localStorage.getItem('mcyt_autosave');
+    async function hasAnySaveData() {
+        const info = await getAutoSaveInfo();
+        return !!(info && info.data);
     }
 
-    function resumeAutoSave() {
-        const info = getAutoSaveInfo();
+    // 🌟 冷启动恢复：全流程 async/await 确保所有历史全量装入内存后再进入主界面
+    async function resumeAutoSave() {
+        const info = await getAutoSaveInfo();
         if (!info || !info.data) {
             if (typeof window.showToast === 'function') window.showToast('⚠️ 未找到有效存档', 'error');
             return;
@@ -314,7 +362,8 @@
         if (typeof window.resetGameState === 'function') {
             window.resetGameState(true);
         }
-        applyDeserializedGameState(info.data);
+
+        await applyDeserializedGameState(info.data);
         _gameInitialized = true;
         window.G.phase = 'playing';
 
@@ -418,9 +467,11 @@
         };
     }
 
-    function applyDeserializedGameState(data) {
+    // 🌟 统一反序列化中枢：彻底串联 IndexedDB 预读取，等待全部对白注入内存后再放行
+    async function applyDeserializedGameState(data) {
         if (!data) return;
         const g = window.G;
+        const storage = getStorageDriver();
 
         if (data.player) {
             g.player = Object.assign({}, g.player, data.player);
@@ -448,7 +499,7 @@
             g.npcs = Object.assign({}, g.npcs, data.npcs);
         }
 
-        // 🛡️ 单聊历史恢复：主存档只做初始冷备份兜底
+        // 1. 单聊历史恢复（主存档只做初始兜底，绝对权威源为 IndexedDB）
         if (!g.chatHistory) g.chatHistory = {};
         if (data.chatHistory && typeof data.chatHistory === 'object') {
             for (const [k, v] of Object.entries(data.chatHistory)) {
@@ -457,38 +508,32 @@
                 }
             }
         }
-
-        // 同步回退读取 localStorage
-        try {
-            const rawChatHist = localStorage.getItem('mcyt_wechat_chathistory_v2');
-            if (rawChatHist) {
-                const parsedChatHist = JSON.parse(rawChatHist);
-                if (parsedChatHist && typeof parsedChatHist === 'object') {
-                    for (const k in parsedChatHist) {
-                        const localMsgs = parsedChatHist[k];
-                        if (Array.isArray(localMsgs) && localMsgs.length > 0) {
-                            g.chatHistory[k] = localMsgs;
-                        }
-                    }
-                }
-            }
-        } catch (_) {}
-
-        // 异步以绝对权威 IndexedDB 覆写就地校准单聊历史
-        if (typeof window.localforage !== 'undefined') {
-            window.localforage.getItem('mcyt_wechat_chathistory_v2').then(idbHist => {
-                if (idbHist && typeof idbHist === 'object') {
-                    for (const k in idbHist) {
-                        const msgs = idbHist[k];
+        if (storage) {
+            try {
+                const idbChatHist = await storage.getItem('mcyt_wechat_chathistory_v2');
+                if (idbChatHist && typeof idbChatHist === 'object') {
+                    for (const k in idbChatHist) {
+                        const msgs = idbChatHist[k];
                         if (Array.isArray(msgs) && msgs.length > 0) {
                             g.chatHistory[k] = msgs;
                         }
                     }
-                    if (g.currentChatNpc && typeof window.renderSingleChatWindow === 'function') {
-                        window.renderSingleChatWindow();
+                }
+            } catch (_) {}
+        } else {
+            try {
+                const rawChatHist = localStorage.getItem('mcyt_wechat_chathistory_v2');
+                if (rawChatHist) {
+                    const parsedChatHist = JSON.parse(rawChatHist);
+                    if (parsedChatHist && typeof parsedChatHist === 'object') {
+                        for (const k in parsedChatHist) {
+                            if (Array.isArray(parsedChatHist[k]) && parsedChatHist[k].length > 0) {
+                                g.chatHistory[k] = parsedChatHist[k];
+                            }
+                        }
                     }
                 }
-            }).catch(() => {});
+            } catch (_) {}
         }
 
         g.currentAccountId = String(data.currentAccountId || 'main');
@@ -519,33 +564,31 @@
         if (Array.isArray(data.ytExternalVideos)) g.ytExternalVideos = data.ytExternalVideos;
         if (Array.isArray(data.ytCustomChannels)) g.ytCustomChannels = data.ytCustomChannels;
 
-        // 🛡️ 群组字典恢复：优先从独立持久化 (IndexedDB) 恢复
+        // 2. 群组字典恢复（绝对权威源为 IndexedDB）
         if (!g.groups) g.groups = {};
         if (data.groups && typeof data.groups === 'object') {
             g.groups = Object.assign({}, data.groups, g.groups);
         }
-        try {
-            const rawLocalGroups = localStorage.getItem('mcyt_wechat_group_chats');
-            if (rawLocalGroups) {
-                const parsedLocalGroups = JSON.parse(rawLocalGroups);
-                if (parsedLocalGroups && typeof parsedLocalGroups === 'object') {
-                    g.groups = Object.assign({}, g.groups, parsedLocalGroups);
-                }
-            }
-        } catch (_) {}
-
-        if (typeof window.localforage !== 'undefined') {
-            window.localforage.getItem('mcyt_wechat_group_chats').then(idbGroups => {
+        if (storage) {
+            try {
+                const idbGroups = await storage.getItem('mcyt_wechat_group_chats');
                 if (idbGroups && typeof idbGroups === 'object') {
                     g.groups = Object.assign({}, g.groups, idbGroups);
-                    if (typeof window.renderChatApp === 'function' && window._activeBottomTab === 'chats') {
-                        window.renderChatApp();
+                }
+            } catch (_) {}
+        } else {
+            try {
+                const rawLocalGroups = localStorage.getItem('mcyt_wechat_group_chats');
+                if (rawLocalGroups) {
+                    const parsedLocalGroups = JSON.parse(rawLocalGroups);
+                    if (parsedLocalGroups && typeof parsedLocalGroups === 'object') {
+                        g.groups = Object.assign({}, g.groups, parsedLocalGroups);
                     }
                 }
-            }).catch(() => {});
+            } catch (_) {}
         }
 
-        // 🛡️ 群聊历史恢复：优先从独立持久化 (IndexedDB) 恢复
+        // 3. 群聊历史恢复（绝对权威源为 IndexedDB）
         if (!g.groupChatHistory) g.groupChatHistory = {};
         if (data.groupChatHistory && typeof data.groupChatHistory === 'object') {
             for (const [k, v] of Object.entries(data.groupChatHistory)) {
@@ -554,24 +597,9 @@
                 }
             }
         }
-
-        try {
-            const rawLocalHist = localStorage.getItem('mcyt_wechat_group_histories');
-            if (rawLocalHist) {
-                const parsedLocalHist = JSON.parse(rawLocalHist);
-                if (parsedLocalHist && typeof parsedLocalHist === 'object') {
-                    for (const gid in parsedLocalHist) {
-                        const localMsgs = parsedLocalHist[gid];
-                        if (Array.isArray(localMsgs) && localMsgs.length > 0) {
-                            g.groupChatHistory[gid] = localMsgs;
-                        }
-                    }
-                }
-            }
-        } catch (_) {}
-
-        if (typeof window.localforage !== 'undefined') {
-            window.localforage.getItem('mcyt_wechat_group_histories').then(idbHist => {
+        if (storage) {
+            try {
+                const idbHist = await storage.getItem('mcyt_wechat_group_histories');
                 if (idbHist && typeof idbHist === 'object') {
                     for (const gid in idbHist) {
                         const msgs = idbHist[gid];
@@ -579,11 +607,23 @@
                             g.groupChatHistory[gid] = msgs;
                         }
                     }
-                    if (g.currentChatGroup && typeof window.renderGroupChatWindow === 'function') {
-                        window.renderGroupChatWindow();
+                }
+            } catch (_) {}
+        } else {
+            try {
+                const rawLocalHist = localStorage.getItem('mcyt_wechat_group_histories');
+                if (rawLocalHist) {
+                    const parsedLocalHist = JSON.parse(rawLocalHist);
+                    if (parsedLocalHist && typeof parsedLocalHist === 'object') {
+                        for (const gid in parsedLocalHist) {
+                            const localMsgs = parsedLocalHist[gid];
+                            if (Array.isArray(localMsgs) && localMsgs.length > 0) {
+                                g.groupChatHistory[gid] = localMsgs;
+                            }
+                        }
                     }
                 }
-            }).catch(() => {});
+            } catch (_) {}
         }
 
         if (!g.groupMemories) g.groupMemories = {};
