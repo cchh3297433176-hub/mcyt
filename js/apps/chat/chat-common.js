@@ -3,6 +3,7 @@
  * 💬 微信基础公共库：头像池加载 · 持久化双轨防丢备份（防空冲刷保护） · 微信通用样式注入 · 原生对话框/操作表 · Token监控池 · 
  *    🌟 表情包全量自愈装载底座（内置四大黄金分组：【豆米乌卡】40张 + 【小狗】94张 + 【抽象】42张 + 【猪猪】，老存档无缝穿透激活） · 
  *    AI实体解析器 · 酒馆 PNG 人设卡封装与导入解析引擎
+ * 🛡️ 核心修复：补齐 ensureNpcIntegrity 中遗漏的群聊历史自愈调用，挂载全局稳定的群聊消息管道 getGroupChatHistorySafe / pushGroupChatMessageSafe。
  */
 
 (function() {
@@ -86,7 +87,7 @@
     window.initAvatarPool = initAvatarPool;
 
     // ============================================================
-    // 🎭 内置同步表情包全量数据底座（四组全量即开即用，杜绝 WebView 跨域拦截）
+    // 🎭 内置同步表情包全量数据底座
     // ============================================================
     const BUILTIN_STICKER_PRESETS = {
         '豆米乌卡': [
@@ -272,7 +273,6 @@
         ]
     };
 
-    // 🌟 全量自愈激活引擎（强行突破旧存档封锁，无损注入四大黄金分组）
     function ensureStickersLoaded() {
         if (!window.G) window.G = {};
         if (!Array.isArray(window.G.stickerCategories)) {
@@ -282,7 +282,6 @@
             window.G.stickerLibrary = [];
         }
 
-        // 🛡️ 强行穿透门禁：检查系统四大预置分组是否在分类列表里，不在就强行补齐！
         const goldenPacks = ['豆米乌卡', '小狗', '抽象', '猪猪'];
         goldenPacks.forEach(packName => {
             if (!window.G.stickerCategories.includes(packName)) {
@@ -290,7 +289,6 @@
             }
         });
 
-        // 🛡️ 强行补全表情包实体数据（去重注入，绝不冲掉玩家自定义表情）
         for (const [catName, packList] of Object.entries(BUILTIN_STICKER_PRESETS)) {
             const existingUrls = new Set(
                 window.G.stickerLibrary
@@ -310,14 +308,12 @@
             });
         }
 
-        // 如果当前选中的分类不存在或仍停留在单一分类，默认切到豆米乌卡
         if (!window.G.activeStickerCategory || !window.G.stickerCategories.includes(window.G.activeStickerCategory)) {
             window.G.activeStickerCategory = '豆米乌卡';
         }
     }
     window.ensureStickersLoaded = ensureStickersLoaded;
 
-    // 预留注册接口供外部自由调用
     window.registerStickerPack = function(categoryName, stickerList) {
         if (!categoryName || !Array.isArray(stickerList)) return;
         ensureStickersLoaded();
@@ -341,10 +337,8 @@
         });
     };
 
-    // 后台生成状态记录表（npcId/groupId => timer / promise）
     if (!window._MCYT_CHAT_GENERATING) window._MCYT_CHAT_GENERATING = {};
 
-    // 历史 Token 统计池（只存最近 10 轮）
     function getTokenHistoryList() {
         try {
             const raw = localStorage.getItem(TOKEN_HISTORY_STORAGE_KEY);
@@ -367,7 +361,7 @@
     }
     window.recordTokenHistoryEntry = recordTokenHistoryEntry;
 
-    // 💾 硬核三轨防丢保护引擎（增设 Quota 防爆降级与防空覆盖回写门禁）
+    // 💾 硬核防丢保护引擎
     function syncCustomNpcsToLocalBackup() {
         try {
             if (!window.G || !window.G.npcs || typeof window.G.npcs !== 'object') return;
@@ -376,7 +370,6 @@
             if (keys.length === 0) {
                 const existing = localStorage.getItem(CUSTOM_NPCS_BACKUP_KEY);
                 if (existing && existing.length > 10) {
-                    console.warn('检测到当前角色内存为空，阻止空冲刷覆盖联系人备份');
                     return;
                 }
             }
@@ -390,7 +383,6 @@
             try {
                 localStorage.setItem(CUSTOM_NPCS_BACKUP_KEY, JSON.stringify(customMap));
             } catch (quotaErr) {
-                console.warn('自建联系人包含大尺寸图片导致配额不足，启用轻量降级备份:', quotaErr);
                 const safeMap = {};
                 for (const [id, npc] of Object.entries(customMap)) {
                     const cloned = Object.assign({}, npc);
@@ -440,7 +432,6 @@
             if (keys.length === 0) {
                 const existing = localStorage.getItem(CHAT_HISTORY_BACKUP_KEY);
                 if (existing && existing.length > 10) {
-                    console.warn('检测到当前聊天记录内存为空，阻止空冲刷覆盖记录备份');
                     return;
                 }
             }
@@ -448,7 +439,7 @@
             try {
                 localStorage.setItem(CHAT_HISTORY_BACKUP_KEY, JSON.stringify(window.G.chatHistory));
             } catch (quotaErr) {
-                console.warn('聊天记录体积过大，尝试做轻量保护保存');
+                console.warn('聊天记录体积过大，轻量保护');
             }
         } catch (e) {
             console.error('备份聊天记录失败:', e);
@@ -475,7 +466,6 @@
     }
     window.restoreChatHistoryFromLocalBackup = restoreChatHistoryFromLocalBackup;
 
-    // 朋友圈动态防丢独立持久化槽
     function syncMomentsFeedToLocalBackup() {
         try {
             if (!window.G || !Array.isArray(window.G.feed)) return;
@@ -483,7 +473,6 @@
             if (window.G.feed.length === 0) {
                 const existing = localStorage.getItem(MOMENTS_FEED_BACKUP_KEY);
                 if (existing && existing.length > 10) {
-                    console.warn('检测到当前动态内存为空，阻止空冲刷覆盖朋友圈备份');
                     return;
                 }
             }
@@ -492,7 +481,6 @@
             try {
                 localStorage.setItem(MOMENTS_FEED_BACKUP_KEY, JSON.stringify(cappedFeed));
             } catch (quotaErr) {
-                console.warn('动态包含大图导致配额不足，启用轻量降级保存:', quotaErr);
                 const safeFeed = cappedFeed.map(item => {
                     const cloned = Object.assign({}, item);
                     if (cloned.image && cloned.image.length > 5000) {
@@ -538,8 +526,6 @@
             syncChatHistoryToLocalBackup();
             syncCustomNpcsToLocalBackup();
             syncMomentsFeedToLocalBackup();
-            // 🛡️ 修复：切后台兜底落盘此前漏掉了群聊独立备份，
-            // 是"清后台重进群聊只剩第一条消息"的根因——单聊有这道保险所以没事，群聊没有。
             if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
             if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
         }
@@ -697,28 +683,6 @@
             .wechat-voice-bar:nth-child(2) { height: 12px; }
             .wechat-voice-bar:nth-child(3) { height: 16px; }
 
-            .wechat-photo-card {
-                background: #ffffff; border: 1px solid #e2e8f0; border-radius: 8px;
-                padding: 10px; max-width: 240px; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-                cursor: pointer; transition: transform 0.15s ease;
-            }
-            .wechat-photo-card:active { transform: scale(0.98); }
-            .wechat-photo-art-box {
-                width: 100%; height: 130px; border-radius: 6px;
-                background: linear-gradient(135deg, #1e293b 0%, #334155 50%, #0f172a 100%);
-                display: flex; flex-direction: column; align-items: center; justify-content: center;
-                padding: 12px; box-sizing: border-box; color: #f8fafc; text-align: center;
-                position: relative; overflow: hidden; box-shadow: inset 0 0 20px rgba(0,0,0,0.3);
-            }
-            .wechat-photo-art-badge {
-                position: absolute; top: 6px; left: 6px; background: rgba(7, 193, 96, 0.85);
-                color: #ffffff; font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 4px;
-            }
-            .wechat-photo-art-text {
-                font-size: 13px; line-height: 1.45; font-weight: 500; text-shadow: 0 1px 3px rgba(0,0,0,0.6);
-                overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical;
-            }
-
             .wechat-share-moment-card {
                 background: #ffffff; border: 1px solid #e0e0e0; border-radius: 6px;
                 padding: 10px 12px; width: 220px; box-shadow: 0 1px 3px rgba(0,0,0,0.05);
@@ -838,6 +802,30 @@
     }
     window.openWechatCleanModal = openWechatCleanModal;
 
+    // 🌟 统一群聊消息安全存取管道（就地操作内存数组，彻底终结指针断裂）
+    window.getGroupChatHistorySafe = function(gid) {
+        if (!window.G) window.G = {};
+        if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
+        if (!Array.isArray(window.G.groupChatHistory[gid])) {
+            window.G.groupChatHistory[gid] = [];
+        }
+        return window.G.groupChatHistory[gid];
+    };
+
+    window.pushGroupChatMessageSafe = function(gid, msgObj) {
+        if (!msgObj) return;
+        if (!msgObj._id) msgObj._id = 'gmsg_' + Date.now() + '_' + Math.floor(Math.random() * 8999 + 1000);
+        if (!msgObj.timestamp) msgObj.timestamp = Date.now();
+        if (!msgObj.time) msgObj.time = new Date().toLocaleTimeString().slice(0, 5);
+        
+        const list = window.getGroupChatHistorySafe(gid);
+        list.push(msgObj);
+
+        if (typeof window.syncGroupChatsToLocalBackup === 'function') {
+            window.syncGroupChatsToLocalBackup();
+        }
+    };
+
     function ensureNpcIntegrity() {
         if (!window.G) window.G = {};
         if (!window.G.npcs) window.G.npcs = {};
@@ -854,7 +842,11 @@
         restoreChatHistoryFromLocalBackup();
         restoreMomentsFeedFromLocalBackup();
 
-        // 🌟 核心：在此处彻底激活预置表情包，突破旧存档拦截
+        // 🛡️ 核心修复：补齐此处遗漏的群聊历史自愈恢复！
+        if (typeof window.restoreGroupsFromStorage === 'function') {
+            window.restoreGroupsFromStorage();
+        }
+
         ensureStickersLoaded();
 
         if (typeof window.restoreWechatProfileData === 'function') {
@@ -1165,7 +1157,7 @@
 
         const view = new DataView(chunk.buffer);
         view.setUint32(0, dataLen);
-        chunk[4] = 0x74; chunk[5] = 0x45; chunk[6] = 0x58; chunk[7] = 0x74;
+        chunk[4] = 0x74; chunk[5] = 0x45; chunk[6] = 0x74; chunk[7] = 0x74;
 
         let offset = 8;
         chunk.set(keyBytes, offset);
