@@ -157,7 +157,7 @@
                             <div class="app-slot" id="appSlotShop" onclick="openPhoneApp('shop')">
                                 <div class="app-icon-box" style="background: linear-gradient(135deg, #38d9a9, #087f5b);">
                                     <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
-                                        <path d="M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11.89 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-6 0h-4V4h4v2z"/>
+                                        <path d="M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11 0 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-6 0h-4V4h4v2z"/>
                                     </svg>
                                 </div>
                                 <div class="app-title-label">商务赞助</div>
@@ -310,9 +310,10 @@
     <script src="js/apps/chat/chat-app-panels.js"></script>
     <script src="js/apps/chat/chat-app-media.js"></script>
 
+    <!-- 🌟 冷启动异步加载守护：确保 IndexedDB 数据 100% 装入运行内存后再渲染界面，彻底终结延迟闪烁与丢记录 Bug -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            setTimeout(function() {
+            setTimeout(async function() {
                 try {
                     if (typeof OtomeSecurityGuard !== 'undefined' && OtomeSecurityGuard.isDeviceBanned()) {
                         if (typeof showDeviceBanLockScreen === 'function') {
@@ -321,11 +322,14 @@
                         }
                     }
 
-                    var autoInfo = (typeof getAutoSaveInfo === 'function') ? getAutoSaveInfo() : null;
+                    var autoInfo = null;
+                    if (typeof getAutoSaveInfo === 'function') {
+                        autoInfo = await getAutoSaveInfo();
+                    }
                     var hasValidSave = !!(autoInfo && autoInfo.data && (autoInfo.data.player || autoInfo.data.npcs));
 
                     if (hasValidSave && typeof resumeAutoSave === 'function') {
-                        resumeAutoSave();
+                        await resumeAutoSave();
                     } else {
                         var setup = document.getElementById('setupPage');
                         var game = document.getElementById('gamePage');
@@ -335,7 +339,7 @@
                 } catch(e) {
                     console.warn('视图启动器遇到异常:', e);
                 }
-            }, 120);
+            }, 60);
         });
     </script>
 </body>
