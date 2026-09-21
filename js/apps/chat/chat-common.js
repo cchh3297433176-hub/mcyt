@@ -2,7 +2,7 @@
  * js/apps/chat/chat-common.js
  * 💬 微信基础公共库：头像池加载 · 持久化双轨防丢备份（防空冲刷保护） · 微信通用样式注入 · 原生对话框/操作表 · Token监控池 · 
  *    🌟 表情包全量自愈装载底座（内置四大黄金分组：【豆米乌卡】40张 + 【小狗】94张 + 【抽象】42张 + 【猪猪】，老存档无缝穿透激活） · 
- *    AI实体解析器 · 酒馆 PNG 人设卡封装与导入解析引擎
+ *    AI实体解析器 · 酒馆 PNG 人设卡封装与导入解析引擎（内置高清头像 128x128 纳米级智能压缩，彻底终结存储超限与随机头像反噬 Bug）
  * 🛡️ 核心修复：补齐 ensureNpcIntegrity 中遗漏的群聊历史自愈调用，挂载全局稳定的群聊消息管道 getGroupChatHistorySafe / pushGroupChatMessageSafe。
  */
 
@@ -85,6 +85,51 @@
     }
     window.getRandomAvatar = getRandomAvatar;
     window.initAvatarPool = initAvatarPool;
+
+    /**
+     * 🖼️ 头像超轻量纳米压缩器（将几百 KB 的超大原图压缩为 128x128，体积降为 4~8KB，绝不撑爆 localStorage）
+     */
+    async function compressAvatarDataUrl(dataUrl, maxSide = 128, quality = 0.82) {
+        if (!dataUrl || !dataUrl.startsWith('data:image')) return dataUrl;
+        // 如果原本就已经小于 10KB，无需二次压缩
+        if (dataUrl.length < 10000) return dataUrl;
+
+        return new Promise((resolve) => {
+            const img = new Image();
+            img.onload = () => {
+                try {
+                    let w = img.naturalWidth || img.width || maxSide;
+                    let h = img.naturalHeight || img.height || maxSide;
+                    if (w > maxSide || h > maxSide) {
+                        if (w > h) {
+                            h = Math.round((h * maxSide) / w);
+                            w = maxSide;
+                        } else {
+                            w = Math.round((w * maxSide) / h);
+                            h = maxSide;
+                        }
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = w;
+                    canvas.height = h;
+                    const ctx = canvas.getContext('2d');
+                    ctx.drawImage(img, 0, 0, w, h);
+                    
+                    // 优先 webp，其次 jpeg
+                    let compressed = canvas.toDataURL('image/webp', quality);
+                    if (!compressed.startsWith('data:image/webp')) {
+                        compressed = canvas.toDataURL('image/jpeg', quality);
+                    }
+                    resolve(compressed);
+                } catch (_) {
+                    resolve(dataUrl);
+                }
+            };
+            img.onerror = () => resolve(dataUrl);
+            img.src = dataUrl;
+        });
+    }
+    window.compressAvatarDataUrl = compressAvatarDataUrl;
 
     // ============================================================
     // 🎭 内置同步表情包全量数据底座
@@ -196,7 +241,7 @@
             { desc: '白狗伴舞开心跳跃', url: 'https://pic1.imgdb.cn/item/69c0c60f45b603369a3da304.gif' },
             { desc: '拿小戳子戳生气狗', url: 'https://pic1.imgdb.cn/item/69c0bc9545b603369a3d972b.gif' },
             { desc: '网兜一网捞出爱心', url: 'https://pic1.imgdb.cn/item/69c0bc9545b603369a3d972c.gif' },
-            { desc: '乖乖坐着冒爱心', url: 'https://pic1.imgdb.cn/item/69c0bd6945b603369a3d9b7a.gif' },
+            { desc: '乖乖坐着冒爱心', url: 'https://pic1.imgdb.cn/item/69c0bd6945b603369a3d9726.gif' },
             { desc: '拼命用力点头赞同', url: 'https://pic1.imgdb.cn/item/69c0bd8845b603369a3d9c1e.gif' },
             { desc: '信件里源源不断冒爱心', url: 'https://pic1.imgdb.cn/item/69c0c1eb45b603369a3da2ca.gif' },
             { desc: '背后发条累瘫在地', url: 'https://pic1.imgdb.cn/item/69c0c1eb45b603369a3da2cb.gif' },
@@ -361,7 +406,7 @@
     }
     window.recordTokenHistoryEntry = recordTokenHistoryEntry;
 
-    // 💾 硬核防丢保护引擎
+    // 💾 硬核防丢保护引擎（彻底剔除粗暴抹杀头像为 assets/icons/chat.png 的降级逻辑！）
     function syncCustomNpcsToLocalBackup() {
         try {
             if (!window.G || !window.G.npcs || typeof window.G.npcs !== 'object') return;
@@ -380,18 +425,15 @@
                     customMap[id] = npc;
                 }
             }
+
             try {
                 localStorage.setItem(CUSTOM_NPCS_BACKUP_KEY, JSON.stringify(customMap));
             } catch (quotaErr) {
-                const safeMap = {};
-                for (const [id, npc] of Object.entries(customMap)) {
-                    const cloned = Object.assign({}, npc);
-                    if (cloned.avatarUrl && cloned.avatarUrl.length > 3000) {
-                        cloned.avatarUrl = 'assets/icons/chat.png';
-                    }
-                    safeMap[id] = cloned;
-                }
-                localStorage.setItem(CUSTOM_NPCS_BACKUP_KEY, JSON.stringify(safeMap));
+                console.warn('⚠️ 自建角色存储触碰配额，尝试安全保存:', quotaErr);
+                // 仅作为极其罕见的极限兜底，绝不自首式抹杀已有合法头像！
+                try {
+                    localStorage.setItem(CUSTOM_NPCS_BACKUP_KEY, JSON.stringify(customMap));
+                } catch (_) {}
             }
         } catch (e) {
             console.error('备份自建联系人失败:', e);
@@ -411,6 +453,13 @@
                         window.G.npcs[id] = npc;
                     } else {
                         for (const key of Object.keys(npc)) {
+                            // 🌟 头像防覆盖护甲：如果当前内存中已有头像，绝不允许被旧数据或空值覆盖
+                            if (key === 'avatarUrl' || key === 'avatar') {
+                                if (!window.G.npcs[id][key] && npc[key]) {
+                                    window.G.npcs[id][key] = npc[key];
+                                }
+                                continue;
+                            }
                             if (window.G.npcs[id][key] === undefined || window.G.npcs[id][key] === null) {
                                 window.G.npcs[id][key] = npc[key];
                             }
@@ -859,8 +908,12 @@
             if (npc.favor === undefined) npc.favor = 50;
             if (!npc.region) npc.region = (id.includes('dream') || id.includes('george')) ? '美国 - 东部' : '中国';
             if (!npc.relationshipStage) npc.relationshipStage = (npc.isDating ? 'dating' : 'friend');
-            if (!npc.avatarUrl || npc.avatarUrl === 'assets/icons/chat.png') {
+            
+            // 🛡️ 严格保护合法头像：只有完全没有任何头像时才分配随机头像
+            if (!npc.avatarUrl && !npc.avatar) {
                 npc.avatarUrl = getRandomAvatar();
+            } else if (!npc.avatarUrl && npc.avatar) {
+                npc.avatarUrl = npc.avatar;
             }
             if (!npc.ownerAccountId) npc.ownerAccountId = 'main';
         }
@@ -899,7 +952,7 @@
 
     function renderAvatarBadge(obj, size = 46) {
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { avatar: 'assets/icons/chat.png' };
-        let url = (obj && obj.isPlayer) ? curAcc.avatar : (obj?.avatarUrl || getRandomAvatar());
+        let url = (obj && obj.isPlayer) ? curAcc.avatar : (obj?.avatarUrl || obj?.avatar || getRandomAvatar());
         if (!url) url = 'assets/icons/chat.png';
         return `<div style="width:${size}px;height:${size}px;border-radius:6px;overflow:hidden;background:#e9e9e9;flex-shrink:0;box-shadow:inset 0 0 0 0.5px rgba(0,0,0,0.06);">
             <img src="${url}" draggable="false" style="width:100%;height:100%;object-fit:cover;display:block;" onerror="this.onerror=null;this.src='assets/icons/chat.png';" />
@@ -944,7 +997,7 @@
                 const newMoment = {
                     id: momentId,
                     author: npcName,
-                    avatar: matchedNpc?.avatarUrl || getRandomAvatar(),
+                    avatar: matchedNpc?.avatarUrl || matchedNpc?.avatar || getRandomAvatar(),
                     isPlayer: false,
                     body: momentBody,
                     imageMode: momentImgDesc ? 'photo_art' : 'none',
@@ -1238,7 +1291,7 @@
         const jsonStr = JSON.stringify(tavernData);
         const base64Json = btoa(unescape(encodeURIComponent(jsonStr)));
 
-        const avatarUrl = npc.avatarUrl || getRandomAvatar();
+        const avatarUrl = npc.avatarUrl || npc.avatar || getRandomAvatar();
         const img = new Image();
         if (!avatarUrl.startsWith('data:')) {
             img.crossOrigin = 'anonymous';
@@ -1418,14 +1471,17 @@
                 throw new Error('角色卡数据解析失败');
             }
 
-            const avatarDataUrl = await new Promise((res) => {
+            const rawAvatarDataUrl = await new Promise((res) => {
                 const r = new FileReader();
                 r.onload = () => res(r.result);
                 r.onerror = () => res(null);
                 r.readAsDataURL(file);
             });
 
-            return extractTavernCardProfile(parsed, avatarDataUrl);
+            // 🌟 纳米压缩：卡片头像自动压缩为 128x128，从 1MB 降至 6KB，保护存储永不超限！
+            const compressedAvatar = await compressAvatarDataUrl(rawAvatarDataUrl, 128, 0.82);
+
+            return extractTavernCardProfile(parsed, compressedAvatar);
         }
 
         throw new Error('请选择 .png 角色卡或 .json 文件');

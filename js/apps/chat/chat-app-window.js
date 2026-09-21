@@ -1,6 +1,6 @@
 /**
  * js/apps/chat/chat-app-window.js
- * 💬 微信主应用 · 拆分分片 3/7：单人私聊窗口渲染（renderSingleChatWindow，仿QQ/群聊双层工具栏布局 · 纯图标重说键 · 消息折叠 · 防卡顿优化）、
+ * 💬 微信主应用 · 拆分分片 3/7：单人私聊窗口渲染（renderSingleChatWindow，仿群聊双层工具栏 · 顶栏闪电继续说 · 输入栏纯图标重说键 · 消息折叠 · 防卡顿优化）、
  *    微信内嵌全屏浏览器浮层（window.openWebPageLink）、
  *    重新生成回复的确认与执行（confirmRetryLastAIReply / doRetryLastAIReply）、
  *    🌟 微信原生直显大图与沉浸式大图文字查看器对接、拟真生活排版卡片（ui_card）渲染。
@@ -133,7 +133,7 @@
     };
 
     // ============================================================
-    // 💬 单人私聊窗口渲染（仿 QQ 双层工具栏 · 纯图标重说 · 消息折叠 · 防卡顿优化）
+    // 💬 单人私聊窗口渲染（仿群聊双层工具栏 · 顶栏闪电继续说 · 纯图标重说键 · 消息折叠）
     // ============================================================
     window.renderSingleChatWindow = function renderSingleChatWindow(container, renderOpts = {}) {
         if (!container) container = document.getElementById('appModalBody') || document.getElementById('socialTab');
@@ -161,16 +161,6 @@
         const isGenerating = !!(window._MCYT_CHAT_GENERATING && window._MCYT_CHAT_GENERATING[npcId]);
 
         const topHeaderTitle = (npc.remark && npc.remark.trim()) ? `${npc.remark.trim()} (${npc.name})` : (npc.name || npc.id);
-
-        let lastDialogueMsg = null;
-        for (let i = chatHist.length - 1; i >= 0; i--) {
-            const m = chatHist[i];
-            if (m.from === 'player' || m.from === 'npc') {
-                lastDialogueMsg = m;
-                break;
-            }
-        }
-        const canRedo = !!(lastDialogueMsg && lastDialogueMsg.from === 'npc');
 
         const collapseCfg = (typeof getChatCollapseConfig === 'function') ? getChatCollapseConfig() : { enabled: true, limit: 50 };
         const chatKey = `single_${npcId}_${curAcc.id}`;
@@ -472,34 +462,15 @@
             </div>`;
         }
 
-        // 顶栏角色名称或输入态
+        // 顶栏角色名称或正在输入态
         let topHeaderDisplayHtml = escapeHtml(topHeaderTitle);
         if (isGenerating) {
             topHeaderDisplayHtml = `<span style="color:#07c160;font-size:14px;">对方正在输入中...</span>`;
         }
 
-        // 🔄 仿群聊精简纯图标重说键
-        let redoBtnHtml = '';
-        if (isGenerating) {
-            redoBtnHtml = `
-            <button id="btnSingleRegenerateReply" style="border:0.5px solid #dcdcdc;background:#ffffff;color:#07c160;width:34px;height:34px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;" title="正在输入...">
-                <div class="wechat-spin-ring" style="width:14px;height:14px;border-width:2px;"></div>
-            </button>`;
-        } else if (canRedo) {
-            redoBtnHtml = `
-            <button id="btnSingleRegenerateReply" onclick="window.confirmRetryLastAIReply('${npcId}')" title="重新生成上一条回复" style="border:0.5px solid #dcdcdc;background:#ffffff;color:#444;width:34px;height:34px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;">
-                <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
-            </button>`;
-        } else {
-            redoBtnHtml = `
-            <button id="btnSingleRegenerateReply" onclick="window.triggerAIReplyForSingle('${npcId}')" title="推动继续回复" style="border:0.5px solid #dcdcdc;background:#ffffff;color:#444;width:34px;height:34px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;">
-                <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
-            </button>`;
-        }
-
         const html = `
         <div style="background:#ededed;display:flex;flex-direction:column;height:100%;min-height:100%;overflow:hidden;font-family:-apple-system,sans-serif;">
-            <!-- 微信顶栏 -->
+            <!-- 微信顶栏：返回、角色信息、动作感知与⚡闪电继续说按钮 -->
             <div class="wechat-top-header">
                 <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;">
                     <button onclick="window.closeChat()" style="border:none;background:none;font-size:15px;color:#181818;cursor:pointer;padding:0;display:flex;align-items:center;gap:2px;font-weight:500;">
@@ -515,6 +486,11 @@
                 <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
                     <button onclick="window.toggleBehindScreen('${npcId}')" style="border:0.5px solid ${isBehindActive ? '#07c160' : '#ccc'};background:${isBehindActive ? '#d4f5dd' : '#fff'};color:${isBehindActive ? '#07c160' : '#555'};width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="动作感知">
                         <svg viewBox="0 0 24 24" style="width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                    </button>
+                    
+                    <!-- ⚡ 顶栏闪电按钮：推动 AI 回复 / 继续说 -->
+                    <button id="btnChatLightningTrigger" onclick="window.triggerAIReplyForSingle('${npcId}')" style="border:none;background:#07c160;color:#fff;width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="让对方继续说话">
+                        ${isGenerating ? `<div class="wechat-spin-ring"></div>` : `<svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`}
                     </button>
                 </div>
             </div>
@@ -535,11 +511,14 @@
 
             <!-- 仿 QQ/群聊 双层输入区域 -->
             <div style="background:#f7f7f7;border-top:0.5px solid #dcdcdc;display:flex;flex-direction:column;padding:6px 10px 8px;flex-shrink:0;gap:6px;">
-                <!-- 上层：输入框 + 纯转圈图标按钮 + 发送键 -->
+                <!-- 上层：输入框 + 纯转圈重说图标 + 发送键 -->
                 <div style="display:flex;align-items:center;gap:6px;">
                     <textarea id="singleChatInput" rows="1" placeholder="发消息..." style="flex:1;padding:8px 12px;border-radius:6px;border:none;background:#ffffff;font-size:14px;resize:none;outline:none;font-family:inherit;box-shadow:inset 0 0 0 0.5px #dcdcdc;box-sizing:border-box;max-height:80px;"></textarea>
                     
-                    ${redoBtnHtml}
+                    <!-- 🔄 纯转圈图标重说键 -->
+                    <button id="btnSingleRegenerateReply" onclick="window.confirmRetryLastAIReply('${npcId}')" title="重新生成上一条回复" style="border:0.5px solid #dcdcdc;background:#ffffff;color:#444;width:34px;height:34px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;">
+                        <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
+                    </button>
 
                     <button onclick="window.doSendSingleChat('${npcId}')" style="border:none;background:#07c160;color:#fff;padding:7px 14px;border-radius:5px;font-size:13.5px;font-weight:600;cursor:pointer;flex-shrink:0;">发送</button>
                 </div>

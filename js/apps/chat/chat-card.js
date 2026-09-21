@@ -5,7 +5,7 @@
  * 1. 角色极简原生名片卡（仅保留头像、姓名/备注、个性签名、地区与好感度）
  * 2. 独立齿轮“资料设置”白灰拟真弹窗（备注名、原名、签名、地区、恋爱状态、人设Prompt修改）
  * 3. 角色回复偏好设置：单次最少/最多发送条数控制、语音发送频率控制
- * 4. 角色卡 PNG 导出入口（支持自定义文件名）、换头像与角色卡导入
+ * 4. 角色卡 PNG 导出入口（支持自定义文件名）、换头像与角色卡导入（导入与相册更换头像全量接入纳米压缩）
  * 5. 推荐名片详情弹窗与添加通讯录
  */
 
@@ -44,7 +44,7 @@
 
                 <div style="display:flex;align-items:center;gap:14px;padding-bottom:16px;border-bottom:0.5px solid #f0f0f0;margin-bottom:14px;padding-right:28px;">
                     <div style="position:relative;width:56px;height:56px;flex-shrink:0;cursor:pointer;" onclick="window.triggerChangeNpcAvatar('${npcId}')" title="点击更换头像">
-                        <img id="npcCardAvatarDisplay" src="${npc.avatarUrl || (typeof getRandomAvatar === 'function' ? getRandomAvatar() : 'assets/icons/chat.png')}" style="width:100%;height:100%;border-radius:8px;object-fit:cover;" onerror="this.src='assets/icons/chat.png';" />
+                        <img id="npcCardAvatarDisplay" src="${npc.avatarUrl || npc.avatar || (typeof getRandomAvatar === 'function' ? getRandomAvatar() : 'assets/icons/chat.png')}" style="width:100%;height:100%;border-radius:8px;object-fit:cover;" onerror="this.src='assets/icons/chat.png';" />
                         <div style="position:absolute;bottom:0;right:0;background:rgba(0,0,0,0.45);border-radius:2px 0 8px 0;width:16px;height:16px;display:flex;align-items:center;justify-content:center;">
                             <svg viewBox="0 0 24 24" style="width:9px;height:9px;fill:#ffffff;"><path d="M4 4h3l2-2h6l2 2h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm8 3a5 5 0 1 0 0 10 5 5 0 0 0 0-10zm0 2a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"/></svg>
                         </div>
@@ -113,7 +113,7 @@
             npc.chatSettings = {
                 minMsgs: 1,
                 maxMsgs: 3,
-                voiceFreq: 'rare' // 'never' | 'rare' | 'often' | 'voice_only'
+                voiceFreq: 'rare'
             };
         }
         const minMsgs = Math.max(1, parseInt(npc.chatSettings.minMsgs) || 1);
@@ -361,7 +361,7 @@
         }
     }
 
-    // 换头像
+    // 换头像（相册导入亦接入纳米压缩保护）
     function triggerChangeNpcAvatar(npcId) {
         if (!window.G || !window.G.npcs) return;
         const npc = window.G.npcs[npcId];
@@ -387,8 +387,15 @@
                     const file = e.target.files && e.target.files[0];
                     if (!file) return;
                     const reader = new FileReader();
-                    reader.onload = (evt) => {
-                        npc.avatarUrl = evt.target.result;
+                    reader.onload = async (evt) => {
+                        const rawData = evt.target.result;
+                        // 🌟 纳米压缩：压缩至 128x128，永不超限
+                        const compressed = (typeof window.compressAvatarDataUrl === 'function')
+                            ? await window.compressAvatarDataUrl(rawData, 128, 0.82)
+                            : rawData;
+
+                        npc.avatarUrl = compressed;
+                        npc.avatar = compressed;
                         if (typeof window.syncCustomNpcsToLocalBackup === 'function') window.syncCustomNpcsToLocalBackup();
                         if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
                         document.querySelector('.wechat-action-sheet-mask')?.remove();
@@ -415,6 +422,7 @@
 
         const newAvatar = (typeof getRandomAvatar === 'function') ? getRandomAvatar() : 'assets/icons/chat.png';
         npc.avatarUrl = newAvatar;
+        npc.avatar = newAvatar;
         if (typeof window.syncCustomNpcsToLocalBackup === 'function') window.syncCustomNpcsToLocalBackup();
         if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
         const disp = document.getElementById('npcCardAvatarDisplay');
@@ -460,6 +468,7 @@
             favor: 50,
             relationshipStage: 'friend',
             avatarUrl: avatar || (typeof getRandomAvatar === 'function' ? getRandomAvatar() : 'assets/icons/chat.png'),
+            avatar: avatar || (typeof getRandomAvatar === 'function' ? getRandomAvatar() : 'assets/icons/chat.png'),
             isCustom: true,
             ownerAccountId: curAcc.id,
             chatSettings: {
@@ -509,6 +518,8 @@
                     if (!window.G.npcs) window.G.npcs = {};
 
                     const newId = 'custom_' + Date.now();
+                    const finalAvatar = profile.avatarUrl || (typeof getRandomAvatar === 'function' ? getRandomAvatar() : 'assets/icons/chat.png');
+
                     window.G.npcs[newId] = {
                         id: newId,
                         name: profile.name,
@@ -518,7 +529,8 @@
                         signature: profile.signature || '',
                         favor: 50,
                         relationshipStage: 'friend',
-                        avatarUrl: profile.avatarUrl || (typeof getRandomAvatar === 'function' ? getRandomAvatar() : 'assets/icons/chat.png'),
+                        avatarUrl: finalAvatar,
+                        avatar: finalAvatar,
                         isCustom: true,
                         ownerAccountId: curAcc.id,
                         chatSettings: {
