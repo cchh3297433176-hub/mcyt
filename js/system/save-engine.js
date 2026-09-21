@@ -32,8 +32,7 @@
 
         try {
             localStorage.removeItem('mcyt_autosave');
-            // 🛡️ 修复：新开一局时一并清空群聊独立备份，避免上一局的群聊
-            // 数据残留在本地缓存里，被自愈合并逻辑重新拉回来
+            // 🛡️ 新开一局时一并清空群聊独立备份，避免上一局的残留
             localStorage.removeItem('mcyt_wechat_group_chats');
             localStorage.removeItem('mcyt_wechat_group_histories');
         } catch (_) {}
@@ -519,9 +518,11 @@
         if (Array.isArray(data.ytExternalVideos)) g.ytExternalVideos = data.ytExternalVideos;
         if (Array.isArray(data.ytCustomChannels)) g.ytCustomChannels = data.ytCustomChannels;
 
-        // 🛡️ 群聊基础数据恢复：优先结合独立本地持久化进行智能合并
+        // 🛡️ 群聊基础字典恢复：优先从独立持久化恢复，主存档作为兜底补齐
         if (!g.groups) g.groups = {};
-        if (data.groups) g.groups = Object.assign({}, g.groups, data.groups);
+        if (data.groups && typeof data.groups === 'object') {
+            g.groups = Object.assign({}, data.groups, g.groups);
+        }
         try {
             const rawLocalGroups = localStorage.getItem('mcyt_wechat_group_chats');
             if (rawLocalGroups) {
@@ -532,15 +533,18 @@
             }
         } catch (_) {}
 
-        // 🛡️ 群聊历史记录深度防冲刷自愈门禁：融合独立持久化数据，绝不让冷启动覆盖丢失发言！
+        // 🛡️ 架构对齐：群聊历史对齐单聊模式（单聊权威源在独立备份，主存档绝不倒灌污染！）
+        // 1. 先用主存档做基础兜底
         if (!g.groupChatHistory) g.groupChatHistory = {};
         if (data.groupChatHistory && typeof data.groupChatHistory === 'object') {
             for (const [k, v] of Object.entries(data.groupChatHistory)) {
-                if (Array.isArray(v)) {
+                if (Array.isArray(v) && v.length > 0) {
                     g.groupChatHistory[k] = v;
                 }
             }
         }
+
+        // 2. 权威合并：读取群聊独立备份 mcyt_wechat_group_histories，以独立备份为高优先级！
         try {
             const rawLocalHist = localStorage.getItem('mcyt_wechat_group_histories');
             if (rawLocalHist) {
@@ -550,16 +554,25 @@
                         const localMsgs = parsedLocalHist[gid];
                         if (!Array.isArray(localMsgs)) continue;
 
-                        const currentMsgs = g.groupChatHistory[gid] || [];
+                        const autosaveMsgs = g.groupChatHistory[gid] || [];
+                        
+                        // 若主存档为空，或独立存储消息数量更多/更新，直接以独立存储为权威源
+                        if (autosaveMsgs.length === 0) {
+                            g.groupChatHistory[gid] = localMsgs;
+                            continue;
+                        }
+
+                        // 若两者皆有数据，按 _id 安全并集融合，绝不让主存档的旧数据挤掉新发言
                         const msgMap = new Map();
-                        // 优先填入局部更完整的消息
-                        localMsgs.forEach(m => {
+                        // 1. 先放主存档的消息
+                        autosaveMsgs.forEach(m => {
                             if (m) {
                                 const key = m._id || `${m.time}_${m.senderName || m.from}_${(m.text || '').slice(0, 15)}`;
                                 msgMap.set(key, m);
                             }
                         });
-                        currentMsgs.forEach(m => {
+                        // 2. 用独立持久化的新消息进行后置覆盖/追加更新
+                        localMsgs.forEach(m => {
                             if (m) {
                                 const key = m._id || `${m.time}_${m.senderName || m.from}_${(m.text || '').slice(0, 15)}`;
                                 msgMap.set(key, m);
