@@ -1,5 +1,6 @@
 // js/system/save-engine.js
 // 📱 小手机系统底层存档引擎（全量数据序列化、冷启动自动恢复、特赦合规核验、记忆卡调度中枢）
+// 🌟 存储架构升级（Phase 1）：群聊历史优先对接 IndexedDB (localforage)，杜绝配额溢出与旧快照污染
 // ============================================================
 
 (function(window) {
@@ -32,6 +33,9 @@
             localStorage.removeItem('mcyt_autosave');
             localStorage.removeItem('mcyt_wechat_group_chats');
             localStorage.removeItem('mcyt_wechat_group_histories');
+            if (typeof window.localforage !== 'undefined') {
+                window.localforage.removeItem('mcyt_wechat_group_histories').catch(() => {});
+            }
         } catch (_) {}
 
         if (typeof window.resetGameState === 'function') {
@@ -495,7 +499,7 @@
 
         // 🛡️ 终极绝杀：群聊历史 100% 对齐单聊机制！
         // 主存档里的 groupChatHistory 仅作为兜底；
-        // 只要独立存储 mcyt_wechat_group_histories 存在，直接以独立存储为绝对权威源，绝不允许主存档旧数据覆盖！
+        // 独立持久化为绝对真源，优先从 IndexedDB (localforage) 加载，旧版 localStorage 作为迁移兜底
         if (!g.groupChatHistory) g.groupChatHistory = {};
         if (data.groupChatHistory && typeof data.groupChatHistory === 'object') {
             for (const [k, v] of Object.entries(data.groupChatHistory)) {
@@ -505,6 +509,7 @@
             }
         }
 
+        // 同步回退读取 localStorage
         try {
             const rawLocalHist = localStorage.getItem('mcyt_wechat_group_histories');
             if (rawLocalHist) {
@@ -513,13 +518,29 @@
                     for (const gid in parsedLocalHist) {
                         const localMsgs = parsedLocalHist[gid];
                         if (Array.isArray(localMsgs) && localMsgs.length > 0) {
-                            // 🌟 核心：直接以独立存储为准（就地赋予最新最全的历史）
                             g.groupChatHistory[gid] = localMsgs;
                         }
                     }
                 }
             }
         } catch (_) {}
+
+        // 异步以绝对权威 IndexedDB 覆写就地校准
+        if (typeof window.localforage !== 'undefined') {
+            window.localforage.getItem('mcyt_wechat_group_histories').then(idbHist => {
+                if (idbHist && typeof idbHist === 'object') {
+                    for (const gid in idbHist) {
+                        const msgs = idbHist[gid];
+                        if (Array.isArray(msgs) && msgs.length > 0) {
+                            g.groupChatHistory[gid] = msgs;
+                        }
+                    }
+                    if (g.currentChatGroup && typeof window.renderGroupChatWindow === 'function') {
+                        window.renderGroupChatWindow();
+                    }
+                }
+            }).catch(() => {});
+        }
 
         if (!g.groupMemories) g.groupMemories = {};
         if (data.groupMemories) g.groupMemories = Object.assign({}, g.groupMemories, data.groupMemories);
