@@ -1,6 +1,6 @@
 // js/system/save-engine.js
 // 📱 小手机系统底层存档引擎（全量数据序列化、冷启动自动恢复、特赦合规核验、记忆卡调度中枢）
-// 🌟 存储架构升级（Phase 1 & 2）：群聊字典与群历史优先对接 IndexedDB (localforage)，杜绝配额溢出与旧快照污染
+// 🌟 存储架构升级（Phase 1, 2 & 3）：群聊历史、群字典、单聊历史全面接入 IndexedDB (localforage)！
 // ============================================================
 
 (function(window) {
@@ -33,9 +33,11 @@
             localStorage.removeItem('mcyt_autosave');
             localStorage.removeItem('mcyt_wechat_group_chats');
             localStorage.removeItem('mcyt_wechat_group_histories');
+            localStorage.removeItem('mcyt_wechat_chathistory_v2');
             if (typeof window.localforage !== 'undefined') {
                 window.localforage.removeItem('mcyt_wechat_group_chats').catch(() => {});
                 window.localforage.removeItem('mcyt_wechat_group_histories').catch(() => {});
+                window.localforage.removeItem('mcyt_wechat_chathistory_v2').catch(() => {});
             }
         } catch (_) {}
 
@@ -446,6 +448,7 @@
             g.npcs = Object.assign({}, g.npcs, data.npcs);
         }
 
+        // 🛡️ 单聊历史恢复：主存档只做初始冷备份兜底
         if (!g.chatHistory) g.chatHistory = {};
         if (data.chatHistory && typeof data.chatHistory === 'object') {
             for (const [k, v] of Object.entries(data.chatHistory)) {
@@ -453,6 +456,39 @@
                     g.chatHistory[k] = v;
                 }
             }
+        }
+
+        // 同步回退读取 localStorage
+        try {
+            const rawChatHist = localStorage.getItem('mcyt_wechat_chathistory_v2');
+            if (rawChatHist) {
+                const parsedChatHist = JSON.parse(rawChatHist);
+                if (parsedChatHist && typeof parsedChatHist === 'object') {
+                    for (const k in parsedChatHist) {
+                        const localMsgs = parsedChatHist[k];
+                        if (Array.isArray(localMsgs) && localMsgs.length > 0) {
+                            g.chatHistory[k] = localMsgs;
+                        }
+                    }
+                }
+            }
+        } catch (_) {}
+
+        // 异步以绝对权威 IndexedDB 覆写就地校准单聊历史
+        if (typeof window.localforage !== 'undefined') {
+            window.localforage.getItem('mcyt_wechat_chathistory_v2').then(idbHist => {
+                if (idbHist && typeof idbHist === 'object') {
+                    for (const k in idbHist) {
+                        const msgs = idbHist[k];
+                        if (Array.isArray(msgs) && msgs.length > 0) {
+                            g.chatHistory[k] = msgs;
+                        }
+                    }
+                    if (g.currentChatNpc && typeof window.renderSingleChatWindow === 'function') {
+                        window.renderSingleChatWindow();
+                    }
+                }
+            }).catch(() => {});
         }
 
         g.currentAccountId = String(data.currentAccountId || 'main');
@@ -483,7 +519,7 @@
         if (Array.isArray(data.ytExternalVideos)) g.ytExternalVideos = data.ytExternalVideos;
         if (Array.isArray(data.ytCustomChannels)) g.ytCustomChannels = data.ytCustomChannels;
 
-        // 🛡️ 群组字典恢复：优先从独立持久化 (IndexedDB) 恢复，主存档只做兜底
+        // 🛡️ 群组字典恢复：优先从独立持久化 (IndexedDB) 恢复
         if (!g.groups) g.groups = {};
         if (data.groups && typeof data.groups === 'object') {
             g.groups = Object.assign({}, data.groups, g.groups);
@@ -498,7 +534,6 @@
             }
         } catch (_) {}
 
-        // 异步以 IndexedDB 绝对权威覆写群组字典
         if (typeof window.localforage !== 'undefined') {
             window.localforage.getItem('mcyt_wechat_group_chats').then(idbGroups => {
                 if (idbGroups && typeof idbGroups === 'object') {
@@ -510,9 +545,7 @@
             }).catch(() => {});
         }
 
-        // 🛡️ 终极绝杀：群聊历史 100% 对齐单聊机制！
-        // 主存档里的 groupChatHistory 仅作为兜底；
-        // 独立持久化为绝对真源，优先从 IndexedDB (localforage) 加载
+        // 🛡️ 群聊历史恢复：优先从独立持久化 (IndexedDB) 恢复
         if (!g.groupChatHistory) g.groupChatHistory = {};
         if (data.groupChatHistory && typeof data.groupChatHistory === 'object') {
             for (const [k, v] of Object.entries(data.groupChatHistory)) {
@@ -522,7 +555,6 @@
             }
         }
 
-        // 同步回退读取 localStorage
         try {
             const rawLocalHist = localStorage.getItem('mcyt_wechat_group_histories');
             if (rawLocalHist) {
@@ -538,7 +570,6 @@
             }
         } catch (_) {}
 
-        // 异步以绝对权威 IndexedDB 覆写就地校准群聊历史
         if (typeof window.localforage !== 'undefined') {
             window.localforage.getItem('mcyt_wechat_group_histories').then(idbHist => {
                 if (idbHist && typeof idbHist === 'object') {
