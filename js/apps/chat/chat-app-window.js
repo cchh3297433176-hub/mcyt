@@ -4,7 +4,7 @@
  *    微信内嵌全屏浏览器浮层（window.openWebPageLink）、
  *    重新生成回复的确认与执行（confirmRetryLastAIReply / doRetryLastAIReply）、
  *    🌟 微信原生直显大图与沉浸式大图文字查看器对接、拟真生活排版卡片（ui_card）渲染。
- * ⚠️ 拆分自 chat-app.js，window.renderSingleChatWindow 的导出位置从原文件末尾就地前移到函数定义处。
+ * 🌟 存储升级：重说撤回逻辑接入 await syncChatHistoryToLocalBackup() 异步原子落盘。
  */
 
 (function() {
@@ -17,7 +17,6 @@
             return;
         }
 
-        // 移除已存在的浏览器浮层，防止多开
         document.getElementById('wechatInAppBrowserModal')?.remove();
 
         const browserModal = document.createElement('div');
@@ -67,7 +66,6 @@
             <div style="flex: 1; position: relative; width: 100%; height: 100%; overflow: hidden; background: #f2f2f2;">
                 <iframe id="wechatBrowserIframe" src="${escapeHtml(url)}" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" style="width: 100%; height: 100%; border: none; background: #ffffff;"></iframe>
                 
-                <!-- 跨域防拦截/X-Frame-Options 提示底栏胶囊 -->
                 <div id="browserCspTip" style="position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.72); backdrop-filter: blur(4px); color: #fff; padding: 6px 14px; border-radius: 18px; font-size: 11px; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); pointer-events: auto; white-space: nowrap;">
                     <span>部分页面若受限无法完全展示</span>
                     <span id="fallbackOpenLinkBtn" style="color: #6ee7b7; font-weight: 600; cursor: pointer; text-decoration: underline;">唤起系统应用打开 ›</span>
@@ -80,7 +78,6 @@
         const iframe = browserModal.querySelector('#wechatBrowserIframe');
         const progressBar = browserModal.querySelector('#browserProgressBar');
 
-        // 模拟微信绿进度条
         if (progressBar) {
             progressBar.style.width = '30%';
             setTimeout(() => { if (progressBar) progressBar.style.width = '75%'; }, 400);
@@ -95,14 +92,12 @@
             };
         }
 
-        // 关闭按钮
         browserModal.querySelector('#closeWechatBrowserBtn')?.addEventListener('click', () => {
             browserModal.style.transform = 'translateY(100%)';
             browserModal.style.transition = 'transform 0.18s cubic-bezier(0.4, 0, 1, 1)';
             setTimeout(() => browserModal.remove(), 190);
         });
 
-        // 刷新按钮
         browserModal.querySelector('#refreshWechatBrowserBtn')?.addEventListener('click', () => {
             if (iframe) {
                 if (progressBar) {
@@ -113,7 +108,6 @@
             }
         });
 
-        // 唤起外部应用打开链接通用函数
         const triggerExternal = () => {
             try {
                 const a = document.createElement('a');
@@ -139,7 +133,6 @@
         if (!container) container = document.getElementById('appModalBody') || document.getElementById('socialTab');
         if (!container) return;
 
-        // 吸收可能存在的待处理塔罗分享
         if (window.ChatTarot && typeof window.ChatTarot.drainPendingTarotShares === 'function') {
             window.ChatTarot.drainPendingTarotShares();
         }
@@ -166,7 +159,6 @@
         const chatKey = `single_${npcId}_${curAcc.id}`;
         const isExpanded = !!(window._chatExpandAllMap && window._chatExpandAllMap[chatKey]);
 
-        // 🛡️ 折叠逻辑严谨保障：关掉折叠开关时 100% 呈现全部消息
         let visibleMessages = chatHist;
         let collapseBannerHtml = '';
 
@@ -220,7 +212,6 @@
                     </div>
                 </div>`;
             } else if (msg.type === 'shared_tarot') {
-                // 🔮 塔罗牌阵卡片（委托给独立模块 ChatTarot 渲染）
                 const tarotCardHtml = (window.ChatTarot && typeof window.ChatTarot.renderSharedTarotCardHTML === 'function')
                     ? window.ChatTarot.renderSharedTarotCardHTML(msg, npcId, false)
                     : `<div style="background:#fff;padding:8px 12px;border-radius:6px;font-size:12px;color:#666;">[塔罗牌阵: ${escapeHtml(msg.sharedTarot?.spreadName || '占卜')}]</div>`;
@@ -236,7 +227,6 @@
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
                 </div>`;
             } else if (msg.type === 'ui_card') {
-                // 🧾 拟真生活排版卡片气泡（精致拟真白灰微绿外壳与真实物品展示）
                 const cardTypeLabel = msg.cardType || '生活便签';
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
@@ -260,7 +250,6 @@
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
                 </div>`;
             } else if (msg.type === 'web_page') {
-                // 🌐 微信原生质感网页链接卡片（点击直接呼出内置全屏浏览器浮层）
                 const wp = msg.webPage || {};
                 const pageUrl = wp.url || '#';
                 const pageTitle = wp.title || '权威检索结果';
@@ -382,7 +371,6 @@
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
                 </div>`;
             } else if (msg.type === 'image' || msg.type === 'image_flip' || msg.type === 'image_text_only' || msg.imageUrl || msg.imageDesc) {
-                // 🖼️ 微信原生纯净直显图片气泡（点击直达全屏沉浸大图与舒展文字查看器，彻底剔除狭窄翻转）
                 const imageBubbleHtml = (typeof window.renderWechatPureImageBubbleHTML === 'function')
                     ? window.renderWechatPureImageBubbleHTML(msg)
                     : `<div style="padding:10px 14px;background:#fff;border-radius:8px;font-size:13px;color:#222;">“${escapeHtml(msg.imageDesc || msg.text || '图片')}”</div>`;
@@ -462,7 +450,6 @@
             </div>`;
         }
 
-        // 顶栏角色名称或正在输入态
         let topHeaderDisplayHtml = escapeHtml(topHeaderTitle);
         if (isGenerating) {
             topHeaderDisplayHtml = `<span style="color:#07c160;font-size:14px;">对方正在输入中...</span>`;
@@ -470,7 +457,6 @@
 
         const html = `
         <div style="background:#ededed;display:flex;flex-direction:column;height:100%;min-height:100%;overflow:hidden;font-family:-apple-system,sans-serif;">
-            <!-- 微信顶栏：返回、角色信息、动作感知与⚡闪电继续说按钮 -->
             <div class="wechat-top-header">
                 <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;">
                     <button onclick="window.closeChat()" style="border:none;background:none;font-size:15px;color:#181818;cursor:pointer;padding:0;display:flex;align-items:center;gap:2px;font-weight:500;">
@@ -488,7 +474,6 @@
                         <svg viewBox="0 0 24 24" style="width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
                     </button>
                     
-                    <!-- ⚡ 顶栏闪电按钮：推动 AI 回复 / 继续说 -->
                     <button id="btnChatLightningTrigger" onclick="window.triggerAIReplyForSingle('${npcId}')" style="border:none;background:#07c160;color:#fff;width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="让对方继续说话">
                         ${isGenerating ? `<div class="wechat-spin-ring"></div>` : `<svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:currentColor;"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`}
                     </button>
@@ -511,11 +496,9 @@
 
             <!-- 仿 QQ/群聊 双层输入区域 -->
             <div style="background:#f7f7f7;border-top:0.5px solid #dcdcdc;display:flex;flex-direction:column;padding:6px 10px 8px;flex-shrink:0;gap:6px;">
-                <!-- 上层：输入框 + 纯转圈重说图标 + 发送键 -->
                 <div style="display:flex;align-items:center;gap:6px;">
                     <textarea id="singleChatInput" rows="1" placeholder="发消息..." style="flex:1;padding:8px 12px;border-radius:6px;border:none;background:#ffffff;font-size:14px;resize:none;outline:none;font-family:inherit;box-shadow:inset 0 0 0 0.5px #dcdcdc;box-sizing:border-box;max-height:80px;"></textarea>
                     
-                    <!-- 🔄 纯转圈图标重说键 -->
                     <button id="btnSingleRegenerateReply" onclick="window.confirmRetryLastAIReply('${npcId}')" title="重新生成上一条回复" style="border:0.5px solid #dcdcdc;background:#ffffff;color:#444;width:34px;height:34px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;">
                         <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
                     </button>
@@ -523,7 +506,6 @@
                     <button onclick="window.doSendSingleChat('${npcId}')" style="border:none;background:#07c160;color:#fff;padding:7px 14px;border-radius:5px;font-size:13.5px;font-weight:600;cursor:pointer;flex-shrink:0;">发送</button>
                 </div>
 
-                <!-- 下层工具栏：语音、⚙️设置抽屉、😊表情、➕加号抽屉 -->
                 <div style="display:flex;align-items:center;justify-content:space-between;padding:0 4px;">
                     <div style="display:flex;align-items:center;gap:18px;">
                         <button onclick="window.openVoiceInputModal('single','${npcId}')" title="发送语音" style="border:none;background:none;cursor:pointer;padding:0;display:flex;align-items:center;color:#555;">
@@ -607,7 +589,7 @@
     };
 
     // 执行回溯并重新生成回复
-    window.doRetryLastAIReply = function(npcId) {
+    window.doRetryLastAIReply = async function(npcId) {
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
         const hist = window.getAccountChatHistory(npcId, curAcc.id);
 
@@ -617,8 +599,10 @@
             hist.pop();
         }
 
-        if (typeof window.syncChatHistoryToLocalBackup === 'function') window.syncChatHistoryToLocalBackup();
-        if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+        if (typeof window.syncChatHistoryToLocalBackup === 'function') {
+            await window.syncChatHistoryToLocalBackup();
+        }
+        if (typeof window.autoSaveGame === 'function') autoSaveGame();
         renderSingleChatWindow();
 
         window.triggerAIReplyForSingle(npcId);

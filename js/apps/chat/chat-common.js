@@ -3,7 +3,9 @@
  * 💬 微信基础公共库：头像池加载 · 持久化双轨防丢备份（防空冲刷保护） · 微信通用样式注入 · 原生对话框/操作表 · Token监控池 · 
  *    🌟 表情包全量自愈装载底座（内置四大黄金分组：【豆米乌卡】40张 + 【小狗】94张 + 【抽象】42张 + 【猪猪】，老存档无缝穿透激活） · 
  *    AI实体解析器 · 酒馆 PNG 人设卡封装与导入解析引擎（内置高清头像 128x128 纳米级智能压缩，彻底终结存储超限与随机头像反噬 Bug）
- * 🛡️ 核心修复：补齐 ensureNpcIntegrity 中遗漏的群聊历史自愈调用，挂载全局稳定的群聊消息管道 getGroupChatHistorySafe / pushGroupChatMessageSafe。
+ * 🌟 存储架构升级（Phase 3）：
+ * 单聊历史对白（mcyt_wechat_chathistory_v2）已平滑迁移至 IndexedDB (via localforage)！
+ * 兼容旧版 localStorage 自动无损迁移，保持单一权威源与就地指针保活。
  */
 
 (function() {
@@ -16,6 +18,14 @@
     const CHAT_HISTORY_BACKUP_KEY = 'mcyt_wechat_chathistory_v2';
     const TOKEN_HISTORY_STORAGE_KEY = 'mcyt_chat_token_history_v1';
     const MOMENTS_FEED_BACKUP_KEY = 'mcyt_wechat_feed_backup_v2';
+
+    // 🛡️ 辅助：localforage 统一获取器
+    function getStorageDriver() {
+        if (typeof window.localforage !== 'undefined') {
+            return window.localforage;
+        }
+        return null;
+    }
 
     // 默认保底安全头像池
     const FALLBACK_AVATARS = [
@@ -430,7 +440,6 @@
                 localStorage.setItem(CUSTOM_NPCS_BACKUP_KEY, JSON.stringify(customMap));
             } catch (quotaErr) {
                 console.warn('⚠️ 自建角色存储触碰配额，尝试安全保存:', quotaErr);
-                // 仅作为极其罕见的极限兜底，绝不自首式抹杀已有合法头像！
                 try {
                     localStorage.setItem(CUSTOM_NPCS_BACKUP_KEY, JSON.stringify(customMap));
                 } catch (_) {}
@@ -473,7 +482,8 @@
     }
     window.restoreCustomNpcsFromLocalBackup = restoreCustomNpcsFromLocalBackup;
 
-    function syncChatHistoryToLocalBackup() {
+    // 💾 单聊历史持久化落盘（全面迁移至 IndexedDB，兜底兼容 localStorage）
+    async function syncChatHistoryToLocalBackup() {
         try {
             if (!window.G || !window.G.chatHistory || typeof window.G.chatHistory !== 'object') return;
             const keys = Object.keys(window.G.chatHistory);
@@ -485,32 +495,59 @@
                 }
             }
 
-            try {
+            const storage = getStorageDriver();
+            if (storage) {
+                await storage.setItem(CHAT_HISTORY_BACKUP_KEY, window.G.chatHistory);
+            } else {
                 localStorage.setItem(CHAT_HISTORY_BACKUP_KEY, JSON.stringify(window.G.chatHistory));
-            } catch (quotaErr) {
-                console.warn('聊天记录体积过大，轻量保护');
             }
         } catch (e) {
-            console.error('备份聊天记录失败:', e);
+            console.error('备份聊天记录到 IndexedDB 失败:', e);
         }
     }
     window.syncChatHistoryToLocalBackup = syncChatHistoryToLocalBackup;
 
-    function restoreChatHistoryFromLocalBackup() {
-        try {
-            const raw = localStorage.getItem(CHAT_HISTORY_BACKUP_KEY);
-            if (!raw) return;
-            const histMap = JSON.parse(raw);
-            if (histMap && typeof histMap === 'object') {
-                if (!window.G.chatHistory) window.G.chatHistory = {};
-                for (const [k, v] of Object.entries(histMap)) {
+    // 🛡️ 单聊历史冷启动自动恢复（优先从 IndexedDB 装载，旧版 localStorage 自动无感平滑迁移）
+    async function restoreChatHistoryFromLocalBackup() {
+        const storage = getStorageDriver();
+        let loadedHist = null;
+
+        if (storage) {
+            try {
+                loadedHist = await storage.getItem(CHAT_HISTORY_BACKUP_KEY);
+            } catch (err) {
+                console.warn('⚠️ 从 IndexedDB 读取单聊历史失败:', err);
+            }
+        }
+
+        // 回退与冷迁移机制
+        if (!loadedHist) {
+            try {
+                const raw = localStorage.getItem(CHAT_HISTORY_BACKUP_KEY);
+                if (raw) {
+                    loadedHist = JSON.parse(raw);
+                    // 🌟 自动平滑写入 IndexedDB
+                    if (loadedHist && storage) {
+                        storage.setItem(CHAT_HISTORY_BACKUP_KEY, loadedHist).catch(e => {
+                            console.warn('⚠️ 自动迁移单聊历史至 IndexedDB 失败:', e);
+                        });
+                    }
+                }
+            } catch (e) {
+                console.error('从 localStorage 恢复单聊历史失败:', e);
+            }
+        }
+
+        if (loadedHist && typeof loadedHist === 'object') {
+            if (!window.G.chatHistory) window.G.chatHistory = {};
+            for (const [k, v] of Object.entries(loadedHist)) {
+                if (Array.isArray(v) && v.length > 0) {
+                    // 原地指针保活装载
                     if (!window.G.chatHistory[k] || window.G.chatHistory[k].length === 0) {
                         window.G.chatHistory[k] = v;
                     }
                 }
             }
-        } catch (e) {
-            console.error('恢复聊天记录失败:', e);
         }
     }
     window.restoreChatHistoryFromLocalBackup = restoreChatHistoryFromLocalBackup;
@@ -891,7 +928,6 @@
         restoreChatHistoryFromLocalBackup();
         restoreMomentsFeedFromLocalBackup();
 
-        // 🛡️ 核心修复：补齐此处遗漏的群聊历史自愈恢复！
         if (typeof window.restoreGroupsFromStorage === 'function') {
             window.restoreGroupsFromStorage();
         }
@@ -909,7 +945,6 @@
             if (!npc.region) npc.region = (id.includes('dream') || id.includes('george')) ? '美国 - 东部' : '中国';
             if (!npc.relationshipStage) npc.relationshipStage = (npc.isDating ? 'dating' : 'friend');
             
-            // 🛡️ 严格保护合法头像：只有完全没有任何头像时才分配随机头像
             if (!npc.avatarUrl && !npc.avatar) {
                 npc.avatarUrl = getRandomAvatar();
             } else if (!npc.avatarUrl && npc.avatar) {
@@ -1478,7 +1513,6 @@
                 r.readAsDataURL(file);
             });
 
-            // 🌟 纳米压缩：卡片头像自动压缩为 128x128，从 1MB 降至 6KB，保护存储永不超限！
             const compressedAvatar = await compressAvatarDataUrl(rawAvatarDataUrl, 128, 0.82);
 
             return extractTavernCardProfile(parsed, compressedAvatar);
