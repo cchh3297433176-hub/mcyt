@@ -507,48 +507,81 @@
     }
     window.syncChatHistoryToLocalBackup = syncChatHistoryToLocalBackup;
 
-    // 🛡️ 单聊历史冷启动自动恢复（优先从 IndexedDB 装载，旧版 localStorage 自动无感平滑迁移）
-    async function restoreChatHistoryFromLocalBackup() {
-        const storage = getStorageDriver();
-        let loadedHist = null;
+    // 🛡️ 单聊历史冷启动自动恢复（单例 Promise 防并发，就地安全合并保活指针，就位后自动静默更新列表）
+    let _restoreChatHistoryPromise = null;
 
-        if (storage) {
-            try {
-                loadedHist = await storage.getItem(CHAT_HISTORY_BACKUP_KEY);
-            } catch (err) {
-                console.warn('⚠️ 从 IndexedDB 读取单聊历史失败:', err);
-            }
+    async function restoreChatHistoryFromLocalBackup(forceRefresh = false) {
+        if (!forceRefresh && _restoreChatHistoryPromise) {
+            return _restoreChatHistoryPromise;
         }
 
-        // 回退与冷迁移机制
-        if (!loadedHist) {
-            try {
-                const raw = localStorage.getItem(CHAT_HISTORY_BACKUP_KEY);
-                if (raw) {
-                    loadedHist = JSON.parse(raw);
-                    // 🌟 自动平滑写入 IndexedDB
-                    if (loadedHist && storage) {
-                        storage.setItem(CHAT_HISTORY_BACKUP_KEY, loadedHist).catch(e => {
-                            console.warn('⚠️ 自动迁移单聊历史至 IndexedDB 失败:', e);
-                        });
-                    }
-                }
-            } catch (e) {
-                console.error('从 localStorage 恢复单聊历史失败:', e);
-            }
-        }
+        _restoreChatHistoryPromise = (async () => {
+            const storage = getStorageDriver();
+            let loadedHist = null;
 
-        if (loadedHist && typeof loadedHist === 'object') {
-            if (!window.G.chatHistory) window.G.chatHistory = {};
-            for (const [k, v] of Object.entries(loadedHist)) {
-                if (Array.isArray(v) && v.length > 0) {
-                    // 原地指针保活装载
-                    if (!window.G.chatHistory[k] || window.G.chatHistory[k].length === 0) {
-                        window.G.chatHistory[k] = v;
-                    }
+            if (storage) {
+                try {
+                    loadedHist = await storage.getItem(CHAT_HISTORY_BACKUP_KEY);
+                } catch (err) {
+                    console.warn('⚠️ 从 IndexedDB 读取单聊历史失败:', err);
                 }
             }
-        }
+
+            // 回退与冷迁移机制
+            if (!loadedHist) {
+                try {
+                    const raw = localStorage.getItem(CHAT_HISTORY_BACKUP_KEY);
+                    if (raw) {
+                        loadedHist = JSON.parse(raw);
+                        // 🌟 自动平滑写入 IndexedDB
+                        if (loadedHist && storage) {
+                            storage.setItem(CHAT_HISTORY_BACKUP_KEY, loadedHist).catch(e => {
+                                console.warn('⚠️ 自动迁移单聊历史至 IndexedDB 失败:', e);
+                            });
+                        }
+                    }
+                } catch (e) {
+                    console.error('从 localStorage 恢复单聊历史失败:', e);
+                }
+            }
+
+            if (loadedHist && typeof loadedHist === 'object') {
+                if (!window.G.chatHistory) window.G.chatHistory = {};
+                for (const [k, v] of Object.entries(loadedHist)) {
+                    if (Array.isArray(v) && v.length > 0) {
+                        // 🛡️ 原地指针保活装载：严禁直接断开可能已经被外部引用的数组指针
+                        if (!window.G.chatHistory[k]) {
+                            window.G.chatHistory[k] = v;
+                        } else if (window.G.chatHistory[k].length === 0) {
+                            window.G.chatHistory[k].push(...v);
+                        } else {
+                            const existingIds = new Set(window.G.chatHistory[k].map(m => m._id || (m.timestamp + '_' + (m.text || ''))));
+                            for (const item of v) {
+                                const id = item._id || (item.timestamp + '_' + (item.text || ''));
+                                if (!existingIds.has(id)) {
+                                    window.G.chatHistory[k].push(item);
+                                    existingIds.add(id);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            window._chatHistoryRestored = true;
+
+            // 🌟 核心自愈：若数据读取完成时当前正处于微信消息主列表，且未进入任何对话窗口，自动静默刷新视图
+            if (window._activeBottomTab === 'chats' && !window.G?.currentChatNpc && !window.G?.currentChatGroup) {
+                const root = document.getElementById('wechatAppRoot');
+                if (root && typeof window.renderChatApp === 'function') {
+                    window.renderChatApp();
+                }
+            }
+
+            return window.G.chatHistory;
+        })();
+
+        return _restoreChatHistoryPromise;
     }
     window.restoreChatHistoryFromLocalBackup = restoreChatHistoryFromLocalBackup;
 
@@ -964,7 +997,14 @@
     function getAccountChatHistory(npcId, accId = null) {
         if (!window.G.chatHistory) window.G.chatHistory = {};
         const key = getChatStorageKey(npcId, accId);
-        if (!window.G.chatHistory[key]) window.G.chatHistory[key] = [];
+        if (!window.G.chatHistory[key]) {
+            // 🌟 兼容性自愈检查：如果老版本没有带账号前缀（形如 'npc_123'），自动迁移对齐到当前主账号 'main_npc_123'
+            if ((!accId || accId === 'main') && Array.isArray(window.G.chatHistory[npcId]) && window.G.chatHistory[npcId].length > 0) {
+                window.G.chatHistory[key] = window.G.chatHistory[npcId];
+            } else {
+                window.G.chatHistory[key] = [];
+            }
+        }
         return window.G.chatHistory[key];
     }
     window.getAccountChatHistory = getAccountChatHistory;
@@ -1554,6 +1594,15 @@
             signature: signature,
             avatarUrl: avatarUrl || (typeof getRandomAvatar === 'function' ? getRandomAvatar() : 'assets/icons/chat.png')
         };
+    }
+
+    // 🌟 早期主动预热加载：脚本装载即刻启动 IndexedDB 读取通道，在用户打开微信前将单聊历史充盈至运行内存
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', () => {
+            restoreChatHistoryFromLocalBackup();
+        });
+    } else {
+        restoreChatHistoryFromLocalBackup();
     }
 
 })();

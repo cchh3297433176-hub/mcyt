@@ -7,6 +7,7 @@
  * ⚠️ 角色名片卡已拆分至 chat-card.js，塔罗卡片与队列已拆分至 chat-tarot.js
  * 加载顺序：本文件（list）→ chat-app-shell.js → chat-app-window.js → chat-app-bubble.js
  *          → chat-app-ai.js → chat-app-panels.js → chat-app-media.js（必须严格按此顺序加载）
+ * 🌟 核心增强：全面兼容消息 timestamp 与 _id 双轨时间戳排序，防止时序错位。
  */
 
 (function() {
@@ -234,8 +235,18 @@
                 const isDating = window.ChatPromptEngine && window.ChatPromptEngine.isNpcInDatingRelationship(npc);
                 return { npc, last, preview, timeLabel, blocked, isDating };
             }).sort((a, b) => {
-                const ta = a.last ? Number(String(a.last._id || '').split('_')[1]) || 0 : 0;
-                const tb = b.last ? Number(String(b.last._id || '').split('_')[1]) || 0 : 0;
+                // 🌟 双轨时间戳提取：支持 timestamp 与 _id 解析，确保时间顺序 100% 准确
+                const getTime = (msg) => {
+                    if (!msg) return 0;
+                    if (msg.timestamp) return Number(msg.timestamp);
+                    if (msg._id && typeof msg._id === 'string') {
+                        const parts = msg._id.split('_');
+                        if (parts[1]) return Number(parts[1]) || 0;
+                    }
+                    return 0;
+                };
+                const ta = getTime(a.last);
+                const tb = getTime(b.last);
                 return tb - ta;
             });
 
@@ -289,8 +300,17 @@
             const timeLabel = last ? String(last.time || '').slice(0, 5) : '';
             return { g, preview, timeLabel, last };
         }).sort((a, b) => {
-            const ta = a.last ? Number(String(a.last._id || '').split('_')[1]) || 0 : 0;
-            const tb = b.last ? Number(String(b.last._id || '').split('_')[1]) || 0 : 0;
+            const getTime = (msg) => {
+                if (!msg) return 0;
+                if (msg.timestamp) return Number(msg.timestamp);
+                if (msg._id && typeof msg._id === 'string') {
+                    const parts = msg._id.split('_');
+                    if (parts[1]) return Number(parts[1]) || 0;
+                }
+                return 0;
+            };
+            const ta = getTime(a.last);
+            const tb = getTime(b.last);
             return tb - ta;
         });
 

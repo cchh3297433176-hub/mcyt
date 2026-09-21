@@ -4,6 +4,7 @@
  *    添加联系人相关入口（导入角色卡/新建自建角色/建群/好友与群邀请处理）、消息翻译/语音详情/名片翻转等直连开关。
  * ⚠️ 拆分自 chat-app.js，仅做物理搬家；window.renderChatApp 的导出位置从原文件末尾就地前移到函数定义后，
  *    行为完全不变（提前导出不影响任何调用方，因为所有调用都发生在页面加载完成之后）。
+ * 🌟 核心增强：冷启动与秒开门禁保障，IndexedDB 单聊对白就位前自动静默侦听并自愈刷新。
  */
 
 (function() {
@@ -26,6 +27,18 @@
         if (legacyWrap) legacyWrap.remove();
 
         window.ensureNpcIntegrity();
+
+        // 🛡️ 门禁保障：如果单聊历史仍处于 IndexedDB 异步读取管道中，挂接就绪通知自动补齐重绘
+        if (!window._chatHistoryRestored && typeof window.restoreChatHistoryFromLocalBackup === 'function') {
+            window.restoreChatHistoryFromLocalBackup().then(() => {
+                if (window._activeBottomTab === 'chats' && !window.G?.currentChatNpc && !window.G?.currentChatGroup) {
+                    const c = document.getElementById('appModalBody') || document.getElementById('socialTab');
+                    if (c && document.getElementById('wechatAppRoot')) {
+                        window.renderChatApp(c);
+                    }
+                }
+            }).catch(() => {});
+        }
 
         if (window.G.currentChatGroup) {
             if (typeof window.renderGroupChatWindow === 'function') {
@@ -352,8 +365,6 @@
                 if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
                 window.G.groupChatHistory[gid] = [];
 
-                // 🛡️ 修复：建群时必须同步独立本地备份，否则该群在后续
-                // 自愈合并中会被判定为"无本地记录"，存在被旧数据覆盖的风险
                 if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
                 if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
                 if (typeof showToast === 'function') showToast('群聊已建立', 'success', 1200);
@@ -456,7 +467,6 @@
                 };
                 if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
                 window.G.groupChatHistory[gid] = [];
-                // 🛡️ 修复：同上，建群/入群必须立刻落盘独立备份
                 if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
                 if (typeof showToast === 'function') showToast('已加入群聊', 'success', 1200);
             }
