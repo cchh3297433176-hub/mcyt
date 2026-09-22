@@ -123,14 +123,23 @@
             `;
         }
 
-        // 2. 点九图自适应拉伸气泡
+        // 2. 点九图自适应拉伸气泡（像 QQ/微信一样，气泡本体随文字自动变长变宽）
         if (b && b.type === 'nine_slice') {
             const imgUrl = isSelf ? (b.userBorderImage || b.borderImage) : (b.npcBorderImage || b.borderImage);
-            const slice = b.slice || '12 12 12 12';
-            const padding = b.padding || '8px 12px';
+            const slice = (isSelf ? (b.userSlice || b.slice) : (b.npcSlice || b.slice)) || '35% 35% 35% 35%';
+            const padding = (isSelf ? (b.userPadding || b.padding) : (b.npcPadding || b.padding)) || '10px 14px';
+            const borderWidth = (isSelf ? (b.userBorderWidth || b.borderWidth) : (b.npcBorderWidth || b.borderWidth)) || 16;
+            const textColor = (isSelf ? (b.userTextColor || b.textColor) : (b.npcTextColor || b.textColor)) || (isSelf ? '#111111' : '#222222');
+            if (!imgUrl) {
+                return `
+                    <div class="chat-bubble ${isSelf ? 'self-bubble' : ''} ${customClass}" style="width:fit-content;max-width:100%;padding:8px 12px;border-radius:6px;font-size:14.5px;line-height:1.5;background:${isSelf ? '#95ec69' : '#fff'};color:#000;border:${isSelf ? 'none' : '1px solid #e0e0e0'};">
+                        ${textHtml}
+                    </div>
+                `;
+            }
             return `
-                <div class="chat-bubble ${isSelf ? 'self-bubble' : ''} ${customClass}" 
-                     style="border-style: solid; border-width: 10px; border-image: url('${imgUrl}') ${slice} fill stretch; padding: ${padding}; background: transparent; color: ${isSelf ? '#111' : '#222'}; width:fit-content; max-width:100%; word-break:break-word; font-size:14.5px; line-height:1.5; transform:scale(${scale}); transform-origin:${origin};">
+                <div class="chat-bubble nine-slice-bubble ${isSelf ? 'self-bubble' : ''} ${customClass}" 
+                     style="border-style: solid; border-width: ${borderWidth}px; border-image: url('${imgUrl}') ${slice} fill stretch; padding: ${padding}; background: transparent; color: ${textColor}; width:fit-content; max-width:100%; min-width:${borderWidth * 2}px; box-sizing:border-box; word-break:break-word; font-size:14.5px; line-height:1.5; transform:scale(${scale}); transform-origin:${origin};">
                     ${textHtml}
                 </div>
             `;
@@ -292,6 +301,9 @@
                                 <div style="display:flex;align-items:center;gap:6px;">
                                     ${b.type === 'visual_box' ? `
                                         <button onclick="event.stopPropagation(); window.openVisualBoxDiyModal('${b.id}')" title="重新框选调节" style="background:none;border:none;color:#576b95;font-size:11px;cursor:pointer;padding:2px 4px;">编辑</button>
+                                    ` : ''}
+                                    ${b.type === 'nine_slice' ? `
+                                        <button onclick="event.stopPropagation(); window.openNineSliceDiyModal('${b.id}')" title="重新调整拉伸区域" style="background:none;border:none;color:#576b95;font-size:11px;cursor:pointer;padding:2px 4px;">编辑</button>
                                     ` : ''}
                                     <button onclick="event.stopPropagation(); window.exportSingleBubble('${b.id}')" title="导出气泡分享 JSON" style="background:none;border:none;color:#07c160;font-size:11px;cursor:pointer;padding:2px 4px;">导出</button>
                                     ${!b.isBuiltin ? `
@@ -621,31 +633,52 @@
             document.body.appendChild(modal);
         }
 
-        modal.innerHTML = `
-            <div style="background:#ffffff;border-radius:14px;width:100%;max-width:300px;padding:16px;box-shadow:0 8px 24px rgba(0,0,0,0.15);">
-                <div style="font-size:14px;font-weight:600;color:#222;margin-bottom:12px;">制作新气泡</div>
-                
-                <input type="file" id="bubbleSourceFileInput" accept="image/*" style="display:none;" onchange="window.handleBubbleSourceLocalUpload(event)">
-                
-                <button onclick="document.getElementById('bubbleSourceFileInput').click()" style="width:100%;padding:11px;background:#07c160;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:6px;">
-                    <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
-                    <span>从手机相册选取图片</span>
-                </button>
+        window._bubbleMakeMode = window._bubbleMakeMode || 'nine_slice';
 
-                <div style="display:flex;align-items:center;margin:10px 0;gap:8px;">
-                    <div style="flex:1;height:1px;background:#eee;"></div>
-                    <span style="font-size:11px;color:#aaa;">或输入图片链接</span>
-                    <div style="flex:1;height:1px;background:#eee;"></div>
+        function renderSourceModal() {
+            const mode = window._bubbleMakeMode;
+            modal.innerHTML = `
+                <div style="background:#ffffff;border-radius:14px;width:100%;max-width:300px;padding:16px;box-shadow:0 8px 24px rgba(0,0,0,0.15);">
+                    <div style="font-size:14px;font-weight:600;color:#222;margin-bottom:10px;">制作新气泡</div>
+
+                    <div style="display:flex;gap:6px;margin-bottom:10px;">
+                        <button id="btnModeNineSlice" style="flex:1;padding:8px 4px;border-radius:8px;font-size:11.5px;cursor:pointer;border:1px solid ${mode === 'nine_slice' ? '#07c160' : '#e0e0e0'};background:${mode === 'nine_slice' ? '#e8f7ed' : '#fff'};color:${mode === 'nine_slice' ? '#07c160' : '#333'};font-weight:${mode === 'nine_slice' ? '600' : 'normal'};line-height:1.4;">
+                            点九图自适应<br><span style="font-size:9.5px;opacity:0.8;">推荐·像QQ一样自动拉伸</span>
+                        </button>
+                        <button id="btnModeVisualBox" style="flex:1;padding:8px 4px;border-radius:8px;font-size:11.5px;cursor:pointer;border:1px solid ${mode === 'visual_box' ? '#07c160' : '#e0e0e0'};background:${mode === 'visual_box' ? '#e8f7ed' : '#fff'};color:${mode === 'visual_box' ? '#07c160' : '#333'};font-weight:${mode === 'visual_box' ? '600' : 'normal'};line-height:1.4;">
+                            固定框选画框<br><span style="font-size:9.5px;opacity:0.8;">插画类气泡，尺寸不变</span>
+                        </button>
+                    </div>
+                    <div style="font-size:10.5px;color:#999;margin-bottom:10px;line-height:1.4;">
+                        ${mode === 'nine_slice' ? '气泡本体会像聊天软件一样，随文字多少自动变长变宽，尾巴和圆角不会被拉变形。' : '气泡是一整张固定大小的图片，文字只能显示在你框选的区域里，长文字不会撑大图片。'}
+                    </div>
+
+                    <input type="file" id="bubbleSourceFileInput" accept="image/*" style="display:none;" onchange="window.handleBubbleSourceLocalUpload(event)">
+
+                    <button onclick="document.getElementById('bubbleSourceFileInput').click()" style="width:100%;padding:11px;background:#07c160;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:6px;">
+                        <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                        <span>从手机相册选取图片</span>
+                    </button>
+
+                    <div style="display:flex;align-items:center;margin:10px 0;gap:8px;">
+                        <div style="flex:1;height:1px;background:#eee;"></div>
+                        <span style="font-size:11px;color:#aaa;">或输入图片链接</span>
+                        <div style="flex:1;height:1px;background:#eee;"></div>
+                    </div>
+
+                    <input type="text" id="bubbleSourceUrlInput" placeholder="https://..." style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:6px;border:1px solid #e0e0e0;font-size:12px;outline:none;margin-bottom:12px;">
+
+                    <div style="display:flex;gap:8px;">
+                        <button style="flex:1;padding:8px;background:#f9f9f9;border:1px solid #ddd;border-radius:6px;font-size:12px;color:#555;cursor:pointer;" onclick="document.getElementById('bubbleSourceModal').remove()">取消</button>
+                        <button style="flex:1;padding:8px;background:#181818;border:none;border-radius:6px;font-size:12px;color:#fff;font-weight:500;cursor:pointer;" onclick="window.confirmBubbleSourceUrl()">${mode === 'nine_slice' ? '下一步：设置拉伸区域' : '开始框选'}</button>
+                    </div>
                 </div>
+            `;
+            modal.querySelector('#btnModeNineSlice').onclick = () => { window._bubbleMakeMode = 'nine_slice'; renderSourceModal(); };
+            modal.querySelector('#btnModeVisualBox').onclick = () => { window._bubbleMakeMode = 'visual_box'; renderSourceModal(); };
+        }
 
-                <input type="text" id="bubbleSourceUrlInput" placeholder="https://..." style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:6px;border:1px solid #e0e0e0;font-size:12px;outline:none;margin-bottom:12px;">
-
-                <div style="display:flex;gap:8px;">
-                    <button style="flex:1;padding:8px;background:#f9f9f9;border:1px solid #ddd;border-radius:6px;font-size:12px;color:#555;cursor:pointer;" onclick="document.getElementById('bubbleSourceModal').remove()">取消</button>
-                    <button style="flex:1;padding:8px;background:#181818;border:none;border-radius:6px;font-size:12px;color:#fff;font-weight:500;cursor:pointer;" onclick="window.confirmBubbleSourceUrl()">开始框选</button>
-                </div>
-            </div>
-        `;
+        renderSourceModal();
     };
 
     window.confirmBubbleSourceUrl = function () {
@@ -655,7 +688,11 @@
             return;
         }
         document.getElementById('bubbleSourceModal')?.remove();
-        window.openVisualBoxDiyModal(null, url, '我的插画气泡');
+        if (window._bubbleMakeMode === 'nine_slice') {
+            window.openNineSliceDiyModal(null, url, '我的自适应气泡');
+        } else {
+            window.openVisualBoxDiyModal(null, url, '我的插画气泡');
+        }
     };
 
     window.handleBubbleSourceLocalUpload = function (event) {
@@ -666,7 +703,11 @@
             const rawData = e.target.result;
             const defaultName = file.name.replace(/\.[^/.]+$/, "");
             document.getElementById('bubbleSourceModal')?.remove();
-            window.openVisualBoxDiyModal(null, rawData, defaultName);
+            if (window._bubbleMakeMode === 'nine_slice') {
+                window.openNineSliceDiyModal(null, rawData, defaultName);
+            } else {
+                window.openVisualBoxDiyModal(null, rawData, defaultName);
+            }
         };
         reader.readAsDataURL(file);
     };
@@ -919,6 +960,318 @@
             window.addEventListener('mousemove', onMove);
             window.addEventListener('touchmove', onMove, { passive: false });
 
+            window.addEventListener('mouseup', onEnd);
+            window.addEventListener('touchend', onEnd);
+        }
+
+        renderStage();
+    };
+
+    // =========================================================================
+    // 🌟 核心：点九图自适应气泡工坊（拖拽切割线，气泡像 QQ/微信一样自动拉伸）
+    // =========================================================================
+    window.openNineSliceDiyModal = function (bubbleId = null, initialUrl = '', initialName = '') {
+        let bubbleObj = null;
+        if (bubbleId) {
+            const list = window.getStoredDecorBubbles();
+            bubbleObj = list.find(x => x.id === bubbleId);
+        }
+
+        function parseSlice(str) {
+            const parts = (str || '35% 35% 35% 35%').replace(/%/g, '').trim().split(/\s+/).map(Number);
+            const [top = 35, right = 35, bottom = 35, left = 35] = parts;
+            return { top, right, bottom, left };
+        }
+        function parsePadding(str) {
+            const parts = (str || '10px 14px').replace(/px/g, '').trim().split(/\s+/).map(Number);
+            if (parts.length >= 2) return { v: parts[0], h: parts[1] };
+            return { v: parts[0] || 10, h: parts[0] || 10 };
+        }
+
+        const state = {
+            id: bubbleObj ? bubbleObj.id : ('bubble_' + Date.now()),
+            name: bubbleObj ? bubbleObj.name : (initialName || '自适应气泡'),
+            author: bubbleObj ? (bubbleObj.author || '') : '玩家自制',
+            scale: (bubbleObj && bubbleObj.scale !== undefined) ? bubbleObj.scale : 1.0,
+            activeSide: 'user', // 'user' | 'npc'
+            user: {
+                url: (bubbleObj?.userBorderImage || bubbleObj?.borderImage) || initialUrl || '',
+                slice: parseSlice(bubbleObj?.userSlice || bubbleObj?.slice),
+                padding: parsePadding(bubbleObj?.userPadding || bubbleObj?.padding),
+                borderWidth: (bubbleObj?.userBorderWidth || bubbleObj?.borderWidth) || 16,
+                textColor: (bubbleObj?.userTextColor || bubbleObj?.textColor) || '#111111'
+            },
+            npc: {
+                url: (bubbleObj?.npcBorderImage || bubbleObj?.borderImage) || initialUrl || '',
+                slice: parseSlice(bubbleObj?.npcSlice || bubbleObj?.slice),
+                padding: parsePadding(bubbleObj?.npcPadding || bubbleObj?.padding),
+                borderWidth: (bubbleObj?.npcBorderWidth || bubbleObj?.borderWidth) || 16,
+                textColor: (bubbleObj?.npcTextColor || bubbleObj?.textColor) || '#222222'
+            }
+        };
+
+        let modal = document.getElementById('nineSliceDiyModal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'nineSliceDiyModal';
+            modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;z-index:100000;padding:12px;box-sizing:border-box;';
+            document.body.appendChild(modal);
+        }
+
+        function sliceCssString(cfg) {
+            return `${cfg.slice.top}% ${cfg.slice.right}% ${cfg.slice.bottom}% ${cfg.slice.left}%`;
+        }
+        function paddingCssString(cfg) {
+            return `${cfg.padding.v}px ${cfg.padding.h}px`;
+        }
+        function buildPreviewBubble(cfg, text) {
+            if (!cfg.url) {
+                return `<div style="padding:8px 12px;border-radius:6px;background:#eee;color:#999;font-size:12px;">先上传一张气泡图片</div>`;
+            }
+            return `<div style="display:inline-block;border-style:solid;border-width:${cfg.borderWidth}px;border-image:url('${cfg.url}') ${sliceCssString(cfg)} fill stretch;padding:${paddingCssString(cfg)};background:transparent;color:${cfg.textColor};max-width:220px;box-sizing:border-box;word-break:break-word;font-size:13.5px;line-height:1.5;">${escapeHtml(text)}</div>`;
+        }
+
+        function renderStage() {
+            const curSide = state.activeSide;
+            const cfg = state[curSide];
+
+            modal.innerHTML = `
+                <div style="background:#ffffff;border-radius:14px;width:100%;max-width:350px;max-height:92vh;overflow-y:auto;padding:16px;box-shadow:0 12px 32px rgba(0,0,0,0.2);box-sizing:border-box;-webkit-overflow-scrolling:touch;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                        <span style="font-size:14px;font-weight:600;color:#222;">点九图自适应气泡工坊</span>
+                        <button onclick="document.getElementById('nineSliceDiyModal').remove()" style="border:none;background:none;font-size:16px;color:#999;cursor:pointer;">✕</button>
+                    </div>
+
+                    <div style="font-size:11px;color:#666;background:#f6f8fa;padding:8px 10px;border-radius:6px;margin-bottom:10px;line-height:1.4;">
+                        💡 拖动图上的<b>四条线</b>，把四个角（圆角/尾巴等不想变形的部分）圈起来，中间的十字区域会随文字自动拉伸。
+                    </div>
+
+                    <div style="display:flex;gap:6px;margin-bottom:10px;">
+                        <button id="btnNsTabUser" style="flex:1;padding:6px;border-radius:6px;font-size:11.5px;cursor:pointer;border:1px solid ${curSide === 'user' ? '#07c160' : '#e0e0e0'};background:${curSide === 'user' ? '#e8f7ed' : '#fff'};color:${curSide === 'user' ? '#07c160' : '#333'};font-weight:${curSide === 'user' ? '600' : 'normal'};">我方气泡设置</button>
+                        <button id="btnNsTabNpc" style="flex:1;padding:6px;border-radius:6px;font-size:11.5px;cursor:pointer;border:1px solid ${curSide === 'npc' ? '#07c160' : '#e0e0e0'};background:${curSide === 'npc' ? '#e8f7ed' : '#fff'};color:${curSide === 'npc' ? '#07c160' : '#333'};font-weight:${curSide === 'npc' ? '600' : 'normal'};">对方气泡设置</button>
+                    </div>
+
+                    ${!cfg.url ? `
+                        <button id="btnNsUploadSide" style="width:100%;padding:10px;background:#07c160;color:#fff;border:none;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;margin-bottom:12px;">为${curSide === 'user' ? '我方' : '对方'}上传气泡图片</button>
+                        <input type="file" id="nsSideFileInput" accept="image/*" style="display:none;">
+                    ` : `
+                        <!-- 🌟 切割线拖拽舞台 -->
+                        <div id="nsStageContainer" style="position:relative;width:100%;background:#ebebeb;border-radius:10px;overflow:hidden;margin-bottom:10px;user-select:none;-webkit-user-select:none;touch-action:none;">
+                            <img id="nsStageImg" src="${cfg.url}" style="width:100%;display:block;pointer-events:none;" />
+
+                            <div id="nsLineTop" style="position:absolute;left:0;right:0;top:${cfg.slice.top}%;height:0;border-top:2px dashed #07c160;cursor:ns-resize;touch-action:none;"><div class="ns-handle" style="position:absolute;left:50%;top:-7px;transform:translateX(-50%);width:26px;height:14px;background:#07c160;border-radius:4px;"></div></div>
+                            <div id="nsLineBottom" style="position:absolute;left:0;right:0;top:${100 - cfg.slice.bottom}%;height:0;border-top:2px dashed #07c160;cursor:ns-resize;touch-action:none;"><div class="ns-handle" style="position:absolute;left:50%;top:-7px;transform:translateX(-50%);width:26px;height:14px;background:#07c160;border-radius:4px;"></div></div>
+                            <div id="nsLineLeft" style="position:absolute;top:0;bottom:0;left:${cfg.slice.left}%;width:0;border-left:2px dashed #576b95;cursor:ew-resize;touch-action:none;"><div class="ns-handle" style="position:absolute;top:50%;left:-7px;transform:translateY(-50%);width:14px;height:26px;background:#576b95;border-radius:4px;"></div></div>
+                            <div id="nsLineRight" style="position:absolute;top:0;bottom:0;left:${100 - cfg.slice.right}%;width:0;border-left:2px dashed #576b95;cursor:ew-resize;touch-action:none;"><div class="ns-handle" style="position:absolute;top:50%;left:-7px;transform:translateY(-50%);width:14px;height:26px;background:#576b95;border-radius:4px;"></div></div>
+                        </div>
+                        <div style="display:flex;justify-content:space-between;margin-bottom:10px;">
+                            <button id="btnNsReupload" style="font-size:10.5px;color:#576b95;background:none;border:none;cursor:pointer;padding:0;">重新上传这一侧的图</button>
+                        </div>
+
+                        <!-- 边框厚度 -->
+                        <div style="background:#f9f9f9;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:8px;">
+                            <div style="display:flex;justify-content:space-between;font-size:11px;color:#555;margin-bottom:4px;">
+                                <span>边框粗细（决定尾巴/圆角保留的大小）</span>
+                                <span style="color:#07c160;font-weight:600;">${cfg.borderWidth}px</span>
+                            </div>
+                            <input type="range" id="nsBorderWidthRange" min="6" max="40" value="${cfg.borderWidth}" style="width:100%;accent-color:#07c160;">
+                        </div>
+
+                        <!-- 文字内边距 -->
+                        <div style="background:#f9f9f9;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:8px;">
+                            <div style="display:flex;justify-content:space-between;font-size:11px;color:#555;margin-bottom:4px;">
+                                <span>文字左右内边距</span>
+                                <span style="color:#07c160;font-weight:600;">${cfg.padding.h}px</span>
+                            </div>
+                            <input type="range" id="nsPadHRange" min="4" max="30" value="${cfg.padding.h}" style="width:100%;accent-color:#07c160;margin-bottom:8px;">
+                            <div style="display:flex;justify-content:space-between;font-size:11px;color:#555;margin-bottom:4px;">
+                                <span>文字上下内边距</span>
+                                <span style="color:#07c160;font-weight:600;">${cfg.padding.v}px</span>
+                            </div>
+                            <input type="range" id="nsPadVRange" min="2" max="24" value="${cfg.padding.v}" style="width:100%;accent-color:#07c160;">
+                        </div>
+
+                        <!-- 文字颜色 -->
+                        <div style="background:#f9f9f9;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;">
+                            <span style="font-size:11px;color:#555;">文字颜色</span>
+                            <input type="color" id="nsTextColorInput" value="${cfg.textColor}" style="width:36px;height:26px;border:none;background:none;cursor:pointer;">
+                        </div>
+
+                        <!-- 实时预览：短句 + 长句，证明能自动拉伸 -->
+                        <div style="background:#fff;border:1px dashed #ddd;border-radius:8px;padding:10px;margin-bottom:12px;">
+                            <div style="font-size:10.5px;color:#999;margin-bottom:8px;">实时预览（短消息 / 长消息都会自动适配）</div>
+                            <div id="nsPreviewShort" style="margin-bottom:8px;">${buildPreviewBubble(cfg, '嗨～')}</div>
+                            <div id="nsPreviewLong">${buildPreviewBubble(cfg, '这是一段比较长的示例文字，看看气泡会不会自动被撑开～')}</div>
+                        </div>
+                    `}
+
+                    <!-- 名称与作者 -->
+                    <div style="display:flex;gap:8px;margin-bottom:12px;">
+                        <input id="nsNameInput" type="text" placeholder="气泡名称" value="${escapeHtml(state.name)}" style="flex:1.3;padding:7px 8px;border-radius:6px;border:1px solid #e0e0e0;font-size:11.5px;outline:none;">
+                        <input id="nsAuthorInput" type="text" placeholder="作者署名" value="${escapeHtml(state.author)}" style="flex:1;padding:7px 8px;border-radius:6px;border:1px solid #e0e0e0;font-size:11.5px;outline:none;">
+                    </div>
+
+                    <button id="btnSaveNineSliceBubble" style="width:100%;padding:11px;background:#07c160;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">保存并应用</button>
+                </div>
+            `;
+
+            modal.querySelector('#btnNsTabUser').onclick = () => { state.activeSide = 'user'; renderStage(); };
+            modal.querySelector('#btnNsTabNpc').onclick = () => { state.activeSide = 'npc'; renderStage(); };
+
+            const uploadBtn = modal.querySelector('#btnNsUploadSide');
+            if (uploadBtn) {
+                const fileInput = modal.querySelector('#nsSideFileInput');
+                uploadBtn.onclick = () => fileInput.click();
+                fileInput.onchange = (e) => {
+                    const file = e.target.files && e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                        state[state.activeSide].url = ev.target.result;
+                        renderStage();
+                    };
+                    reader.readAsDataURL(file);
+                };
+            }
+
+            const reuploadBtn = modal.querySelector('#btnNsReupload');
+            if (reuploadBtn) {
+                reuploadBtn.onclick = () => {
+                    state[state.activeSide].url = '';
+                    renderStage();
+                };
+            }
+
+            function refreshPreviewsOnly() {
+                const shortEl = modal.querySelector('#nsPreviewShort');
+                const longEl = modal.querySelector('#nsPreviewLong');
+                if (shortEl) shortEl.innerHTML = buildPreviewBubble(state[state.activeSide], '嗨～');
+                if (longEl) longEl.innerHTML = buildPreviewBubble(state[state.activeSide], '这是一段比较长的示例文字，看看气泡会不会自动被撑开～');
+            }
+
+            const bwRange = modal.querySelector('#nsBorderWidthRange');
+            if (bwRange) bwRange.oninput = (e) => {
+                state[state.activeSide].borderWidth = parseInt(e.target.value, 10);
+                bwRange.parentElement.querySelector('span:last-child').textContent = `${state[state.activeSide].borderWidth}px`;
+                refreshPreviewsOnly();
+            };
+
+            const padH = modal.querySelector('#nsPadHRange');
+            if (padH) padH.oninput = (e) => {
+                state[state.activeSide].padding.h = parseInt(e.target.value, 10);
+                padH.parentElement.querySelector('span:last-child').textContent = `${state[state.activeSide].padding.h}px`;
+                refreshPreviewsOnly();
+            };
+            const padV = modal.querySelector('#nsPadVRange');
+            if (padV) padV.oninput = (e) => {
+                state[state.activeSide].padding.v = parseInt(e.target.value, 10);
+                padV.parentElement.querySelector('span:last-child').textContent = `${state[state.activeSide].padding.v}px`;
+                refreshPreviewsOnly();
+            };
+            const colorInput = modal.querySelector('#nsTextColorInput');
+            if (colorInput) colorInput.oninput = (e) => {
+                state[state.activeSide].textColor = e.target.value;
+                refreshPreviewsOnly();
+            };
+
+            modal.querySelector('#nsNameInput').oninput = (e) => { state.name = e.target.value; };
+            modal.querySelector('#nsAuthorInput').oninput = (e) => { state.author = e.target.value; };
+
+            bindNineSliceInteraction(modal, state, refreshPreviewsOnly);
+
+            modal.querySelector('#btnSaveNineSliceBubble').onclick = () => {
+                if (!state.user.url && !state.npc.url) {
+                    if (typeof showToast === 'function') showToast('请至少上传一侧的气泡图片');
+                    return;
+                }
+                const finalName = state.name.trim() || '自适应气泡';
+                const finalAuthor = state.author.trim() || '玩家自制';
+
+                const itemToSave = {
+                    id: state.id,
+                    name: finalName,
+                    author: finalAuthor,
+                    type: 'nine_slice',
+                    scale: state.scale,
+                    userBorderImage: state.user.url,
+                    npcBorderImage: state.npc.url,
+                    userSlice: sliceCssString(state.user),
+                    npcSlice: sliceCssString(state.npc),
+                    userPadding: paddingCssString(state.user),
+                    npcPadding: paddingCssString(state.npc),
+                    userBorderWidth: state.user.borderWidth,
+                    npcBorderWidth: state.npc.borderWidth,
+                    userTextColor: state.user.textColor,
+                    npcTextColor: state.npc.textColor,
+                    isBuiltin: false
+                };
+
+                saveCustomBubble(itemToSave);
+                localStorage.setItem('mcyt_active_decor_bubble', itemToSave.id);
+
+                modal.remove();
+                refreshDecorView();
+                if (typeof showToast === 'function') showToast('自适应气泡已保存并应用！');
+            };
+        }
+
+        function bindNineSliceInteraction(modalRoot, st, onChange) {
+            const container = modalRoot.querySelector('#nsStageContainer');
+            if (!container) return;
+            const lineTop = modalRoot.querySelector('#nsLineTop');
+            const lineBottom = modalRoot.querySelector('#nsLineBottom');
+            const lineLeft = modalRoot.querySelector('#nsLineLeft');
+            const lineRight = modalRoot.querySelector('#nsLineRight');
+
+            const getEventPos = (e) => {
+                if (e.touches && e.touches[0]) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+                return { x: e.clientX, y: e.clientY };
+            };
+
+            let dragTarget = null;
+
+            function onMove(e) {
+                if (!dragTarget) return;
+                const rect = container.getBoundingClientRect();
+                const pos = getEventPos(e);
+                const cfg = st[st.activeSide];
+                const minGap = 8; // 最小间隔百分比，避免两条线重叠
+
+                if (dragTarget === 'top') {
+                    let val = ((pos.y - rect.top) / rect.height) * 100;
+                    val = Math.max(0, Math.min(100 - cfg.slice.bottom - minGap, val));
+                    cfg.slice.top = Math.round(val);
+                    lineTop.style.top = `${cfg.slice.top}%`;
+                } else if (dragTarget === 'bottom') {
+                    let val = 100 - ((pos.y - rect.top) / rect.height) * 100;
+                    val = Math.max(0, Math.min(100 - cfg.slice.top - minGap, val));
+                    cfg.slice.bottom = Math.round(val);
+                    lineBottom.style.top = `${100 - cfg.slice.bottom}%`;
+                } else if (dragTarget === 'left') {
+                    let val = ((pos.x - rect.left) / rect.width) * 100;
+                    val = Math.max(0, Math.min(100 - cfg.slice.right - minGap, val));
+                    cfg.slice.left = Math.round(val);
+                    lineLeft.style.left = `${cfg.slice.left}%`;
+                } else if (dragTarget === 'right') {
+                    let val = 100 - ((pos.x - rect.left) / rect.width) * 100;
+                    val = Math.max(0, Math.min(100 - cfg.slice.left - minGap, val));
+                    cfg.slice.right = Math.round(val);
+                    lineRight.style.left = `${100 - cfg.slice.right}%`;
+                }
+                e.preventDefault();
+                onChange();
+            }
+            function onEnd() { dragTarget = null; }
+
+            [['top', lineTop], ['bottom', lineBottom], ['left', lineLeft], ['right', lineRight]].forEach(([key, el]) => {
+                if (!el) return;
+                const start = (e) => { dragTarget = key; e.preventDefault(); e.stopPropagation(); };
+                el.addEventListener('mousedown', start);
+                el.addEventListener('touchstart', start, { passive: false });
+            });
+
+            window.addEventListener('mousemove', onMove);
+            window.addEventListener('touchmove', onMove, { passive: false });
             window.addEventListener('mouseup', onEnd);
             window.addEventListener('touchend', onEnd);
         }
