@@ -8,7 +8,7 @@
  *  3. 第三阶段：1:1 复刻真实微信单聊与试穿舞台，尺寸与第二阶段共通，位置独立拖拽，100% 真实落盘
  *  4. Canvas 物理像素级底图水平翻转，双轨存入 IndexedDB（mcyt_decor_bubbles）
  *  5. 主题级正等边三角 HSV 动态色轮拾色修复，支持角色与我方文字双轨独立调色
- *  6. 导出支持 WebView Base64 DataURL 静默下载 JSON 配置文件
+ *  6. 导出支持 WebView 标准 Base64 DataURL（修复 bad base-64 异常），穿透保存至 Download 文件夹
  *  7. 气泡功能支持直接粘贴图片/HTML/CSS链接极速保存
  *  8. 补齐独立的 openBubbleFontModal 弹窗，操作栏全面升级为极简轻量 SVG 图标
  */
@@ -249,7 +249,7 @@
     }
 
     /**
-     * 渲染气泡样式库独立列表（全面改用极简轻量 SVG 图标，紧凑无多余空白）
+     * 渲染气泡样式库独立列表（极简轻量 SVG 图标）
      */
     window.renderChatBubbleSection = function (container) {
         if (!container) return;
@@ -257,7 +257,6 @@
         const activeBubbleId = localStorage.getItem('mcyt_active_decor_bubble') || 'bubble_default';
         const bubbles = window.getStoredDecorBubbles();
 
-        // 极简 SVG 图标模板
         const editSvg = `<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:#576b95;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>`;
         const fontSvg = `<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:#576b95;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>`;
         const exportSvg = `<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:#07c160;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
@@ -272,7 +271,7 @@
                     </div>
                     <div style="display:flex;align-items:center;gap:12px;">
                         <button onclick="event.stopPropagation(); window.openBubbleActionMenu();" title="新建与导入气泡" style="width:26px;height:26px;border-radius:50%;border:none;background:#07c160;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;">
-                            <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2.5;stroke-linecap:round;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                            <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2.5;stroke-linecap:round;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="12" y2="12"></line></svg>
                         </button>
                         <span id="decorBubblesCollapseArrow" style="font-size:11px;color:#888;user-select:none;transition:transform 0.2s ease;">▼</span>
                     </div>
@@ -297,7 +296,6 @@
                                         <span style="font-size:10px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">缩放${Math.round(curScale * 100)}% · ${curFont}px ${b.author ? ('· ' + escapeHtml(b.author)) : ''}</span>
                                     </div>
 
-                                    <!-- 极简 SVG 紧凑图标操作组 -->
                                     <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
                                         ${b.type === 'visual_box' ? `
                                             <button onclick="event.stopPropagation(); window.openVisualBoxDiyModal('${b.id}')" title="编辑气泡" style="background:#fff;border:1px solid #e0e0e0;border-radius:5px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;">${editSvg}</button>
@@ -325,7 +323,7 @@
     };
 
     /**
-     * 补齐：气泡字体与文字排版独立配置弹窗（消灭 Uncaught TypeError 报错）
+     * 气泡字体与文字排版独立配置弹窗
      */
     window.openBubbleFontModal = function (bubbleId) {
         const bubbles = window.getStoredDecorBubbles();
@@ -1210,29 +1208,23 @@
                         拉动绿色 8 点框确定<b>文字排版安全区</b>与换行宽度；按住文字可在气泡内随意挪动！
                     </div>
 
-                    <!-- 触控舞台 -->
                     <div id="step2TransformStage" style="position:relative;background:#ededed;border-radius:12px;padding:24px 10px;display:flex;justify-content:center;align-items:center;margin-bottom:14px;min-height:180px;touch-action:none;user-select:none;-webkit-user-select:none;">
                         
-                        <!-- 气泡容器 -->
                         <div id="step2LockedBubble" style="position:relative;width:${state.boxWidth}px;height:${state.boxHeight}px;border-style:solid;border-width:${cfg.borderWidth}px;border-image:url('${cfg.url}') ${sliceCss(cfg)} fill stretch;-webkit-border-image:url('${cfg.url}') ${sliceCss(cfg)} fill stretch;box-sizing:border-box;display:flex;align-items:center;justify-content:center;overflow:visible;">
                             
-                            <!-- 文字 8 点控制框 -->
                             <div id="step2TextBox8" style="position:absolute;left:calc(50% - ${state.textBoxWidth / 2}px + ${state.textOffsetX}px);top:calc(50% - ${state.textBoxHeight / 2}px + ${state.textOffsetY}px);width:${state.textBoxWidth}px;height:${state.textBoxHeight}px;border:1.5px solid #07c160;background:rgba(7,193,96,0.08);box-sizing:border-box;cursor:move;touch-action:none;display:flex;align-items:center;justify-content:center;padding:2px 4px;">
                                 
                                 <span id="step2TextDemoSpan" style="display:block;width:100%;text-align:${state.textAlign};font-size:${state.fontSize}px;color:${cfg.textColor};line-height:1.35;word-break:break-word;pointer-events:none;">
                                     你好！字的位置决定排版安全区，不再虚胖空白～
                                 </span>
 
-                                <!-- 8 点控制手柄 -->
                                 ${build8PointHandlesHtml('t8')}
                             </div>
                         </div>
                     </div>
 
-                    <!-- 字号、颜色、粗细与对齐控制板 -->
                     <div style="background:#f9f9f9;border:1px solid #eee;border-radius:8px;padding:10px 12px;margin-bottom:14px;display:flex;flex-direction:column;gap:10px;">
                         
-                        <!-- 字号与双轨颜色设置 -->
                         <div style="display:flex;align-items:center;justify-content:space-between;">
                             <div style="display:flex;align-items:center;gap:6px;">
                                 <span style="font-size:12px;font-weight:600;color:#333;">文字字号</span>
@@ -1253,7 +1245,6 @@
                             </div>
                         </div>
 
-                        <!-- 边框粗细与缩放 -->
                         <div style="display:flex;align-items:center;justify-content:space-between;border-top:1px dashed #e5e5e5;padding-top:8px;">
                             <div style="display:flex;align-items:center;gap:6px;">
                                 <span style="font-size:12px;font-weight:600;color:#333;">边框粗细</span>
@@ -1271,7 +1262,6 @@
                             </div>
                         </div>
 
-                        <!-- 居中、靠左、靠右排版选项 -->
                         <div style="display:flex;align-items:center;justify-content:space-between;border-top:1px dashed #e5e5e5;padding-top:8px;">
                             <span style="font-size:12px;font-weight:600;color:#333;">文本对齐</span>
                             <div style="display:flex;gap:5px;">
@@ -1281,7 +1271,6 @@
                             </div>
                         </div>
 
-                        <!-- 内边距调节 -->
                         <div style="display:flex;align-items:center;justify-content:space-between;border-top:1px dashed #e5e5e5;padding-top:8px;">
                             <div style="display:flex;align-items:center;gap:6px;">
                                 <span style="font-size:12px;font-weight:600;color:#333;">横向留白</span>
@@ -1504,10 +1493,8 @@
                         拉动绿色 <b>8 个手柄</b>自适应拉伸气泡；按住气泡空白处可<b>独立挪移屏幕位置</b>！
                     </div>
 
-                    <!-- 1:1 真实微信单聊视口 -->
                     <div id="vChatStage" style="position:relative;background:#ededed;border-radius:12px;padding:16px 10px;margin-bottom:12px;display:flex;flex-direction:column;gap:16px;min-height:240px;box-sizing:border-box;touch-action:none;user-select:none;-webkit-user-select:none;overflow:hidden;">
                         
-                        <!-- 对方消息行 -->
                         <div style="display:flex;justify-content:flex-start;align-items:flex-start;gap:8px;width:100%;">
                             ${renderWorkshopStageAvatar(npcAvatar, activeShape, activeFrameObj, 38)}
                             <div style="max-width:78%;display:flex;flex-direction:column;align-items:flex-start;">
@@ -1520,7 +1507,6 @@
                             </div>
                         </div>
 
-                        <!-- 我方消息行 -->
                         <div style="display:flex;justify-content:flex-end;align-items:flex-start;gap:8px;width:100%;">
                             <div style="max-width:78%;display:flex;flex-direction:column;align-items:flex-end;">
                                 <div id="vBubbleUser" class="v-stage-bubble" data-side="user" style="position:relative;display:inline-flex;align-items:center;width:${state.boxWidth}px;height:${state.boxHeight}px;border-style:solid;border-width:${state.user.borderWidth}px;border-image:url('${state.user.url}') ${sliceCss(state.user)} fill stretch;-webkit-border-image:url('${state.user.url}') ${sliceCss(state.user)} fill stretch;padding:${padCss(state.user)};color:${state.user.textColor};box-sizing:border-box;word-break:break-word;font-size:${state.fontSize}px;line-height:1.4;transform:translate(${state.userOffsetX}px, ${state.userOffsetY}px) scale(${state.scale});cursor:move;touch-action:none;">
@@ -1836,7 +1822,7 @@
     };
 
     /**
-     * 🌟 导出气泡 JSON 文件（直接静默下载，穿透 WebView）
+     * 🌟 导出气泡 JSON 文件（标准 Base64 编码，彻底根除 bad base-64 报错）
      */
     window.exportSingleBubble = function (bubbleId) {
         const bubbles = window.getStoredDecorBubbles();
@@ -1851,25 +1837,59 @@
         const jsonStr = JSON.stringify(exportPayload, null, 2);
 
         try {
-            const encodedData = encodeURIComponent(jsonStr);
-            const dataUrl = `data:application/json;charset=utf-8,${encodedData}`;
+            // 标准 Base64 编码（支持 UTF-8 中文字符，满足 Android WebView 原生 DownloadListener 的解码标准）
+            const base64Content = btoa(unescape(encodeURIComponent(jsonStr)));
+            const dataUrl = `data:application/json;base64,${base64Content}`;
+
+            const safeName = (b.name || 'bubble').replace(/[\\/:*?"<>|]/g, '_');
+            const fileName = `bubble_${safeName}_${Date.now()}.json`;
+
             const a = document.createElement('a');
             a.href = dataUrl;
-            const safeName = (b.name || 'bubble').replace(/[\\/:*?"<>|]/g, '_');
-            a.download = `bubble_${safeName}_${Date.now()}.json`;
+            a.download = fileName;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-            if (typeof showToast === 'function') showToast('气泡配置文件已开始下载');
+
+            if (typeof showToast === 'function') showToast('已发起下载，请留意通知栏或 Download 目录');
         } catch (err) {
-            console.error('[Bubble] 下载 JSON 文件失败，降级剪贴板:', err);
-            if (navigator.clipboard) {
-                navigator.clipboard.writeText(jsonStr).then(() => {
-                    if (typeof showToast === 'function') showToast('已将配置复制到剪贴板');
-                });
-            }
+            console.error('[Bubble] Base64 下载异常，弹窗提供复制备选:', err);
+            promptCopyBubbleJson(jsonStr);
         }
     };
+
+    /**
+     * 辅助兜底：当环境完全封杀文件下载时提供一键复制
+     */
+    function promptCopyBubbleJson(jsonStr) {
+        let modal = document.getElementById('bubbleFallbackExportModal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'bubbleFallbackExportModal';
+            modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:100000;padding:20px;';
+            document.body.appendChild(modal);
+        }
+
+        modal.innerHTML = `
+            <div style="background:#ffffff;border-radius:14px;width:100%;max-width:320px;padding:16px;box-shadow:0 8px 24px rgba(0,0,0,0.15);">
+                <div style="font-size:14px;font-weight:600;color:#222;margin-bottom:8px;">气泡配置代码</div>
+                <div style="font-size:11px;color:#888;margin-bottom:8px;">设备已拦截直接下载，可直接复制此配置分享：</div>
+                <textarea readonly style="width:100%;box-sizing:border-box;min-height:120px;padding:8px;border-radius:6px;border:1px solid #ddd;font-size:10.5px;font-family:monospace;resize:none;background:#f9f9f9;margin-bottom:12px;">${escapeHtml(jsonStr)}</textarea>
+                <div style="display:flex;gap:8px;">
+                    <button onclick="document.getElementById('bubbleFallbackExportModal').remove()" style="flex:1;padding:8px;background:#f5f5f5;border:1px solid #ddd;border-radius:6px;font-size:12px;color:#666;cursor:pointer;">关闭</button>
+                    <button id="btnCopyFallbackJson" style="flex:1.4;padding:8px;background:#07c160;border:none;border-radius:6px;font-size:12px;color:#fff;font-weight:600;cursor:pointer;">一键复制</button>
+                </div>
+            </div>
+        `;
+        modal.querySelector('#btnCopyFallbackJson').onclick = () => {
+            if (navigator.clipboard) {
+                navigator.clipboard.writeText(jsonStr).then(() => {
+                    if (typeof showToast === 'function') showToast('已复制到剪贴板！');
+                    modal.remove();
+                });
+            }
+        };
+    }
 
     function refreshDecorView() {
         const sub = document.getElementById('themeAppSubContent');
