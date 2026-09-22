@@ -1310,7 +1310,8 @@
 
         const view = new DataView(chunk.buffer);
         view.setUint32(0, dataLen);
-        chunk[4] = 0x74; chunk[5] = 0x45; chunk[6] = 0x74; chunk[7] = 0x74;
+        // 🌟 修复关键：PNG 标准文本数据块格式为 'tEXt' (0x74, 0x45, 0x58, 0x74)
+        chunk[4] = 0x74; chunk[5] = 0x45; chunk[6] = 0x58; chunk[7] = 0x74;
 
         let offset = 8;
         chunk.set(keyBytes, offset);
@@ -1503,7 +1504,8 @@
             const chunkDataOffset = offset + 8;
             if (chunkDataOffset + length > arrayBuffer.byteLength) break;
 
-            if (typeCode === 'tEXt') {
+            // 🌟 兼容标准 tEXt 与此前手滑误写的 tEtt（实现平滑自愈历史导出卡片）
+            if (typeCode === 'tEXt' || typeCode === 'tEtt') {
                 const dataBytes = new Uint8Array(arrayBuffer, chunkDataOffset, length);
                 let nullIdx = -1;
                 for (let i = 0; i < dataBytes.length; i++) {
@@ -1548,17 +1550,19 @@
                 throw new Error('不是标准的 PNG 格式图片');
             }
 
-            let rawDataStr = chunks['chara'] || chunks['ccv3'];
+            // 🌟 兼容主流 Tavern 关键字：chara, character, ccv3
+            let rawDataStr = chunks['chara'] || chunks['character'] || chunks['ccv3'];
             if (!rawDataStr) {
                 throw new Error('未在图片中检测到酒馆角色卡数据');
             }
 
+            let cleanDataStr = rawDataStr.trim().replace(/[\r\n\s]/g, '');
             let jsonStr = '';
             try {
-                jsonStr = decodeURIComponent(escape(atob(rawDataStr)));
+                jsonStr = decodeURIComponent(escape(atob(cleanDataStr)));
             } catch (_) {
                 try {
-                    jsonStr = atob(rawDataStr);
+                    jsonStr = atob(cleanDataStr);
                 } catch (_) {
                     jsonStr = rawDataStr;
                 }
