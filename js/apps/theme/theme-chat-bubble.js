@@ -4,8 +4,8 @@
  * 
  * 核心功能：
  *  1. 专业 8 点手柄自由拉伸变形系统（上3点、下3点、左右各1中点）
- *  2. 第二阶段：气泡尺寸锁定不变，文字拥有 8 点框自由缩放排版，支持点击精准修改字号与居中/靠左/靠右对齐切换
- *  3. 第三阶段：1:1 复刻真实微信单聊与试穿舞台，真实头像与头像框联动，8点框仅拉伸九切中间区，两方尺寸共通，位置独立拖拽
+ *  2. 第二阶段：气泡尺寸锁定不变，文字拥有 8 点框自由缩放排版，支持点击精准修改字号、居中/靠左/靠右对齐切换，自动精准换算四向保护 Padding
+ *  3. 第三阶段：1:1 复刻真实微信单聊与试穿舞台，彻底废除 0.7 缩水，宽高 100% 同步落盘，真实头像与头像框联动，两方尺寸共通，位置独立拖拽
  *  4. Canvas 物理像素级底图水平翻转，双轨存入 IndexedDB（mcyt_decor_bubbles）
  *  5. 主题级正等边三角 HSV 动态色轮与统一气泡渲染器 buildDecorBubbleHtml
  */
@@ -140,7 +140,7 @@
     }
 
     /**
-     * 全局气泡 HTML 核心渲染器（支持 textAlign 与 8点变形坐标）
+     * 全局气泡 HTML 核心渲染器（100% 忠实还原 boxWidth/boxHeight，废除 0.7 缩水惩罚）
      */
     window.buildDecorBubbleHtml = function (textHtml, isSelf, bubbleId, customClass = '') {
         const bubbles = window.getStoredDecorBubbles();
@@ -154,8 +154,9 @@
         const offY = isSelf ? (b.userOffsetY || 0) : (b.npcOffsetY || 0);
         const origin = isSelf ? 'center right' : 'center left';
 
-        const minWStyle = (b.boxWidth && b.boxWidth > 40) ? `min-width: ${Math.round(b.boxWidth * 0.7)}px;` : '';
-        const minHStyle = (b.boxHeight && b.boxHeight > 30) ? `min-height: ${Math.round(b.boxHeight * 0.7)}px;` : '';
+        // 🌟 100% 继承设置宽度与高度，绝不乘以 0.7 降质缩水
+        const minWStyle = (b.boxWidth && b.boxWidth > 30) ? `min-width: ${b.boxWidth}px;` : '';
+        const minHStyle = (b.boxHeight && b.boxHeight > 25) ? `min-height: ${b.boxHeight}px;` : '';
 
         // 1. 画框气泡
         if (b && b.type === 'visual_box' && b.visualConfig) {
@@ -406,7 +407,7 @@
                     </div>
                     <input type="file" id="bubbleSourceFileInput" accept="image/*" style="display:none;" onchange="window.handleBubbleSourceLocalUpload(event)">
                     <button onclick="document.getElementById('bubbleSourceFileInput').click()" style="width:100%;padding:11px;background:#07c160;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:6px;">
-                        <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2;"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"></polyline></svg>
+                        <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2;"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
                         <span>从手机相册选取图片</span>
                     </button>
                     <div style="display:flex;align-items:center;margin:10px 0;gap:8px;">
@@ -807,9 +808,15 @@
             return { top, right, bottom, left };
         }
         function parsePadding(str) {
-            const parts = (str || '8px 12px').replace(/px/g, '').trim().split(/\s+/).map(Number);
-            if (parts.length >= 2) return { v: parts[0], h: parts[1] };
-            return { v: parts[0] || 8, h: parts[0] || 12 };
+            if (!str) return { top: 8, right: 12, bottom: 8, left: 12 };
+            const parts = str.replace(/px/g, '').trim().split(/\s+/).map(Number);
+            if (parts.length === 4) {
+                return { top: parts[0], right: parts[1], bottom: parts[2], left: parts[3] };
+            }
+            if (parts.length === 2) {
+                return { top: parts[0], right: parts[1], bottom: parts[0], left: parts[1] };
+            }
+            return { top: parts[0] || 8, right: parts[0] || 12, bottom: parts[0] || 8, left: parts[0] || 12 };
         }
 
         const state = {
@@ -867,7 +874,10 @@
             return `${cfg.slice.top}% ${cfg.slice.right}% ${cfg.slice.bottom}% ${cfg.slice.left}%`;
         }
         function padCss(cfg) {
-            return `${cfg.padding.v}px ${cfg.padding.h}px`;
+            if (cfg.padding.top !== undefined) {
+                return `${cfg.padding.top}px ${cfg.padding.right}px ${cfg.padding.bottom}px ${cfg.padding.left}px`;
+            }
+            return `${cfg.padding.v || 8}px ${cfg.padding.h || 12}px`;
         }
 
         async function ensureNpcMirroredImage() {
@@ -1063,7 +1073,17 @@
             };
 
             modal.querySelector('#btnStep2Prev').onclick = () => { state.step = 1; renderStage(); };
+            
+            // 🌟 核心：进入第 3 步时，将第 2 步排版出的避让区自动精准算入 Padding
             modal.querySelector('#btnStep2Next').onclick = async () => {
+                const padL = Math.max(10, Math.round(120 - state.textBoxWidth / 2 + state.textOffsetX));
+                const padR = Math.max(10, Math.round(240 - padL - state.textBoxWidth));
+                const padT = Math.max(8, Math.round(50 - state.textBoxHeight / 2 + state.textOffsetY));
+                const padB = Math.max(8, Math.round(100 - padT - state.textBoxHeight));
+
+                state.user.padding = { top: padT, right: padR, bottom: padB, left: padL };
+                state.npc.padding = { top: padT, right: padL, bottom: padB, left: padR };
+
                 await ensureNpcMirroredImage();
                 state.step = 3;
                 renderStage();
@@ -1147,9 +1167,8 @@
             window.addEventListener('touchend', () => { isDragging = false; activeHandleDir = null; });
         }
 
-        // ================= 阶段 3：虚拟实景试穿（1:1 仿真微信聊天真实对白与真实头像框） =================
+        // ================= 阶段 3：虚拟实景试穿（100% 真实布局 + 1:1 CSS 规则仿真） =================
         function renderStep3VirtualChat() {
-            // 提取当前真实生效的头像、形状与头像框（1:1 对齐真实聊天与 P1 试穿舞台）
             const userAvatar = (typeof window.getPlayerAvatarSafe === 'function') 
                 ? window.getPlayerAvatarSafe() 
                 : 'assets/icons/chat.png';
@@ -1175,14 +1194,14 @@
                         拉动绿色 <b>8 个手柄</b>变形拉伸中间区（圆角尾巴受保护不形变）；按住气泡可<b>分别独立挪移屏幕位置</b>！
                     </div>
 
-                    <!-- 1:1 仿真真实微信单聊视口 -->
+                    <!-- 1:1 仿真真实微信单聊视口，使用与真实聊天 100% 一致的 min-width / min-height 与自适应规则 -->
                     <div id="vChatStage" style="position:relative;background:#ededed;border-radius:12px;padding:16px 10px;margin-bottom:12px;display:flex;flex-direction:column;gap:16px;min-height:240px;box-sizing:border-box;touch-action:none;user-select:none;-webkit-user-select:none;overflow:hidden;">
                         
                         <!-- 对方消息行（左侧：真实头像框 + 对方物理镜像切图气泡） -->
                         <div style="display:flex;justify-content:flex-start;align-items:flex-start;gap:8px;width:100%;">
                             ${renderWorkshopStageAvatar(npcAvatar, activeShape, activeFrameObj, 38)}
                             <div style="max-width:78%;display:flex;flex-direction:column;align-items:flex-start;">
-                                <div id="vBubbleNpc" class="v-stage-bubble" data-side="npc" style="position:relative;display:inline-flex;align-items:center;width:${state.boxWidth}px;height:${state.boxHeight}px;border-style:solid;border-width:${state.npc.borderWidth}px;border-image:url('${state.npc.url || state.user.url}') ${sliceCss(state.npc)} fill stretch;-webkit-border-image:url('${state.npc.url || state.user.url}') ${sliceCss(state.npc)} fill stretch;padding:${padCss(state.npc)};color:${state.npc.textColor};box-sizing:border-box;word-break:break-word;font-size:${state.fontSize}px;line-height:1.4;transform:translate(${state.npcOffsetX}px, ${state.npcOffsetY}px);cursor:move;touch-action:none;">
+                                <div id="vBubbleNpc" class="v-stage-bubble" data-side="npc" style="position:relative;display:inline-flex;align-items:center;width:fit-content;max-width:86%;min-width:${state.boxWidth}px;min-height:${state.boxHeight}px;border-style:solid;border-width:${state.npc.borderWidth}px;border-image:url('${state.npc.url || state.user.url}') ${sliceCss(state.npc)} fill stretch;-webkit-border-image:url('${state.npc.url || state.user.url}') ${sliceCss(state.npc)} fill stretch;padding:${padCss(state.npc)};color:${state.npc.textColor};box-sizing:border-box;word-break:break-word;font-size:${state.fontSize}px;line-height:1.4;transform:translate(${state.npcOffsetX}px, ${state.npcOffsetY}px);cursor:move;touch-action:none;">
                                     <div style="width:100%;text-align:${state.textAlign};pointer-events:none;">气泡只拉伸中间，圆角尾巴不变形！</div>
                                     <div class="bubble-8-frame" data-side="npc" style="display:none;position:absolute;inset:-3px;border:1.5px dashed #07c160;border-radius:4px;pointer-events:none;">
                                         ${build8PointHandlesHtml('b8')}
@@ -1194,7 +1213,7 @@
                         <!-- 我方消息行（右侧：我方真实头像框 + 我方气泡，尺寸与对方共通） -->
                         <div style="display:flex;justify-content:flex-end;align-items:flex-start;gap:8px;width:100%;">
                             <div style="max-width:78%;display:flex;flex-direction:column;align-items:flex-end;">
-                                <div id="vBubbleUser" class="v-stage-bubble" data-side="user" style="position:relative;display:inline-flex;align-items:center;width:${state.boxWidth}px;height:${state.boxHeight}px;border-style:solid;border-width:${state.user.borderWidth}px;border-image:url('${state.user.url}') ${sliceCss(state.user)} fill stretch;-webkit-border-image:url('${state.user.url}') ${sliceCss(state.user)} fill stretch;padding:${padCss(state.user)};color:${state.user.textColor};box-sizing:border-box;word-break:break-word;font-size:${state.fontSize}px;line-height:1.4;transform:translate(${state.userOffsetX}px, ${state.userOffsetY}px);cursor:move;touch-action:none;">
+                                <div id="vBubbleUser" class="v-stage-bubble" data-side="user" style="position:relative;display:inline-flex;align-items:center;width:fit-content;max-width:86%;min-width:${state.boxWidth}px;min-height:${state.boxHeight}px;border-style:solid;border-width:${state.user.borderWidth}px;border-image:url('${state.user.url}') ${sliceCss(state.user)} fill stretch;-webkit-border-image:url('${state.user.url}') ${sliceCss(state.user)} fill stretch;padding:${padCss(state.user)};color:${state.user.textColor};box-sizing:border-box;word-break:break-word;font-size:${state.fontSize}px;line-height:1.4;transform:translate(${state.userOffsetX}px, ${state.userOffsetY}px);cursor:move;touch-action:none;">
                                     <div style="width:100%;text-align:${state.textAlign};pointer-events:none;">两边宽高共通，位置分开拖动！</div>
                                     <div class="bubble-8-frame" data-side="user" style="display:block;position:absolute;inset:-3px;border:1.5px dashed #07c160;border-radius:4px;pointer-events:none;">
                                         ${build8PointHandlesHtml('b8')}
@@ -1233,7 +1252,7 @@
                     textAlign: state.textAlign || 'left',
                     fontFamily: state.fontFamily,
 
-                    // 8 点变形锁定的气泡拉伸区尺寸（共通）
+                    // 8 点变形锁定的气泡拉伸区最小保底尺寸（绝不乘以 0.7 降权）
                     boxWidth: state.boxWidth,
                     boxHeight: state.boxHeight,
 
@@ -1282,15 +1301,15 @@
             const getPos = (e) => (e.touches && e.touches[0]) ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : { x: e.clientX, y: e.clientY };
 
             function updateStageView() {
-                // 宽高高低共通更新
+                // 1:1 同步更新 minWidth / minHeight
                 if (bUser) {
-                    bUser.style.width = `${st.boxWidth}px`;
-                    bUser.style.height = `${st.boxHeight}px`;
+                    bUser.style.minWidth = `${st.boxWidth}px`;
+                    bUser.style.minHeight = `${st.boxHeight}px`;
                     bUser.style.transform = `translate(${st.userOffsetX}px, ${st.userOffsetY}px)`;
                 }
                 if (bNpc) {
-                    bNpc.style.width = `${st.boxWidth}px`;
-                    bNpc.style.height = `${st.boxHeight}px`;
+                    bNpc.style.minWidth = `${st.boxWidth}px`;
+                    bNpc.style.minHeight = `${st.boxHeight}px`;
                     bNpc.style.transform = `translate(${st.npcOffsetX}px, ${st.npcOffsetY}px)`;
                 }
             }
