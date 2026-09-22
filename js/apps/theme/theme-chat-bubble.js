@@ -154,12 +154,11 @@
         const offY = isSelf ? (b.userOffsetY || 0) : (b.npcOffsetY || 0);
         const origin = isSelf ? 'center right' : 'center left';
 
-        // 🌟 修复：此前用 min-width/min-height（仅作下限保底），导致字号调大后气泡框会
-        //    被真实内容"撑大变形"，与编辑器 8 点变形舞台里锁死的 width/height 预览完全不符。
-        //    统一改为与编辑器一致的固定 width/height，字号超出时用 overflow:visible 让文字
-        //    溢出边框显示，而不是让点九图边框被动拉伸变细。
-        const fixedWStyle = (b.boxWidth && b.boxWidth > 30) ? `width: ${b.boxWidth}px;` : '';
-        const fixedHStyle = (b.boxHeight && b.boxHeight > 25) ? `height: ${b.boxHeight}px;` : '';
+        // 🌟 该气泡框的定位思路：初始宽高/位置严格按你在编辑器里设定的来（min-width/min-height 只作为起始下限），
+        //    换行、字数变多时，框会跟随文字自然行高与字符宽度按比例继续撑大——这正是浏览器文本排版的原生行为
+        //    （每多一行就精确增加一个 line-height 的高度，多一个字就精确增加对应字宽），不需要额外写死比例公式。
+        const minWStyle = (b.boxWidth && b.boxWidth > 30) ? `min-width: ${b.boxWidth}px;` : '';
+        const minHStyle = (b.boxHeight && b.boxHeight > 25) ? `min-height: ${b.boxHeight}px;` : '';
 
         // 1. 画框气泡
         if (b && b.type === 'visual_box' && b.visualConfig) {
@@ -206,8 +205,8 @@
 
             return `
                 <div class="chat-bubble nine-slice-bubble ${isSelf ? 'self-bubble' : ''} ${customClass}" 
-                     style="position:relative;display:inline-flex;align-items:center;border-style:solid;border-width:${borderWidth}px;border-image:url('${imgUrl}') ${slice} fill stretch;-webkit-border-image:url('${imgUrl}') ${slice} fill stretch;padding:${padding};background:transparent;color:${textColor};${fixedWStyle ? fixedWStyle : 'width:fit-content;'}${fixedHStyle}max-width:86%;box-sizing:border-box;overflow:visible;word-break:break-word;font-size:${fontSize}px;${fontFamilyCss}line-height:1.45;transform:translate(${offX}px, ${offY}px) scale(${scale});transform-origin:${origin};">
-                    <div style="width:100%;overflow:visible;text-align:${textAlign};">${textHtml}</div>
+                     style="position:relative;display:inline-flex;align-items:center;border-style:solid;border-width:${borderWidth}px;border-image:url('${imgUrl}') ${slice} fill stretch;-webkit-border-image:url('${imgUrl}') ${slice} fill stretch;padding:${padding};background:transparent;color:${textColor};width:fit-content;max-width:86%;${minWStyle}${minHStyle}box-sizing:border-box;word-break:break-word;font-size:${fontSize}px;${fontFamilyCss}line-height:1.45;transform:translate(${offX}px, ${offY}px) scale(${scale});transform-origin:${origin};">
+                    <div style="width:100%;text-align:${textAlign};">${textHtml}</div>
                 </div>
             `;
         }
