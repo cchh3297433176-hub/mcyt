@@ -1,15 +1,15 @@
 /**
  * js/apps/theme/theme-app.js
- * 🎀 个性化与主题中心 App
- * 职责：主体粉白可调节自定制、状态栏三维解耦（描边勾线/填充底色/底图）、
- *       粉白甜心自定义下拉菜单（杜绝原生 Android 白框）、正等边三角形高精度触控对齐校准、
- *       HSV 触控输入实时响应、桌面组件自由多页穿梭与独立开关控制、壁纸自适应裁剪、一键全站色彩重置、
- *       多配置方案管理器、免费字体网引导与扩展字体导入、
- *       🌟 桌面排版模式入口：在已有组件卡片中直接开启桌面手拖排版与重置。
+ * 🎀 个性化与主题中心 App（仿微信白灰微绿原生架构）
+ * 职责：主体色彩定制、状态栏三维解耦、HSV 色相盘调控、桌面组件排版、
+ *       壁纸裁剪、字体库扩展、主题方案管理器、
+ *       🌟 双页签架构调度：调度 [手机主题] 与 [聊天装扮 (theme-chat-decor.js)]
  */
 
 (function () {
     'use strict';
+
+    let activeThemeTab = 'system'; // 'system' | 'chat_decor'
 
     let hsvState = {
         h: 61,
@@ -23,15 +23,14 @@
     let currentThemeMode = 'auto';
     let currentFontFormat = 'html';
 
-    // 当前通过 HSV 色相盘调节的目标对象：
     let currentHsvTarget = 'status_text';
 
     const HSV_TARGET_NAMES = {
         status_text: '字体与状态栏指示颜色',
         icon_label: '桌面 App 标题文字颜色',
         status_fill: '状态栏填充底色',
-        main_pink: '主体核心色彩（草莓粉区）',
-        main_white: '主体纯白背景（纯白区）'
+        main_pink: '主体系统重点色彩',
+        main_white: '主体背景基底底色'
     };
 
     function hsvToRgb(h, s, v) {
@@ -88,18 +87,18 @@
 
     function getCurrentTargetHex(targetKey) {
         if (targetKey === 'status_text') {
-            return localStorage.getItem('mcyt_phone_custom_color') || '#ff5c8a';
+            return localStorage.getItem('mcyt_phone_custom_color') || '#07c160';
         } else if (targetKey === 'icon_label') {
-            return localStorage.getItem('mcyt_icon_label_color') || '#2e1a22';
+            return localStorage.getItem('mcyt_icon_label_color') || '#222222';
         } else if (targetKey === 'status_fill') {
             const fill = localStorage.getItem('mcyt_statusbar_fill');
-            return (fill && fill.startsWith('#')) ? fill : '#ff5c8a';
+            return (fill && fill.startsWith('#')) ? fill : '#ffffff';
         } else if (targetKey === 'main_pink') {
-            return localStorage.getItem('mcyt_custom_main_pink') || '#ff5c8a';
+            return localStorage.getItem('mcyt_custom_main_pink') || '#07c160';
         } else if (targetKey === 'main_white') {
             return localStorage.getItem('mcyt_custom_main_white') || '#ffffff';
         }
-        return '#ff5c8a';
+        return '#07c160';
     }
 
     function updateHsvVisibilityDom() {
@@ -121,9 +120,9 @@
             root.style.setProperty('--star-glow-color', 'rgba(255, 255, 255, 0.9)');
             if (typeof window.applyColorTheme === 'function') window.applyColorTheme(false);
         } else if (mode === 'light') {
-            root.style.setProperty('--status-color', '#1a1a1a');
-            root.style.setProperty('--lock-text-color', '#1a1a1a');
-            root.style.setProperty('--status-svg-fill', '#1a1a1a');
+            root.style.setProperty('--status-color', '#222222');
+            root.style.setProperty('--lock-text-color', '#222222');
+            root.style.setProperty('--status-svg-fill', '#222222');
             root.style.setProperty('--star-glow-color', 'rgba(0, 0, 0, 0.4)');
             if (typeof window.applyColorTheme === 'function') window.applyColorTheme(true);
         } else if (mode === 'auto') {
@@ -139,7 +138,58 @@
         }
     }
 
+    // 主题中心主渲染函数（白灰微绿双Tab中枢）
     window.renderThemeApp = function (container) {
+        if (!container) return;
+
+        container.innerHTML = `
+            <div class="theme-app-shell" style="background:#f7f7f7;min-height:100%;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#222;">
+                <!-- 顶部微信原生双页签导航 -->
+                <div style="background:#ffffff;border-bottom:1px solid #eeeeee;display:flex;position:sticky;top:0;z-index:20;">
+                    <div id="themeTabSystem" onclick="window.switchThemeAppTab('system')" 
+                         style="flex:1;text-align:center;padding:12px 0;font-size:14px;font-weight:${activeThemeTab === 'system' ? '700' : '500'};color:${activeThemeTab === 'system' ? '#07c160' : '#666666'};cursor:pointer;position:relative;transition:all 0.2s;">
+                        📱 手机主题
+                        ${activeThemeTab === 'system' ? '<div style="position:absolute;bottom:0;left:25%;width:50%;height:3px;background:#07c160;border-radius:3px 3px 0 0;"></div>' : ''}
+                    </div>
+                    <div id="themeTabChatDecor" onclick="window.switchThemeAppTab('chat_decor')" 
+                         style="flex:1;text-align:center;padding:12px 0;font-size:14px;font-weight:${activeThemeTab === 'chat_decor' ? '700' : '500'};color:${activeThemeTab === 'chat_decor' ? '#07c160' : '#666666'};cursor:pointer;position:relative;transition:all 0.2s;">
+                        💬 聊天装扮
+                        ${activeThemeTab === 'chat_decor' ? '<div style="position:absolute;bottom:0;left:25%;width:50%;height:3px;background:#07c160;border-radius:3px 3px 0 0;"></div>' : ''}
+                    </div>
+                </div>
+
+                <!-- 容器主体 -->
+                <div id="themeAppSubContent" style="padding:12px;flex:1;display:flex;flex-direction:column;gap:12px;"></div>
+            </div>
+        `;
+
+        const subContainer = document.getElementById('themeAppSubContent');
+        if (activeThemeTab === 'system') {
+            renderSystemThemeSubView(subContainer);
+        } else {
+            if (typeof window.renderChatDecorTheme === 'function') {
+                window.renderChatDecorTheme(subContainer);
+            } else {
+                subContainer.innerHTML = `
+                    <div style="background:#ffffff;border-radius:12px;padding:24px;text-align:center;color:#888;border:1px solid #eeeeee;">
+                        <div style="font-size:14px;font-weight:600;color:#222;margin-bottom:6px;">聊天装扮模块加载中...</div>
+                        <div style="font-size:12px;">请确保已加载 js/apps/theme/theme-chat-decor.js 脚本</div>
+                    </div>
+                `;
+            }
+        }
+    };
+
+    window.switchThemeAppTab = function (tabKey) {
+        activeThemeTab = tabKey;
+        const appModalBody = document.getElementById('appModalBody');
+        if (appModalBody) {
+            window.renderThemeApp(appModalBody);
+        }
+    };
+
+    // 渲染第一页：手机主体与桌面设置（纯白卡片，消除粉白精致土）
+    function renderSystemThemeSubView(container) {
         if (!container) return;
 
         currentThemeMode = localStorage.getItem('mcyt_phone_theme_mode') || 'auto';
@@ -151,21 +201,19 @@
 
         const sStrokeVal = localStorage.getItem('mcyt_statusbar_stroke') || 'none';
 
-        // 读取组件独立开关与页码
         const calEnabled = localStorage.getItem('mcyt_widget_calendar_enabled') !== 'false';
         const calPage = parseInt(localStorage.getItem('mcyt_widget_calendar_page') || '1', 10);
 
         const todoEnabled = localStorage.getItem('mcyt_widget_todo_enabled') !== 'false';
         const todoPage = parseInt(localStorage.getItem('mcyt_widget_todo_page') || '1', 10);
 
-        // 读取已保存的排版偏移量摘要
         let offsetSummary = '默认位置（未自定义）';
         try {
             const rawOffsets = localStorage.getItem('mcyt_desktop_block_offsets_v1');
             if (rawOffsets) {
                 const off = JSON.parse(rawOffsets);
                 const items = [];
-                if (off.lock) items.push(`锁屏条:${off.lock > 0 ? '+' : ''}${off.lock}px`);
+                if (off.lock) items.push(`锁屏:${off.lock > 0 ? '+' : ''}${off.lock}px`);
                 if (off.tarot) items.push(`塔罗:${off.tarot > 0 ? '+' : ''}${off.tarot}px`);
                 if (off.calendar) items.push(`日历:${off.calendar > 0 ? '+' : ''}${off.calendar}px`);
                 if (off.todo) items.push(`便签:${off.todo > 0 ? '+' : ''}${off.todo}px`);
@@ -176,125 +224,118 @@
 
         container.innerHTML = `
             <!-- 卡片 1：壁纸设置 -->
-            <div class="theme-setting-card">
-                <div class="theme-setting-title">
-                    <span>壁纸设置（本地相册导入）</span>
-                </div>
-                <div class="theme-setting-desc">
-                    选取手机相册照片，导入时可按当前屏幕比例自由平移缩放裁剪。
-                </div>
+            <div style="background:#ffffff;border-radius:12px;border:1px solid #eeeeee;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,0.02);">
+                <div style="font-size:14px;font-weight:700;color:#222;margin-bottom:4px;">壁纸设置</div>
+                <div style="font-size:12px;color:#888;margin-bottom:12px;">选取手机相册照片，导入时可按屏幕比例自由裁剪。</div>
 
-                <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:6px;">
+                <div style="display:flex;flex-direction:column;gap:8px;">
                     <input type="file" id="localLockFileInput" accept="image/*" style="display:none;" onchange="window.handleWallpaperUpload(event, 'lock')">
                     <input type="file" id="localDesktopFileInput" accept="image/*" style="display:none;" onchange="window.handleWallpaperUpload(event, 'desktop')">
 
                     <div style="display:flex;gap:8px;">
-                        <button class="btn-secondary" style="flex:1;" onclick="document.getElementById('localLockFileInput').click()">
+                        <button style="flex:1;padding:8px 10px;border-radius:8px;border:1px solid #e0e0e0;background:#f9f9f9;font-size:12px;color:#333;font-weight:600;cursor:pointer;" onclick="document.getElementById('localLockFileInput').click()">
                             选取锁屏壁纸
                         </button>
-                        <button class="btn-secondary" style="flex:1;" onclick="document.getElementById('localDesktopFileInput').click()">
+                        <button style="flex:1;padding:8px 10px;border-radius:8px;border:1px solid #e0e0e0;background:#f9f9f9;font-size:12px;color:#333;font-weight:600;cursor:pointer;" onclick="document.getElementById('localDesktopFileInput').click()">
                             选取桌面壁纸
                         </button>
                     </div>
 
-                    <div id="wallpaperStatusTip" style="font-size:11.5px;color:var(--text2);text-align:center;margin:4px 0 2px 0;">
+                    <div id="wallpaperStatusTip" style="font-size:11.5px;color:#888;text-align:center;margin:2px 0;">
                         ${pendingLockBg || pendingDesktopBg ? '已载入自定义壁纸' : '当前使用默认壁纸'}
                     </div>
 
                     <div style="display:flex;gap:8px;">
-                        <button class="btn-primary" style="flex:2;" onclick="window.confirmSaveWallpapersOnly()">
+                        <button style="flex:2;padding:8px 12px;border-radius:8px;border:none;background:#07c160;color:#ffffff;font-size:12.5px;font-weight:600;cursor:pointer;" onclick="window.confirmSaveWallpapersOnly()">
                             保存当前壁纸
                         </button>
-                        <button class="btn-secondary" style="flex:1;" onclick="window.restoreDefaultWallpapersOnly()">
+                        <button style="flex:1;padding:8px 12px;border-radius:8px;border:1px solid #e0e0e0;background:#f9f9f9;color:#555;font-size:12px;cursor:pointer;" onclick="window.restoreDefaultWallpapersOnly()">
                             恢复默认
                         </button>
                     </div>
                 </div>
             </div>
 
-            <!-- 卡片 2：色彩与状态栏全局专业定制 -->
-            <div class="theme-setting-card">
-                <div class="theme-setting-title">
-                    <span>主题全层级色彩与状态栏定制</span>
-                </div>
-                <div class="theme-setting-desc">
-                    轻触切换调节目标，全线接入专业 HSV 色相盘与水滴吸色准星。
-                </div>
+            <!-- 卡片 2：色彩与状态栏全局定制 -->
+            <div style="background:#ffffff;border-radius:12px;border:1px solid #eeeeee;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,0.02);">
+                <div style="font-size:14px;font-weight:700;color:#222;margin-bottom:4px;">全层级色彩与状态栏</div>
+                <div style="font-size:12px;color:#888;margin-bottom:12px;">专业 HSV 色轮微调与实时水滴取色。</div>
 
                 <div style="margin-bottom:12px;position:relative;">
-                    <label style="font-size:11.5px;font-weight:700;color:var(--text2);display:block;margin-bottom:4px;">色盘当前调控目标：</label>
-                    <div id="themeHsvTargetDropdownBtn" class="custom-theme-target-dropdown" onclick="window.toggleThemeTargetDropdown()">
-                        <span id="themeHsvTargetDropdownLabel">${HSV_TARGET_NAMES[currentHsvTarget]}</span>
-                        <span style="font-size:10px;color:var(--primary);">▼</span>
+                    <label style="font-size:12px;font-weight:600;color:#555;display:block;margin-bottom:6px;">色盘调节目标：</label>
+                    <div id="themeHsvTargetDropdownBtn" onclick="window.toggleThemeTargetDropdown()"
+                         style="background:#f9f9f9;border:1px solid #e0e0e0;border-radius:8px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
+                        <span id="themeHsvTargetDropdownLabel" style="font-size:12.5px;color:#222;font-weight:600;">${HSV_TARGET_NAMES[currentHsvTarget]}</span>
+                        <span style="font-size:10px;color:#888;">▼</span>
                     </div>
-                    <div id="themeHsvTargetDropdownMenu" class="custom-theme-dropdown-menu" style="display:none;">
+                    <div id="themeHsvTargetDropdownMenu" style="display:none;position:absolute;top:100%;left:0;right:0;background:#ffffff;border:1px solid #e5e5e5;border-radius:8px;box-shadow:0 4px 12px rgba(0,0,0,0.08);margin-top:4px;z-index:30;flex-direction:column;overflow:hidden;">
                         ${Object.keys(HSV_TARGET_NAMES).map(k => `
-                            <div class="custom-theme-dropdown-item ${k === currentHsvTarget ? 'active' : ''}" onclick="window.selectHsvTarget('${k}')">
+                            <div style="padding:9px 12px;font-size:12.5px;color:#333;display:flex;justify-content:space-between;cursor:pointer;border-bottom:1px solid #f5f5f5;" onclick="window.selectHsvTarget('${k}')">
                                 <span>${HSV_TARGET_NAMES[k]}</span>
-                                ${k === currentHsvTarget ? '<span style="color:var(--primary);">✓</span>' : ''}
+                                ${k === currentHsvTarget ? '<span style="color:#07c160;font-weight:bold;">✓</span>' : ''}
                             </div>
                         `).join('')}
                     </div>
                 </div>
 
-                <div id="statusBarExtraControls" style="display:${currentHsvTarget === 'status_fill' ? 'block' : 'none'};margin-bottom:12px;background:#fff8fa;padding:10px;border-radius:12px;border:1px solid #ffeef2;">
+                <div id="statusBarExtraControls" style="display:${currentHsvTarget === 'status_fill' ? 'block' : 'none'};margin-bottom:12px;background:#f9f9f9;padding:10px;border-radius:8px;border:1px solid #e8e8e8;">
                     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-                        <span style="font-size:11.5px;font-weight:600;color:var(--text);">状态栏底部分割描边：</span>
-                        <select id="statusBarStrokeSelect" style="padding:3px 6px;border-radius:6px;border:1px solid #ffd1dc;font-size:11px;" onchange="window.updateStatusBarStroke(this.value)">
-                            <option value="none" ${sStrokeVal === 'none' ? 'selected' : ''}>无描边</option>
-                            <option value="1px solid rgba(255, 92, 138, 0.35)" ${sStrokeVal.includes('255, 92, 138') ? 'selected' : ''}>柔粉描边</option>
-                            <option value="1px solid rgba(255, 255, 255, 0.45)" ${sStrokeVal.includes('255, 255, 255') ? 'selected' : ''}>纯白描边</option>
-                            <option value="1px solid rgba(0, 0, 0, 0.18)" ${sStrokeVal.includes('0, 0, 0') ? 'selected' : ''}>黑巧深色描边</option>
+                        <span style="font-size:12px;font-weight:600;color:#333;">底部分割线：</span>
+                        <select id="statusBarStrokeSelect" style="padding:4px 8px;border-radius:6px;border:1px solid #ccc;font-size:11.5px;background:#fff;" onchange="window.updateStatusBarStroke(this.value)">
+                            <option value="none" ${sStrokeVal === 'none' ? 'selected' : ''}>无分割线</option>
+                            <option value="1px solid rgba(7, 193, 96, 0.35)" ${sStrokeVal.includes('7, 193, 96') ? 'selected' : ''}>原生微绿描边</option>
+                            <option value="1px solid rgba(255, 255, 255, 0.45)" ${sStrokeVal.includes('255, 255, 255') ? 'selected' : ''}>纯白细线</option>
+                            <option value="1px solid rgba(0, 0, 0, 0.12)" ${sStrokeVal.includes('0, 0, 0') ? 'selected' : ''}>浅灰细线</option>
                         </select>
                     </div>
                     <div style="display:flex;align-items:center;justify-content:space-between;">
-                        <span style="font-size:11.5px;font-weight:600;color:var(--text);">专属底图或快捷透明：</span>
+                        <span style="font-size:12px;font-weight:600;color:#333;">专属底图或透明：</span>
                         <input type="file" id="statusBarBgFileInput" accept="image/*" style="display:none;" onchange="window.handleStatusBarBgUpload(event)">
-                        <div style="display:flex;gap:4px;">
-                            <button class="btn-secondary" style="padding:2px 6px;font-size:10.5px;" onclick="window.updateStatusBarFill('transparent')">完全透明</button>
-                            <button class="btn-secondary" style="padding:2px 6px;font-size:10.5px;" onclick="document.getElementById('statusBarBgFileInput').click()">导入底图</button>
-                            <button class="btn-secondary" style="padding:2px 6px;font-size:10.5px;color:#c92a2a;" onclick="window.clearStatusBarBg()">清图</button>
+                        <div style="display:flex;gap:6px;">
+                            <button style="padding:3px 8px;font-size:11px;border-radius:6px;border:1px solid #e0e0e0;background:#fff;" onclick="window.updateStatusBarFill('transparent')">透明</button>
+                            <button style="padding:3px 8px;font-size:11px;border-radius:6px;border:1px solid #e0e0e0;background:#fff;" onclick="document.getElementById('statusBarBgFileInput').click()">底图</button>
+                            <button style="padding:3px 8px;font-size:11px;border-radius:6px;border:1px solid #ffdcd9;background:#fff;color:#fa5151;" onclick="window.clearStatusBarBg()">清除</button>
                         </div>
                     </div>
                 </div>
 
                 <div id="statusModeRadioWrap" style="display:${currentHsvTarget === 'status_text' ? 'block' : 'none'};margin-bottom:12px;">
-                    <div class="theme-pointer-group">
-                        <div class="theme-pointer-item" onclick="window.onThemeModeRadioChange('auto')">
-                            <input type="radio" name="themeModeRadio" id="modeAuto" value="auto" ${currentThemeMode === 'auto' ? 'checked' : ''}>
-                            <label for="modeAuto">自动识别壁纸明暗反色</label>
-                        </div>
-                        <div class="theme-pointer-item" onclick="window.onThemeModeRadioChange('dark')">
-                            <input type="radio" name="themeModeRadio" id="modeDark" value="dark" ${currentThemeMode === 'dark' ? 'checked' : ''}>
-                            <label for="modeDark">默认纯白质感（强制纯白）</label>
-                        </div>
-                        <div class="theme-pointer-item" onclick="window.onThemeModeRadioChange('light')">
-                            <input type="radio" name="themeModeRadio" id="modeLight" value="light" ${currentThemeMode === 'light' ? 'checked' : ''}>
-                            <label for="modeLight">默认黑巧质感（强制深黑）</label>
-                        </div>
-                        <div class="theme-pointer-item" onclick="window.onThemeModeRadioChange('custom')">
-                            <input type="radio" name="themeModeRadio" id="modeCustom" value="custom" ${currentThemeMode === 'custom' ? 'checked' : ''}>
-                            <label for="modeCustom">自定义固定颜色（色盘调配）</label>
-                        </div>
+                    <div style="display:flex;flex-direction:column;gap:6px;background:#f9f9f9;padding:8px 12px;border-radius:8px;border:1px solid #e8e8e8;">
+                        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+                            <input type="radio" name="themeModeRadio" value="auto" ${currentThemeMode === 'auto' ? 'checked' : ''} onchange="window.onThemeModeRadioChange('auto')">
+                            <span>自动识别壁纸明暗反色</span>
+                        </label>
+                        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+                            <input type="radio" name="themeModeRadio" value="dark" ${currentThemeMode === 'dark' ? 'checked' : ''} onchange="window.onThemeModeRadioChange('dark')">
+                            <span>强制纯白质感（深底白字）</span>
+                        </label>
+                        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+                            <input type="radio" name="themeModeRadio" value="light" ${currentThemeMode === 'light' ? 'checked' : ''} onchange="window.onThemeModeRadioChange('light')">
+                            <span>强制深黑质感（浅底黑字）</span>
+                        </label>
+                        <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+                            <input type="radio" name="themeModeRadio" value="custom" ${currentThemeMode === 'custom' ? 'checked' : ''} onchange="window.onThemeModeRadioChange('custom')">
+                            <span>自定义固定色彩（下方色盘）</span>
+                        </label>
                     </div>
                 </div>
 
-                <!-- 正等边 HSV 色盘与水滴放大镜 -->
+                <!-- 正等边 HSV 色盘 -->
                 <div id="themeHsvPickerWrap" style="margin-top:6px;display:${(currentHsvTarget === 'status_text' && currentThemeMode !== 'custom') ? 'none' : 'block'};">
-                    <div class="hsv-pixel-perfect-plate" style="background:#2b2b2b;border-radius:20px;padding:18px 16px;box-shadow:inset 0 2px 8px rgba(0,0,0,0.5), 0 6px 18px rgba(0,0,0,0.25);width:100%;max-width:320px;margin:0 auto;box-sizing:border-box;">
-                        <div class="hsv-wheel-box" id="hsvWheelBox" style="width:230px;height:230px;margin:0 auto 12px auto;position:relative;user-select:none;touch-action:none;">
-                            <canvas id="hsvWheelCanvas" class="hsv-wheel-canvas" width="460" height="460" style="width:100%;height:100%;border-radius:50%;display:block;touch-action:none;"></canvas>
-                            <div class="hsv-ring-handle" id="hsvRingHandle" style="position:absolute;width:24px;height:24px;border:3px solid #ffffff;border-radius:50%;box-shadow:0 0 5px rgba(0,0,0,0.6);transform:translate(-50%,-50%);pointer-events:none;box-sizing:border-box;"></div>
-                            <div class="hsv-triangle-handle" id="hsvTriangleHandle" style="position:absolute;width:20px;height:20px;border:3px solid #ffffff;border-radius:50%;box-shadow:0 0 5px rgba(0,0,0,0.6);transform:translate(-50%,-50%);pointer-events:none;box-sizing:border-box;"></div>
+                    <div style="background:#222222;border-radius:16px;padding:16px;width:100%;max-width:320px;margin:0 auto;box-sizing:border-box;">
+                        <div class="hsv-wheel-box" id="hsvWheelBox" style="width:220px;height:220px;margin:0 auto 10px auto;position:relative;user-select:none;touch-action:none;">
+                            <canvas id="hsvWheelCanvas" class="hsv-wheel-canvas" width="440" height="440" style="width:100%;height:100%;border-radius:50%;display:block;touch-action:none;"></canvas>
+                            <div class="hsv-ring-handle" id="hsvRingHandle" style="position:absolute;width:22px;height:22px;border:2.5px solid #ffffff;border-radius:50%;box-shadow:0 0 4px rgba(0,0,0,0.5);transform:translate(-50%,-50%);pointer-events:none;box-sizing:border-box;"></div>
+                            <div class="hsv-triangle-handle" id="hsvTriangleHandle" style="position:absolute;width:18px;height:18px;border:2.5px solid #ffffff;border-radius:50%;box-shadow:0 0 4px rgba(0,0,0,0.5);transform:translate(-50%,-50%);pointer-events:none;box-sizing:border-box;"></div>
                         </div>
 
-                        <div style="display:flex;justify-content:space-between;align-items:center;padding:0 8px 12px 8px;">
-                            <div id="currentHexBadge" style="font-size:12px;font-family:monospace;color:#fff;background:rgba(255,255,255,0.15);padding:3px 8px;border-radius:6px;">
+                        <div style="display:flex;justify-content:space-between;align-items:center;padding:0 4px 10px 4px;">
+                            <div id="currentHexBadge" style="font-size:12px;font-family:monospace;color:#fff;background:rgba(255,255,255,0.15);padding:2px 8px;border-radius:6px;">
                                 ${curHex.toUpperCase()}
                             </div>
                             <input type="file" id="pipetteImageInput" accept="image/*" style="display:none;" onchange="window.handlePipetteImageSelected(event)">
-                            <div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;cursor:pointer;" onclick="document.getElementById('pipetteImageInput').click()" title="从相册图片精准吸色">
-                                <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:none;stroke:#d0d0d0;stroke-width:1.8;">
+                            <div style="width:26px;height:26px;display:flex;align-items:center;justify-content:center;cursor:pointer;" onclick="document.getElementById('pipetteImageInput').click()" title="从照片吸色">
+                                <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:#ffffff;stroke-width:1.8;">
                                     <path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"></path>
                                     <path d="M12 11v4" stroke-linecap="round"></path>
                                     <path d="M10 13h4" stroke-linecap="round"></path>
@@ -302,201 +343,162 @@
                             </div>
                         </div>
 
-                        <div style="display:flex;flex-direction:column;gap:12px;padding:0 6px;">
-                            <div style="display:flex;align-items:center;gap:10px;">
-                                <span style="font-size:13px;font-family:serif;color:#a0a0a0;width:12px;font-weight:bold;">H</span>
-                                <div style="flex:1;position:relative;display:flex;align-items:center;">
-                                    <input type="range" id="sliderH" min="0" max="360" value="${hsvState.h}" style="width:100%;height:6px;border-radius:3px;appearance:none;-webkit-appearance:none;outline:none;background:linear-gradient(to right, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%);">
-                                </div>
-                                <input type="number" id="inputValH" class="hsv-number-input" min="0" max="360" value="${hsvState.h}" onchange="window.onHsvManualInputChange('h', this.value)" />
+                        <div style="display:flex;flex-direction:column;gap:10px;padding:0 4px;">
+                            <div style="display:flex;align-items:center;gap:8px;">
+                                <span style="font-size:12px;color:#aaa;width:10px;font-weight:bold;">H</span>
+                                <input type="range" id="sliderH" min="0" max="360" value="${hsvState.h}" style="flex:1;height:5px;border-radius:3px;appearance:none;outline:none;background:linear-gradient(to right, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%);">
+                                <input type="number" id="inputValH" min="0" max="360" value="${hsvState.h}" onchange="window.onHsvManualInputChange('h', this.value)" style="width:40px;background:#333;color:#fff;border:1px solid #444;border-radius:4px;padding:2px 4px;font-size:11px;text-align:center;">
                             </div>
-
-                            <div style="display:flex;align-items:center;gap:10px;">
-                                <span style="font-size:13px;font-family:serif;color:#a0a0a0;width:12px;font-weight:bold;">S</span>
-                                <div style="flex:1;position:relative;display:flex;align-items:center;">
-                                    <input type="range" id="sliderS" min="0" max="100" value="${hsvState.s}" style="width:100%;height:6px;border-radius:3px;appearance:none;-webkit-appearance:none;outline:none;" id="sliderSTrack">
-                                </div>
-                                <input type="number" id="inputValS" class="hsv-number-input" min="0" max="100" value="${hsvState.s}" onchange="window.onHsvManualInputChange('s', this.value)" />
+                            <div style="display:flex;align-items:center;gap:8px;">
+                                <span style="font-size:12px;color:#aaa;width:10px;font-weight:bold;">S</span>
+                                <input type="range" id="sliderS" min="0" max="100" value="${hsvState.s}" style="flex:1;height:5px;border-radius:3px;appearance:none;outline:none;">
+                                <input type="number" id="inputValS" min="0" max="100" value="${hsvState.s}" onchange="window.onHsvManualInputChange('s', this.value)" style="width:40px;background:#333;color:#fff;border:1px solid #444;border-radius:4px;padding:2px 4px;font-size:11px;text-align:center;">
                             </div>
-
-                            <div style="display:flex;align-items:center;gap:10px;">
-                                <span style="font-size:13px;font-family:serif;color:#a0a0a0;width:12px;font-weight:bold;">V</span>
-                                <div style="flex:1;position:relative;display:flex;align-items:center;">
-                                    <input type="range" id="sliderV" min="0" max="100" value="${hsvState.v}" style="width:100%;height:6px;border-radius:3px;appearance:none;-webkit-appearance:none;outline:none;" id="sliderVTrack">
-                                </div>
-                                <input type="number" id="inputValV" class="hsv-number-input" min="0" max="100" value="${hsvState.v}" onchange="window.onHsvManualInputChange('v', this.value)" />
+                            <div style="display:flex;align-items:center;gap:8px;">
+                                <span style="font-size:12px;color:#aaa;width:10px;font-weight:bold;">V</span>
+                                <input type="range" id="sliderV" min="0" max="100" value="${hsvState.v}" style="flex:1;height:5px;border-radius:3px;appearance:none;outline:none;">
+                                <input type="number" id="inputValV" min="0" max="100" value="${hsvState.v}" onchange="window.onHsvManualInputChange('v', this.value)" style="width:40px;background:#333;color:#fff;border:1px solid #444;border-radius:4px;padding:2px 4px;font-size:11px;text-align:center;">
                             </div>
                         </div>
-
                     </div>
                 </div>
 
-                <div class="theme-action-bar" style="margin-top:14px;flex-direction:column;gap:8px;">
-                    <button class="btn-primary" style="width:100%;" onclick="window.saveAndApplyColorThemeOnly()">
-                        保存并应用当前色彩配置
+                <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;">
+                    <button style="width:100%;padding:9px;background:#07c160;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;" onclick="window.saveAndApplyColorThemeOnly()">
+                        保存当前色彩
                     </button>
-                    <button class="btn-secondary" style="width:100%;font-size:12px;" onclick="window.restoreAllDefaultColors()">
-                        ✨ 一键恢复全站默认主题色彩
+                    <button style="width:100%;padding:8px;background:#f9f9f9;color:#666;border:1px solid #e0e0e0;border-radius:8px;font-size:12px;cursor:pointer;" onclick="window.restoreAllDefaultColors()">
+                        恢复全站默认主题色
                     </button>
                 </div>
             </div>
 
-            <!-- 卡片 3：桌面组件多页自由系统 + 桌面排版模式入口 -->
-            <div class="theme-setting-card">
-                <div class="theme-collapsible-header" onclick="window.toggleWidgetsSettingsCollapse()" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
-                    <div class="theme-setting-title" style="margin-bottom:0;">
-                        <span>桌面小组件与位置分配</span>
+            <!-- 卡片 3：桌面小组件与排版 -->
+            <div style="background:#ffffff;border-radius:12px;border:1px solid #eeeeee;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,0.02);">
+                <div onclick="window.toggleWidgetsSettingsCollapse()" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
+                    <div>
+                        <div style="font-size:14px;font-weight:700;color:#222;">桌面小组件与排版</div>
+                        <div style="font-size:12px;color:#888;">控制组件显示与手势自由排版</div>
                     </div>
-                    <span class="theme-collapsible-arrow" id="widgetsCollapseArrow" style="font-size:12px;color:var(--primary);font-weight:bold;">▶ 展开</span>
+                    <span id="widgetsCollapseArrow" style="font-size:12px;color:#07c160;font-weight:bold;">▶ 展开</span>
                 </div>
 
                 <div id="widgetsSettingsBody" style="display:none;margin-top:12px;">
-                    <div class="theme-setting-desc">
-                        自由决定每个小组件是否显示、挂载页码，并可直接进入桌面手势自由排版模式。
-                    </div>
-
                     <div style="display:flex;flex-direction:column;gap:10px;">
-                        <!-- 组件 A：极简黑白日历 -->
-                        <div style="background:#fff8fa;padding:10px;border-radius:12px;border:1px solid #ffeef2;">
+                        <!-- 组件 A：日历 -->
+                        <div style="background:#f9f9f9;padding:10px;border-radius:8px;border:1px solid #eee;">
                             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                                <span style="font-size:12.5px;font-weight:700;color:var(--text);">📅 极简黑白月历</span>
-                                <button class="btn-secondary" style="padding:2px 8px;font-size:11px;${calEnabled ? 'color:var(--primary);font-weight:bold;' : 'color:#999;'}" onclick="window.toggleWidgetEnabled('calendar')">
+                                <span style="font-size:12.5px;font-weight:700;color:#222;">📅 极简日历</span>
+                                <button style="padding:2px 8px;font-size:11px;border-radius:6px;border:1px solid #e0e0e0;background:#fff;${calEnabled ? 'color:#07c160;font-weight:bold;' : 'color:#999;'}" onclick="window.toggleWidgetEnabled('calendar')">
                                     ${calEnabled ? '● 已开启' : '○ 已关闭'}
                                 </button>
                             </div>
                             <div style="display:flex;align-items:center;justify-content:space-between;">
-                                <span style="font-size:11px;color:var(--text2);">显示页面：</span>
-                                <div style="display:flex;gap:6px;align-items:center;">
-                                    <button class="widget-page-btn ${calPage === 1 ? 'active' : ''}" onclick="window.setWidgetPage('calendar', 1)">第 1 页</button>
-                                    <button class="widget-page-btn ${calPage === 2 ? 'active' : ''}" onclick="window.setWidgetPage('calendar', 2)">第 2 页</button>
+                                <span style="font-size:11.5px;color:#888;">放置页码：</span>
+                                <div style="display:flex;gap:6px;">
+                                    <button style="padding:2px 8px;font-size:11px;border-radius:6px;border:1px solid ${calPage === 1 ? '#07c160' : '#ddd'};background:${calPage === 1 ? '#e8f7ed' : '#fff'};color:${calPage === 1 ? '#07c160' : '#555'};" onclick="window.setWidgetPage('calendar', 1)">第 1 页</button>
+                                    <button style="padding:2px 8px;font-size:11px;border-radius:6px;border:1px solid ${calPage === 2 ? '#07c160' : '#ddd'};background:${calPage === 2 ? '#e8f7ed' : '#fff'};color:${calPage === 2 ? '#07c160' : '#555'};" onclick="window.setWidgetPage('calendar', 2)">第 2 页</button>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- 组件 B：温暖米白待办便签 -->
-                        <div style="background:#fff8fa;padding:10px;border-radius:12px;border:1px solid #ffeef2;">
+                        <!-- 组件 B：待办便签 -->
+                        <div style="background:#f9f9f9;padding:10px;border-radius:8px;border:1px solid #eee;">
                             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                                <span style="font-size:12.5px;font-weight:700;color:var(--text);">📝 米白待办便签</span>
-                                <button class="btn-secondary" style="padding:2px 8px;font-size:11px;${todoEnabled ? 'color:var(--primary);font-weight:bold;' : 'color:#999;'}" onclick="window.toggleWidgetEnabled('todo')">
+                                <span style="font-size:12.5px;font-weight:700;color:#222;">📝 待办便签</span>
+                                <button style="padding:2px 8px;font-size:11px;border-radius:6px;border:1px solid #e0e0e0;background:#fff;${todoEnabled ? 'color:#07c160;font-weight:bold;' : 'color:#999;'}" onclick="window.toggleWidgetEnabled('todo')">
                                     ${todoEnabled ? '● 已开启' : '○ 已关闭'}
                                 </button>
                             </div>
                             <div style="display:flex;align-items:center;justify-content:space-between;">
-                                <span style="font-size:11px;color:var(--text2);">显示页面：</span>
-                                <div style="display:flex;gap:6px;align-items:center;">
-                                    <button class="widget-page-btn ${todoPage === 1 ? 'active' : ''}" onclick="window.setWidgetPage('todo', 1)">第 1 页</button>
-                                    <button class="widget-page-btn ${todoPage === 2 ? 'active' : ''}" onclick="window.setWidgetPage('todo', 2)">第 2 页</button>
+                                <span style="font-size:11.5px;color:#888;">放置页码：</span>
+                                <div style="display:flex;gap:6px;">
+                                    <button style="padding:2px 8px;font-size:11px;border-radius:6px;border:1px solid ${todoPage === 1 ? '#07c160' : '#ddd'};background:${todoPage === 1 ? '#e8f7ed' : '#fff'};color:${todoPage === 1 ? '#07c160' : '#555'};" onclick="window.setWidgetPage('todo', 1)">第 1 页</button>
+                                    <button style="padding:2px 8px;font-size:11px;border-radius:6px;border:1px solid ${todoPage === 2 ? '#07c160' : '#ddd'};background:${todoPage === 2 ? '#e8f7ed' : '#fff'};color:${todoPage === 2 ? '#07c160' : '#555'};" onclick="window.setWidgetPage('todo', 2)">第 2 页</button>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- 待办快捷动作 -->
-                        <div style="display:flex;gap:8px;margin-top:2px;">
-                            <button class="btn-secondary" style="flex:1;font-size:11.5px;" onclick="if(typeof window.generateSmartDayTodos==='function')window.generateSmartDayTodos();">
-                                ✨ 智能生成一日待办
-                            </button>
-                            <button class="btn-secondary" style="flex:1;font-size:11.5px;" onclick="if(typeof window.promptAddTodoItem==='function')window.promptAddTodoItem();">
-                                ＋ 新增一条待办
-                            </button>
-                        </div>
-
-                        <!-- 🌟 桌面手势排版微调模式操作区（不新建卡片，直接在内部优雅集成） -->
-                        <div style="background:#fff3f6;border:1.5px dashed #ffccd9;border-radius:12px;padding:10px;margin-top:4px;">
+                        <!-- 桌面排版模式入口 -->
+                        <div style="background:#f2f9f5;border:1px dashed #b2e2c8;border-radius:8px;padding:10px;margin-top:4px;">
                             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                                <span style="font-size:12px;font-weight:700;color:#2e1a22;">📐 桌面各层手拖排版模式</span>
-                                <span style="font-size:10px;color:var(--primary);font-weight:600;">自由调高低</span>
+                                <span style="font-size:12px;font-weight:700;color:#1b5e20;">📐 桌面各层手拖排版模式</span>
                             </div>
-                            <div style="font-size:11px;color:var(--text2);margin-bottom:8px;line-height:1.45;">
-                                当前微调状态：<span style="font-family:monospace;color:#ff5c8a;">${offsetSummary}</span>
+                            <div style="font-size:11px;color:#666;margin-bottom:8px;">
+                                当前偏移：<span style="font-family:monospace;color:#07c160;">${offsetSummary}</span>
                             </div>
                             <div style="display:flex;gap:8px;">
-                                <button class="btn-primary" style="flex:1.5;font-size:11.5px;padding:8px;" onclick="window.triggerDesktopCustomLayoutMode()">
-                                    进入桌面排版模式
+                                <button style="flex:1.5;padding:7px;background:#07c160;color:#fff;border:none;border-radius:6px;font-size:11.5px;font-weight:600;cursor:pointer;" onclick="window.triggerDesktopCustomLayoutMode()">
+                                    进入手势排版模式
                                 </button>
-                                <button class="btn-secondary" style="flex:1;font-size:11.5px;padding:8px;" onclick="window.triggerResetDesktopBlockOffsets()">
+                                <button style="flex:1;padding:7px;background:#fff;border:1px solid #ddd;border-radius:6px;font-size:11.5px;color:#555;cursor:pointer;" onclick="window.triggerResetDesktopBlockOffsets()">
                                     恢复默认
                                 </button>
                             </div>
                         </div>
-
                     </div>
                 </div>
             </div>
 
-            <!-- 卡片 4：字体库与多格式扩展 -->
-            <div class="theme-setting-card">
-                <div class="theme-collapsible-header" onclick="window.toggleFontLibraryCollapse()" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
-                    <div class="theme-setting-title" style="margin-bottom:0;">
-                        <span>字体库与扩展导入</span>
+            <!-- 卡片 4：字体扩展库 -->
+            <div style="background:#ffffff;border-radius:12px;border:1px solid #eeeeee;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,0.02);">
+                <div onclick="window.toggleFontLibraryCollapse()" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
+                    <div>
+                        <div style="font-size:14px;font-weight:700;color:#222;">系统字体扩展库</div>
+                        <div style="font-size:12px;color:#888;">导入外部 CSS 或字体文件</div>
                     </div>
-                    <span class="theme-collapsible-arrow" id="fontCollapseArrow" style="font-size:12px;color:var(--primary);">▶ 展开</span>
+                    <span id="fontCollapseArrow" style="font-size:12px;color:#07c160;font-weight:bold;">▶ 展开</span>
                 </div>
 
                 <div id="fontLibraryBody" style="display:none;margin-top:12px;">
-                    <div style="background:#f4f9fd;border:1px solid #d0e7fa;border-radius:10px;padding:8px 12px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
-                        <div style="display:flex;flex-direction:column;">
-                            <span style="font-size:12px;font-weight:700;color:#1864ab;">🔤 免费商业字体大全</span>
-                            <span style="font-size:10.5px;color:#495057;">开源可商用无版权字体网站（fonts.zeoseven.com）</span>
-                        </div>
-                        <a href="https://fonts.zeoseven.com/" target="_blank" rel="noopener noreferrer" style="text-decoration:none;">
-                            <button class="btn-secondary" style="padding:4px 10px;font-size:11px;background:#e7f5ff;border-color:#a5d8ff;color:#1971c2;">
-                                访问网站 ↗
-                            </button>
-                        </a>
-                    </div>
-
-                    <div class="theme-setting-desc">
-                        选择对应的导入格式。导入成功后，整部手机界面字体将即刻全面生效！
-                    </div>
-
                     <div style="display:flex;gap:6px;margin-bottom:10px;">
-                        <button class="btn-secondary font-fmt-btn ${currentFontFormat === 'html' ? 'btn-primary' : ''}" id="btnFmtHtml" style="flex:1;padding:6px;font-size:11px;" onclick="window.switchFontFormat('html')">HTML 标签外链</button>
-                        <button class="btn-secondary font-fmt-btn ${currentFontFormat === 'css' ? 'btn-primary' : ''}" id="btnFmtCss" style="flex:1;padding:6px;font-size:11px;" onclick="window.switchFontFormat('css')">CSS 代码片段</button>
-                        <button class="btn-secondary font-fmt-btn ${currentFontFormat === 'local' ? 'btn-primary' : ''}" id="btnFmtLocal" style="flex:1;padding:6px;font-size:11px;" onclick="window.switchFontFormat('local')">本地字体文件</button>
+                        <button style="flex:1;padding:6px;font-size:11px;border-radius:6px;border:1px solid #ddd;cursor:pointer;background:${currentFontFormat === 'html' ? '#07c160' : '#f9f9f9'};color:${currentFontFormat === 'html' ? '#fff' : '#444'};" onclick="window.switchFontFormat('html')">HTML 标签外链</button>
+                        <button style="flex:1;padding:6px;font-size:11px;border-radius:6px;border:1px solid #ddd;cursor:pointer;background:${currentFontFormat === 'css' ? '#07c160' : '#f9f9f9'};color:${currentFontFormat === 'css' ? '#fff' : '#444'};" onclick="window.switchFontFormat('css')">CSS 片段</button>
+                        <button style="flex:1;padding:6px;font-size:11px;border-radius:6px;border:1px solid #ddd;cursor:pointer;background:${currentFontFormat === 'local' ? '#07c160' : '#f9f9f9'};color:${currentFontFormat === 'local' ? '#fff' : '#444'};" onclick="window.switchFontFormat('local')">本地字体文件</button>
                     </div>
 
                     <div id="fontInputSection_html" style="display:${currentFontFormat === 'html' ? 'block' : 'none'};">
-                        <input type="text" id="fontRemarkInput_html" placeholder="字体名称备注（如：长坂点宋体）" style="width:100%;margin-bottom:6px;padding:8px 10px;border-radius:8px;border:1px solid #ffd1dc;font-size:12px;outline:none;">
-                        <textarea id="fontCodeInput_html" placeholder="粘贴完整的 HTML 代码" style="width:100%;min-height:75px;padding:8px 10px;border-radius:8px;border:1px solid #ffd1dc;font-size:11px;outline:none;resize:none;font-family:monospace;"></textarea>
-                        <button class="btn-primary" style="width:100%;margin-top:8px;" onclick="window.handleUnifiedFontImport('html')">导入并强制全局应用</button>
+                        <input type="text" id="fontRemarkInput_html" placeholder="字体备注名称（如：思源宋体）" style="width:100%;box-sizing:border-box;margin-bottom:6px;padding:8px 10px;border-radius:6px;border:1px solid #e0e0e0;font-size:12px;outline:none;">
+                        <textarea id="fontCodeInput_html" placeholder="粘贴完整的 HTML 标签代码" style="width:100%;box-sizing:border-box;min-height:70px;padding:8px 10px;border-radius:6px;border:1px solid #e0e0e0;font-size:11px;outline:none;resize:none;font-family:monospace;"></textarea>
+                        <button style="width:100%;margin-top:8px;padding:8px;background:#07c160;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;" onclick="window.handleUnifiedFontImport('html')">导入并全局应用</button>
                     </div>
 
                     <div id="fontInputSection_css" style="display:${currentFontFormat === 'css' ? 'block' : 'none'};">
-                        <input type="text" id="fontRemarkInput_css" placeholder="字体名称备注（如：像素甜心）" style="width:100%;margin-bottom:6px;padding:8px 10px;border-radius:8px;border:1px solid #ffd1dc;font-size:12px;outline:none;">
-                        <textarea id="fontCodeInput_css" placeholder="粘贴 CSS 代码" style="width:100%;min-height:75px;padding:8px 10px;border-radius:8px;border:1px solid #ffd1dc;font-size:11px;outline:none;resize:none;font-family:monospace;"></textarea>
-                        <button class="btn-primary" style="width:100%;margin-top:8px;" onclick="window.handleUnifiedFontImport('css')">导入并强制全局应用</button>
+                        <input type="text" id="fontRemarkInput_css" placeholder="字体备注名称" style="width:100%;box-sizing:border-box;margin-bottom:6px;padding:8px 10px;border-radius:6px;border:1px solid #e0e0e0;font-size:12px;outline:none;">
+                        <textarea id="fontCodeInput_css" placeholder="粘贴 CSS @font-face 代码" style="width:100%;box-sizing:border-box;min-height:70px;padding:8px 10px;border-radius:6px;border:1px solid #e0e0e0;font-size:11px;outline:none;resize:none;font-family:monospace;"></textarea>
+                        <button style="width:100%;margin-top:8px;padding:8px;background:#07c160;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;" onclick="window.handleUnifiedFontImport('css')">导入并全局应用</button>
                     </div>
 
                     <div id="fontInputSection_local" style="display:${currentFontFormat === 'local' ? 'block' : 'none'};">
                         <input type="file" id="themeFontFileInput" accept=".ttf,.otf,.woff,.woff2" style="display:none;" onchange="window.handleThemeFontUpload(event)">
-                        <button class="btn-secondary" style="width:100%;padding:10px;" onclick="document.getElementById('themeFontFileInput').click()">
+                        <button style="width:100%;padding:10px;background:#f9f9f9;border:1px solid #ddd;border-radius:6px;font-size:12px;color:#333;cursor:pointer;" onclick="document.getElementById('themeFontFileInput').click()">
                             选取本地字体文件 (.ttf / .otf / .woff)
                         </button>
                     </div>
 
-                    <div id="installedFontsList" style="margin-top:14px;display:flex;flex-direction:column;gap:6px;"></div>
+                    <div id="installedFontsList" style="margin-top:12px;display:flex;flex-direction:column;gap:6px;"></div>
                 </div>
             </div>
 
-            <!-- 卡片 5：主题方案管理器 -->
-            <div class="theme-setting-card">
-                <div class="theme-setting-title">
-                    <span>主题配置方案</span>
-                    <button class="btn-secondary" style="padding:3px 8px;font-size:11px;" onclick="window.promptSaveNewProfile()">
-                        新建方案
+            <!-- 卡片 5：主题配置方案管理器 -->
+            <div style="background:#ffffff;border-radius:12px;border:1px solid #eeeeee;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,0.02);">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                    <div>
+                        <div style="font-size:14px;font-weight:700;color:#222;">主题方案备份</div>
+                        <div style="font-size:12px;color:#888;">保存当前的壁纸与色彩配置</div>
+                    </div>
+                    <button style="padding:4px 10px;font-size:11.5px;border-radius:6px;border:none;background:#07c160;color:#fff;font-weight:600;cursor:pointer;" onclick="window.openNewThemeProfileDialog()">
+                        ＋ 新建方案
                     </button>
                 </div>
-                <div class="theme-setting-desc">
-                    保存当前的壁纸、色彩与字体配置，随时自由切换。
-                </div>
-                <div class="profile-chip-list" id="themeProfileList"></div>
+                <div id="themeProfileList" style="display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;"></div>
             </div>
         `;
 
         initHsvCanvasPicker();
         renderProfileChips();
         renderInstalledFontsList();
-    };
+    }
 
     // 🌸 触发桌面手拖排版模式
     window.triggerDesktopCustomLayoutMode = function () {
@@ -510,7 +512,6 @@
         }, 160);
     };
 
-    // 一键重置桌面块偏移
     window.triggerResetDesktopBlockOffsets = function () {
         if (typeof window.resetDesktopBlockOffsets === 'function') {
             window.resetDesktopBlockOffsets();
@@ -527,7 +528,6 @@
         }
     };
 
-    // 自定义下拉菜单控制
     window.toggleThemeTargetDropdown = function () {
         const menu = document.getElementById('themeHsvTargetDropdownMenu');
         if (menu) {
@@ -541,13 +541,8 @@
         if (label) label.textContent = HSV_TARGET_NAMES[targetKey];
         const menu = document.getElementById('themeHsvTargetDropdownMenu');
         if (menu) menu.style.display = 'none';
-
-        document.querySelectorAll('.custom-theme-dropdown-item').forEach(it => {
-            it.classList.remove('active');
-        });
     };
 
-    // 折叠/展开小组件设置面板
     window.toggleWidgetsSettingsCollapse = function () {
         const body = document.getElementById('widgetsSettingsBody');
         const arrow = document.getElementById('widgetsCollapseArrow');
@@ -557,7 +552,6 @@
         arrow.textContent = isHidden ? '▼ 收起' : '▶ 展开';
     };
 
-    // 组件开关与位置切换核心
     window.toggleWidgetEnabled = function (widgetKey) {
         const storageKey = `mcyt_widget_${widgetKey}_enabled`;
         const current = localStorage.getItem(storageKey) !== 'false';
@@ -601,7 +595,6 @@
         }
     };
 
-    // 切换当前色盘调谐目标
     window.onHsvTargetChange = function (newTarget) {
         currentHsvTarget = newTarget;
 
@@ -682,10 +675,10 @@
         localStorage.removeItem('mcyt_custom_main_white');
 
         const root = document.documentElement;
-        root.style.setProperty('--theme-main-pink', '#ff5c8a');
+        root.style.setProperty('--theme-main-pink', '#07c160');
         root.style.setProperty('--theme-main-white', '#ffffff');
-        root.style.setProperty('--theme-sub-white', '#fff5f7');
-        root.style.setProperty('--app-icon-label-color', '#2e1a22');
+        root.style.setProperty('--theme-sub-white', '#f7f7f7');
+        root.style.setProperty('--app-icon-label-color', '#222222');
         root.style.setProperty('--status-bar-stroke', 'none');
         root.style.setProperty('--status-bar-fill', 'transparent');
         root.style.setProperty('--status-bar-bg-img', 'none');
@@ -754,7 +747,6 @@
         if (typeof showToast === 'function') showToast(`[${HSV_TARGET_NAMES[currentHsvTarget]}] 色彩已永久保存！`);
     };
 
-    // 正等边三角形 HSV 拾色器绘制
     function initHsvCanvasPicker() {
         const box = document.getElementById('hsvWheelBox');
         const canvas = document.getElementById('hsvWheelCanvas');
@@ -763,10 +755,10 @@
         if (!box || !canvas || !rHandle || !tHandle) return;
 
         const ctx = canvas.getContext('2d');
-        const size = 460;
+        const size = 440;
         const center = size / 2;
         const outerR = size / 2 - 8;
-        const innerR = outerR - 36;
+        const innerR = outerR - 34;
         const triR = innerR - 8;
 
         function getEquilateralTriangleVertices() {
@@ -825,7 +817,7 @@
 
         function updateHandlesAndSliders() {
             const boxRect = box.getBoundingClientRect();
-            const scale = (boxRect.width || 230) / size;
+            const scale = (boxRect.width || 220) / size;
 
             const rad = (hsvState.h - 90) * Math.PI / 180;
             const ringMidR = (outerR + innerR) / 2;
@@ -1002,7 +994,7 @@
             </div>
             <div style="display:flex;gap:12px;width:100%;max-width:320px;margin-top:12px;">
                 <button class="btn-secondary" style="flex:1;" id="pipetteCancelBtn">取消</button>
-                <button class="btn-primary" style="flex:1;" id="pipetteConfirmBtn">选取此颜色</button>
+                <button class="btn-primary" style="flex:1;background:#07c160;border:none;" id="pipetteConfirmBtn">选取此颜色</button>
             </div>
         `;
 
@@ -1116,8 +1108,8 @@
             </div>
             <div style="display:flex;gap:8px;width:100%;max-width:380px;margin-top:12px;">
                 <button class="btn-secondary" style="flex:1;" id="cropCancelBtn">取消</button>
-                <button class="btn-secondary" style="flex:1;" id="cropUseOriginalBtn">直接使用原图</button>
-                <button class="btn-primary" style="flex:1.4;" id="cropConfirmBtn">完成裁剪</button>
+                <button class="btn-secondary" style="flex:1;" id="cropUseOriginalBtn">使用原图</button>
+                <button class="btn-primary" style="flex:1.4;background:#07c160;border:none;" id="cropConfirmBtn">完成裁剪</button>
             </div>
         `;
 
@@ -1266,14 +1258,11 @@
             const sec = document.getElementById('fontInputSection_' + k);
             if (sec) sec.style.display = (k === fmt) ? 'block' : 'none';
         });
-        document.querySelectorAll('.font-fmt-btn').forEach(b => {
-            b.classList.remove('btn-primary');
-            b.classList.add('btn-secondary');
-        });
-        const activeBtn = document.getElementById('btnFmt' + fmt.charAt(0).toUpperCase() + fmt.slice(1));
-        if (activeBtn) {
-            activeBtn.classList.remove('btn-secondary');
-            activeBtn.classList.add('btn-primary');
+        const appModalBody = document.getElementById('appModalBody');
+        if (appModalBody && activeThemeTab === 'system') {
+            const body = document.getElementById('fontLibraryBody');
+            const arrow = document.getElementById('fontCollapseArrow');
+            if (body && arrow) { body.style.display = 'block'; arrow.textContent = '▼ 收起'; }
         }
     };
 
@@ -1283,7 +1272,7 @@
         if (!codeInput) return;
 
         const rawCode = (codeInput.value || '').trim();
-        const remark = (remarkInput && remarkInput.value.trim()) || '自定义扩展字体';
+        const remark = (remarkInput && remarkInput.value.trim()) || '自定义字体';
 
         if (!rawCode) {
             if (typeof showToast === 'function') showToast('请输入对应的字体代码');
@@ -1332,7 +1321,7 @@
         applyGlobalFontForce(familyName, cssText, linkHrefs);
         renderInstalledFontsList();
         codeInput.value = '';
-        if (typeof showToast === 'function') showToast(`字体 [${remark}] 已全局生效，重启App也会保留！`, 'success');
+        if (typeof showToast === 'function') showToast(`字体 [${remark}] 已全局生效`, 'success');
     };
 
     window.handleThemeFontUpload = function (event) {
@@ -1359,13 +1348,10 @@
                 });
                 applyGlobalFontForce(fontName, cssText, []);
                 renderInstalledFontsList();
-                if (typeof showToast === 'function') showToast('本地字体安装并应用成功，重启App也会保留');
+                if (typeof showToast === 'function') showToast('本地字体安装并应用成功');
             } catch (err) {
-                if (typeof showToast === 'function') showToast('字体文件太大，本地存储装不下，换个小一点的文件试试');
+                if (typeof showToast === 'function') showToast('字体文件过大，请换较小文件');
             }
-        };
-        reader.onerror = function () {
-            if (typeof showToast === 'function') showToast('字体读取失败，请检查文件格式');
         };
         reader.readAsDataURL(file);
     };
@@ -1415,9 +1401,7 @@
             localStorage.setItem('mcyt_active_font_family', familyName);
             localStorage.setItem('mcyt_active_font_code', cssText || '');
             localStorage.setItem('mcyt_active_font_links', JSON.stringify(linkHrefs || []));
-        } catch (_) {
-            if (typeof showToast === 'function') showToast('该字体体积较大，重启App后可能需要重新导入');
-        }
+        } catch (_) {}
     }
 
     function saveFontRecord(fontItem) {
@@ -1426,9 +1410,7 @@
         list.push(fontItem);
         try {
             localStorage.setItem('mcyt_installed_fonts', JSON.stringify(list));
-        } catch (e) {
-            if (typeof showToast === 'function') showToast('字体记录保存失败，可能是本地存储空间不足');
-        }
+        } catch (e) {}
     }
 
     function renderInstalledFontsList() {
@@ -1439,19 +1421,19 @@
         try { list = JSON.parse(localStorage.getItem('mcyt_installed_fonts') || '[]'); } catch (e) { list = []; }
 
         if (list.length === 0) {
-            container.innerHTML = `<div style="font-size:11px;color:var(--text2);text-align:center;">暂无自定义字体</div>`;
+            container.innerHTML = `<div style="font-size:11px;color:#999;text-align:center;">暂无自定义字体</div>`;
             return;
         }
 
         container.innerHTML = list.map(item => `
-            <div style="display:flex;justify-content:space-between;align-items:center;background:#fff8fa;padding:6px 10px;border-radius:8px;border:1px solid #ffeef2;">
+            <div style="display:flex;justify-content:space-between;align-items:center;background:#f9f9f9;padding:6px 10px;border-radius:6px;border:1px solid #eee;">
                 <div style="display:flex;flex-direction:column;">
-                    <span style="font-size:12px;font-weight:700;color:#2e1a22;">${item.name}</span>
-                    <span style="font-size:10px;color:var(--text2);">类型: ${item.type.toUpperCase()} · 系列: ${item.family}</span>
+                    <span style="font-size:12px;font-weight:600;color:#222;">${item.name}</span>
+                    <span style="font-size:10px;color:#888;">${item.family}</span>
                 </div>
                 <div style="display:flex;gap:6px;">
-                    <button class="btn-secondary" style="padding:2px 6px;font-size:10.5px;" onclick="window.reapplyFontItem('${item.id}')">应用</button>
-                    <button class="btn-secondary" style="padding:2px 6px;font-size:10.5px;color:#c92a2a;" onclick="window.removeFontItem('${item.id}')">删除</button>
+                    <button style="padding:2px 8px;font-size:10.5px;border-radius:4px;border:1px solid #ddd;background:#fff;cursor:pointer;" onclick="window.reapplyFontItem('${item.id}')">应用</button>
+                    <button style="padding:2px 8px;font-size:10.5px;border-radius:4px;border:1px solid #ffdcd9;background:#fff;color:#fa5151;cursor:pointer;" onclick="window.removeFontItem('${item.id}')">删除</button>
                 </div>
             </div>
         `).join('');
@@ -1473,7 +1455,7 @@
         renderInstalledFontsList();
     };
 
-    // 配置方案管理器
+    // 配置方案管理器（仿微信原生无弹窗浮层输入）
     function getStoredProfiles() {
         try { return JSON.parse(localStorage.getItem('mcyt_theme_profiles') || '[]'); } catch (e) { return []; }
     }
@@ -1486,28 +1468,51 @@
         const activeName = localStorage.getItem('mcyt_active_profile_name') || '';
 
         if (profiles.length === 0) {
-            container.innerHTML = `<div style="font-size:11.5px;color:var(--text2);">暂无方案，点击上方“新建方案”保存当前配置</div>`;
+            container.innerHTML = `<div style="font-size:11.5px;color:#999;">暂无方案，点击上方“新建方案”保存</div>`;
             return;
         }
 
         container.innerHTML = profiles.map(p => `
-            <div class="profile-chip ${p.name === activeName ? 'active' : ''}" onclick="window.applyThemeProfile('${p.name}')">
-                <span>${p.name}</span>
-                <span class="profile-chip-del" onclick="event.stopPropagation(); window.deleteThemeProfile('${p.name}')">✕</span>
+            <div style="display:inline-flex;align-items:center;gap:6px;background:${p.name === activeName ? '#e8f7ed' : '#f9f9f9'};border:1px solid ${p.name === activeName ? '#07c160' : '#e0e0e0'};padding:4px 10px;border-radius:16px;cursor:pointer;" onclick="window.applyThemeProfile('${p.name}')">
+                <span style="font-size:11.5px;font-weight:${p.name === activeName ? '700' : '500'};color:${p.name === activeName ? '#07c160' : '#333'};">${p.name}</span>
+                <span style="font-size:10px;color:#999;cursor:pointer;" onclick="event.stopPropagation(); window.deleteThemeProfile('${p.name}')">✕</span>
             </div>
         `).join('');
     }
 
-    window.promptSaveNewProfile = function () {
-        const name = prompt('请输入新配置方案的名称：', '甜心粉白方案');
-        if (!name || !name.trim()) return;
+    // 仿微信居中浮层：新建主题方案
+    window.openNewThemeProfileDialog = function () {
+        let modal = document.getElementById('themeProfilePromptModal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'themeProfilePromptModal';
+            modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:99999;padding:20px;';
+            document.body.appendChild(modal);
+        }
+
+        modal.innerHTML = `
+            <div style="background:#ffffff;border-radius:12px;width:100%;max-width:300px;padding:16px;box-shadow:0 8px 24px rgba(0,0,0,0.15);">
+                <div style="font-size:14px;font-weight:700;color:#222;margin-bottom:8px;">新建主题方案</div>
+                <input type="text" id="newProfileNameInput" placeholder="请输入方案名称" value="自定义主题方案" style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:6px;border:1px solid #e0e0e0;font-size:12.5px;outline:none;margin-bottom:14px;">
+                <div style="display:flex;gap:8px;">
+                    <button style="flex:1;padding:8px;background:#f9f9f9;border:1px solid #ddd;border-radius:6px;font-size:12px;color:#555;cursor:pointer;" onclick="document.getElementById('themeProfilePromptModal').remove()">取消</button>
+                    <button style="flex:1;padding:8px;background:#07c160;border:none;border-radius:6px;font-size:12px;color:#fff;font-weight:600;cursor:pointer;" onclick="window.confirmSaveNewProfileFromDialog()">保存</button>
+                </div>
+            </div>
+        `;
+    };
+
+    window.confirmSaveNewProfileFromDialog = function () {
+        const input = document.getElementById('newProfileNameInput');
+        const name = input ? input.value.trim() : '';
+        if (!name) return;
 
         const profiles = getStoredProfiles();
         const curRgb = hsvToRgb(hsvState.h, hsvState.s, hsvState.v);
         const hex = rgbToHex(curRgb.r, curRgb.g, curRgb.b);
 
         const newProfile = {
-            name: name.trim(),
+            name: name,
             mode: currentThemeMode,
             customColor: hex,
             lockBg: pendingLockBg || localStorage.getItem('mcyt_custom_lock_bg'),
@@ -1521,6 +1526,10 @@
 
         localStorage.setItem('mcyt_theme_profiles', JSON.stringify(profiles));
         localStorage.setItem('mcyt_active_profile_name', newProfile.name);
+
+        const modal = document.getElementById('themeProfilePromptModal');
+        if (modal) modal.remove();
+
         renderProfileChips();
         if (typeof showToast === 'function') showToast('方案 [' + newProfile.name + '] 已保存！');
     };
@@ -1551,14 +1560,16 @@
         }
 
         const appModalBody = document.getElementById('appModalBody');
-        if (appModalBody) window.renderThemeApp(appModalBody);
+        if (appModalBody && activeThemeTab === 'system') {
+            const sub = document.getElementById('themeAppSubContent');
+            if (sub) renderSystemThemeSubView(sub);
+        }
 
         applyThemeModeDirect(currentThemeMode);
         if (typeof showToast === 'function') showToast('已切换至方案: ' + target.name);
     };
 
     window.deleteThemeProfile = function (profileName) {
-        if (!confirm(`确定要删除方案 [${profileName}] 吗？`)) return;
         let profiles = getStoredProfiles().filter(p => p.name !== profileName);
         localStorage.setItem('mcyt_theme_profiles', JSON.stringify(profiles));
         if (localStorage.getItem('mcyt_active_profile_name') === profileName) {
