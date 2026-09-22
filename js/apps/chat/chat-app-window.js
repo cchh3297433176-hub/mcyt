@@ -5,6 +5,7 @@
  *    重新生成回复的确认与执行（confirmRetryLastAIReply / doRetryLastAIReply）、
  *    🌟 微信原生直显大图与沉浸式大图文字查看器对接、拟真生活排版卡片（ui_card）渲染。
  * 🌟 存储升级：重说撤回逻辑接入 await syncChatHistoryToLocalBackup() 异步原子落盘。
+ * 🌟 修复：我方头像全面接入 getPlayerAvatarSafe() 杜绝掉落回默认图标；头像框完美继承缩放 (scale) 与全向偏移 (offsetX, offsetY)。
  */
 
 (function() {
@@ -56,13 +57,29 @@
         }
     }
 
-    // 辅助：渲染带装扮与头像框的头像元素
-    function renderDecorAvatarHtml(avatarUrl, shape, frameUrl, size = 38) {
+    // 辅助：渲染带装扮与头像框的头像元素（精准遵循配置的 scale 与全向偏移 offsetX, offsetY）
+    function renderDecorAvatarHtml(avatarUrl, shape, frameObjOrUrl, size = 38) {
         const rad = getShapeBorderRadius(shape);
+        let frameUrl = '';
+        let frameScale = 1.18;
+        let offsetX = 0;
+        let offsetY = 0;
+
+        if (frameObjOrUrl && typeof frameObjOrUrl === 'object') {
+            frameUrl = frameObjOrUrl.url || '';
+            frameScale = (frameObjOrUrl.scale !== undefined) ? frameObjOrUrl.scale : 1.18;
+            offsetX = frameObjOrUrl.offsetX || 0;
+            offsetY = frameObjOrUrl.offsetY || 0;
+        } else if (typeof frameObjOrUrl === 'string') {
+            frameUrl = frameObjOrUrl;
+        }
+
         return `
             <div style="position:relative;width:${size}px;height:${size}px;flex-shrink:0;">
                 <img src="${avatarUrl || 'assets/icons/chat.png'}" style="width:100%;height:100%;object-fit:cover;border-radius:${rad};display:block;" onerror="this.src='assets/icons/chat.png';" />
-                ${frameUrl ? `<img src="${frameUrl}" style="position:absolute;top:-10%;left:-10%;width:120%;height:120%;pointer-events:none;" onerror="this.style.display='none';" />` : ''}
+                ${frameUrl ? `
+                    <img src="${frameUrl}" style="position:absolute;top:50%;left:50%;transform:translate(calc(-50% + ${offsetX}px), calc(-50% + ${offsetY}px)) scale(${frameScale});width:100%;height:100%;pointer-events:none;" onerror="this.style.display='none';" />
+                ` : ''}
             </div>
         `;
     }
@@ -214,26 +231,29 @@
         const npcBubbleId = decor.bubbleId || globalBubbleId;
         const userBubbleId = globalBubbleId; // 我方默认使用全局气泡
 
-        // 计算头像框 URL
+        // 计算头像框池
         let framesList = [];
         try { framesList = JSON.parse(localStorage.getItem('mcyt_decor_frames') || '[]'); } catch (_) {}
         const DEFAULT_FRAMES = [
-            { id: 'frame_none', url: '' },
-            { id: 'frame_gold_star', url: 'assets/decor/frames/frame_gold.png' },
-            { id: 'frame_cat_ear', url: 'assets/decor/frames/frame_cat.png' }
+            { id: 'frame_none', url: '', scale: 1.18, offsetX: 0, offsetY: 0 },
+            { id: 'frame_gold_star', url: 'assets/decor/frames/frame_gold.png', scale: 1.18, offsetX: 0, offsetY: 0 },
+            { id: 'frame_cat_ear', url: 'assets/decor/frames/frame_cat.png', scale: 1.18, offsetX: 0, offsetY: 0 }
         ];
         framesList = [...DEFAULT_FRAMES, ...framesList];
 
+        // 对方专属头像框对象
         const targetFrameId = decor.frameId !== undefined && decor.frameId !== null ? decor.frameId : globalFrameId;
-        const targetFrameObj = framesList.find(f => f.id === targetFrameId);
-        const npcFrameUrl = (targetFrameObj && targetFrameObj.url) ? targetFrameObj.url : '';
+        const targetFrameObj = framesList.find(f => f.id === targetFrameId) || null;
 
-        // 我方全局头像框
-        const userFrameObj = framesList.find(f => f.id === globalFrameId);
-        const userFrameUrl = (userFrameObj && userFrameObj.url) ? userFrameObj.url : '';
+        // 我方全局头像框对象
+        const userFrameObj = framesList.find(f => f.id === globalFrameId) || null;
 
         const npcAvatarUrl = npc.avatarUrl || npc.avatar || 'assets/icons/chat.png';
-        const userAvatarUrl = (typeof getPlayerAvatar === 'function') ? getPlayerAvatar() : 'assets/icons/chat.png';
+        
+        // 🌟 核心修复：我方头像绝对优先走高保真安全管道 getPlayerAvatarSafe()，杜绝掉落回 assets/icons/chat.png
+        const userAvatarUrl = (typeof window.getPlayerAvatarSafe === 'function') 
+            ? window.getPlayerAvatarSafe() 
+            : ((typeof getPlayerAvatar === 'function' ? getPlayerAvatar() : null) || 'assets/icons/chat.png');
 
         const collapseCfg = (typeof getChatCollapseConfig === 'function') ? getChatCollapseConfig() : { enabled: true, limit: 50 };
         const chatKey = `single_${npcId}_${curAcc.id}`;
@@ -270,10 +290,10 @@
         for (const msg of visibleMessages) {
             const isSelf = (msg.from === 'player');
 
-            // 头像与装扮挂载
+            // 头像与装扮挂载（精准传入头像框完整对象，完美继承尺寸 scale 与 offsetX, offsetY 偏移）
             const currentAvatarHtml = isSelf
-                ? renderDecorAvatarHtml(userAvatarUrl, globalShape, userFrameUrl, 38)
-                : renderDecorAvatarHtml(npcAvatarUrl, npcShape, npcFrameUrl, 38);
+                ? renderDecorAvatarHtml(userAvatarUrl, globalShape, userFrameObj, 38)
+                : renderDecorAvatarHtml(npcAvatarUrl, npcShape, targetFrameObj, 38);
 
             // 气泡 CSS 挂载
             const currentBubbleCss = isSelf

@@ -4,7 +4,9 @@
  * 🌟 存储架构升级（Phase 1 & 2）：
  * 1. 群聊历史对白（mcyt_wechat_group_histories）全面接入 IndexedDB！
  * 2. 群基础信息字典（mcyt_wechat_group_chats）全面接入 IndexedDB！
- * 均具备旧版 localStorage 自动无损迁移与防绞杀指针就地保活机制。
+ * 🌟 装扮升级：
+ * 1. 我方头像全面接入 getPlayerAvatarSafe() 杜绝掉落回默认图标。
+ * 2. 群内各成员与我方头像框严格读取 scale 缩放以及 offsetX / offsetY 全向微调参数，完美贴合。
  */
 
 (function() {
@@ -80,24 +82,31 @@
         }
     }
 
+    // 辅助：精准根据头像框的 scale、offsetX、offsetY 渲染
     function renderGroupMemberAvatarHtml(avatarUrl, shape, frameId, size = 38) {
         let framesList = [];
         try { framesList = JSON.parse(localStorage.getItem('mcyt_decor_frames') || '[]'); } catch (_) {}
         const DEFAULT_FRAMES = [
-            { id: 'frame_none', url: '' },
-            { id: 'frame_gold_star', url: 'assets/decor/frames/frame_gold.png' },
-            { id: 'frame_cat_ear', url: 'assets/decor/frames/frame_cat.png' }
+            { id: 'frame_none', url: '', scale: 1.18, offsetX: 0, offsetY: 0 },
+            { id: 'frame_gold_star', url: 'assets/decor/frames/frame_gold.png', scale: 1.18, offsetX: 0, offsetY: 0 },
+            { id: 'frame_cat_ear', url: 'assets/decor/frames/frame_cat.png', scale: 1.18, offsetX: 0, offsetY: 0 }
         ];
         framesList = [...DEFAULT_FRAMES, ...framesList];
 
         const targetFrame = framesList.find(f => f.id === frameId);
         const frameUrl = (targetFrame && targetFrame.url) ? targetFrame.url : '';
+        const frameScale = (targetFrame && targetFrame.scale !== undefined) ? targetFrame.scale : 1.18;
+        const frameX = (targetFrame && targetFrame.offsetX !== undefined) ? targetFrame.offsetX : 0;
+        const frameY = (targetFrame && targetFrame.offsetY !== undefined) ? targetFrame.offsetY : 0;
+
         const rad = getShapeBorderRadius(shape);
 
         return `
             <div style="position:relative;width:${size}px;height:${size}px;flex-shrink:0;">
                 <img src="${avatarUrl || 'assets/icons/chat.png'}" style="width:100%;height:100%;object-fit:cover;border-radius:${rad};display:block;" onerror="this.src='assets/icons/chat.png';" />
-                ${frameUrl ? `<img src="${frameUrl}" style="position:absolute;top:-10%;left:-10%;width:120%;height:120%;pointer-events:none;" onerror="this.style.display='none';" />` : ''}
+                ${frameUrl ? `
+                    <img src="${frameUrl}" style="position:absolute;top:50%;left:50%;transform:translate(calc(-50% + ${frameX}px), calc(-50% + ${frameY}px)) scale(${frameScale});width:100%;height:100%;pointer-events:none;" onerror="this.style.display='none';" />
+                ` : ''}
             </div>
         `;
     }
@@ -275,7 +284,10 @@
             let avatarUrl = '';
 
             if (isSelf) {
-                avatarUrl = (typeof getPlayerAvatar === 'function') ? getPlayerAvatar() : 'assets/icons/chat.png';
+                // 🌟 我方头像走高保真管道，杜绝降级
+                avatarUrl = (typeof window.getPlayerAvatarSafe === 'function')
+                    ? window.getPlayerAvatarSafe()
+                    : ((typeof getPlayerAvatar === 'function' ? getPlayerAvatar() : null) || 'assets/icons/chat.png');
             } else {
                 if (msg.senderId && window.G.npcs && window.G.npcs[msg.senderId]) {
                     senderNpc = window.G.npcs[msg.senderId];
@@ -291,7 +303,7 @@
                 }
             }
 
-            // 🌟 读取角色专属装扮或全局装扮
+            // 🌟 读取角色专属装扮或全局装扮（含完整的 scale 和偏移）
             const memberDecor = getGroupMemberDecor(msg.senderId, isSelf);
             const memberAvatarHtml = renderGroupMemberAvatarHtml(avatarUrl, memberDecor.shape, memberDecor.frameId, 38);
             const memberBubbleCss = getBubbleCssByDecor(memberDecor.bubbleId, isSelf);
@@ -503,9 +515,8 @@
                 <div style="display:flex;align-items:center;gap:6px;">
                     <textarea id="groupChatInput" rows="1" placeholder="发消息..." style="flex:1;padding:8px 12px;border-radius:6px;border:none;background:#ffffff;font-size:14px;resize:none;outline:none;font-family:inherit;box-shadow:inset 0 0 0 0.5px #dcdcdc;box-sizing:border-box;max-height:80px;"></textarea>
                     
-                    <button id="btnGroupRegenerateReply" onclick="window.regenerateLastGroupAIReply('${gid}')" title="撤回上一轮群发言并让大家重新接话" style="border:0.5px solid #dcdcdc;background:#ffffff;color:#444;padding:7px 11px;border-radius:5px;font-size:13px;font-weight:500;cursor:pointer;flex-shrink:0;display:flex;align-items:center;gap:3px;-webkit-tap-highlight-color:transparent;">
-                        <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
-                        <span>重说</span>
+                    <button id="btnGroupRegenerateReply" onclick="window.regenerateLastGroupAIReply('${gid}')" title="重新生成上一条回复" style="border:0.5px solid #dcdcdc;background:#ffffff;color:#444;width:34px;height:34px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;">
+                        <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
                     </button>
 
                     <button onclick="window.doSendGroupChat('${gid}')" style="border:none;background:#07c160;color:#fff;padding:7px 14px;border-radius:5px;font-size:13.5px;font-weight:600;cursor:pointer;flex-shrink:0;">发送</button>
