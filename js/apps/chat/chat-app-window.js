@@ -7,8 +7,9 @@
  * 🌟 存储升级：重说撤回逻辑接入 await syncChatHistoryToLocalBackup() 异步原子落盘。
  * 🌟 修复与升级：
  *  1. 我方头像全面接入 getPlayerAvatarSafe() 杜绝掉落回默认图标；
- *  2. 头像框全面接入 window.getStoredDecorFrames() 管道（全面兼容 IndexedDB 动态扩容池与全向微调 offset/scale），彻底解决新导入头像框在聊天界面失踪的严重 bug；
- *  3. 气泡全面接入 buildDecorBubbleHtml 管道，支持角色专属气泡、插画框选气泡、点九图与自由缩放！
+ *  2. 头像框全面接入 window.getStoredDecorFrames() 管道（全面兼容 IndexedDB 动态扩容池与全向微调 offset/scale）；
+ *  3. 气泡全面接入 buildDecorBubbleHtml 管道，语音条与语音转文字全面融合入气泡排版容器，彻底解决九图挤压变形与外挂白框问题；
+ *  4. 微信翻译全面改为 color: inherit，完美跟随气泡文字自定义颜色（支持双轨调色）。
  */
 
 (function() {
@@ -66,10 +67,12 @@
         if (!b) return isSelf ? 'background-color: #95ec69; color: #000;' : 'background-color: #ffffff; color: #000;';
 
         if (b.type === 'nine_slice') {
-            const imgUrl = isSelf ? (b.userBorderImage || b.borderImage) : (b.npcBorderImage || b.borderImage);
-            const slice = b.slice || '12 12 12 12';
-            const padding = b.padding || '8px 12px';
-            return `border-style: solid; border-width: 10px; border-image: url('${imgUrl}') ${slice} fill stretch; padding: ${padding}; background: transparent; color: ${isSelf ? '#111' : '#222'};`;
+            const imgUrl = isSelf ? (b.userBorderImage || b.borderImage) : (b.npcBorderImage || b.userBorderImage || b.borderImage);
+            const slice = isSelf ? (b.userSlice || b.slice || '30% 30% 30% 30%') : (b.npcSlice || b.userSlice || b.slice || '30% 30% 30% 30%');
+            const padding = isSelf ? (b.userPadding || b.padding || '8px 12px') : (b.npcPadding || b.padding || '8px 12px');
+            const borderWidth = isSelf ? (b.userBorderWidth || b.borderWidth || 14) : (b.npcBorderWidth || b.borderWidth || 14);
+            const textColor = isSelf ? (b.userTextColor || b.textColor || '#111111') : (b.npcTextColor || b.textColor || '#222222');
+            return `border-style: solid; border-width: ${borderWidth}px; border-image: url('${imgUrl}') ${slice} fill stretch; -webkit-border-image: url('${imgUrl}') ${slice} fill stretch; padding: ${padding}; background: transparent; color: ${textColor};`;
         } else {
             return isSelf ? (b.userStyle || 'background-color: #95ec69; color: #000;') : (b.npcStyle || 'background-color: #ffffff; color: #000;');
         }
@@ -114,6 +117,27 @@
             </div>
         `;
     }
+
+    // 🌟 全局挂载直接展开/折叠语音详情函数
+    window.toggleVoiceMessageDetailsDirect = function(msgId) {
+        const box = document.getElementById('voiceDescBox_' + msgId);
+        if (box) {
+            const isHidden = (box.style.display === 'none' || getComputedStyle(box).display === 'none');
+            box.style.display = isHidden ? 'block' : 'none';
+        }
+    };
+
+    // 🌟 全局挂载直接展开/收起翻译函数
+    window.toggleMessageTranslationDirect = function(btn, msgId) {
+        const box = document.getElementById('transBox_' + msgId);
+        if (box) {
+            const isHidden = (box.style.display === 'none' || getComputedStyle(box).display === 'none');
+            box.style.display = isHidden ? 'block' : 'none';
+            if (btn) {
+                btn.textContent = isHidden ? '收起翻译' : '翻译';
+            }
+        }
+    };
 
     // 🌐 微信原生质感内嵌网页安全浏览器浮层（In-App Browser）
     window.openWebPageLink = function(url, pageTitle = '网页浏览') {
@@ -231,9 +255,6 @@
         if (!container) return;
 
         // 静默触发装扮池异步预热与保活，确保 IndexedDB 头像框与气泡随时最新
-        // 🌟 修复：冷启动时 IndexedDB 尚未读完，气泡池仅剩内置默认气泡，
-        //    此前 fire-and-forget 调用不会在加载完成后补渲染，导致自定义气泡永久摔回默认样式。
-        //    这里加上一次性的加载完成回调，若窗口仍处于打开状态则自动重绘。
         const _reopenNpcId = window.G && window.G.currentChatNpc;
         if (typeof window.loadStoredDecorFramesAsync === 'function' && !window._mcytDecorFramesReady) {
             window.loadStoredDecorFramesAsync().then(() => {
@@ -284,7 +305,7 @@
         const npcBubbleId = decor.bubbleId || globalBubbleId; // 对方专属气泡
         const userBubbleId = globalBubbleId; // 我方默认使用全局气泡
 
-        // 🌟 统一提取头像框池（修复：全面优先读取 IndexedDB 内存管道，彻底修复新导入头像框在聊天中不显示的问题）
+        // 统一提取头像框池
         const framesList = getAvailableFramesList();
 
         const targetFrameId = decor.frameId !== undefined && decor.frameId !== null ? decor.frameId : globalFrameId;
@@ -490,34 +511,55 @@
                     <span style="font-weight:600;color:#181818;">动作感知：</span>${escapeHtml(msg.text || '')}
                 </div>`;
             } else if (msg.type === 'voice') {
+                // 🌟 语音消息彻底适配自定义气泡核心管道：
+                // 1. 统一接入 renderSafeBubbleHtml，杜绝硬编码类名引起的白底透出与九宫格挤压变形；
+                // 2. 语音转文字直接收归气泡内部，支持原生折叠与展开；
+                // 3. 所有文字、声波、图标全面继承气泡字体颜色。
                 const seconds = Math.min(60, Math.max(1, parseInt(msg.seconds) || 3));
-                const bubbleWidth = Math.min(220, 68 + seconds * 4.5);
-                const currentBubbleCss = getDecorBubbleCss(currentBubbleId, isSelf);
+                const voiceBarMinWidth = Math.min(180, Math.max(68, 56 + seconds * 4));
+
+                const voiceBarInnerHtml = `
+                    <div onclick="window.toggleVoiceMessageDetailsDirect('${msg._id}')" style="display:flex;align-items:center;justify-content:${isSelf ? 'flex-end' : 'flex-start'};gap:6px;cursor:pointer;user-select:none;min-height:22px;width:100%;">
+                        ${!isSelf ? `
+                            <div class="wechat-voice-wave" style="color:inherit;opacity:0.85;display:flex;align-items:center;gap:2.5px;">
+                                <div class="wechat-voice-bar" style="background:currentColor;"></div>
+                                <div class="wechat-voice-bar" style="background:currentColor;"></div>
+                                <div class="wechat-voice-bar" style="background:currentColor;"></div>
+                            </div>
+                            <span style="font-size:13.5px;font-weight:600;color:inherit;margin-left:2px;letter-spacing:0.5px;">${seconds}"</span>
+                        ` : `
+                            <span style="font-size:13.5px;font-weight:600;color:inherit;margin-right:2px;letter-spacing:0.5px;">${seconds}"</span>
+                            <div class="wechat-voice-wave" style="color:inherit;opacity:0.85;transform:scaleX(-1);display:flex;align-items:center;gap:2.5px;">
+                                <div class="wechat-voice-bar" style="background:currentColor;"></div>
+                                <div class="wechat-voice-bar" style="background:currentColor;"></div>
+                                <div class="wechat-voice-bar" style="background:currentColor;"></div>
+                            </div>
+                        `}
+                    </div>
+                `;
+
+                const voiceDetailHtml = (msg.text || msg.audioBg) ? `
+                    <div id="voiceDescBox_${msg._id}" style="display:none;margin-top:6px;padding-top:6px;border-top:0.5px dashed currentColor;opacity:0.92;font-size:12.5px;line-height:1.45;color:inherit;word-break:break-word;">
+                        ${msg.audioBg ? `<div style="font-size:11px;opacity:0.75;margin-bottom:3px;font-style:italic;">（${escapeHtml(msg.audioBg)}）</div>` : ''}
+                        <div><span style="font-weight:600;opacity:0.85;">转文字：</span>${escapeHtml(msg.text || '')}</div>
+                    </div>
+                ` : '';
+
+                const voiceContainerHtml = `
+                    <div class="wechat-voice-bubble-wrapper" style="min-width:${voiceBarMinWidth}px;max-width:100%;color:inherit;">
+                        ${voiceBarInnerHtml}
+                        ${voiceDetailHtml}
+                    </div>
+                `;
+
+                const renderedBubbleHtml = renderSafeBubbleHtml(voiceContainerHtml, isSelf, currentBubbleId, 'voice-bubble-cell');
 
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
                     ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${currentAvatarHtml}</div>` : ''}
-                    <div style="max-width:74%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
+                    <div style="max-width:76%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                         ${quoteHtml}
-                        <div class="wechat-voice-bubble" onclick="window.toggleVoiceMessageDetailsDirect('${msg._id}')" style="width:${bubbleWidth}px;${currentBubbleCss};justify-content:${isSelf ? 'flex-end' : 'flex-start'};box-sizing:border-box;">
-                            ${!isSelf ? `
-                                <div class="wechat-voice-wave" style="color:#444;">
-                                    <div class="wechat-voice-bar"></div><div class="wechat-voice-bar"></div><div class="wechat-voice-bar"></div>
-                                </div>
-                                <span style="font-size:13px;font-weight:600;margin-left:4px;">${seconds}"</span>
-                            ` : `
-                                <span style="font-size:13px;font-weight:600;margin-right:4px;">${seconds}"</span>
-                                <div class="wechat-voice-wave" style="color:#222;transform:scaleX(-1);">
-                                    <div class="wechat-voice-bar"></div><div class="wechat-voice-bar"></div><div class="wechat-voice-bar"></div>
-                                </div>
-                            `}
-                        </div>
-
-                        <div id="voiceDescBox_${msg._id}" style="display:none;margin-top:5px;background:#ffffff;border:0.5px solid #e0e0e0;border-radius:6px;padding:7px 10px;font-size:12px;color:#333;line-height:1.45;box-shadow:0 1px 3px rgba(0,0,0,0.04);max-width:240px;">
-                            ${msg.audioBg ? `<div style="color:#888;font-size:11px;margin-bottom:3px;font-style:italic;">（${escapeHtml(msg.audioBg)}）</div>` : ''}
-                            <div><span style="color:#07c160;font-weight:600;">转文字：</span>${escapeHtml(msg.text || '')}</div>
-                        </div>
-
+                        ${renderedBubbleHtml}
                         <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
                     </div>
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${currentAvatarHtml}</div>` : ''}
@@ -554,13 +596,14 @@
                 const displayMainText = hasOriginal ? msg.originalText : msg.text;
                 let bubbleBody = isSelf ? escapeHtml(displayMainText || '').replace(/\n/g, '<br>') : ((typeof renderContentWithThoughts === 'function') ? renderContentWithThoughts(displayMainText || '') : escapeHtml(displayMainText || ''));
 
+                // 🌟 翻译区域彻底解绑死板灰色，全面使用 color: inherit 与半透明边框，完美同步气泡自选字色
                 const transPartHtml = hasOriginal ? `
-                    <div id="transBox_${msg._id}" style="display:none;margin-top:6px;padding-top:6px;border-top:0.5px dashed #d5d5d5;font-size:13px;color:#222;line-height:1.45;">
-                        <div style="font-size:10px;color:#999;margin-bottom:2px;display:flex;align-items:center;gap:3px;">
-                            <svg viewBox="0 0 24 24" style="width:10px;height:10px;fill:none;stroke:currentColor;stroke-width:2;"><path d="M5 8l6 6M11 8L5 14M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6"/></svg>
+                    <div id="transBox_${msg._id}" style="display:none;margin-top:6px;padding-top:6px;border-top:0.5px dashed currentColor;opacity:0.92;font-size:13px;line-height:1.45;color:inherit;">
+                        <div style="font-size:10px;opacity:0.65;margin-bottom:3px;display:flex;align-items:center;gap:3px;color:inherit;">
+                            <svg viewBox="0 0 24 24" style="width:11px;height:11px;fill:none;stroke:currentColor;stroke-width:2;"><path d="M5 8l6 6M11 8L5 14M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6"/></svg>
                             <span>微信翻译</span>
                         </div>
-                        <div>${escapeHtml(msg.text || '')}</div>
+                        <div style="color:inherit;word-break:break-word;">${escapeHtml(msg.text || '')}</div>
                     </div>
                 ` : '';
 
@@ -661,13 +704,13 @@
 
                 <div style="display:flex;align-items:center;justify-content:space-between;padding:0 4px;">
                     <div style="display:flex;align-items:center;gap:18px;">
-                        <button onclick="window.openVoiceInputModal('single','${npcId}')" title="发送语音" style="border:none;background:none;cursor:pointer;padding:0;display:flex;align-items:center;color:#555;">
+                        <button onclick="window.openVoiceInputModal('single','${npcId}')" title="发送语音" style="border:none;background:none;cursor:pointer;padding:0;display:flex;align-items:color:#555;">
                             <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
                         </button>
 
                         <button onclick="window.toggleChatSettingsDrawer('single','${npcId}')" title="系统设置与排版" style="border:none;background:none;cursor:pointer;padding:0;display:flex;align-items:center;color:#555;">
                             <svg viewBox="0 0 24 24" style="width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">
-                                <circle cx="12" cy="12" r="3"></circle>
+                                <circle cx="12" cy="3" r="3"></circle>
                                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                             </svg>
                         </button>
