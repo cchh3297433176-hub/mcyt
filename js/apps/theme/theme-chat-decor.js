@@ -1,17 +1,21 @@
 /**
  * js/apps/theme/theme-chat-decor.js
- * 💬 聊天装扮中心（独立子模块）
+ * 💬 微信装扮中心独立模块（原生白灰微绿质感）
  * 职责：
- *  1. 聊天气泡库：点九图 (border-image) 自适应拉伸、纯 CSS 样式导入、双边 (用户/角色) 样式预览与切换
- *  2. 头像装扮：头像框 (静态PNG/WebP/GIF动图) 导入与选用、头像形状 (圆形/圆角方/正方) 一键切换
- *  3. 自定义命名备注：每个气泡与头像框均可自定义名称并点击即时生效
- *  4. AI 装扮协议一键导入：支持粘贴 AI 输出的 JSON / CSS 规范，自动解析入库
+ *  1. 头像框缩略图折叠抽屉与试穿预览模式（点击试穿，再次点击卸下）
+ *  2. 头像框缩放调节器（支持 80%~160% 自由缩放对齐微调）
+ *  3. 点九图 (border-image) 自适应与纯 CSS 气泡
+ *  4. 消除杂乱 emoji，遵循微信原生克制质感
  */
 
 (function () {
     'use strict';
 
-    // 默认预设气泡池
+    // 默认头像框（支持配置独立的 scale 比例）
+    const DEFAULT_FRAMES = [
+        { id: 'frame_none', name: '无头像框', url: '', scale: 1.15, isBuiltin: true }
+    ];
+
     const DEFAULT_BUBBLES = [
         {
             id: 'bubble_default',
@@ -20,49 +24,33 @@
             userStyle: 'background-color: #95ec69; color: #000000; border-radius: 6px;',
             npcStyle: 'background-color: #ffffff; color: #000000; border-radius: 6px; border: 1px solid #e7e7e7;',
             isBuiltin: true
-        },
-        {
-            id: 'bubble_cyber_dark',
-            name: '赛博霓虹黑夜',
-            type: 'css',
-            userStyle: 'background: linear-gradient(135deg, #00c6ff, #0072ff); color: #ffffff; border-radius: 14px 4px 14px 14px; box-shadow: 0 2px 8px rgba(0, 114, 255, 0.3);',
-            npcStyle: 'background: #181924; color: #00e5ff; border: 1px solid #00e5ff; border-radius: 4px 14px 14px 14px; box-shadow: 0 2px 8px rgba(0, 229, 255, 0.2);',
-            isBuiltin: true
-        },
-        {
-            id: 'bubble_retro_terminal',
-            name: '复古终端微光',
-            type: 'css',
-            userStyle: 'background: #022b1c; color: #00ff66; border: 1px solid #00ff66; border-radius: 4px; font-family: monospace;',
-            npcStyle: 'background: #0b1311; color: #4af626; border: 1px solid #235937; border-radius: 4px; font-family: monospace;',
-            isBuiltin: true
         }
     ];
 
-    // 默认预设头像框池
-    const DEFAULT_FRAMES = [
-        { id: 'frame_none', name: '无头像框', url: '', isBuiltin: true },
-        { id: 'frame_gold_star', name: '金色辉光 (预设)', url: 'assets/decor/frames/frame_gold.png', isBuiltin: true },
-        { id: 'frame_cat_ear', name: '萌动猫耳 (预设)', url: 'assets/decor/frames/frame_cat.png', isBuiltin: true }
-    ];
-
-    // 读取装扮数据
-    function getStoredBubbles() {
-        try {
-            const list = JSON.parse(localStorage.getItem('mcyt_decor_bubbles') || '[]');
-            return [...DEFAULT_BUBBLES, ...list];
-        } catch (_) {
-            return DEFAULT_BUBBLES;
-        }
-    }
-
-    function getStoredFrames() {
+    window.getStoredDecorFrames = function() {
         try {
             const list = JSON.parse(localStorage.getItem('mcyt_decor_frames') || '[]');
             return [...DEFAULT_FRAMES, ...list];
         } catch (_) {
             return DEFAULT_FRAMES;
         }
+    };
+
+    window.getStoredDecorBubbles = function() {
+        try {
+            const list = JSON.parse(localStorage.getItem('mcyt_decor_bubbles') || '[]');
+            return [...DEFAULT_BUBBLES, ...list];
+        } catch (_) {
+            return DEFAULT_BUBBLES;
+        }
+    };
+
+    function saveCustomFrame(item) {
+        try {
+            let list = JSON.parse(localStorage.getItem('mcyt_decor_frames') || '[]');
+            list.push(item);
+            localStorage.setItem('mcyt_decor_frames', JSON.stringify(list));
+        } catch (_) {}
     }
 
     function saveCustomBubble(item) {
@@ -73,145 +61,6 @@
         } catch (_) {}
     }
 
-    function saveCustomFrame(item) {
-        try {
-            let list = JSON.parse(localStorage.getItem('mcyt_decor_frames') || '[]');
-            list.push(item);
-            localStorage.setItem('mcyt_decor_frames', JSON.stringify(list));
-        } catch (_) {}
-    }
-
-    // 渲染聊天装扮页面入口
-    window.renderChatDecorTheme = function (container) {
-        if (!container) return;
-
-        const activeBubbleId = localStorage.getItem('mcyt_active_decor_bubble') || 'bubble_default';
-        const activeFrameId = localStorage.getItem('mcyt_active_decor_frame') || 'frame_none';
-        const activeShape = localStorage.getItem('mcyt_active_avatar_shape') || 'circle'; // 'circle' | 'squircle' | 'square'
-
-        const bubbles = getStoredBubbles();
-        const frames = getStoredFrames();
-
-        const activeBubble = bubbles.find(b => b.id === activeBubbleId) || bubbles[0];
-        const activeFrame = frames.find(f => f.id === activeFrameId) || frames[0];
-
-        container.innerHTML = `
-            <!-- 卡片 1：实时装扮预览舞台 -->
-            <div style="background:#ffffff;border-radius:12px;border:1px solid #eeeeee;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,0.02);">
-                <div style="font-size:14px;font-weight:700;color:#222;margin-bottom:4px;">✨ 实时效果预览</div>
-                <div style="font-size:12px;color:#888;margin-bottom:12px;">以下为你选择的头像形状、头像框与气泡样式：</div>
-
-                <div style="background:#ebebeb;border-radius:10px;padding:14px;display:flex;flex-direction:column;gap:12px;">
-                    <!-- 对方发言预览 -->
-                    <div style="display:flex;gap:10px;align-items:flex-start;">
-                        <div style="position:relative;width:40px;height:40px;flex-shrink:0;">
-                            <img src="assets/icons/chat.png" style="width:100%;height:100%;object-fit:cover;border-radius:${getShapeBorderRadius(activeShape)};" />
-                            ${activeFrame && activeFrame.url ? `<img src="${activeFrame.url}" style="position:absolute;top:-10%;left:-10%;width:120%;height:120%;pointer-events:none;" onerror="this.style.display='none'" />` : ''}
-                        </div>
-                        <div style="max-width:70%;padding:9px 12px;font-size:13px;line-height:1.4;box-sizing:border-box;${getBubbleCssString(activeBubble, 'npc')}">
-                            你好呀！这是角色的聊天气泡样式，看起来是不是超级自然？
-                        </div>
-                    </div>
-
-                    <!-- 我方发言预览 -->
-                    <div style="display:flex;gap:10px;align-items:flex-start;flex-direction:row-reverse;">
-                        <div style="position:relative;width:40px;height:40px;flex-shrink:0;">
-                            <img src="assets/icons/chat.png" style="width:100%;height:100%;object-fit:cover;border-radius:${getShapeBorderRadius(activeShape)};" />
-                            ${activeFrame && activeFrame.url ? `<img src="${activeFrame.url}" style="position:absolute;top:-10%;left:-10%;width:120%;height:120%;pointer-events:none;" onerror="this.style.display='none'" />` : ''}
-                        </div>
-                        <div style="max-width:70%;padding:9px 12px;font-size:13px;line-height:1.4;box-sizing:border-box;${getBubbleCssString(activeBubble, 'user')}">
-                            这是我的发言气泡！点九图拉伸和纯代码均可完美适配～
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 卡片 2：头像形状与头像框管理 -->
-            <div style="background:#ffffff;border-radius:12px;border:1px solid #eeeeee;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,0.02);">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                    <div>
-                        <div style="font-size:14px;font-weight:700;color:#222;">头像形状与头像框</div>
-                        <div style="font-size:12px;color:#888;">支持圆形、方圆与静态/动态 GIF 头像框</div>
-                    </div>
-                    <button style="padding:4px 10px;font-size:11.5px;border-radius:6px;border:none;background:#07c160;color:#fff;font-weight:600;cursor:pointer;" onclick="window.openAddFrameModal()">
-                        ＋ 添头像框
-                    </button>
-                </div>
-
-                <!-- 头像形状切换 -->
-                <div style="margin-bottom:12px;">
-                    <div style="font-size:12px;font-weight:600;color:#555;margin-bottom:6px;">全局头像基础形状：</div>
-                    <div style="display:flex;gap:8px;">
-                        <button style="flex:1;padding:7px;border-radius:6px;border:1px solid ${activeShape === 'circle' ? '#07c160' : '#ddd'};background:${activeShape === 'circle' ? '#e8f7ed' : '#f9f9f9'};color:${activeShape === 'circle' ? '#07c160' : '#444'};font-size:12px;cursor:pointer;" onclick="window.setAvatarShape('circle')">
-                            ⚪ 原生正圆
-                        </button>
-                        <button style="flex:1;padding:7px;border-radius:6px;border:1px solid ${activeShape === 'squircle' ? '#07c160' : '#ddd'};background:${activeShape === 'squircle' ? '#e8f7ed' : '#f9f9f9'};color:${activeShape === 'squircle' ? '#07c160' : '#444'};font-size:12px;cursor:pointer;" onclick="window.setAvatarShape('squircle')">
-                            ◽ 微信圆角方
-                        </button>
-                        <button style="flex:1;padding:7px;border-radius:6px;border:1px solid ${activeShape === 'square' ? '#07c160' : '#ddd'};background:${activeShape === 'square' ? '#e8f7ed' : '#f9f9f9'};color:${activeShape === 'square' ? '#07c160' : '#444'};font-size:12px;cursor:pointer;" onclick="window.setAvatarShape('square')">
-                            ⬛ 棱角正方
-                        </button>
-                    </div>
-                </div>
-
-                <!-- 头像框池列表 -->
-                <div style="font-size:12px;font-weight:600;color:#555;margin-bottom:6px;">可用头像框（点击切换应用）：</div>
-                <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(80px, 1fr));gap:8px;" id="decorFramesGrid">
-                    ${frames.map(f => `
-                        <div onclick="window.selectDecorFrame('${f.id}')" style="position:relative;background:${f.id === activeFrameId ? '#e8f7ed' : '#f9f9f9'};border:1px solid ${f.id === activeFrameId ? '#07c160' : '#eee'};border-radius:8px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;cursor:pointer;text-align:center;">
-                            <div style="position:relative;width:36px;height:36px;margin-bottom:4px;">
-                                <img src="assets/icons/chat.png" style="width:100%;height:100%;object-fit:cover;border-radius:${getShapeBorderRadius(activeShape)};" />
-                                ${f.url ? `<img src="${f.url}" style="position:absolute;top:-10%;left:-10%;width:120%;height:120%;pointer-events:none;" onerror="this.style.display='none'" />` : ''}
-                            </div>
-                            <span style="font-size:10.5px;color:#333;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:72px;">${f.name}</span>
-                            ${!f.isBuiltin ? `<span onclick="event.stopPropagation(); window.deleteDecorFrame('${f.id}')" style="position:absolute;top:2px;right:4px;font-size:10px;color:#fa5151;cursor:pointer;">✕</span>` : ''}
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-
-            <!-- 卡片 3：气泡样式库与管理 -->
-            <div style="background:#ffffff;border-radius:12px;border:1px solid #eeeeee;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,0.02);">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                    <div>
-                        <div style="font-size:14px;font-weight:700;color:#222;">气泡样式库</div>
-                        <div style="font-size:12px;color:#888;">点九图自适应拉伸或纯 CSS 样式定制</div>
-                    </div>
-                    <div style="display:flex;gap:6px;">
-                        <button style="padding:4px 8px;font-size:11px;border-radius:6px;border:1px solid #07c160;background:#e8f7ed;color:#07c160;font-weight:600;cursor:pointer;" onclick="window.openAiThemeImportModal()">
-                            🤖 AI 协议导入
-                        </button>
-                        <button style="padding:4px 8px;font-size:11px;border-radius:6px;border:none;background:#07c160;color:#fff;font-weight:600;cursor:pointer;" onclick="window.openAddBubbleModal()">
-                            ＋ 添气泡
-                        </button>
-                    </div>
-                </div>
-
-                <div style="display:flex;flex-direction:column;gap:8px;margin-top:10px;" id="decorBubblesList">
-                    ${bubbles.map(b => `
-                        <div onclick="window.selectDecorBubble('${b.id}')" style="background:${b.id === activeBubbleId ? '#e8f7ed' : '#f9f9f9'};border:1px solid ${b.id === activeBubbleId ? '#07c160' : '#eee'};border-radius:8px;padding:10px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
-                            <div style="display:flex;flex-direction:column;gap:2px;">
-                                <div style="display:flex;align-items:center;gap:6px;">
-                                    <span style="font-size:13px;font-weight:600;color:#222;">${b.name}</span>
-                                    <span style="font-size:10px;padding:1px 5px;border-radius:4px;background:#e0e0e0;color:#666;">${b.type === 'nine_slice' ? '点九图' : 'CSS代码'}</span>
-                                    ${b.id === activeBubbleId ? '<span style="font-size:10px;color:#07c160;font-weight:bold;">[当前使用]</span>' : ''}
-                                </div>
-                                <span style="font-size:11px;color:#888;">${b.isBuiltin ? '系统预设方案' : '用户自定义导入'}</span>
-                            </div>
-                            <div style="display:flex;gap:6px;align-items:center;">
-                                <button style="padding:3px 8px;font-size:11px;border-radius:4px;border:1px solid ${b.id === activeBubbleId ? '#07c160' : '#ddd'};background:#fff;color:${b.id === activeBubbleId ? '#07c160' : '#333'};cursor:pointer;">
-                                    ${b.id === activeBubbleId ? '已应用' : '使用'}
-                                </button>
-                                ${!b.isBuiltin ? `<button onclick="event.stopPropagation(); window.deleteDecorBubble('${b.id}')" style="padding:3px 6px;font-size:11px;border-radius:4px;border:1px solid #ffdcd9;background:#fff;color:#fa5151;cursor:pointer;">删除</button>` : ''}
-                            </div>
-                        </div>
-                    `).join('')}
-                </div>
-            </div>
-        `;
-    };
-
-    // 辅助计算形状圆角
     function getShapeBorderRadius(shape) {
         if (shape === 'circle') return '50%';
         if (shape === 'squircle') return '8px';
@@ -219,38 +68,175 @@
         return '50%';
     }
 
-    // 辅助生成 CSS 样式行内代码
-    function getBubbleCssString(bubble, senderType) {
-        if (!bubble) return '';
-        if (bubble.type === 'nine_slice') {
-            const imgUrl = senderType === 'user' ? (bubble.userBorderImage || bubble.borderImage) : (bubble.npcBorderImage || bubble.borderImage);
-            const slice = bubble.slice || '12 12 12 12';
-            const padding = bubble.padding || '8px 12px';
-            return `border-style: solid; border-width: 10px; border-image: url('${imgUrl}') ${slice} fill stretch; padding: ${padding};`;
-        } else {
-            return senderType === 'user' ? (bubble.userStyle || '') : (bubble.npcStyle || '');
-        }
-    }
+    // 渲染装扮中心页签内容
+    window.renderChatDecorTheme = function (container) {
+        if (!container) return;
 
-    // 设置头像形状
+        const activeBubbleId = localStorage.getItem('mcyt_active_decor_bubble') || 'bubble_default';
+        const activeFrameId = localStorage.getItem('mcyt_active_decor_frame') || 'frame_none';
+        const activeShape = localStorage.getItem('mcyt_active_avatar_shape') || 'circle';
+
+        const frames = window.getStoredDecorFrames();
+        const bubbles = window.getStoredDecorBubbles();
+
+        const activeFrame = frames.find(f => f.id === activeFrameId) || frames[0];
+        const activeBubble = bubbles.find(b => b.id === activeBubbleId) || bubbles[0];
+
+        const previewAvatar = (typeof window.getPlayerAvatarSafe === 'function') 
+            ? window.getPlayerAvatarSafe() 
+            : 'assets/icons/chat.png';
+
+        const frameScale = (activeFrame && activeFrame.scale) ? activeFrame.scale : 1.18;
+
+        container.innerHTML = `
+            <!-- 试穿舞台 -->
+            <div style="background:#ffffff;border-radius:12px;border:1px solid #eeeeee;padding:14px;">
+                <div style="font-size:13.5px;font-weight:600;color:#222;margin-bottom:4px;">效果试穿舞台</div>
+                <div style="font-size:11.5px;color:#888;margin-bottom:12px;">点击下方头像框缩略图即可试穿或脱下。</div>
+
+                <div style="background:#f2f2f2;border-radius:10px;padding:16px;display:flex;align-items:center;justify-content:center;gap:20px;">
+                    <div style="display:flex;flex-direction:column;align-items:center;gap:6px;">
+                        <div style="position:relative;width:52px;height:52px;">
+                            <img src="${previewAvatar}" style="width:100%;height:100%;object-fit:cover;border-radius:${getShapeBorderRadius(activeShape)};display:block;" onerror="this.src='assets/icons/chat.png';" />
+                            ${activeFrame && activeFrame.url ? `
+                                <img src="${activeFrame.url}" style="position:absolute;top:50%;left:50%;transform:translate(-50%, -50%) scale(${frameScale});width:100%;height:100%;pointer-events:none;" onerror="this.style.display='none'" />
+                            ` : ''}
+                        </div>
+                        <span style="font-size:11px;color:#666;">${activeFrame && activeFrame.url ? activeFrame.name : '无头像框'}</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 头像形状切换 -->
+            <div style="background:#ffffff;border-radius:12px;border:1px solid #eeeeee;padding:14px;">
+                <div style="font-size:13.5px;font-weight:600;color:#222;margin-bottom:8px;">头像基础形状</div>
+                <div style="display:flex;gap:8px;">
+                    <button style="flex:1;padding:7px;border-radius:6px;border:1px solid ${activeShape === 'circle' ? '#07c160' : '#e0e0e0'};background:${activeShape === 'circle' ? '#e8f7ed' : '#f9f9f9'};color:${activeShape === 'circle' ? '#07c160' : '#333'};font-size:12px;cursor:pointer;" onclick="window.setAvatarShape('circle')">正圆</button>
+                    <button style="flex:1;padding:7px;border-radius:6px;border:1px solid ${activeShape === 'squircle' ? '#07c160' : '#e0e0e0'};background:${activeShape === 'squircle' ? '#e8f7ed' : '#f9f9f9'};color:${activeShape === 'squircle' ? '#07c160' : '#333'};font-size:12px;cursor:pointer;" onclick="window.setAvatarShape('squircle')">圆角方</button>
+                    <button style="flex:1;padding:7px;border-radius:6px;border:1px solid ${activeShape === 'square' ? '#07c160' : '#e0e0e0'};background:${activeShape === 'square' ? '#e8f7ed' : '#f9f9f9'};color:${activeShape === 'square' ? '#07c160' : '#333'};font-size:12px;cursor:pointer;" onclick="window.setAvatarShape('square')">直角方</button>
+                </div>
+            </div>
+
+            <!-- 头像框折叠栏与缩略图选择 -->
+            <div style="background:#ffffff;border-radius:12px;border:1px solid #eeeeee;padding:14px;">
+                <div onclick="window.toggleDecorFramesCollapse()" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
+                    <div>
+                        <div style="font-size:13.5px;font-weight:600;color:#222;">头像框库</div>
+                        <div style="font-size:11.5px;color:#888;">展开查看已导入的头像框缩略图</div>
+                    </div>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <button onclick="event.stopPropagation(); window.openAddFrameModal();" style="padding:4px 8px;font-size:11px;border-radius:6px;border:none;background:#07c160;color:#fff;font-weight:500;cursor:pointer;">添加头像框</button>
+                        <span id="decorFramesCollapseArrow" style="font-size:12px;color:#07c160;font-weight:bold;">▼ 收起</span>
+                    </div>
+                </div>
+
+                <div id="decorFramesBody" style="display:block;margin-top:12px;">
+                    <div style="display:grid;grid-template-columns:repeat(auto-fill, minmax(70px, 1fr));gap:10px;">
+                        ${frames.map(f => {
+                            const isCur = (f.id === activeFrameId);
+                            const curScale = f.scale || 1.18;
+                            return `
+                                <div onclick="window.toggleSelectFrameItem('${f.id}')" 
+                                     style="position:relative;background:${isCur ? '#e8f7ed' : '#f9f9f9'};border:1px solid ${isCur ? '#07c160' : '#eee'};border-radius:8px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;cursor:pointer;">
+                                    <div style="position:relative;width:40px;height:40px;margin-bottom:4px;">
+                                        <img src="${previewAvatar}" style="width:100%;height:100%;object-fit:cover;border-radius:${getShapeBorderRadius(activeShape)};display:block;" onerror="this.src='assets/icons/chat.png';" />
+                                        ${f.url ? `<img src="${f.url}" style="position:absolute;top:50%;left:50%;transform:translate(-50%, -50%) scale(${curScale});width:100%;height:100%;pointer-events:none;" onerror="this.style.display='none'" />` : ''}
+                                    </div>
+                                    <span style="font-size:10px;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:60px;text-align:center;">${escapeHtml(f.name)}</span>
+                                    ${!f.isBuiltin ? `<span onclick="event.stopPropagation(); window.deleteDecorFrame('${f.id}')" style="position:absolute;top:2px;right:4px;font-size:10px;color:#fa5151;cursor:pointer;">✕</span>` : ''}
+                                </div>
+                            `;
+                        }).join('')}
+                    </div>
+
+                    <!-- 选中项缩放调节器 -->
+                    ${activeFrame && activeFrame.url ? `
+                        <div style="margin-top:12px;background:#f9f9f9;border-radius:8px;padding:10px;border:1px solid #eee;">
+                            <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;color:#555;margin-bottom:6px;">
+                                <span>当前头像框尺寸调节</span>
+                                <span style="color:#07c160;font-weight:600;" id="frameScaleValText">${Math.round(frameScale * 100)}%</span>
+                            </div>
+                            <input type="range" min="80" max="160" value="${Math.round(frameScale * 100)}" style="width:100%;accent-color:#07c160;" oninput="window.updateCurrentFrameScale(this.value)">
+                        </div>
+                    ` : ''}
+                </div>
+            </div>
+
+            <!-- 气泡样式库 -->
+            <div style="background:#ffffff;border-radius:12px;border:1px solid #eeeeee;padding:14px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                    <div>
+                        <div style="font-size:13.5px;font-weight:600;color:#222;">气泡样式库</div>
+                        <div style="font-size:11.5px;color:#888;">自定义对白背景与质感</div>
+                    </div>
+                    <button onclick="window.openAddBubbleModal()" style="padding:4px 8px;font-size:11px;border-radius:6px;border:none;background:#07c160;color:#fff;cursor:pointer;">添加气泡</button>
+                </div>
+
+                <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
+                    ${bubbles.map(b => `
+                        <div onclick="window.selectDecorBubble('${b.id}')" style="background:${b.id === activeBubbleId ? '#e8f7ed' : '#f9f9f9'};border:1px solid ${b.id === activeBubbleId ? '#07c160' : '#eee'};border-radius:8px;padding:10px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
+                            <div style="display:flex;flex-direction:column;gap:2px;">
+                                <span style="font-size:12.5px;font-weight:600;color:#222;">${escapeHtml(b.name)}</span>
+                                <span style="font-size:10px;color:#888;">${b.type === 'nine_slice' ? '点九图自适应' : 'CSS 代码片段'}</span>
+                            </div>
+                            <span style="font-size:11px;color:${b.id === activeBubbleId ? '#07c160' : '#999'};font-weight:${b.id === activeBubbleId ? '600' : 'normal'};">
+                                ${b.id === activeBubbleId ? '使用中' : '选用'}
+                            </span>
+                        </div>
+                    `).join('')}
+                </div>
+            </div>
+        `;
+    };
+
+    window.toggleDecorFramesCollapse = function () {
+        const body = document.getElementById('decorFramesBody');
+        const arrow = document.getElementById('decorFramesCollapseArrow');
+        if (!body || !arrow) return;
+        const isHidden = body.style.display === 'none';
+        body.style.display = isHidden ? 'block' : 'none';
+        arrow.textContent = isHidden ? '▼ 收起' : '▶ 展开';
+    };
+
+    // 试穿与卸下切换
+    window.toggleSelectFrameItem = function (id) {
+        const current = localStorage.getItem('mcyt_active_decor_frame') || 'frame_none';
+        const nextId = (current === id) ? 'frame_none' : id;
+        localStorage.setItem('mcyt_active_decor_frame', nextId);
+        refreshDecorView();
+    };
+
+    // 调整当前选中头像框的尺寸
+    window.updateCurrentFrameScale = function (val) {
+        const num = parseFloat(val) / 100;
+        const curId = localStorage.getItem('mcyt_active_decor_frame');
+        if (!curId || curId === 'frame_none') return;
+
+        let list = JSON.parse(localStorage.getItem('mcyt_decor_frames') || '[]');
+        const target = list.find(x => x.id === curId);
+        if (target) {
+            target.scale = num;
+            localStorage.setItem('mcyt_decor_frames', JSON.stringify(list));
+        }
+
+        const label = document.getElementById('frameScaleValText');
+        if (label) label.textContent = `${Math.round(num * 100)}%`;
+
+        refreshDecorView();
+    };
+
     window.setAvatarShape = function (shape) {
         localStorage.setItem('mcyt_active_avatar_shape', shape);
-        document.documentElement.style.setProperty('--avatar-border-radius', getShapeBorderRadius(shape));
         refreshDecorView();
-        if (typeof showToast === 'function') showToast('头像形状已更新');
+        if (typeof showToast === 'function') showToast('头像形状已应用');
     };
 
-    // 选择生效头像框
-    window.selectDecorFrame = function (id) {
-        localStorage.setItem('mcyt_active_decor_frame', id);
-        const frames = getStoredFrames();
-        const f = frames.find(x => x.id === id);
-        document.documentElement.style.setProperty('--global-avatar-frame', f && f.url ? `url('${f.url}')` : 'none');
+    window.selectDecorBubble = function (id) {
+        localStorage.setItem('mcyt_active_decor_bubble', id);
         refreshDecorView();
-        if (typeof showToast === 'function') showToast(`已选用头像框: ${f ? f.name : '无'}`);
+        if (typeof showToast === 'function') showToast('气泡样式已应用');
     };
 
-    // 删除头像框
     window.deleteDecorFrame = function (id) {
         let list = JSON.parse(localStorage.getItem('mcyt_decor_frames') || '[]');
         list = list.filter(x => x.id !== id);
@@ -259,109 +245,84 @@
             localStorage.setItem('mcyt_active_decor_frame', 'frame_none');
         }
         refreshDecorView();
-        if (typeof showToast === 'function') showToast('已删除该头像框');
-    };
-
-    // 选择生效气泡
-    window.selectDecorBubble = function (id) {
-        localStorage.setItem('mcyt_active_decor_bubble', id);
-        applyActiveBubbleCssGlobally();
-        refreshDecorView();
-        const bubbles = getStoredBubbles();
-        const b = bubbles.find(x => x.id === id);
-        if (typeof showToast === 'function') showToast(`已应用气泡: ${b ? b.name : ''}`);
-    };
-
-    // 删除气泡
-    window.deleteDecorBubble = function (id) {
-        let list = JSON.parse(localStorage.getItem('mcyt_decor_bubbles') || '[]');
-        list = list.filter(x => x.id !== id);
-        localStorage.setItem('mcyt_decor_bubbles', JSON.stringify(list));
-        if (localStorage.getItem('mcyt_active_decor_bubble') === id) {
-            localStorage.setItem('mcyt_active_decor_bubble', 'bubble_default');
-            applyActiveBubbleCssGlobally();
-        }
-        refreshDecorView();
-        if (typeof showToast === 'function') showToast('已删除该气泡样式');
     };
 
     function refreshDecorView() {
         const sub = document.getElementById('themeAppSubContent');
-        if (sub) window.renderChatDecorTheme(sub);
-    }
-
-    // 全局注入气泡 CSS（使得所有单聊和群聊即刻生效）
-    function applyActiveBubbleCssGlobally() {
-        const bubbleId = localStorage.getItem('mcyt_active_decor_bubble') || 'bubble_default';
-        const bubbles = getStoredBubbles();
-        const b = bubbles.find(x => x.id === bubbleId) || bubbles[0];
-
-        let styleTag = document.getElementById('mcytGlobalDynamicBubbleStyle');
-        if (!styleTag) {
-            styleTag = document.createElement('style');
-            styleTag.id = 'mcytGlobalDynamicBubbleStyle';
-            document.head.appendChild(styleTag);
-        }
-
-        if (b.type === 'nine_slice') {
-            const uImg = b.userBorderImage || b.borderImage;
-            const nImg = b.npcBorderImage || b.borderImage;
-            const slice = b.slice || '12 12 12 12';
-            styleTag.textContent = `
-                .chat-bubble-user {
-                    border-style: solid !important;
-                    border-width: 10px !important;
-                    border-image: url('${uImg}') ${slice} fill stretch !important;
-                    background: transparent !important;
-                }
-                .chat-bubble-npc {
-                    border-style: solid !important;
-                    border-width: 10px !important;
-                    border-image: url('${nImg}') ${slice} fill stretch !important;
-                    background: transparent !important;
-                }
-            `;
-        } else {
-            styleTag.textContent = `
-                .chat-bubble-user {
-                    ${b.userStyle || ''}
-                }
-                .chat-bubble-npc {
-                    ${b.npcStyle || ''}
-                }
-            `;
+        if (sub && typeof window.renderChatDecorTheme === 'function') {
+            window.renderChatDecorTheme(sub);
         }
     }
 
-    // 新增头像框弹窗（支持相册直传 / 网络 URL）
+    // 弹窗添加头像框（自带缩放滑块调节与实时预览）
     window.openAddFrameModal = function () {
         let modal = document.getElementById('addFrameModal');
         if (!modal) {
             modal = document.createElement('div');
             modal.id = 'addFrameModal';
-            modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:99999;padding:20px;';
+            modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:99999;padding:20px;';
             document.body.appendChild(modal);
         }
 
+        let pendingScale = 1.18;
+        const testAvatar = (typeof window.getPlayerAvatarSafe === 'function') ? window.getPlayerAvatarSafe() : 'assets/icons/chat.png';
+
         modal.innerHTML = `
             <div style="background:#ffffff;border-radius:12px;width:100%;max-width:320px;padding:16px;box-shadow:0 8px 24px rgba(0,0,0,0.15);">
-                <div style="font-size:14px;font-weight:700;color:#222;margin-bottom:8px;">添加新头像框</div>
-                <div style="font-size:11.5px;color:#888;margin-bottom:12px;">支持 GIF 动图与 PNG 镂空图，可填本地路径或外链</div>
+                <div style="font-size:14px;font-weight:600;color:#222;margin-bottom:8px;">添加新头像框</div>
 
-                <input type="text" id="frameNameInput" placeholder="头像框备注名称（如：星之守护）" style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:6px;border:1px solid #e0e0e0;font-size:12px;outline:none;margin-bottom:8px;">
-                <input type="text" id="frameUrlInput" placeholder="图片 URL / 本地相对路径" style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:6px;border:1px solid #e0e0e0;font-size:12px;outline:none;margin-bottom:8px;">
+                <!-- 实时尺寸对照预览 -->
+                <div style="background:#f5f5f5;border-radius:8px;padding:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;margin-bottom:12px;">
+                    <div style="position:relative;width:52px;height:52px;">
+                        <img src="${testAvatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;" onerror="this.src='assets/icons/chat.png';" />
+                        <img id="newFramePreviewImg" src="" style="display:none;position:absolute;top:50%;left:50%;transform:translate(-50%, -50%) scale(${pendingScale});width:100%;height:100%;pointer-events:none;" />
+                    </div>
+                    <span style="font-size:10px;color:#888;margin-top:6px;">贴合效果参考</span>
+                </div>
+
+                <input type="text" id="newFrameNameInput" placeholder="备注名称（如：星之守护）" style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:6px;border:1px solid #e0e0e0;font-size:12px;outline:none;margin-bottom:8px;">
+                <input type="text" id="newFrameUrlInput" placeholder="图片 URL 或相对路径" style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:6px;border:1px solid #e0e0e0;font-size:12px;outline:none;margin-bottom:8px;" oninput="window._onNewFrameUrlChange(this.value)">
 
                 <input type="file" id="localFrameFileInput" accept="image/*" style="display:none;" onchange="window.handleFrameLocalUpload(event)">
-                <button style="width:100%;padding:7px;background:#f9f9f9;border:1px solid #ddd;border-radius:6px;font-size:11.5px;color:#555;margin-bottom:14px;cursor:pointer;" onclick="document.getElementById('localFrameFileInput').click()">
-                    📁 从相册中选取图片文件
+                <button style="width:100%;padding:7px;background:#f9f9f9;border:1px solid #ddd;border-radius:6px;font-size:11.5px;color:#555;margin-bottom:10px;cursor:pointer;" onclick="document.getElementById('localFrameFileInput').click()">
+                    从相册中选取图片
                 </button>
+
+                <!-- 尺寸调节滑块 -->
+                <div style="margin-bottom:14px;">
+                    <div style="display:flex;justify-content:space-between;font-size:11px;color:#666;margin-bottom:4px;">
+                        <span>默认尺寸调节</span>
+                        <span id="newFrameScaleLabel">118%</span>
+                    </div>
+                    <input type="range" id="newFrameScaleRange" min="80" max="160" value="118" style="width:100%;accent-color:#07c160;" oninput="window._onNewFrameScaleChange(this.value)">
+                </div>
 
                 <div style="display:flex;gap:8px;">
                     <button style="flex:1;padding:8px;background:#f9f9f9;border:1px solid #ddd;border-radius:6px;font-size:12px;color:#555;cursor:pointer;" onclick="document.getElementById('addFrameModal').remove()">取消</button>
-                    <button style="flex:1;padding:8px;background:#07c160;border:none;border-radius:6px;font-size:12px;color:#fff;font-weight:600;cursor:pointer;" onclick="window.confirmAddFrame()">保存并选用</button>
+                    <button style="flex:1;padding:8px;background:#07c160;border:none;border-radius:6px;font-size:12px;color:#fff;font-weight:600;cursor:pointer;" onclick="window.confirmAddNewFrame()">保存并选用</button>
                 </div>
             </div>
         `;
+    };
+
+    window._onNewFrameUrlChange = function (val) {
+        const preview = document.getElementById('newFramePreviewImg');
+        if (preview) {
+            if (val) {
+                preview.src = val;
+                preview.style.display = 'block';
+            } else {
+                preview.style.display = 'none';
+            }
+        }
+    };
+
+    window._onNewFrameScaleChange = function (val) {
+        const scale = parseFloat(val) / 100;
+        const label = document.getElementById('newFrameScaleLabel');
+        const preview = document.getElementById('newFramePreviewImg');
+        if (label) label.textContent = `${val}%`;
+        if (preview) preview.style.transform = `translate(-50%, -50%) scale(${scale})`;
     };
 
     window.handleFrameLocalUpload = function (event) {
@@ -369,9 +330,12 @@
         if (!file) return;
         const reader = new FileReader();
         reader.onload = function (e) {
-            const urlInput = document.getElementById('frameUrlInput');
-            if (urlInput) urlInput.value = e.target.result;
-            const nameInput = document.getElementById('frameNameInput');
+            const urlInput = document.getElementById('newFrameUrlInput');
+            if (urlInput) {
+                urlInput.value = e.target.result;
+                window._onNewFrameUrlChange(e.target.result);
+            }
+            const nameInput = document.getElementById('newFrameNameInput');
             if (nameInput && !nameInput.value) {
                 nameInput.value = file.name.replace(/\.[^/.]+$/, "");
             }
@@ -379,47 +343,50 @@
         reader.readAsDataURL(file);
     };
 
-    window.confirmAddFrame = function () {
-        const name = (document.getElementById('frameNameInput').value || '').trim();
-        const url = (document.getElementById('frameUrlInput').value || '').trim();
+    window.confirmAddNewFrame = function () {
+        const name = (document.getElementById('newFrameNameInput').value || '').trim();
+        const url = (document.getElementById('newFrameUrlInput').value || '').trim();
+        const scaleVal = parseFloat(document.getElementById('newFrameScaleRange')?.value || 118) / 100;
+
         if (!name || !url) {
-            if (typeof showToast === 'function') showToast('请填写名称与图片地址');
+            if (typeof showToast === 'function') showToast('请填写名称与图片');
             return;
         }
 
         const newId = 'frame_' + Date.now();
-        saveCustomFrame({ id: newId, name, url, isBuiltin: false });
-        window.selectDecorFrame(newId);
+        saveCustomFrame({ id: newId, name, url, scale: scaleVal, isBuiltin: false });
+        localStorage.setItem('mcyt_active_decor_frame', newId);
 
-        const modal = document.getElementById('addFrameModal');
-        if (modal) modal.remove();
+        document.getElementById('addFrameModal')?.remove();
+        refreshDecorView();
+        if (typeof showToast === 'function') showToast('新头像框已添加并生效');
     };
 
-    // 新增气泡样式弹窗（纯 CSS / 点九图双选）
+    // 新增气泡样式
     window.openAddBubbleModal = function () {
         let modal = document.getElementById('addBubbleModal');
         if (!modal) {
             modal = document.createElement('div');
             modal.id = 'addBubbleModal';
-            modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:99999;padding:20px;';
+            modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:99999;padding:20px;';
             document.body.appendChild(modal);
         }
 
         modal.innerHTML = `
-            <div style="background:#ffffff;border-radius:12px;width:100%;max-width:340px;padding:16px;box-shadow:0 8px 24px rgba(0,0,0,0.15);max-height:85vh;overflow-y:auto;">
-                <div style="font-size:14px;font-weight:700;color:#222;margin-bottom:8px;">添加气泡样式</div>
+            <div style="background:#ffffff;border-radius:12px;width:100%;max-width:320px;padding:16px;box-shadow:0 8px 24px rgba(0,0,0,0.15);">
+                <div style="font-size:14px;font-weight:600;color:#222;margin-bottom:8px;">添加气泡样式</div>
 
-                <input type="text" id="bubbleCustomName" placeholder="气泡名称备注（如：薄荷青柠檬）" style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:6px;border:1px solid #e0e0e0;font-size:12px;outline:none;margin-bottom:8px;">
+                <input type="text" id="bubbleCustomName" placeholder="气泡备注名称" style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:6px;border:1px solid #e0e0e0;font-size:12px;outline:none;margin-bottom:8px;">
 
-                <div style="font-size:11.5px;font-weight:600;color:#555;margin-bottom:4px;">我方气泡 CSS (User)：</div>
-                <textarea id="bubbleUserCssInput" placeholder="例: background: #95ec69; color: #000; border-radius: 8px;" style="width:100%;box-sizing:border-box;min-height:55px;padding:8px;border-radius:6px;border:1px solid #e0e0e0;font-size:11px;font-family:monospace;outline:none;resize:none;margin-bottom:8px;"></textarea>
+                <div style="font-size:11px;color:#666;margin-bottom:4px;">我方气泡 CSS：</div>
+                <textarea id="bubbleUserCssInput" placeholder="background: #95ec69; color: #000;" style="width:100%;box-sizing:border-box;min-height:50px;padding:8px;border-radius:6px;border:1px solid #e0e0e0;font-size:11px;font-family:monospace;resize:none;margin-bottom:8px;"></textarea>
 
-                <div style="font-size:11.5px;font-weight:600;color:#555;margin-bottom:4px;">对方气泡 CSS (NPC)：</div>
-                <textarea id="bubbleNpcCssInput" placeholder="例: background: #ffffff; color: #000; border-radius: 8px; border: 1px solid #eee;" style="width:100%;box-sizing:border-box;min-height:55px;padding:8px;border-radius:6px;border:1px solid #e0e0e0;font-size:11px;font-family:monospace;outline:none;resize:none;margin-bottom:12px;"></textarea>
+                <div style="font-size:11px;color:#666;margin-bottom:4px;">对方气泡 CSS：</div>
+                <textarea id="bubbleNpcCssInput" placeholder="background: #ffffff; color: #000; border: 1px solid #eee;" style="width:100%;box-sizing:border-box;min-height:50px;padding:8px;border-radius:6px;border:1px solid #e0e0e0;font-size:11px;font-family:monospace;resize:none;margin-bottom:12px;"></textarea>
 
                 <div style="display:flex;gap:8px;">
                     <button style="flex:1;padding:8px;background:#f9f9f9;border:1px solid #ddd;border-radius:6px;font-size:12px;color:#555;cursor:pointer;" onclick="document.getElementById('addBubbleModal').remove()">取消</button>
-                    <button style="flex:1;padding:8px;background:#07c160;border:none;border-radius:6px;font-size:12px;color:#fff;font-weight:600;cursor:pointer;" onclick="window.confirmAddBubble()">保存并应用</button>
+                    <button style="flex:1;padding:8px;background:#07c160;border:none;border-radius:6px;font-size:12px;color:#fff;font-weight:600;cursor:pointer;" onclick="window.confirmAddBubble()">保存</button>
                 </div>
             </div>
         `;
@@ -430,8 +397,8 @@
         const userCss = (document.getElementById('bubbleUserCssInput').value || '').trim();
         const npcCss = (document.getElementById('bubbleNpcCssInput').value || '').trim();
 
-        if (!name || (!userCss && !npcCss)) {
-            if (typeof showToast === 'function') showToast('请填写气泡备注名称与样式');
+        if (!name) {
+            if (typeof showToast === 'function') showToast('请填写气泡名称');
             return;
         }
 
@@ -440,117 +407,15 @@
             id: newId,
             name: name,
             type: 'css',
-            userStyle: userCss || 'background: #95ec69; color: #000; border-radius: 6px;',
-            npcStyle: npcCss || 'background: #ffffff; color: #000; border-radius: 6px;',
+            userStyle: userCss || 'background: #95ec69; color: #000;',
+            npcStyle: npcCss || 'background: #ffffff; color: #000; border: 1px solid #eee;',
             isBuiltin: false
         });
 
-        window.selectDecorBubble(newId);
-        const modal = document.getElementById('addBubbleModal');
-        if (modal) modal.remove();
-    };
-
-    // 🤖 AI 主题协议一键导入（兼容标准 JSON / CSS 代码）
-    window.openAiThemeImportModal = function () {
-        let modal = document.getElementById('aiThemeImportModal');
-        if (!modal) {
-            modal = document.createElement('div');
-            modal.id = 'aiThemeImportModal';
-            modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:99999;padding:20px;';
-            document.body.appendChild(modal);
-        }
-
-        modal.innerHTML = `
-            <div style="background:#ffffff;border-radius:12px;width:100%;max-width:340px;padding:16px;box-shadow:0 8px 24px rgba(0,0,0,0.15);">
-                <div style="font-size:14px;font-weight:700;color:#222;margin-bottom:6px;">🤖 导入 AI 主题代码</div>
-                <div style="font-size:11.5px;color:#888;margin-bottom:10px;line-height:1.4;">
-                    直接粘贴 AI 输出的 JSON 配置或 CSS 代码块，自动解析气泡与头像框！
-                </div>
-
-                <textarea id="aiThemePayloadInput" placeholder='粘贴 AI 提供的 JSON 或代码块，例如：\n{\n  "themeName": "赛博霓虹",\n  "bubble": { "userStyle": "...", "npcStyle": "..." },\n  "avatarFrame": "..."\n}' style="width:100%;box-sizing:border-box;min-height:120px;padding:8px 10px;border-radius:6px;border:1px solid #e0e0e0;font-size:11px;font-family:monospace;outline:none;resize:none;margin-bottom:12px;"></textarea>
-
-                <div style="display:flex;gap:8px;">
-                    <button style="flex:1;padding:8px;background:#f9f9f9;border:1px solid #ddd;border-radius:6px;font-size:12px;color:#555;cursor:pointer;" onclick="document.getElementById('aiThemeImportModal').remove()">取消</button>
-                    <button style="flex:1;padding:8px;background:#07c160;border:none;border-radius:6px;font-size:12px;color:#fff;font-weight:600;cursor:pointer;" onclick="window.confirmImportAiTheme()">立即解析导入</button>
-                </div>
-            </div>
-        `;
-    };
-
-    window.confirmImportAiTheme = function () {
-        const input = document.getElementById('aiThemePayloadInput');
-        const raw = (input ? input.value : '').trim();
-        if (!raw) return;
-
-        let parsed = null;
-        // 尝试 JSON 解析
-        try {
-            // 剔除可能的 ```json 包裹
-            const cleanJson = raw.replace(/^```json\s*/i, '').replace(/\s*```$/, '');
-            parsed = JSON.parse(cleanJson);
-        } catch (_) {}
-
-        if (parsed) {
-            const themeName = parsed.themeName || parsed.name || ('AI装扮_' + Date.now());
-            if (parsed.bubble) {
-                const bubbleId = 'bubble_ai_' + Date.now();
-                saveCustomBubble({
-                    id: bubbleId,
-                    name: themeName + '气泡',
-                    type: parsed.bubble.type || 'css',
-                    userStyle: parsed.bubble.userStyle || '',
-                    npcStyle: parsed.bubble.npcStyle || '',
-                    borderImage: parsed.bubble.borderImage || '',
-                    slice: parsed.bubble.slice || '12 12 12 12',
-                    padding: parsed.bubble.padding || '8px 12px',
-                    isBuiltin: false
-                });
-                window.selectDecorBubble(bubbleId);
-            }
-            if (parsed.avatarFrame) {
-                const frameId = 'frame_ai_' + Date.now();
-                saveCustomFrame({
-                    id: frameId,
-                    name: themeName + '头像框',
-                    url: parsed.avatarFrame,
-                    isBuiltin: false
-                });
-                window.selectDecorFrame(frameId);
-            }
-            if (parsed.avatarShape) {
-                window.setAvatarShape(parsed.avatarShape);
-            }
-            if (typeof showToast === 'function') showToast(`AI 主题 [${themeName}] 解析导入成功！`);
-        } else {
-            // 作为纯 CSS 代码处理
-            const bubbleId = 'bubble_ai_' + Date.now();
-            saveCustomBubble({
-                id: bubbleId,
-                name: 'AI自定义CSS气泡',
-                type: 'css',
-                userStyle: raw,
-                npcStyle: raw,
-                isBuiltin: false
-            });
-            window.selectDecorBubble(bubbleId);
-            if (typeof showToast === 'function') showToast('已将 CSS 代码解析为气泡样式！');
-        }
-
-        const modal = document.getElementById('aiThemeImportModal');
-        if (modal) modal.remove();
+        localStorage.setItem('mcyt_active_decor_bubble', newId);
+        document.getElementById('addBubbleModal')?.remove();
         refreshDecorView();
+        if (typeof showToast === 'function') showToast('气泡样式已保存并生效');
     };
 
-    // 页面初始化时挂载全局气泡样式与头像形状
-    try {
-        applyActiveBubbleCssGlobally();
-        const savedShape = localStorage.getItem('mcyt_active_avatar_shape') || 'circle';
-        document.documentElement.style.setProperty('--avatar-border-radius', getShapeBorderRadius(savedShape));
-        const savedFrameId = localStorage.getItem('mcyt_active_decor_frame') || 'frame_none';
-        const frames = getStoredFrames();
-        const f = frames.find(x => x.id === savedFrameId);
-        if (f && f.url) {
-            document.documentElement.style.setProperty('--global-avatar-frame', `url('${f.url}')`);
-        }
-    } catch (_) {}
 })();
