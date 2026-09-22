@@ -11,6 +11,7 @@
  *  6. 导出支持 WebView 标准 Base64 DataURL（修复 bad base-64 异常），穿透保存至 Download 文件夹
  *  7. 气泡功能支持直接粘贴图片/HTML/CSS链接极速保存
  *  8. 补齐独立的 openBubbleFontModal 弹窗，操作栏全面升级为极简轻量 SVG 图标
+ *  9. AI 气泡中枢解耦路由至独立的 js/apps/theme/theme-bubble-ai.js（支持视觉仿图与专家级拟真系统提示词）
  */
 
 (function () {
@@ -469,11 +470,11 @@
                             <div style="font-size:10.5px;color:#777;">8点文字排版安全区，消除虚大空白</div>
                         </div>
                     </button>
-                    <button onclick="document.getElementById('bubbleActionMenuModal').remove(); window.openAiGenerateBubbleModal();" style="width:100%;padding:11px 14px;background:#f9f9f9;border:1px solid #e5e5e5;border-radius:8px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:10px;">
+                    <button onclick="document.getElementById('bubbleActionMenuModal').remove(); if(typeof window.openAiGenerateBubbleModal==='function') window.openAiGenerateBubbleModal();" style="width:100%;padding:11px 14px;background:#f9f9f9;border:1px solid #e5e5e5;border-radius:8px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:10px;">
                         <svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:#333;fill:none;stroke-width:2;"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/></svg>
                         <div>
-                            <div style="font-size:13px;font-weight:600;color:#222;">AI 生成气泡</div>
-                            <div style="font-size:10.5px;color:#777;">输入自然语言风格，由 AI 自动编写气泡</div>
+                            <div style="font-size:13px;font-weight:600;color:#222;">AI 视觉仿图 & 定制</div>
+                            <div style="font-size:10.5px;color:#777;">上传参考图或自然语言，AI 仿制气泡</div>
                         </div>
                     </button>
                     <button onclick="document.getElementById('bubbleActionMenuModal').remove(); window.openImportBubbleHubModal();" style="width:100%;padding:11px 14px;background:#f9f9f9;border:1px solid #e5e5e5;border-radius:8px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:10px;">
@@ -660,89 +661,7 @@
         reader.readAsDataURL(file);
     };
 
-    // AI 生成与 JSON 导入模块
-    window.openAiGenerateBubbleModal = function () {
-        let modal = document.getElementById('aiGenerateBubbleModal');
-        if (!modal) {
-            modal = document.createElement('div');
-            modal.id = 'aiGenerateBubbleModal';
-            modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:100000;padding:20px;';
-            document.body.appendChild(modal);
-        }
-
-        modal.innerHTML = `
-            <div style="background:#ffffff;border-radius:14px;width:100%;max-width:320px;padding:16px;box-shadow:0 8px 24px rgba(0,0,0,0.15);">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                    <span style="font-size:14px;font-weight:600;color:#222;">AI 智能生成气泡</span>
-                    <button onclick="document.getElementById('aiGenerateBubbleModal').remove()" style="background:none;border:none;color:#999;font-size:16px;cursor:pointer;">✕</button>
-                </div>
-                <textarea id="aiBubblePromptInput" placeholder="输入设计意向..." style="width:100%;box-sizing:border-box;height:75px;padding:8px 10px;border-radius:6px;border:1px solid #ddd;font-size:12px;outline:none;resize:none;margin-bottom:10px;"></textarea>
-                <div id="aiBubbleStatus" style="font-size:11px;color:#07c160;margin-bottom:10px;display:none;">正在调度 AI 编写设计代码...</div>
-                <div style="display:flex;gap:8px;">
-                    <button onclick="document.getElementById('aiGenerateBubbleModal').remove()" style="flex:1;padding:9px;background:#f5f5f5;border:1px solid #ddd;border-radius:6px;font-size:12px;color:#555;cursor:pointer;">取消</button>
-                    <button id="btnRunAiGenerateBubble" style="flex:1.4;padding:9px;background:#07c160;border:none;border-radius:6px;font-size:12px;color:#fff;font-weight:600;cursor:pointer;">开始生成</button>
-                </div>
-            </div>
-        `;
-
-        modal.querySelector('#btnRunAiGenerateBubble').onclick = async () => {
-            const prompt = (modal.querySelector('#aiBubblePromptInput')?.value || '').trim();
-            if (!prompt) return;
-
-            const statusEl = modal.querySelector('#aiBubbleStatus');
-            const btn = modal.querySelector('#btnRunAiGenerateBubble');
-            statusEl.style.display = 'block';
-            btn.disabled = true;
-
-            try {
-                const aiConfig = JSON.parse(localStorage.getItem('mc_yt_ai_config') || '{}');
-                if (!aiConfig.apiKey) throw new Error('请先在系统设置中配置 AI ApiKey');
-
-                const sysPrompt = `你是一个精通CSS设计的专家。设计一对聊天气泡。输出标准合法 JSON: {"name":"气泡名","userStyle":"我方CSS","npcStyle":"对方CSS"}`;
-
-                const resp = await fetch((aiConfig.baseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '') + '/chat/completions', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${aiConfig.apiKey}` },
-                    body: JSON.stringify({
-                        model: aiConfig.model || 'gpt-3.5-turbo',
-                        messages: [{ role: 'system', content: sysPrompt }, { role: 'user', content: prompt }],
-                        temperature: 0.7
-                    })
-                });
-
-                if (!resp.ok) throw new Error('请求失败');
-                const data = await resp.json();
-                let rawText = data.choices[0].message.content.replace(/```json/g, '').replace(/```/g, '').trim();
-                const parsed = JSON.parse(rawText);
-
-                const newBubble = {
-                    id: 'bubble_ai_' + Date.now(),
-                    name: parsed.name || 'AI定制气泡',
-                    author: 'AI Designer',
-                    type: 'css',
-                    scale: 1.0,
-                    fontSize: 14.5,
-                    textAlign: 'left',
-                    userStyle: parsed.userStyle || 'background:#95ec69;color:#000;',
-                    npcStyle: parsed.npcStyle || 'background:#fff;color:#000;border:1px solid #eee;',
-                    userTextColor: '#000000',
-                    npcTextColor: '#000000',
-                    isBuiltin: false
-                };
-
-                await window.saveCustomBubbleAsync(newBubble);
-                localStorage.setItem('mcyt_active_decor_bubble', newBubble.id);
-                modal.remove();
-                refreshDecorView();
-                if (typeof showToast === 'function') showToast('AI 气泡生成成功！');
-            } catch (err) {
-                statusEl.style.display = 'none';
-                btn.disabled = false;
-                if (typeof showToast === 'function') showToast('生成失败: ' + err.message);
-            }
-        };
-    };
-
+    // JSON 导入模块
     window.openImportBubbleHubModal = function () {
         let modal = document.getElementById('bubbleImportHubModal');
         if (!modal) {
@@ -1837,7 +1756,6 @@
         const jsonStr = JSON.stringify(exportPayload, null, 2);
 
         try {
-            // 标准 Base64 编码（支持 UTF-8 中文字符，满足 Android WebView 原生 DownloadListener 的解码标准）
             const base64Content = btoa(unescape(encodeURIComponent(jsonStr)));
             const dataUrl = `data:application/json;base64,${base64Content}`;
 
