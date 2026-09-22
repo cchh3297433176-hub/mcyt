@@ -231,11 +231,25 @@
         if (!container) return;
 
         // 静默触发装扮池异步预热与保活，确保 IndexedDB 头像框与气泡随时最新
-        if (typeof window.loadStoredDecorFramesAsync === 'function') {
-            window.loadStoredDecorFramesAsync();
+        // 🌟 修复：冷启动时 IndexedDB 尚未读完，气泡池仅剩内置默认气泡，
+        //    此前 fire-and-forget 调用不会在加载完成后补渲染，导致自定义气泡永久摔回默认样式。
+        //    这里加上一次性的加载完成回调，若窗口仍处于打开状态则自动重绘。
+        const _reopenNpcId = window.G && window.G.currentChatNpc;
+        if (typeof window.loadStoredDecorFramesAsync === 'function' && !window._mcytDecorFramesReady) {
+            window.loadStoredDecorFramesAsync().then(() => {
+                window._mcytDecorFramesReady = true;
+                if (window.G && window.G.currentChatNpc === _reopenNpcId && document.body.contains(container)) {
+                    renderSingleChatWindow(container, renderOpts);
+                }
+            });
         }
-        if (typeof window.loadStoredDecorBubblesAsync === 'function') {
-            window.loadStoredDecorBubblesAsync();
+        if (typeof window.loadStoredDecorBubblesAsync === 'function' && !window._mcytDecorBubblesReady) {
+            window.loadStoredDecorBubblesAsync().then(() => {
+                window._mcytDecorBubblesReady = true;
+                if (window.G && window.G.currentChatNpc === _reopenNpcId && document.body.contains(container)) {
+                    renderSingleChatWindow(container, renderOpts);
+                }
+            });
         }
 
         if (window.ChatTarot && typeof window.ChatTarot.drainPendingTarotShares === 'function') {
