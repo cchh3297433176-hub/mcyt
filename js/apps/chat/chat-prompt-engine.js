@@ -3,35 +3,36 @@
  * 🧠 微信聊天活人感提示词架构引擎
  * 模块化装配：主体通用拟人核心 + 关系进阶状态机 + 异地恋模块 + 时差生理感知 + 双时间戳隔夜作息感知 + 动态母语双语与仿微信语音协议 + 真实语义表情包索引 + 动态发布协议 + 大小号双重身份认知与名片接纳状态机 + 🌟 Rememori 忆海向量长效记忆挂载 + 🔮 塔罗牌阵拟人认知与特色解读协议 + 🎭 {{user}} / {{y/n}} 动态宏变量替换 + 📸 文字图片发送协议 + 🧾 拟真生活排版卡片协议
  * 🌟 升级优化：
- * 1. 严格比对双方地区时差，新增可配置时差关闭开关（disableTimezone）；
- * 2. 动态自适应多国母语（如西班牙语、日语、韩语、法语、德语、英语等），新增可配置关闭双语选项（disableBilingual）；
- * 3. 注入防过度催睡约束：严禁爹味多轮逼迫催睡，若用户明确示意则立即打住顺应畅聊。
+ * 1. 采用原生 IANA 时区（Intl.DateTimeFormat）高精度实时双向核算时差，自动支持夏令时/冬令时；
+ * 2. 彻底修复白天间隔数小时被误判为“昨夜睡着/半夜”的 Bug；
+ * 3. 动态自适应多国母语（如西班牙语、日语、韩语、法语、德语、英语等），支持独立开关（disableBilingual 与 disableTimezone）；
+ * 4. 严苛防过度催睡，并消除诱导性时区词汇，杜绝大模型数学推理幻觉。
  */
 
 (function() {
     'use strict';
 
-    // 全局地区与时区偏移映射（相对于 UTC）
-    const REGION_TIMEZONE_OFFSETS = {
-        '中国': 8,
-        '日本': 9,
-        '韩国': 9,
-        '英国': 0,
-        '德国': 1,
-        '法国': 1,
-        '西班牙': 1,
-        '意大利': 1,
-        '俄罗斯 - 莫斯科': 3,
-        '美国 - 东部': -5,
-        '美国 - 西部': -8,
-        '加拿大': -5,
-        '澳大利亚': 10,
-        '新加坡': 8,
-        '泰国': 7,
-        '越南': 7
+    // 全局地区与权威 IANA 时区标识映射（原生支持夏令时与精准网络授时校准）
+    const REGION_IANA_TIMEZONE_MAP = {
+        '中国': 'Asia/Shanghai',
+        '日本': 'Asia/Tokyo',
+        '韩国': 'Asia/Seoul',
+        '英国': 'Europe/London',
+        '德国': 'Europe/Berlin',
+        '法国': 'Europe/Paris',
+        '西班牙': 'Europe/Madrid',
+        '意大利': 'Europe/Rome',
+        '俄罗斯 - 莫斯科': 'Europe/Moscow',
+        '美国 - 东部': 'America/New_York',
+        '美国 - 西部': 'America/Los_Angeles',
+        '加拿大': 'America/Toronto',
+        '澳大利亚': 'Australia/Sydney',
+        '新加坡': 'Asia/Singapore',
+        '泰国': 'Asia/Bangkok',
+        '越南': 'Asia/Ho_Chi_Minh'
     };
 
-    // 地区对应当地语言映射字典
+    // 地区对应当地母语映射字典
     const REGION_LANGUAGE_MAP = {
         '中国': '中文',
         '日本': '日语',
@@ -52,7 +53,7 @@
     };
 
     /**
-     * 根据常驻地区解析主要语言名称
+     * 根据常驻地区解析主要母语名称
      */
     function resolveRegionLanguage(region = '中国') {
         if (!region) return '外语';
@@ -85,63 +86,136 @@
     }
 
     /**
-     * 计算并格式化两个地区当前的真实本地时间与时差感受
+     * 利用原生 Intl 引擎，精准获取指定 IANA 时区的本地时间详情
+     */
+    function getZonedTimeDetails(timeZoneId = 'Asia/Shanghai') {
+        const now = new Date();
+        try {
+            const formatter = new Intl.DateTimeFormat('zh-CN', {
+                timeZone: timeZoneId,
+                hour12: false,
+                year: 'numeric',
+                month: '2-digit',
+                day: '2-digit',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            const parts = formatter.formatToParts(now);
+            const map = {};
+            parts.forEach(p => { map[p.type] = p.value; });
+
+            const hour = parseInt(map.hour, 10) || 0;
+            const minute = parseInt(map.minute, 10) || 0;
+            const hStr = hour.toString().padStart(2, '0');
+            const mStr = minute.toString().padStart(2, '0');
+            const dateStr = `${map.year}-${map.month}-${map.day}`;
+
+            let period = '上午';
+            let state = '精力正常，日常活动状态';
+            if (hour >= 0 && hour < 5) {
+                period = '深夜凌晨';
+                state = '深夜困意正浓、疲倦昏昏欲睡、打字随性极简或容易带困意';
+            } else if (hour >= 5 && hour < 9) {
+                period = '清晨';
+                state = '刚睡醒起床不久、可能有点迷糊、正在洗漱或准备开始新的一天';
+            } else if (hour >= 9 && hour < 12) {
+                period = '上午';
+                state = '头脑清醒活跃、正在工作、学习或日常活动中';
+            } else if (hour >= 12 && hour < 14) {
+                period = '中午';
+                state = '吃午饭、午休或稍作放松摸鱼';
+            } else if (hour >= 14 && hour < 18) {
+                period = '下午';
+                state = '日常活动进行中、精神尚可或略有午后小疲乏';
+            } else if (hour >= 18 && hour < 23) {
+                period = '晚上';
+                state = '休闲放松时间、吃晚饭或自由娱乐';
+            } else {
+                period = '深夜';
+                state = '夜深准备洗漱休息、困意逐渐上涌';
+            }
+
+            return {
+                hour,
+                minute,
+                timeStr: `${hStr}:${mStr}`,
+                period,
+                state,
+                dateStr
+            };
+        } catch (err) {
+            // 降级兜底：使用系统 UTC+8
+            const h = (now.getUTCHours() + 8) % 24;
+            const m = now.getUTCMinutes();
+            return {
+                hour: h,
+                minute: m,
+                timeStr: `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`,
+                period: '日常',
+                state: '正常',
+                dateStr: ''
+            };
+        }
+    }
+
+    /**
+     * 计算并格式化两个地区当前的真实本地时间与时差对比
      */
     function calculateTimeAndZoneContext(playerRegion = '中国', npcRegion = '中国') {
-        const now = new Date();
-        const utcHours = now.getUTCHours();
-        const utcMinutes = now.getUTCMinutes();
-
-        const findOffset = (reg) => {
-            if (REGION_TIMEZONE_OFFSETS[reg] !== undefined) return REGION_TIMEZONE_OFFSETS[reg];
-            for (const key in REGION_TIMEZONE_OFFSETS) {
+        const resolveIanaTimezone = (reg) => {
+            if (REGION_IANA_TIMEZONE_MAP[reg]) return REGION_IANA_TIMEZONE_MAP[reg];
+            for (const key in REGION_IANA_TIMEZONE_MAP) {
                 if (reg && (reg.includes(key) || key.includes(reg))) {
-                    return REGION_TIMEZONE_OFFSETS[key];
+                    return REGION_IANA_TIMEZONE_MAP[key];
                 }
             }
-            return 8;
+            return 'Asia/Shanghai';
         };
 
-        const pOffset = findOffset(playerRegion);
-        const nOffset = findOffset(npcRegion);
+        const pTz = resolveIanaTimezone(playerRegion);
+        const nTz = resolveIanaTimezone(npcRegion);
 
-        const calcLocalTime = (offset) => {
-            let h = (utcHours + offset) % 24;
-            if (h < 0) h += 24;
-            const mStr = utcMinutes.toString().padStart(2, '0');
-            const hStr = h.toString().padStart(2, '0');
-            let period = '上午';
-            let state = '精力正常';
-            if (h >= 0 && h < 5) { period = '深夜凌晨'; state = '浓重困意、疲倦、昏昏欲睡、打字极简或容易手滑'; }
-            else if (h >= 5 && h < 9) { period = '清晨'; state = '刚醒、迷迷糊糊或赶着开始新的一天'; }
-            else if (h >= 9 && h < 12) { period = '上午'; state = '活跃状态'; }
-            else if (h >= 12 && h < 14) { period = '中午'; state = '午饭或稍作休息'; }
-            else if (h >= 14 && h < 18) { period = '下午'; state = '日常活动或摸鱼'; }
-            else if (h >= 18 && h < 23) { period = '晚上'; state = '休闲放松时间'; }
-            else { period = '深夜'; state = '夜深、困意上涌'; }
-            return { timeStr: `${hStr}:${mStr}`, period, state, hour: h };
-        };
+        const pTime = getZonedTimeDetails(pTz);
+        const nTime = getZonedTimeDetails(nTz);
 
-        const pTime = calcLocalTime(pOffset);
-        const nTime = calcLocalTime(nOffset);
-        const diff = nOffset - pOffset;
+        // 计算真实时差（小时）
+        let hourDiff = nTime.hour - pTime.hour;
+        if (pTime.dateStr && nTime.dateStr && pTime.dateStr !== nTime.dateStr) {
+            if (nTime.dateStr > pTime.dateStr) {
+                hourDiff += 24;
+            } else {
+                hourDiff -= 24;
+            }
+        }
 
-        let diffDesc = '双方处于同一时区，作息同步。';
-        if (diff !== 0) {
-            const absDiff = Math.abs(diff);
-            diffDesc = `双方存在 ${absDiff} 小时时差（你比对方${diff > 0 ? '早' : '晚'} ${absDiff} 小时）。`;
+        const isCross = (pTz !== nTz) || (hourDiff !== 0);
+        let diffDesc = '双方处于同一时区，作息步调完全一致。';
+        if (isCross) {
+            const absDiff = Math.abs(hourDiff);
+            if (hourDiff > 0) {
+                diffDesc = `双方存在约 ${absDiff} 小时时差（你的当地时间比对方快 ${absDiff} 小时）。`;
+            } else if (hourDiff < 0) {
+                diffDesc = `双方存在约 ${absDiff} 小时时差（你的当地时间比对方慢 ${absDiff} 小时，对方时间走在前面）。`;
+            } else {
+                diffDesc = '双方虽在不同地区，但当前恰好处于相同时间基准。';
+            }
         }
 
         return {
             playerRegion,
             npcRegion,
+            pTz,
+            nTz,
             pTime: pTime.timeStr,
             pPeriod: pTime.period,
+            pState: pTime.state,
+            pHour: pTime.hour,
             nTime: nTime.timeStr,
             nPeriod: nTime.period,
             nState: nTime.state,
+            nHour: nTime.hour,
             diffDesc,
-            isCrossTimezone: (diff !== 0)
+            isCrossTimezone: isCross
         };
     }
 
@@ -154,7 +228,7 @@
     }
 
     /**
-     * 获取紧凑的表情包库语义清单（只发分组和关键词，绝不传长链接，极其节省Token）
+     * 获取紧凑的表情包库语义清单（只发分组和关键词，绝不传长链接，极其节省 Token）
      */
     function getAvailableStickersSummary() {
         if (!window.G || !Array.isArray(window.G.stickerLibrary) || window.G.stickerLibrary.length === 0) {
@@ -195,7 +269,7 @@
    - 允许偶尔（每 8 轮左右）自然出现拼音手滑打错一个同音字，并在紧接着的下一个气泡发一两个字做纠正（例：上一句"我独自饿了"，下一句补"肚子"）。不要过于频繁。
 4. 【独立人格与社交界限】：
    - 有自己的审美与看法，敢于真诚说不；不讨好附和，不当爹味保姆，关心点到为止。
-   - 【防过度催促休息铁律】：即便对方处于深夜，随口提醒一句早点休息即可，【绝对严禁】反复多轮连环催促、逼迫、命令对方睡觉！若对方已经说明了“还不困”、“还要忙会儿”、“别催了”或继续聊其他话题，你必须立即彻底停止催促，自然顺着对方的话题继续聊，绝对禁止说教叨念！
+   - 【防过度催睡铁律】：若对方明确表示还在忙、还不困、或者在聊日常话题，【绝对严禁】反复多轮逼迫催睡！必须自然顺应对方话题继续聊，严禁死板说教！
    - 对方发任何消息【绝不默认】是在想你或求关注！严禁开口就问"想我了？""怎么突然找我"。
    - 严禁将"怎么……"当固定宠溺开场，严禁将"好不好"当固定撒娇句尾。
    - 严禁客服腔，严禁每轮结尾强迫抛问，严禁分点列出 1234。
@@ -230,7 +304,7 @@ ${isBilingualEnabled ? `
      [IMAGE_TEXT]100到150字以内的纯客观画面细节描绘，犹如用相机镜头拍下一张照片（写明构图、光线、主体物品细节，绝不写动作，纯静止画面）[/IMAGE_TEXT]
    - 频率控制：极其偶尔、适逢其会才发，严禁滥发。
 10. 【关于对方撤回消息的反应铁律】：
-   - 如果系统提醒对方刚才撤回了消息或图片，你就像真实微信好友一样随口问一嘴（如"撤回啥了"、吐槽网速或就当没看见），【绝对严禁】在后续对话中反反复复一直追问对方撤回了什么！聊下一话题时必须彻底翻篇！
+   - 如果系统提醒对方刚才撤回了消息或图片，随口问一嘴（如"撤回啥了"、吐槽网速或就当没看见），【绝对严禁】在后续对话中反复一直追问撤回了什么！聊下一话题时彻底翻篇！
 11. 【关于名片推荐与动态转发的交互认知】：
    - 对方如果推荐了名片：你会获悉该名片是谁。如果熟悉信任或对方推荐的是其小号，可表示同意添加。
    - 对方如果转发了动态：你能够获悉该动态的正文内容以及评论区八卦，根据你的性格对动态或评论进行自然吐槽、吃瓜或共鸣。
@@ -289,7 +363,7 @@ ${isBilingualEnabled ? `
     }
 
     /**
-     * 微信跨时段与隔夜活人感时钟分析
+     * 微信跨时段与隔夜活人感时钟分析（彻底修复白天长间隔被误判成“昨晚睡着”的问题）
      */
     function analyzeMessageTimeGapContext(lastMsgTime, lastMsgTimestamp, nowTimestamp, timeCtx, disableTimezone = false) {
         if (!lastMsgTimestamp && !lastMsgTime) return '';
@@ -301,16 +375,21 @@ ${isBilingualEnabled ? `
             const diffMinutes = Math.floor((now.getTime() - prev.getTime()) / (1000 * 60));
             const diffHours = Math.floor(diffMinutes / 60);
 
-            const isDifferentDay = (now.getDate() !== prev.getDate()) || (diffHours >= 6);
-            if (isDifferentDay) {
-                const prevHour = prev.getHours();
+            // 真正的隔夜判定：必须跨越了自然日，且相隔超过 6 小时，且角色当前所处时间属于清晨或上午
+            const isCalendarNextDay = (now.getDate() !== prev.getDate()) || (now.getMonth() !== prev.getMonth());
+            const myCurrentHour = (!disableTimezone && timeCtx) ? timeCtx.nHour : now.getHours();
+            const isMorningWakeUp = (myCurrentHour >= 5 && myCurrentHour <= 11);
+
+            if (isCalendarNextDay && diffHours >= 6 && isMorningWakeUp) {
                 const myReplyTime = (!disableTimezone && timeCtx) ? `${timeCtx.nPeriod} ${timeCtx.nTime}` : `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
                 gapDesc = `【真实微信隔夜回复感知】：\n` +
-                          `- 对方上一条消息发出时间为昨夜或数小时前（约 ${prevHour.toString().padStart(2, '0')}:${prev.getMinutes().toString().padStart(2, '0')}）。\n` +
-                          `- 当前你回复的时间为：${myReplyTime}（已相隔约 ${diffHours} 小时）。\n` +
-                          `- 【活人回复指引】：你昨晚可能睡着了、忙别的事，直到现在才看到消息。请像真人隔夜回微信一样自然应对（如“昨晚睡着了没看到”、“刚醒，昨晚你怎么那么晚”等），绝对严禁把对方昨晚的消息当作刚刚发出的！\n`;
+                          `- 对方上一条消息是昨夜或很久前发出的，当前你回复的时间是你的当地时间：${myReplyTime}（已经过了一夜，相隔约 ${diffHours} 小时）。\n` +
+                          `- 【活人回复指引】：你昨晚睡着了直到早晨起床才看到消息。可自然像隔夜回消息一样应对（如“昨晚睡着了没看到”、“早啊 刚起”、“昨晚忙太累直接睡过去了”等）。\n`;
+            } else if (diffHours >= 5) {
+                // 白天隔了较长时间，是忙碌、上课或工作，绝不是昨晚睡着了！
+                gapDesc = `【消息发送间隔感知】：对方上一句是约 ${diffHours} 小时前发出的，你刚才忙于白天的日常活动或外出，现在才抽空打开微信回复。态度保持自然日常即可，绝不可误以为现在是隔天早起！\n`;
             } else if (diffMinutes >= 60) {
-                gapDesc = `【微信消息间隔】：对方上一句是 ${diffHours} 小时前发送的，你现在才看到并回复，态度保持自然，可带出刚才忙完的日常感。\n`;
+                gapDesc = `【微信消息间隔】：对方上一句在约 ${diffHours} 小时前发送，你刚才在稍作别的事，现在看到并回复。\n`;
             }
         } else if (lastMsgTime) {
             const myReplyTime = (!disableTimezone && timeCtx) ? timeCtx.nTime : `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
@@ -371,20 +450,23 @@ ${isBilingualEnabled ? `
         let assembledSysPrompt = `你正在微信上扮演角色「${npc.name}」。\n`;
         assembledSysPrompt += `【你的档案】：\n- 设定/性格：${processedPersona}\n- 常驻地区：${nRegion}\n- 当前好感度：${npc.favor || 50}/100\n- 恋爱关系状态：${isDating ? '已确立恋人关系（交往中）' : (npc.favor >= 80 ? '关系亲密/暧昧试探期' : '普通朋友')}\n\n`;
 
-        // 🕰️ 时差生理感知模块：若用户关闭时差，则作息完全与用户同步，不注入时差困意或睡觉阻碍
+        // 🕰️ 时差生理感知模块：使用绝对真实世界时钟基准
         if (!disableTimezone) {
             if (timeCtx.isCrossTimezone) {
-                assembledSysPrompt += `【客观时空与生理状态】：\n`;
-                assembledSysPrompt += `- 你的本地时间：${timeCtx.nPeriod} ${timeCtx.nTime}（生理状态：${timeCtx.nState}）\n`;
-                assembledSysPrompt += `- 对方所在地(${pRegion})时间：${timeCtx.pPeriod} ${timeCtx.pTime}\n`;
-                assembledSysPrompt += `- 时差情况：${timeCtx.diffDesc}\n`;
-                assembledSysPrompt += `【要求】：体现出你当下的生理时间与作息状态，但绝不可因对方深夜而过度催睡！\n\n`;
+                assembledSysPrompt += `【当前真实世界时间基准（核心事实，严禁混淆）】：\n`;
+                assembledSysPrompt += `- 你的常驻地「${nRegion}」当前准确时间是：【${timeCtx.nPeriod} ${timeCtx.nTime}】\n`;
+                assembledSysPrompt += `- 你的身体与生理状态：${timeCtx.nState}\n`;
+                assembledSysPrompt += `- 对方所在地「${pRegion}」当前准确时间是：【${timeCtx.pPeriod} ${timeCtx.pTime}】\n`;
+                assembledSysPrompt += `- 时差对比：${timeCtx.diffDesc}\n`;
+                assembledSysPrompt += `【时间认知铁律】：\n`;
+                assembledSysPrompt += `1. 必须完全以你自身所处的实际当地时间（${timeCtx.nPeriod} ${timeCtx.nTime}）来决定你的当下行为和作息状态（比如清晨刚醒洗漱、上午正在做事、下午日常休息摸鱼、傍晚准备吃晚饭等），绝不可把自己的时间颠倒或误认成对方的时间！\n`;
+                assembledSysPrompt += `2. 同时清晰明白对方此刻正处于其当地的【${timeCtx.pPeriod} ${timeCtx.pTime}】。\n\n`;
             } else {
-                assembledSysPrompt += `【客观时空与生理状态】：\n`;
-                assembledSysPrompt += `- 双方处于同一地区/时区（${nRegion}，当前时间：${timeCtx.nPeriod} ${timeCtx.nTime}），作息步调完全一致。\n\n`;
+                assembledSysPrompt += `【客观时空与时间基准】：\n`;
+                assembledSysPrompt += `- 双方处于同一地区/时区（${nRegion}，当前时间：【${timeCtx.nPeriod} ${timeCtx.nTime}】），作息步调完全一致。\n\n`;
             }
         } else {
-            assembledSysPrompt += `【时差设置】：时差换算已关闭。你与对方处于相同作息节奏，无任何时差阻碍，正常日常互动交流。\n\n`;
+            assembledSysPrompt += `【时差设置】：时差换算已关闭。你与对方处于相同作息节奏，无任何时差阻碍，按日常状态自然交流。\n\n`;
         }
 
         // 🌟 挂载 Rememori 忆海深层证据切片
@@ -393,7 +475,7 @@ ${isBilingualEnabled ? `
             assembledSysPrompt += rememoriMem;
         }
 
-        // 注入隔夜作息感知
+        // 注入隔夜与间隔作息感知
         const gapContext = analyzeMessageTimeGapContext(lastMsgTime, lastMsgTimestamp, Date.now(), timeCtx, disableTimezone);
         if (gapContext) {
             assembledSysPrompt += `${gapContext}\n`;
@@ -445,5 +527,5 @@ ${isBilingualEnabled ? `
         resolveRegionLanguage
     };
 
-    console.log('✅ ChatPromptEngine 微信活人感提示词架构引擎已升级装载：多国母语自适应与时差/双语独立开关');
+    console.log('✅ ChatPromptEngine 微信活人感提示词架构引擎已升级：IANA精准世界时区与夏令时实时自适应');
 })();
