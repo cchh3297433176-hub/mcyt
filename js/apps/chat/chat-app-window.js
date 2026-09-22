@@ -7,7 +7,7 @@
  * 🌟 存储升级：重说撤回逻辑接入 await syncChatHistoryToLocalBackup() 异步原子落盘。
  * 🌟 修复与升级：
  *  1. 我方头像全面接入 getPlayerAvatarSafe() 杜绝掉落回默认图标；
- *  2. 头像框完美继承缩放 (scale) 与全向偏移 (offsetX, offsetY)；
+ *  2. 头像框全面接入 window.getStoredDecorFrames() 管道（全面兼容 IndexedDB 动态扩容池与全向微调 offset/scale），彻底解决新导入头像框在聊天界面失踪的严重 bug；
  *  3. 气泡全面接入 buildDecorBubbleHtml 管道，支持角色专属气泡、插画框选气泡、点九图与自由缩放！
  */
 
@@ -22,19 +22,44 @@
         return '8px';
     }
 
+    // 辅助：统一获取全局/运行时头像框配置列表（优先接入 IndexedDB 运行态池）
+    function getAvailableFramesList() {
+        if (typeof window.getStoredDecorFrames === 'function') {
+            const list = window.getStoredDecorFrames();
+            if (Array.isArray(list) && list.length > 0) return list;
+        }
+        if (Array.isArray(window._decorFramesCache) && window._decorFramesCache.length > 0) {
+            return window._decorFramesCache;
+        }
+        let framesList = [];
+        try {
+            framesList = JSON.parse(localStorage.getItem('mcyt_decor_frames') || '[]');
+        } catch (_) {}
+        const DEFAULT_FRAMES = [
+            { id: 'frame_none', name: '无头像框', url: '', scale: 1.18, offsetX: 0, offsetY: 0, isBuiltin: true },
+            { id: 'frame_gold_star', name: '金色之星', url: 'assets/decor/frames/frame_gold.png', scale: 1.18, offsetX: 0, offsetY: 0 },
+            { id: 'frame_cat_ear', name: '猫耳软萌', url: 'assets/decor/frames/frame_cat.png', scale: 1.18, offsetX: 0, offsetY: 0 }
+        ];
+        return [...DEFAULT_FRAMES, ...framesList];
+    }
+
     // 辅助：获取气泡样式字符串（回退兜底）
     function getDecorBubbleCss(bubbleId, isSelf) {
         let bubbles = [];
         try {
-            const DEFAULT_BUBBLES = [
-                {
-                    id: 'bubble_default',
-                    userStyle: 'background-color: #95ec69; color: #000000; border-radius: 6px;',
-                    npcStyle: 'background-color: #ffffff; color: #000000; border-radius: 6px; border: 1px solid #e7e7e7;'
-                }
-            ];
-            const stored = JSON.parse(localStorage.getItem('mcyt_decor_bubbles') || '[]');
-            bubbles = [...DEFAULT_BUBBLES, ...stored];
+            if (typeof window.getStoredDecorBubbles === 'function') {
+                bubbles = window.getStoredDecorBubbles();
+            } else {
+                const DEFAULT_BUBBLES = [
+                    {
+                        id: 'bubble_default',
+                        userStyle: 'background-color: #95ec69; color: #000000; border-radius: 6px;',
+                        npcStyle: 'background-color: #ffffff; color: #000000; border-radius: 6px; border: 1px solid #e7e7e7;'
+                    }
+                ];
+                const stored = JSON.parse(localStorage.getItem('mcyt_decor_bubbles') || '[]');
+                bubbles = [...DEFAULT_BUBBLES, ...stored];
+            }
         } catch (_) {}
 
         const b = bubbles.find(x => x.id === bubbleId) || bubbles[0];
@@ -50,7 +75,7 @@
         }
     }
 
-    // 辅助：统一渲染气泡内容（优先调用 theme-chat-decor.js 提供的统一渲染器）
+    // 辅助：统一渲染气泡内容（优先调用 theme-chat-bubble.js 提供的统一渲染器）
     function renderSafeBubbleHtml(contentHtml, isSelf, bubbleId, customClass = '') {
         if (typeof window.buildDecorBubbleHtml === 'function') {
             return window.buildDecorBubbleHtml(contentHtml, isSelf, bubbleId, customClass);
@@ -205,6 +230,14 @@
         if (!container) container = document.getElementById('appModalBody') || document.getElementById('socialTab');
         if (!container) return;
 
+        // 静默触发装扮池异步预热与保活，确保 IndexedDB 头像框与气泡随时最新
+        if (typeof window.loadStoredDecorFramesAsync === 'function') {
+            window.loadStoredDecorFramesAsync();
+        }
+        if (typeof window.loadStoredDecorBubblesAsync === 'function') {
+            window.loadStoredDecorBubblesAsync();
+        }
+
         if (window.ChatTarot && typeof window.ChatTarot.drainPendingTarotShares === 'function') {
             window.ChatTarot.drainPendingTarotShares();
         }
@@ -237,19 +270,16 @@
         const npcBubbleId = decor.bubbleId || globalBubbleId; // 对方专属气泡
         const userBubbleId = globalBubbleId; // 我方默认使用全局气泡
 
-        // 计算头像框池
-        let framesList = [];
-        try { framesList = JSON.parse(localStorage.getItem('mcyt_decor_frames') || '[]'); } catch (_) {}
-        const DEFAULT_FRAMES = [
-            { id: 'frame_none', url: '', scale: 1.18, offsetX: 0, offsetY: 0 },
-            { id: 'frame_gold_star', url: 'assets/decor/frames/frame_gold.png', scale: 1.18, offsetX: 0, offsetY: 0 },
-            { id: 'frame_cat_ear', url: 'assets/decor/frames/frame_cat.png', scale: 1.18, offsetX: 0, offsetY: 0 }
-        ];
-        framesList = [...DEFAULT_FRAMES, ...framesList];
+        // 🌟 统一提取头像框池（修复：全面优先读取 IndexedDB 内存管道，彻底修复新导入头像框在聊天中不显示的问题）
+        const framesList = getAvailableFramesList();
 
         const targetFrameId = decor.frameId !== undefined && decor.frameId !== null ? decor.frameId : globalFrameId;
-        const targetFrameObj = framesList.find(f => f.id === targetFrameId) || null;
-        const userFrameObj = framesList.find(f => f.id === globalFrameId) || null;
+        const targetFrameObj = (targetFrameId && targetFrameId !== 'frame_none') 
+            ? (framesList.find(f => f.id === targetFrameId) || null) 
+            : null;
+        const userFrameObj = (globalFrameId && globalFrameId !== 'frame_none') 
+            ? (framesList.find(f => f.id === globalFrameId) || null) 
+            : null;
 
         const npcAvatarUrl = npc.avatarUrl || npc.avatar || 'assets/icons/chat.png';
         const userAvatarUrl = (typeof window.getPlayerAvatarSafe === 'function') 
