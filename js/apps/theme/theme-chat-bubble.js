@@ -2,15 +2,12 @@
  * js/apps/theme/theme-chat-bubble.js
  * 微信装扮中心模块（超级气泡工坊独立中枢）
  * 
- * 架构：
- *  1. 气泡样式库折叠栏（极简 + 与 ▲/▼ 图标）
- *  2. 加号弹出菜单：AI生成气泡 / 导入已有设置(JSON与CSS) / 制作新气泡
- *  3. 图源选择弹窗（相册选取 / 图片直链）
- *  4. 🌟 点九图自适应拉伸气泡：三阶段沉浸式向导（切片保护 -> 文字排版与位置拖拽 -> 虚拟实景聊天宽窄与位置微调）
- *  5. 🌟 对方镜像体系彻底重构：Canvas 底层水平翻转，坚决消除 CSS scaleX(-1) 导致的穿模飘出屏幕与字形颠倒
- *  6. 🌟 移植主题同款正等边三角 HSV 动态色轮与水滴取色
- *  7. localForage (IndexedDB) 驱动存储，无配额上限，支持高清大图
- *  8. 全局核心渲染器 window.buildDecorBubbleHtml
+ * 核心升级：
+ *  1. 彻底消灭滑条：全程手势触控驱动（图片级文字选框拉动手柄缩放、直接拖拽对齐）
+ *  2. 虚拟实景试穿：角色与用户气泡各自手指自由拖拽定位，拉动手柄共通微调宽窄大小
+ *  3. 镜像底层修复：Canvas 物理像素级水平翻转底图，切片边界自动对调，双轨无损存入 IndexedDB
+ *  4. 移植主题同款正等边三角 HSV 动态色轮与水滴取色
+ *  5. 全局核心渲染器 window.buildDecorBubbleHtml 零穿模保障
  */
 
 (function () {
@@ -27,8 +24,10 @@
             scale: 1.0,
             fontSize: 14.5,
             fontFamily: '',
-            offsetX: 0,
-            offsetY: 0,
+            userOffsetX: 0,
+            userOffsetY: 0,
+            npcOffsetX: 0,
+            npcOffsetY: 0,
             isBuiltin: true
         }
     ];
@@ -37,7 +36,7 @@
     let _bubblesLoadedPromise = null;
 
     /**
-     * 异步预装载气泡（IndexedDB 绝对优先）
+     * 异步预装载气泡（IndexedDB 驱动）
      */
     window.loadStoredDecorBubblesAsync = function () {
         if (_bubblesLoadedPromise) return _bubblesLoadedPromise;
@@ -100,7 +99,7 @@
     };
 
     /**
-     * 🌟 Canvas 底层图象水平镜像翻转生成器（彻底解决负 Scale 飘出屏幕问题）
+     * 🌟 Canvas 真实像素级水平翻转底图（绝不使用 CSS scaleX(-1) 造成穿模）
      */
     function flipImageHorizontallyAsync(base64OrUrl) {
         return new Promise((resolve) => {
@@ -118,7 +117,7 @@
                     ctx.drawImage(img, 0, 0);
                     resolve(canvas.toDataURL('image/png'));
                 } catch (e) {
-                    console.warn('[Bubble] Canvas 镜像翻转异常，沿用原图:', e);
+                    console.warn('[Bubble] Canvas 镜像异常，沿用原图:', e);
                     resolve(base64OrUrl);
                 }
             };
@@ -136,21 +135,19 @@
         const scale = (b && b.scale !== undefined) ? b.scale : 1.0;
         const fontSize = (b && b.fontSize) ? b.fontSize : 14.5;
         const fontFamilyCss = (b && b.fontFamily) ? `font-family: ${b.fontFamily};` : '';
-        const offX = (b && b.offsetX !== undefined) ? b.offsetX : 0;
-        const offY = (b && b.offsetY !== undefined) ? b.offsetY : 0;
+        
+        // 角色与用户位置独立解耦
+        const offX = isSelf ? (b.userOffsetX || 0) : (b.npcOffsetX || 0);
+        const offY = isSelf ? (b.userOffsetY || 0) : (b.npcOffsetY || 0);
         const origin = isSelf ? 'center right' : 'center left';
 
         // 1. 固定框选画框气泡
         if (b && b.type === 'visual_box' && b.visualConfig) {
-            const isMirror = (!isSelf && b.mirrorNpcFromUser);
-            const sideCfg = isMirror 
-                ? (b.visualConfig.npc || b.visualConfig.user) 
-                : (isSelf ? b.visualConfig.user : b.visualConfig.npc);
-
+            const sideCfg = isSelf ? b.visualConfig.user : (b.visualConfig.npc || b.visualConfig.user);
             const bgUrl = sideCfg?.url || b.visualConfig.user?.url || '';
             let rect = sideCfg?.rect || { left: 15, top: 15, width: 70, height: 70 };
             const textColor = sideCfg?.color || '#000000';
-            const textAlign = sideCfg?.align || (isSelf ? 'left' : 'left');
+            const textAlign = sideCfg?.align || 'left';
 
             if (!bgUrl) {
                 return `
@@ -171,17 +168,13 @@
             `;
         }
 
-        // 2. 点九图自适应拉伸气泡（彻底消除负 scale，使用真实的独立镜像切图）
+        // 2. 点九图自适应拉伸气泡（双轨真实底图渲染，彻底消除负 scale）
         if (b && b.type === 'nine_slice') {
-            const isMirror = (!isSelf && b.mirrorNpcFromUser);
-            const imgUrl = isMirror 
-                ? (b.npcBorderImage || b.userBorderImage || b.borderImage)
-                : (isSelf ? (b.userBorderImage || b.borderImage) : (b.npcBorderImage || b.borderImage));
-
-            const slice = (isMirror ? (b.npcSlice || b.userSlice || b.slice) : (isSelf ? (b.userSlice || b.slice) : (b.npcSlice || b.slice))) || '30% 30% 30% 30%';
-            const padding = (isMirror ? (b.npcPadding || b.userPadding || b.padding) : (isSelf ? (b.userPadding || b.padding) : (b.npcPadding || b.padding))) || '8px 12px';
-            const borderWidth = (isMirror ? (b.npcBorderWidth || b.userBorderWidth || b.borderWidth) : (isSelf ? (b.userBorderWidth || b.borderWidth) : (b.npcBorderWidth || b.borderWidth))) || 14;
-            const textColor = (isMirror ? (b.npcTextColor || b.userTextColor || b.textColor) : (isSelf ? (b.userTextColor || b.textColor) : (b.npcTextColor || b.textColor))) || (isSelf ? '#111111' : '#222222');
+            const imgUrl = isSelf ? (b.userBorderImage || b.borderImage) : (b.npcBorderImage || b.userBorderImage || b.borderImage);
+            const slice = isSelf ? (b.userSlice || b.slice || '30% 30% 30% 30%') : (b.npcSlice || b.userSlice || b.slice || '30% 30% 30% 30%');
+            const padding = isSelf ? (b.userPadding || b.padding || '8px 12px') : (b.npcPadding || b.padding || '8px 12px');
+            const borderWidth = isSelf ? (b.userBorderWidth || b.borderWidth || 14) : (b.npcBorderWidth || b.borderWidth || 14);
+            const textColor = isSelf ? (b.userTextColor || b.textColor || '#111111') : (b.npcTextColor || b.textColor || '#222222');
 
             if (!imgUrl) {
                 return `
@@ -213,7 +206,7 @@
     };
 
     /**
-     * 渲染气泡样式库独立区块（嵌入装扮中心）
+     * 渲染气泡样式库独立区块（嵌入装扮中心底部）
      */
     window.renderChatBubbleSection = function (container) {
         if (!container) return;
@@ -336,7 +329,7 @@
                         <svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:#333;fill:none;stroke-width:2;"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
                         <div>
                             <div style="font-size:13px;font-weight:600;color:#222;">制作新气泡</div>
-                            <div style="font-size:10.5px;color:#777;">从相册选取图片制作点九图自适应或画框</div>
+                            <div style="font-size:10.5px;color:#777;">从相册选取图片，纯手势拖拽调节与试穿</div>
                         </div>
                     </button>
                     <button onclick="document.getElementById('bubbleActionMenuModal').remove(); window.openImportBubbleHubModal();" style="width:100%;padding:11px 14px;background:#f9f9f9;border:1px solid #e5e5e5;border-radius:8px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:10px;">
@@ -430,7 +423,7 @@
         reader.readAsDataURL(file);
     };
 
-    // AI 生成气泡
+    // AI 生成与 JSON 导入
     window.openAiGenerateBubbleModal = function () {
         let modal = document.getElementById('aiGenerateBubbleModal');
         if (!modal) {
@@ -446,7 +439,7 @@
                     <span style="font-size:14px;font-weight:600;color:#222;">AI 智能生成气泡</span>
                     <button onclick="document.getElementById('aiGenerateBubbleModal').remove()" style="background:none;border:none;color:#999;font-size:16px;cursor:pointer;">✕</button>
                 </div>
-                <textarea id="aiBubblePromptInput" placeholder="输入设计意向，如：抹茶星空、复古信笺..." style="width:100%;box-sizing:border-box;height:75px;padding:8px 10px;border-radius:6px;border:1px solid #ddd;font-size:12px;outline:none;resize:none;margin-bottom:10px;"></textarea>
+                <textarea id="aiBubblePromptInput" placeholder="输入设计意向..." style="width:100%;box-sizing:border-box;height:75px;padding:8px 10px;border-radius:6px;border:1px solid #ddd;font-size:12px;outline:none;resize:none;margin-bottom:10px;"></textarea>
                 <div id="aiBubbleStatus" style="font-size:11px;color:#07c160;margin-bottom:10px;display:none;">正在调度 AI 编写设计代码...</div>
                 <div style="display:flex;gap:8px;">
                     <button onclick="document.getElementById('aiGenerateBubbleModal').remove()" style="flex:1;padding:9px;background:#f5f5f5;border:1px solid #ddd;border-radius:6px;font-size:12px;color:#555;cursor:pointer;">取消</button>
@@ -468,8 +461,7 @@
                 const aiConfig = JSON.parse(localStorage.getItem('mc_yt_ai_config') || '{}');
                 if (!aiConfig.apiKey) throw new Error('请先在系统设置中配置 AI ApiKey');
 
-                const sysPrompt = `你是一个精通CSS界面设计的专家。请根据用户的设计意图，设计一对聊天气泡（我方发送与对方接收）。输出标准合法 JSON：
-{"name":"气泡名","userStyle":"我方CSS","npcStyle":"对方CSS"}`;
+                const sysPrompt = `你是一个精通CSS设计的专家。设计一对聊天气泡。输出标准合法 JSON: {"name":"气泡名","userStyle":"我方CSS","npcStyle":"对方CSS"}`;
 
                 const resp = await fetch((aiConfig.baseUrl || 'https://api.openai.com/v1').replace(/\/+$/, '') + '/chat/completions', {
                     method: 'POST',
@@ -511,7 +503,6 @@
         };
     };
 
-    // 导入已有设置
     window.openImportBubbleHubModal = function () {
         let modal = document.getElementById('bubbleImportHubModal');
         if (!modal) {
@@ -595,9 +586,6 @@
         return { h, s, v };
     }
 
-    /**
-     * 🌟 HSV 专业色盘
-     */
     window.openWechatColorPickerModal = function (initialColor = '#111111', onSelectCallback) {
         let modal = document.getElementById('wechatColorPickerModal');
         if (!modal) {
@@ -632,20 +620,6 @@
                         <div style="display:flex;align-items:center;gap:6px;">
                             <div id="bPalettePreviewBox" style="width:24px;height:24px;border-radius:5px;border:1px solid rgba(255,255,255,0.4);background:${curHex};"></div>
                             <span id="bCurrentHexBadge" style="font-size:12px;font-family:monospace;color:#fff;background:rgba(255,255,255,0.16);padding:2px 7px;border-radius:5px;">${curHex.toUpperCase()}</span>
-                        </div>
-                    </div>
-                    <div style="display:flex;flex-direction:column;gap:8px;padding:0 2px;">
-                        <div style="display:flex;align-items:center;gap:6px;">
-                            <span style="font-size:11px;color:#aaa;width:10px;font-weight:bold;">H</span>
-                            <input type="range" id="bSliderH" min="0" max="360" value="${hsvState.h}" style="flex:1;height:4px;border-radius:2px;appearance:none;outline:none;background:linear-gradient(to right, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%);">
-                        </div>
-                        <div style="display:flex;align-items:center;gap:6px;">
-                            <span style="font-size:11px;color:#aaa;width:10px;font-weight:bold;">S</span>
-                            <input type="range" id="bSliderS" min="0" max="100" value="${hsvState.s}" style="flex:1;height:4px;border-radius:2px;appearance:none;outline:none;">
-                        </div>
-                        <div style="display:flex;align-items:center;gap:6px;">
-                            <span style="font-size:11px;color:#aaa;width:10px;font-weight:bold;">V</span>
-                            <input type="range" id="bSliderV" min="0" max="100" value="${hsvState.v}" style="flex:1;height:4px;border-radius:2px;appearance:none;outline:none;">
                         </div>
                     </div>
                 </div>
@@ -732,9 +706,7 @@
             badge.textContent = curHex.toUpperCase();
         }
 
-        let activeDrag = null;
         box.addEventListener('touchstart', (e) => {
-            activeDrag = 'wheel';
             const rect = box.getBoundingClientRect();
             const px = (e.touches[0].clientX - rect.left) * (size / rect.width);
             const py = (e.touches[0].clientY - rect.top) * (size / rect.width);
@@ -754,10 +726,6 @@
             };
         });
 
-        modal.querySelector('#bSliderH').oninput = (e) => { hsvState.h = parseInt(e.target.value); renderWheel(); };
-        modal.querySelector('#bSliderS').oninput = (e) => { hsvState.s = parseInt(e.target.value); updateHandlesAndUi(); };
-        modal.querySelector('#bSliderV').oninput = (e) => { hsvState.v = parseInt(e.target.value); updateHandlesAndUi(); };
-
         modal.querySelector('#btnBPaletteConfirm').onclick = () => {
             if (typeof onSelectCallback === 'function') onSelectCallback(curHex);
             modal.remove();
@@ -767,68 +735,7 @@
     };
 
     /**
-     * 🌟 气泡文字大小与字体弹窗
-     */
-    window.openBubbleFontModal = function (bubbleId) {
-        const bubbles = window.getStoredDecorBubbles();
-        const b = bubbles.find(x => x.id === bubbleId);
-        if (!b) return;
-
-        let modal = document.getElementById('bubbleFontModal');
-        if (!modal) {
-            modal = document.createElement('div');
-            modal.id = 'bubbleFontModal';
-            modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:100000;padding:20px;';
-            document.body.appendChild(modal);
-        }
-
-        let curFont = b.fontSize || 14.5;
-        let curFamily = b.fontFamily || '';
-
-        modal.innerHTML = `
-            <div style="background:#ffffff;border-radius:14px;width:100%;max-width:320px;padding:16px;box-shadow:0 8px 24px rgba(0,0,0,0.15);">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                    <span style="font-size:14px;font-weight:600;color:#222;">设置文字大小与字体</span>
-                    <button onclick="document.getElementById('bubbleFontModal').remove()" style="background:none;border:none;color:#999;font-size:16px;cursor:pointer;">✕</button>
-                </div>
-                <div style="background:#f9f9f9;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:12px;">
-                    <div style="display:flex;justify-content:space-between;font-size:11px;color:#555;margin-bottom:4px;">
-                        <span>字号缩放</span>
-                        <span style="color:#07c160;font-weight:600;" id="fontModalValText">${curFont}px</span>
-                    </div>
-                    <input type="range" id="fontModalSlider" min="11" max="22" step="0.5" value="${curFont}" style="width:100%;accent-color:#07c160;">
-                </div>
-                <div style="margin-bottom:12px;">
-                    <div style="font-size:11px;color:#555;margin-bottom:4px;">自定义 Font-Family</div>
-                    <input type="text" id="fontCustomInput" value="${escapeHtml(curFamily)}" placeholder="例如: 'PingFang SC', sans-serif" style="width:100%;box-sizing:border-box;padding:7px 8px;border-radius:6px;border:1px solid #ddd;font-size:11.5px;outline:none;">
-                </div>
-                <div style="display:flex;gap:8px;">
-                    <button onclick="document.getElementById('bubbleFontModal').remove()" style="flex:1;padding:9px;background:#f5f5f5;border:1px solid #ddd;border-radius:6px;font-size:12px;color:#666;cursor:pointer;">取消</button>
-                    <button id="btnSaveFontSettings" style="flex:1.4;padding:9px;background:#07c160;border:none;border-radius:6px;font-size:12px;color:#fff;font-weight:600;cursor:pointer;">保存</button>
-                </div>
-            </div>
-        `;
-
-        modal.querySelector('#fontModalSlider').oninput = (e) => {
-            curFont = parseFloat(e.target.value);
-            modal.querySelector('#fontModalValText').textContent = `${curFont}px`;
-        };
-
-        modal.querySelector('#btnSaveFontSettings').onclick = async () => {
-            b.fontSize = curFont;
-            b.fontFamily = modal.querySelector('#fontCustomInput').value.trim();
-            await window.saveCustomBubbleAsync(b);
-            modal.remove();
-            refreshDecorView();
-            if (typeof showToast === 'function') showToast('字体排版已更新');
-        };
-    };
-
-    /**
-     * 🌟🌟🌟 点九图自适应气泡向导工坊（重构：三阶段体验）
-     * 阶段 1：切片保护
-     * 阶段 2：文字排版与拖拽位置
-     * 阶段 3：虚拟实景聊天宽窄与位置微调
+     * 🌟🌟🌟 点九图自适应气泡向导工坊（纯触控手势版，绝无滑条）
      */
     window.openNineSliceDiyModal = function (bubbleId = null, initialUrl = '', initialName = '') {
         let bubbleObj = null;
@@ -849,15 +756,24 @@
         }
 
         const state = {
-            step: 1, // 1: 切片, 2: 文字排版与位置, 3: 虚拟实景聊天
+            step: 1, // 1: 切片, 2: 选框手势缩放文字, 3: 实景手势拖动气泡
             id: bubbleObj ? bubbleObj.id : ('bubble_' + Date.now()),
             name: bubbleObj ? bubbleObj.name : (initialName || '自适应气泡'),
             author: bubbleObj ? (bubbleObj.author || '') : '玩家自制',
             scale: (bubbleObj && bubbleObj.scale !== undefined) ? bubbleObj.scale : 1.0,
             fontSize: (bubbleObj && bubbleObj.fontSize) ? bubbleObj.fontSize : 14.5,
             fontFamily: (bubbleObj && bubbleObj.fontFamily) ? bubbleObj.fontFamily : '',
-            offsetX: (bubbleObj && bubbleObj.offsetX !== undefined) ? bubbleObj.offsetX : 0,
-            offsetY: (bubbleObj && bubbleObj.offsetY !== undefined) ? bubbleObj.offsetY : 0,
+            
+            // 角色与用户位置彻底独立
+            userOffsetX: bubbleObj?.userOffsetX || bubbleObj?.offsetX || 0,
+            userOffsetY: bubbleObj?.userOffsetY || bubbleObj?.offsetY || 0,
+            npcOffsetX: bubbleObj?.npcOffsetX || bubbleObj?.offsetX || 0,
+            npcOffsetY: bubbleObj?.npcOffsetY || bubbleObj?.offsetY || 0,
+
+            // 文字在气泡内的相对偏移
+            textOffsetX: 0,
+            textOffsetY: 0,
+
             mirrorNpcFromUser: (bubbleObj && bubbleObj.mirrorNpcFromUser !== undefined) ? bubbleObj.mirrorNpcFromUser : true,
             user: {
                 url: (bubbleObj?.userBorderImage || bubbleObj?.borderImage) || initialUrl || '',
@@ -890,9 +806,11 @@
             return `${cfg.padding.v}px ${cfg.padding.h}px`;
         }
 
+        // 核心：强制 Canvas 生成真实镜像切图
         async function ensureNpcMirroredImage() {
             if (state.mirrorNpcFromUser && state.user.url) {
                 state.npc.url = await flipImageHorizontallyAsync(state.user.url);
+                // 左右切片百分比互换，确保尾巴圆角完全对齐
                 state.npc.slice = {
                     top: state.user.slice.top,
                     right: state.user.slice.left,
@@ -906,21 +824,21 @@
 
         function renderStage() {
             if (state.step === 1) renderStep1Slice();
-            else if (state.step === 2) renderStep2TextLayout();
+            else if (state.step === 2) renderStep2TextTransform();
             else if (state.step === 3) renderStep3VirtualChat();
         }
 
-        // ================= 阶段 1：切片保护 =================
+        // ================= 阶段 1：拖动虚线切片 =================
         function renderStep1Slice() {
             const cfg = state.user;
             modal.innerHTML = `
                 <div style="background:#ffffff;border-radius:14px;width:100%;max-width:350px;max-height:92vh;overflow-y:auto;padding:16px;box-shadow:0 12px 32px rgba(0,0,0,0.2);box-sizing:border-box;">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                        <span style="font-size:14px;font-weight:700;color:#222;">第 1 步：九图切片保护</span>
+                        <span style="font-size:14px;font-weight:700;color:#222;">第 1 步：九图切片</span>
                         <button onclick="document.getElementById('nineSliceDiyModal').remove()" style="border:none;background:none;font-size:16px;color:#999;cursor:pointer;">✕</button>
                     </div>
                     <div style="font-size:11px;color:#666;margin-bottom:10px;line-height:1.4;">
-                        拖动虚线框住四个圆角和尾巴，中间十字区域随文字自动伸展。
+                        拖动四条虚线圈住圆角和尾巴，中间十字区自动伸展。
                     </div>
 
                     ${!cfg.url ? `
@@ -935,23 +853,15 @@
                             <div id="nsLineRight" style="position:absolute;top:0;bottom:0;left:${100 - cfg.slice.right}%;width:0;border-left:2px dashed #576b95;cursor:ew-resize;"><div style="position:absolute;top:50%;left:-7px;transform:translateY(-50%);width:14px;height:26px;background:#576b95;border-radius:4px;"></div></div>
                         </div>
 
-                        <div style="background:#f9f9f9;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:10px;">
-                            <div style="display:flex;justify-content:space-between;font-size:11px;color:#555;margin-bottom:4px;">
-                                <span>切片保护边框（防止圆角变形）</span>
-                                <span style="color:#07c160;font-weight:600;" id="nsBorderWidthVal">${cfg.borderWidth}px</span>
-                            </div>
-                            <input type="range" id="nsBorderWidthSlider" min="6" max="32" value="${cfg.borderWidth}" style="width:100%;accent-color:#07c160;">
-                        </div>
-
                         <div style="display:flex;justify-content:space-between;align-items:center;background:#f9f9f9;padding:8px 10px;border-radius:8px;border:1px solid #eee;margin-bottom:12px;">
                             <div>
-                                <div style="font-size:12px;font-weight:600;color:#333;">对方气泡自动水平镜像</div>
-                                <div style="font-size:10px;color:#888;">Canvas 底层镜像，尾巴对称，文字正向</div>
+                                <div style="font-size:12px;font-weight:600;color:#333;">对方气泡自动镜像生成</div>
+                                <div style="font-size:10px;color:#888;">Canvas 像素翻转，完全独立对称</div>
                             </div>
                             <input type="checkbox" id="chkMirrorNpc" ${state.mirrorNpcFromUser ? 'checked' : ''} style="width:18px;height:18px;accent-color:#07c160;">
                         </div>
 
-                        <button id="btnStep1Next" style="width:100%;padding:11px;background:#07c160;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">下一步：调节文字与位置 ➔</button>
+                        <button id="btnStep1Next" style="width:100%;padding:11px;background:#07c160;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;">下一步：手势调节文字 ➔</button>
                     `}
                 </div>
             `;
@@ -971,13 +881,7 @@
 
             if (cfg.url) {
                 bindNineSliceHandles(modal, cfg);
-                modal.querySelector('#nsBorderWidthSlider').oninput = (e) => {
-                    cfg.borderWidth = parseInt(e.target.value, 10);
-                    modal.querySelector('#nsBorderWidthVal').textContent = `${cfg.borderWidth}px`;
-                };
-                modal.querySelector('#chkMirrorNpc').onchange = (e) => {
-                    state.mirrorNpcFromUser = e.target.checked;
-                };
+                modal.querySelector('#chkMirrorNpc').onchange = (e) => { state.mirrorNpcFromUser = e.target.checked; };
                 modal.querySelector('#btnStep1Next').onclick = async () => {
                     await ensureNpcMirroredImage();
                     state.step = 2;
@@ -986,55 +890,46 @@
             }
         }
 
-        // ================= 阶段 2：文字排版与拖拽位置 =================
-        function renderStep2TextLayout() {
+        // ================= 阶段 2：像放大图片一样拖动手柄缩放文字与移动位置 =================
+        function renderStep2TextTransform() {
             const cfg = state.user;
             modal.innerHTML = `
                 <div style="background:#ffffff;border-radius:14px;width:100%;max-width:350px;max-height:92vh;overflow-y:auto;padding:16px;box-shadow:0 12px 32px rgba(0,0,0,0.2);box-sizing:border-box;">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
-                        <span style="font-size:14px;font-weight:700;color:#222;">第 2 步：文字排版与内边距</span>
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                        <span style="font-size:14px;font-weight:700;color:#222;">第 2 步：文字手势缩放与拖动</span>
                         <button onclick="document.getElementById('nineSliceDiyModal').remove()" style="border:none;background:none;font-size:16px;color:#999;cursor:pointer;">✕</button>
                     </div>
-                    <div style="font-size:11px;color:#666;margin-bottom:10px;">
-                        拖动滑块调整文字边距与大小，让文字完美居中在气泡安全区内。
+                    <div style="font-size:11px;color:#666;margin-bottom:12px;line-height:1.4;">
+                        点击文字出现绿色选框。按住文字可<b>随意拖动位置</b>；拉动右下角绿点<b>像缩放图片一样放大缩小字号</b>！
                     </div>
 
-                    <!-- 动态预览区 -->
-                    <div style="background:#ededed;border-radius:10px;padding:24px 16px;display:flex;justify-content:center;align-items:center;margin-bottom:12px;min-height:110px;">
-                        <div id="step2BubblePreview" style="display:inline-block;border-style:solid;border-width:${cfg.borderWidth}px;border-image:url('${cfg.url}') ${sliceCss(cfg)} fill stretch;-webkit-border-image:url('${cfg.url}') ${sliceCss(cfg)} fill stretch;padding:${padCss(cfg)};color:${cfg.textColor};max-width:240px;box-sizing:border-box;word-break:break-word;font-size:${state.fontSize}px;line-height:1.45;">
-                            你好呀！这是我的专属气泡～
+                    <!-- 触控拖拽舞台 -->
+                    <div id="step2TransformStage" style="position:relative;background:#ededed;border-radius:12px;padding:32px 14px;display:flex;justify-content:center;align-items:center;margin-bottom:14px;min-height:160px;touch-action:none;user-select:none;-webkit-user-select:none;">
+                        
+                        <!-- 气泡本体 -->
+                        <div id="step2BubbleContainer" style="position:relative;display:inline-block;border-style:solid;border-width:${cfg.borderWidth}px;border-image:url('${cfg.url}') ${sliceCss(cfg)} fill stretch;-webkit-border-image:url('${cfg.url}') ${sliceCss(cfg)} fill stretch;padding:${padCss(cfg)};min-width:110px;max-width:240px;box-sizing:border-box;">
+                            
+                            <!-- 文字选框（带手柄） -->
+                            <div id="step2TextTransformBox" style="position:relative;transform:translate(${state.textOffsetX}px, ${state.textOffsetY}px);border:1.5px dashed #07c160;border-radius:4px;padding:4px 6px;cursor:move;touch-action:none;">
+                                
+                                <span id="step2TextDemo" style="display:block;font-size:${state.fontSize}px;color:${cfg.textColor};line-height:1.4;word-break:break-word;pointer-events:none;">
+                                    你好呀！按住我随意拖动，拉右下角放缩！
+                                </span>
+
+                                <!-- 缩放手柄（类似修图软件） -->
+                                <div id="step2TextResizeHandle" style="position:absolute;right:-7px;bottom:-7px;width:16px;height:16px;background:#07c160;border:2px solid #fff;border-radius:50%;cursor:se-resize;touch-action:none;box-shadow:0 1px 4px rgba(0,0,0,0.3);"></div>
+                            </div>
                         </div>
                     </div>
 
-                    <!-- 字号缩放 -->
-                    <div style="background:#f9f9f9;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:8px;">
-                        <div style="display:flex;justify-content:space-between;font-size:11px;color:#555;margin-bottom:4px;">
-                            <span>文字字号</span>
-                            <span style="color:#07c160;font-weight:600;" id="valStep2FontSize">${state.fontSize}px</span>
+                    <!-- 文字颜色快捷修改 -->
+                    <div style="background:#f9f9f9;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;">
+                        <div>
+                            <span style="font-size:12px;font-weight:600;color:#333;">文字颜色</span>
+                            <span style="font-size:10px;color:#888;display:block;">当前字号: <span id="step2FontSizeBadge" style="color:#07c160;font-weight:bold;">${state.fontSize.toFixed(1)}px</span></span>
                         </div>
-                        <input type="range" id="sliderStep2FontSize" min="11" max="20" step="0.5" value="${state.fontSize}" style="width:100%;accent-color:#07c160;">
-                    </div>
-
-                    <!-- 文字左右与上下边距 -->
-                    <div style="background:#f9f9f9;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:8px;">
-                        <div style="display:flex;justify-content:space-between;font-size:11px;color:#555;margin-bottom:4px;">
-                            <span>文字左右边距</span>
-                            <span style="color:#07c160;font-weight:600;" id="valStep2PadH">${cfg.padding.h}px</span>
-                        </div>
-                        <input type="range" id="sliderStep2PadH" min="4" max="28" value="${cfg.padding.h}" style="width:100%;accent-color:#07c160;margin-bottom:8px;">
-
-                        <div style="display:flex;justify-content:space-between;font-size:11px;color:#555;margin-bottom:4px;">
-                            <span>文字上下边距</span>
-                            <span style="color:#07c160;font-weight:600;" id="valStep2PadV">${cfg.padding.v}px</span>
-                        </div>
-                        <input type="range" id="sliderStep2PadV" min="2" max="22" value="${cfg.padding.v}" style="width:100%;accent-color:#07c160;">
-                    </div>
-
-                    <!-- 文字颜色 -->
-                    <div style="background:#f9f9f9;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
-                        <span style="font-size:11.5px;color:#555;font-weight:600;">文字颜色</span>
-                        <div id="btnStep2ColorTrigger" style="display:flex;align-items:center;gap:6px;cursor:pointer;background:#fff;padding:3px 8px;border-radius:6px;border:1px solid #ddd;">
-                            <div style="width:16px;height:16px;border-radius:4px;background:${cfg.textColor};border:1px solid #ccc;"></div>
+                        <div id="btnStep2ColorTrigger" style="display:flex;align-items:center;gap:6px;cursor:pointer;background:#fff;padding:4px 10px;border-radius:6px;border:1px solid #ddd;">
+                            <div style="width:18px;height:18px;border-radius:4px;background:${cfg.textColor};border:1px solid #ccc;"></div>
                             <span style="font-size:11px;font-family:monospace;color:#333;">${cfg.textColor}</span>
                         </div>
                     </div>
@@ -1046,36 +941,12 @@
                 </div>
             `;
 
-            function refreshStep2Preview() {
-                const el = modal.querySelector('#step2BubblePreview');
-                if (!el) return;
-                el.style.borderWidth = `${cfg.borderWidth}px`;
-                el.style.borderImage = `url('${cfg.url}') ${sliceCss(cfg)} fill stretch`;
-                el.style.webkitBorderImage = `url('${cfg.url}') ${sliceCss(cfg)} fill stretch`;
-                el.style.padding = padCss(cfg);
-                el.style.fontSize = `${state.fontSize}px`;
-                el.style.color = cfg.textColor;
-            }
+            bindTextTransformInteraction(modal, state);
 
-            modal.querySelector('#sliderStep2FontSize').oninput = (e) => {
-                state.fontSize = parseFloat(e.target.value);
-                modal.querySelector('#valStep2FontSize').textContent = `${state.fontSize}px`;
-                refreshStep2Preview();
-            };
-            modal.querySelector('#sliderStep2PadH').oninput = (e) => {
-                cfg.padding.h = parseInt(e.target.value, 10);
-                modal.querySelector('#valStep2PadH').textContent = `${cfg.padding.h}px`;
-                refreshStep2Preview();
-            };
-            modal.querySelector('#sliderStep2PadV').oninput = (e) => {
-                cfg.padding.v = parseInt(e.target.value, 10);
-                modal.querySelector('#valStep2PadV').textContent = `${cfg.padding.v}px`;
-                refreshStep2Preview();
-            };
             modal.querySelector('#btnStep2ColorTrigger').onclick = () => {
                 window.openWechatColorPickerModal(cfg.textColor, (col) => {
                     cfg.textColor = col;
-                    renderStep2TextLayout();
+                    renderStep2TextTransform();
                 });
             };
 
@@ -1087,64 +958,109 @@
             };
         }
 
-        // ================= 阶段 3：虚拟实景聊天微调 =================
+        // 绑定文字的拖动移动与拉动手柄放大缩小
+        function bindTextTransformInteraction(modalRoot, st) {
+            const box = modalRoot.querySelector('#step2TextTransformBox');
+            const handle = modalRoot.querySelector('#step2TextResizeHandle');
+            const demoText = modalRoot.querySelector('#step2TextDemo');
+            const badge = modalRoot.querySelector('#step2FontSizeBadge');
+            if (!box || !handle || !demoText) return;
+
+            let isDragging = false;
+            let isScaling = false;
+            let startX = 0, startY = 0;
+            let initialFontSize = st.fontSize;
+            let initialOffX = st.textOffsetX;
+            let initialOffY = st.textOffsetY;
+
+            const getPos = (e) => (e.touches && e.touches[0]) ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : { x: e.clientX, y: e.clientY };
+
+            // 1. 拖动文字位置
+            box.addEventListener('touchstart', (e) => {
+                if (e.target === handle) return;
+                isDragging = true;
+                const p = getPos(e);
+                startX = p.x; startY = p.y;
+                initialOffX = st.textOffsetX;
+                initialOffY = st.textOffsetY;
+            }, { passive: false });
+
+            // 2. 拉动手柄缩放字号（像放大图片一样）
+            handle.addEventListener('touchstart', (e) => {
+                isScaling = true;
+                const p = getPos(e);
+                startX = p.x; startY = p.y;
+                initialFontSize = st.fontSize;
+                e.stopPropagation();
+                e.preventDefault();
+            }, { passive: false });
+
+            window.addEventListener('touchmove', (e) => {
+                if (!isDragging && !isScaling) return;
+                const p = getPos(e);
+                const dx = p.x - startX;
+                const dy = p.y - startY;
+
+                if (isDragging) {
+                    st.textOffsetX = Math.round(initialOffX + dx);
+                    st.textOffsetY = Math.round(initialOffY + dy);
+                    box.style.transform = `translate(${st.textOffsetX}px, ${st.textOffsetY}px)`;
+                } else if (isScaling) {
+                    // 右下拖动增大，左上拖动缩小
+                    const delta = (dx + dy) * 0.12;
+                    let nextFont = Math.max(10, Math.min(26, initialFontSize + delta));
+                    st.fontSize = parseFloat(nextFont.toFixed(1));
+                    demoText.style.fontSize = `${st.fontSize}px`;
+                    if (badge) badge.textContent = `${st.fontSize}px`;
+                }
+                if (e.cancelable) e.preventDefault();
+            }, { passive: false });
+
+            window.addEventListener('touchend', () => { isDragging = false; isScaling = false; });
+        }
+
+        // ================= 阶段 3：虚拟实景聊天（双手势：位置分开拖，宽窄高低手柄共通） =================
         function renderStep3VirtualChat() {
             modal.innerHTML = `
                 <div style="background:#ffffff;border-radius:14px;width:100%;max-width:360px;max-height:94vh;overflow-y:auto;padding:16px;box-shadow:0 12px 32px rgba(0,0,0,0.2);box-sizing:border-box;">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
                         <span style="font-size:14px;font-weight:700;color:#222;">第 3 步：虚拟实景试穿与微调</span>
                         <button onclick="document.getElementById('nineSliceDiyModal').remove()" style="border:none;background:none;font-size:16px;color:#999;cursor:pointer;">✕</button>
                     </div>
+                    <div style="font-size:11px;color:#666;margin-bottom:10px;line-height:1.4;">
+                        👉 按住气泡可<b>自由拖拽独立位置</b>；拉动选中的绿色手柄可<b>共通调节气泡宽窄与大小</b>！
+                    </div>
 
-                    <!-- 真实 1:1 虚拟单聊画面 -->
-                    <div id="vChatViewport" style="background:#ededed;border-radius:10px;padding:14px 10px;margin-bottom:12px;display:flex;flex-direction:column;gap:12px;max-height:220px;overflow-y:auto;box-sizing:border-box;">
-                        <!-- 对方发言（左侧） -->
+                    <!-- 1:1 虚拟真实聊天视口 -->
+                    <div id="vChatStage" style="position:relative;background:#ededed;border-radius:12px;padding:16px 10px;margin-bottom:12px;display:flex;flex-direction:column;gap:16px;min-height:240px;box-sizing:border-box;touch-action:none;user-select:none;-webkit-user-select:none;overflow:hidden;">
+                        
+                        <!-- 对方消息（左侧，物理镜像底图） -->
                         <div style="display:flex;align-items:flex-start;gap:8px;width:100%;">
                             <div style="width:36px;height:36px;border-radius:6px;background:#ff9800;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:bold;">对方</div>
-                            <div id="vBubbleNpcContainer" style="flex:1;display:flex;justify-content:flex-start;">
-                                <div id="vBubbleNpc" style="display:inline-block;border-style:solid;border-width:${state.npc.borderWidth}px;border-image:url('${state.npc.url || state.user.url}') ${sliceCss(state.npc)} fill stretch;-webkit-border-image:url('${state.npc.url || state.user.url}') ${sliceCss(state.npc)} fill stretch;padding:${padCss(state.npc)};color:${state.npc.textColor};max-width:85%;box-sizing:border-box;word-break:break-word;font-size:${state.fontSize}px;line-height:1.45;transform:translate(${state.offsetX}px, ${state.offsetY}px) scale(${state.scale});transform-origin:center left;">
-                                    收到！我这边的气泡对称翻转正常吗？
+                            <div style="flex:1;display:flex;justify-content:flex-start;">
+                                <div id="vBubbleNpc" class="v-interactive-bubble" data-side="npc" style="position:relative;display:inline-block;border-style:solid;border-width:${state.npc.borderWidth}px;border-image:url('${state.npc.url || state.user.url}') ${sliceCss(state.npc)} fill stretch;-webkit-border-image:url('${state.npc.url || state.user.url}') ${sliceCss(state.npc)} fill stretch;padding:${padCss(state.npc)};color:${state.npc.textColor};max-width:85%;box-sizing:border-box;word-break:break-word;font-size:${state.fontSize}px;line-height:1.45;transform:translate(${state.npcOffsetX}px, ${state.npcOffsetY}px) scale(${state.scale});transform-origin:center left;cursor:move;touch-action:none;">
+                                    对方气泡完全镜像对称，位置可以单独拖拽哦！
+                                    <!-- 共通宽窄控制手柄 -->
+                                    <div class="v-resize-handle" data-side="npc" style="position:absolute;right:-8px;bottom:-8px;width:16px;height:16px;background:#07c160;border:2px solid #fff;border-radius:50%;cursor:se-resize;display:none;touch-action:none;box-shadow:0 1px 4px rgba(0,0,0,0.3);"></div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- 我方发言（右侧） -->
+                        <!-- 我方消息（右侧） -->
                         <div style="display:flex;align-items:flex-start;flex-direction:row-reverse;gap:8px;width:100%;">
                             <div style="width:36px;height:36px;border-radius:6px;background:#07c160;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:bold;">我</div>
-                            <div id="vBubbleUserContainer" style="flex:1;display:flex;justify-content:flex-end;">
-                                <div id="vBubbleUser" style="display:inline-block;border-style:solid;border-width:${state.user.borderWidth}px;border-image:url('${state.user.url}') ${sliceCss(state.user)} fill stretch;-webkit-border-image:url('${state.user.url}') ${sliceCss(state.user)} fill stretch;padding:${padCss(state.user)};color:${state.user.textColor};max-width:85%;box-sizing:border-box;word-break:break-word;font-size:${state.fontSize}px;line-height:1.45;transform:translate(${state.offsetX}px, ${state.offsetY}px) scale(${state.scale});transform-origin:center right;">
-                                    非常完美！宽窄刚刚好，完全不会遮挡或者飘出屏幕啦！
+                            <div style="flex:1;display:flex;justify-content:flex-end;">
+                                <div id="vBubbleUser" class="v-interactive-bubble" data-side="user" style="position:relative;display:inline-block;border-style:solid;border-width:${state.user.borderWidth}px;border-image:url('${state.user.url}') ${sliceCss(state.user)} fill stretch;-webkit-border-image:url('${state.user.url}') ${sliceCss(state.user)} fill stretch;padding:${padCss(state.user)};color:${state.user.textColor};max-width:85%;box-sizing:border-box;word-break:break-word;font-size:${state.fontSize}px;line-height:1.45;transform:translate(${state.userOffsetX}px, ${state.userOffsetY}px) scale(${state.scale});transform-origin:center right;cursor:move;touch-action:none;">
+                                    太棒了！两边宽窄大小共通，位置还能单独挪动！
+                                    <!-- 共通宽窄控制手柄 -->
+                                    <div class="v-resize-handle" data-side="user" style="position:absolute;left:-8px;bottom:-8px;width:16px;height:16px;background:#07c160;border:2px solid #fff;border-radius:50%;cursor:sw-resize;display:none;touch-action:none;box-shadow:0 1px 4px rgba(0,0,0,0.3);"></div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    <!-- 微调面板：气泡尺寸大小 -->
-                    <div style="background:#f9f9f9;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:8px;">
-                        <div style="display:flex;justify-content:space-between;font-size:11px;color:#555;margin-bottom:4px;">
-                            <span>气泡整体缩放 (宽窄与尺寸)</span>
-                            <span style="color:#07c160;font-weight:600;" id="valStep3Scale">${Math.round(state.scale * 100)}%</span>
-                        </div>
-                        <input type="range" id="sliderStep3Scale" min="70" max="130" value="${Math.round(state.scale * 100)}" style="width:100%;accent-color:#07c160;">
-                    </div>
-
-                    <!-- 微调面板：上下/左右位置微调 -->
-                    <div style="background:#f9f9f9;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:10px;">
-                        <div style="display:flex;justify-content:space-between;font-size:11px;color:#555;margin-bottom:4px;">
-                            <span>气泡左右位置偏移 (X轴)</span>
-                            <span style="color:#07c160;font-weight:600;" id="valStep3OffX">${state.offsetX}px</span>
-                        </div>
-                        <input type="range" id="sliderStep3OffX" min="-30" max="30" value="${state.offsetX}" style="width:100%;accent-color:#07c160;margin-bottom:8px;">
-
-                        <div style="display:flex;justify-content:space-between;font-size:11px;color:#555;margin-bottom:4px;">
-                            <span>气泡上下位置偏移 (Y轴)</span>
-                            <span style="color:#07c160;font-weight:600;" id="valStep3OffY">${state.offsetY}px</span>
-                        </div>
-                        <input type="range" id="sliderStep3OffY" min="-20" max="20" value="${state.offsetY}" style="width:100%;accent-color:#07c160;">
-                    </div>
-
-                    <div style="margin-bottom:10px;">
-                        <input id="step3NameInput" type="text" placeholder="气泡名称" value="${escapeHtml(state.name)}" style="width:100%;box-sizing:border-box;padding:7px 8px;border-radius:6px;border:1px solid #ddd;font-size:12px;outline:none;">
+                    <div style="margin-bottom:12px;">
+                        <input id="step3NameInput" type="text" placeholder="气泡名称" value="${escapeHtml(state.name)}" style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:6px;border:1px solid #ddd;font-size:12px;outline:none;">
                     </div>
 
                     <div style="display:flex;gap:8px;">
@@ -1154,32 +1070,11 @@
                 </div>
             `;
 
-            function refreshStep3Transforms() {
-                const u = modal.querySelector('#vBubbleUser');
-                const n = modal.querySelector('#vBubbleNpc');
-                if (u) u.style.transform = `translate(${state.offsetX}px, ${state.offsetY}px) scale(${state.scale})`;
-                if (n) n.style.transform = `translate(${state.offsetX}px, ${state.offsetY}px) scale(${state.scale})`;
-            }
-
-            modal.querySelector('#sliderStep3Scale').oninput = (e) => {
-                state.scale = parseFloat(e.target.value) / 100;
-                modal.querySelector('#valStep3Scale').textContent = `${Math.round(state.scale * 100)}%`;
-                refreshStep3Transforms();
-            };
-            modal.querySelector('#sliderStep3OffX').oninput = (e) => {
-                state.offsetX = parseInt(e.target.value, 10);
-                modal.querySelector('#valStep3OffX').textContent = `${state.offsetX}px`;
-                refreshStep3Transforms();
-            };
-            modal.querySelector('#sliderStep3OffY').oninput = (e) => {
-                state.offsetY = parseInt(e.target.value, 10);
-                modal.querySelector('#valStep3OffY').textContent = `${state.offsetY}px`;
-                refreshStep3Transforms();
-            };
+            bindStep3TouchInteraction(modal, state);
 
             modal.querySelector('#step3NameInput').oninput = (e) => { state.name = e.target.value; };
-
             modal.querySelector('#btnStep3Prev').onclick = () => { state.step = 2; renderStage(); };
+            
             modal.querySelector('#btnStep3ConfirmSave').onclick = async () => {
                 const finalName = state.name.trim() || '自适应气泡';
                 const itemToSave = {
@@ -1190,8 +1085,13 @@
                     scale: state.scale,
                     fontSize: state.fontSize,
                     fontFamily: state.fontFamily,
-                    offsetX: state.offsetX,
-                    offsetY: state.offsetY,
+                    
+                    // 角色与用户位置独立落盘
+                    userOffsetX: state.userOffsetX,
+                    userOffsetY: state.userOffsetY,
+                    npcOffsetX: state.npcOffsetX,
+                    npcOffsetY: state.npcOffsetY,
+
                     mirrorNpcFromUser: state.mirrorNpcFromUser,
                     userBorderImage: state.user.url,
                     npcBorderImage: state.mirrorNpcFromUser ? state.npc.url : state.user.url,
@@ -1215,6 +1115,92 @@
             };
         }
 
+        // 绑定第 3 步纯手势操作：位置独立拖拽，宽窄高低共通缩放
+        function bindStep3TouchInteraction(modalRoot, st) {
+            const bubbles = modalRoot.querySelectorAll('.v-interactive-bubble');
+            const bUser = modalRoot.querySelector('#vBubbleUser');
+            const bNpc = modalRoot.querySelector('#vBubbleNpc');
+
+            let activeSide = null; // 'user' | 'npc'
+            let isMoving = false;
+            let isResizing = false;
+            let startX = 0, startY = 0;
+            let initialOffX = 0, initialOffY = 0;
+            let initialScale = st.scale;
+
+            const getPos = (e) => (e.touches && e.touches[0]) ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : { x: e.clientX, y: e.clientY };
+
+            function updateTransforms() {
+                if (bUser) bUser.style.transform = `translate(${st.userOffsetX}px, ${st.userOffsetY}px) scale(${st.scale})`;
+                if (bNpc) bNpc.style.transform = `translate(${st.npcOffsetX}px, ${st.npcOffsetY}px) scale(${st.scale})`;
+            }
+
+            function setActiveBubble(side) {
+                activeSide = side;
+                modalRoot.querySelectorAll('.v-resize-handle').forEach(h => {
+                    h.style.display = (h.getAttribute('data-side') === side) ? 'block' : 'none';
+                });
+                modalRoot.querySelectorAll('.v-interactive-bubble').forEach(b => {
+                    b.style.outline = (b.getAttribute('data-side') === side) ? '1.5px dashed #07c160' : 'none';
+                });
+            }
+
+            // 默认激活用户气泡
+            setActiveBubble('user');
+
+            bubbles.forEach(b => {
+                b.addEventListener('touchstart', (e) => {
+                    const side = b.getAttribute('data-side');
+                    setActiveBubble(side);
+
+                    if (e.target.classList.contains('v-resize-handle')) {
+                        // 拉动手柄调节宽窄大小（共通）
+                        isResizing = true;
+                        const p = getPos(e);
+                        startX = p.x; startY = p.y;
+                        initialScale = st.scale;
+                        e.stopPropagation();
+                        e.preventDefault();
+                    } else {
+                        // 拖动气泡移动位置（独立）
+                        isMoving = true;
+                        const p = getPos(e);
+                        startX = p.x; startY = p.y;
+                        initialOffX = (side === 'user') ? st.userOffsetX : st.npcOffsetX;
+                        initialOffY = (side === 'user') ? st.userOffsetY : st.npcOffsetY;
+                    }
+                }, { passive: false });
+            });
+
+            window.addEventListener('touchmove', (e) => {
+                if (!isMoving && !isResizing) return;
+                const p = getPos(e);
+                const dx = p.x - startX;
+                const dy = p.y - startY;
+
+                if (isMoving && activeSide) {
+                    if (activeSide === 'user') {
+                        st.userOffsetX = Math.round(initialOffX + dx);
+                        st.userOffsetY = Math.round(initialOffY + dy);
+                    } else {
+                        st.npcOffsetX = Math.round(initialOffX + dx);
+                        st.npcOffsetY = Math.round(initialOffY + dy);
+                    }
+                    updateTransforms();
+                } else if (isResizing) {
+                    // 共通手柄调节：往外拉变大变宽，往里收变小
+                    const factor = (activeSide === 'user') ? (-dx + dy) : (dx + dy);
+                    let nextScale = Math.max(0.65, Math.min(1.45, initialScale + factor * 0.005));
+                    st.scale = parseFloat(nextScale.toFixed(2));
+                    updateTransforms();
+                }
+                if (e.cancelable) e.preventDefault();
+            }, { passive: false });
+
+            window.addEventListener('touchend', () => { isMoving = false; isResizing = false; });
+        }
+
+        // 阶段 1 切片四条虚线拖动手势
         function bindNineSliceHandles(modalRoot, cfg) {
             const container = modalRoot.querySelector('#nsStageContainer');
             if (!container) return;
@@ -1254,13 +1240,10 @@
 
             [['top', lineTop], ['bottom', lineBottom], ['left', lineLeft], ['right', lineRight]].forEach(([key, el]) => {
                 if (!el) return;
-                el.addEventListener('mousedown', (e) => { dragTarget = key; e.preventDefault(); });
                 el.addEventListener('touchstart', (e) => { dragTarget = key; e.preventDefault(); }, { passive: false });
             });
 
-            window.addEventListener('mousemove', onMove);
             window.addEventListener('touchmove', onMove, { passive: false });
-            window.addEventListener('mouseup', onEnd);
             window.addEventListener('touchend', onEnd);
         }
 
@@ -1284,10 +1267,11 @@
             scale: (bubbleObj && bubbleObj.scale !== undefined) ? bubbleObj.scale : 1.0,
             fontSize: (bubbleObj && bubbleObj.fontSize) ? bubbleObj.fontSize : 13.5,
             fontFamily: (bubbleObj && bubbleObj.fontFamily) ? bubbleObj.fontFamily : '',
-            offsetX: (bubbleObj && bubbleObj.offsetX !== undefined) ? bubbleObj.offsetX : 0,
-            offsetY: (bubbleObj && bubbleObj.offsetY !== undefined) ? bubbleObj.offsetY : 0,
+            userOffsetX: bubbleObj?.userOffsetX || 0,
+            userOffsetY: bubbleObj?.userOffsetY || 0,
+            npcOffsetX: bubbleObj?.npcOffsetX || 0,
+            npcOffsetY: bubbleObj?.npcOffsetY || 0,
             mirrorNpcFromUser: (bubbleObj && bubbleObj.mirrorNpcFromUser !== undefined) ? bubbleObj.mirrorNpcFromUser : true,
-            activeSide: 'user',
             user: {
                 url: bubbleObj?.visualConfig?.user?.url || initialUrl || '',
                 rect: bubbleObj?.visualConfig?.user?.rect || { left: 20, top: 20, width: 60, height: 60 },
@@ -1310,53 +1294,45 @@
             document.body.appendChild(modal);
         }
 
-        function renderStage() {
-            const curSide = state.activeSide;
-            const curCfg = state[curSide];
-
-            modal.innerHTML = `
-                <div style="background:#ffffff;border-radius:14px;width:100%;max-width:350px;max-height:92vh;overflow-y:auto;padding:16px;box-shadow:0 12px 32px rgba(0,0,0,0.2);box-sizing:border-box;">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                        <span style="font-size:14px;font-weight:600;color:#222;">画框框选工坊</span>
-                        <button onclick="document.getElementById('visualBoxDiyModal').remove()" style="border:none;background:none;font-size:16px;color:#999;cursor:pointer;">✕</button>
-                    </div>
-                    <div id="visualBoxStageContainer" style="position:relative;width:100%;background:#ebebeb;border-radius:10px;overflow:hidden;margin-bottom:12px;display:flex;align-items:center;justify-content:center;min-height:200px;user-select:none;touch-action:none;">
-                        <img src="${curCfg.url}" style="width:100%;max-width:280px;height:auto;display:block;pointer-events:none;" onerror="this.style.display='none';" />
-                        <div id="visualDragBox" style="position:absolute;left:${curCfg.rect.left}%;top:${curCfg.rect.top}%;width:${curCfg.rect.width}%;height:${curCfg.rect.height}%;background:rgba(7, 193, 96, 0.22);border:2px dashed #07c160;border-radius:6px;cursor:move;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;align-items:${curCfg.align === 'center' ? 'center' : (curCfg.align === 'right' ? 'flex-end' : 'flex-start')};padding:4px;overflow:hidden;touch-action:none;">
-                            <span style="font-size:${state.fontSize}px;color:${curCfg.color};line-height:1.3;pointer-events:none;word-break:break-word;text-align:${curCfg.align};">对白文字预览</span>
-                            <div id="visualResizeHandle" style="position:absolute;right:-1px;bottom:-1px;width:18px;height:18px;background:#07c160;border-radius:4px 0 4px 0;cursor:se-resize;display:flex;align-items:center;justify-content:center;touch-action:none;">
-                                <svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:none;stroke:#fff;stroke-width:3;"><line x1="20" y1="4" x2="4" y2="20"></line><line x1="20" y1="12" x2="12" y2="20"></line></svg>
-                            </div>
-                        </div>
-                    </div>
-                    <button id="btnSaveVisualBubble" style="width:100%;padding:10px;background:#07c160;border:none;border-radius:6px;font-size:12.5px;color:#fff;font-weight:600;cursor:pointer;">保存并选用</button>
+        modal.innerHTML = `
+            <div style="background:#ffffff;border-radius:14px;width:100%;max-width:350px;max-height:92vh;overflow-y:auto;padding:16px;box-shadow:0 12px 32px rgba(0,0,0,0.2);box-sizing:border-box;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+                    <span style="font-size:14px;font-weight:600;color:#222;">画框框选工坊</span>
+                    <button onclick="document.getElementById('visualBoxDiyModal').remove()" style="border:none;background:none;font-size:16px;color:#999;cursor:pointer;">✕</button>
                 </div>
-            `;
+                <div id="visualBoxStageContainer" style="position:relative;width:100%;background:#ebebeb;border-radius:10px;overflow:hidden;margin-bottom:12px;display:flex;align-items:center;justify-content:center;min-height:200px;user-select:none;touch-action:none;">
+                    <img src="${state.user.url}" style="width:100%;max-width:280px;height:auto;display:block;pointer-events:none;" onerror="this.style.display='none';" />
+                    <div id="visualDragBox" style="position:absolute;left:${state.user.rect.left}%;top:${state.user.rect.top}%;width:${state.user.rect.width}%;height:${state.user.rect.height}%;background:rgba(7, 193, 96, 0.22);border:2px dashed #07c160;border-radius:6px;cursor:move;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding:4px;overflow:hidden;touch-action:none;">
+                        <span style="font-size:${state.fontSize}px;color:${state.user.color};line-height:1.3;pointer-events:none;word-break:break-word;">对白文字预览</span>
+                    </div>
+                </div>
+                <button id="btnSaveVisualBubble" style="width:100%;padding:10px;background:#07c160;border:none;border-radius:6px;font-size:12.5px;color:#fff;font-weight:600;cursor:pointer;">保存并选用</button>
+            </div>
+        `;
 
-            modal.querySelector('#btnSaveVisualBubble').onclick = async () => {
-                const itemToSave = {
-                    id: state.id,
-                    name: state.name,
-                    author: state.author,
-                    type: 'visual_box',
-                    scale: state.scale,
-                    fontSize: state.fontSize,
-                    fontFamily: state.fontFamily,
-                    offsetX: state.offsetX,
-                    offsetY: state.offsetY,
-                    mirrorNpcFromUser: state.mirrorNpcFromUser,
-                    visualConfig: { user: { ...state.user }, npc: { ...state.npc } },
-                    isBuiltin: false
-                };
-                await window.saveCustomBubbleAsync(itemToSave);
-                localStorage.setItem('mcyt_active_decor_bubble', itemToSave.id);
-                modal.remove();
-                refreshDecorView();
-                if (typeof showToast === 'function') showToast('画框气泡已保存！');
+        modal.querySelector('#btnSaveVisualBubble').onclick = async () => {
+            const itemToSave = {
+                id: state.id,
+                name: state.name,
+                author: state.author,
+                type: 'visual_box',
+                scale: state.scale,
+                fontSize: state.fontSize,
+                fontFamily: state.fontFamily,
+                userOffsetX: state.userOffsetX,
+                userOffsetY: state.userOffsetY,
+                npcOffsetX: state.npcOffsetX,
+                npcOffsetY: state.npcOffsetY,
+                mirrorNpcFromUser: state.mirrorNpcFromUser,
+                visualConfig: { user: { ...state.user }, npc: { ...state.npc } },
+                isBuiltin: false
             };
-        }
-
-        renderStage();
+            await window.saveCustomBubbleAsync(itemToSave);
+            localStorage.setItem('mcyt_active_decor_bubble', itemToSave.id);
+            modal.remove();
+            refreshDecorView();
+            if (typeof showToast === 'function') showToast('画框气泡已保存！');
+        };
     };
 
     /**
@@ -1367,7 +1343,7 @@
         const b = bubbles.find(x => x.id === bubbleId);
         if (!b) return;
 
-        const exportPayload = { format: 'mcyt_chat_bubble_v2', version: '2.5', bubble: { ...b, id: 'bubble_shared_' + Date.now() } };
+        const exportPayload = { format: 'mcyt_chat_bubble_v2', version: '3.0', bubble: { ...b, id: 'bubble_shared_' + Date.now() } };
         const jsonStr = JSON.stringify(exportPayload, null, 2);
 
         let modal = document.getElementById('bubbleExportModal');
