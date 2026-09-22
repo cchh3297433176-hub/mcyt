@@ -2,7 +2,8 @@
  * js/apps/chat/chat-common.js
  * 💬 微信基础公共库：头像池加载 · 持久化双轨防丢备份（防空冲刷保护） · 微信通用样式注入 · 原生对话框/操作表 · Token监控池 · 
  *    🌟 表情包全量自愈装载底座（内置四大黄金分组：【豆米乌卡】40张 + 【小狗】94张 + 【抽象】42张 + 【猪猪】，老存档无缝穿透激活） · 
- *    AI实体解析器 · 酒馆 PNG 人设卡封装与导入解析引擎（内置高清头像 128x128 纳米级智能压缩，彻底终结存储超限与随机头像反噬 Bug）
+ *    AI实体解析器 · 酒馆 PNG 人设卡封装与导入解析引擎（内置高清头像 128x128 纳米级智能压缩，彻底终结存储超限与随机头像反噬 Bug） ·
+ *    🌟 用户多马甲安全头像提取管道 window.getPlayerAvatarSafe()（彻底修复装扮切换导致头像掉回默认图标的 Bug）
  * 🌟 存储架构升级（Phase 3）：
  * 单聊历史对白（mcyt_wechat_chathistory_v2）已平滑迁移至 IndexedDB (via localforage)！
  * 兼容旧版 localStorage 自动无损迁移，保持单一权威源与就地指针保活。
@@ -97,11 +98,41 @@
     window.initAvatarPool = initAvatarPool;
 
     /**
-     * 🖼️ 头像超轻量纳米压缩器（将几百 KB 的超大原图压缩为 128x128，体积降为 4~8KB，绝不撑爆 localStorage）
+     * 🛡️ 全局高保真用户头像提取器（永不掉成初始绿色图标）
+     */
+    function getPlayerAvatarSafe() {
+        // 1. 优先提取多马甲小号当前激活账户
+        if (typeof window.getActiveAccountInfo === 'function') {
+            try {
+                const acc = window.getActiveAccountInfo();
+                if (acc && (acc.avatarUrl || acc.avatar)) {
+                    return acc.avatarUrl || acc.avatar;
+                }
+            } catch (_) {}
+        }
+
+        // 2. 检查全局游戏状态 player 对象
+        if (window.G && window.G.player) {
+            if (window.G.player.avatarUrl) return window.G.player.avatarUrl;
+            if (window.G.player.avatar) return window.G.player.avatar;
+        }
+
+        // 3. 检查独立本地持久化主头像
+        try {
+            const stored = localStorage.getItem('mcyt_wechat_player_avatar');
+            if (stored && stored.length > 10) return stored;
+        } catch (_) {}
+
+        // 4. 兜底获取
+        return 'assets/icons/chat.png';
+    }
+    window.getPlayerAvatarSafe = getPlayerAvatarSafe;
+
+    /**
+     * 🖼️ 头像超轻量纳米压缩器（将超大原图压缩为 128x128，体积降为 4~8KB，绝不撑爆配额）
      */
     async function compressAvatarDataUrl(dataUrl, maxSide = 128, quality = 0.82) {
         if (!dataUrl || !dataUrl.startsWith('data:image')) return dataUrl;
-        // 如果原本就已经小于 10KB，无需二次压缩
         if (dataUrl.length < 10000) return dataUrl;
 
         return new Promise((resolve) => {
@@ -125,7 +156,6 @@
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, w, h);
                     
-                    // 优先 webp，其次 jpeg
                     let compressed = canvas.toDataURL('image/webp', quality);
                     if (!compressed.startsWith('data:image/webp')) {
                         compressed = canvas.toDataURL('image/jpeg', quality);
@@ -507,7 +537,6 @@
     }
     window.syncChatHistoryToLocalBackup = syncChatHistoryToLocalBackup;
 
-    // 🛡️ 单聊历史冷启动自动恢复（单例 Promise 防并发，就地安全合并保活指针，就位后自动静默更新列表）
     let _restoreChatHistoryPromise = null;
 
     async function restoreChatHistoryFromLocalBackup(forceRefresh = false) {
@@ -527,13 +556,11 @@
                 }
             }
 
-            // 回退与冷迁移机制
             if (!loadedHist) {
                 try {
                     const raw = localStorage.getItem(CHAT_HISTORY_BACKUP_KEY);
                     if (raw) {
                         loadedHist = JSON.parse(raw);
-                        // 🌟 自动平滑写入 IndexedDB
                         if (loadedHist && storage) {
                             storage.setItem(CHAT_HISTORY_BACKUP_KEY, loadedHist).catch(e => {
                                 console.warn('⚠️ 自动迁移单聊历史至 IndexedDB 失败:', e);
@@ -549,7 +576,6 @@
                 if (!window.G.chatHistory) window.G.chatHistory = {};
                 for (const [k, v] of Object.entries(loadedHist)) {
                     if (Array.isArray(v) && v.length > 0) {
-                        // 🛡️ 原地指针保活装载：严禁直接断开可能已经被外部引用的数组指针
                         if (!window.G.chatHistory[k]) {
                             window.G.chatHistory[k] = v;
                         } else if (window.G.chatHistory[k].length === 0) {
@@ -570,7 +596,6 @@
 
             window._chatHistoryRestored = true;
 
-            // 🌟 核心自愈：若数据读取完成时当前正处于微信消息主列表，且未进入任何对话窗口，自动静默刷新视图
             if (window._activeBottomTab === 'chats' && !window.G?.currentChatNpc && !window.G?.currentChatGroup) {
                 const root = document.getElementById('wechatAppRoot');
                 if (root && typeof window.renderChatApp === 'function') {
@@ -998,7 +1023,6 @@
         if (!window.G.chatHistory) window.G.chatHistory = {};
         const key = getChatStorageKey(npcId, accId);
         if (!window.G.chatHistory[key]) {
-            // 🌟 兼容性自愈检查：如果老版本没有带账号前缀（形如 'npc_123'），自动迁移对齐到当前主账号 'main_npc_123'
             if ((!accId || accId === 'main') && Array.isArray(window.G.chatHistory[npcId]) && window.G.chatHistory[npcId].length > 0) {
                 window.G.chatHistory[key] = window.G.chatHistory[npcId];
             } else {
@@ -1026,8 +1050,9 @@
     window.isAccountBlockedByNpc = isAccountBlockedByNpc;
 
     function renderAvatarBadge(obj, size = 46) {
-        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { avatar: 'assets/icons/chat.png' };
-        let url = (obj && obj.isPlayer) ? curAcc.avatar : (obj?.avatarUrl || obj?.avatar || getRandomAvatar());
+        let url = (obj && obj.isPlayer) 
+            ? getPlayerAvatarSafe() 
+            : (obj?.avatarUrl || obj?.avatar || getRandomAvatar());
         if (!url) url = 'assets/icons/chat.png';
         return `<div style="width:${size}px;height:${size}px;border-radius:6px;overflow:hidden;background:#e9e9e9;flex-shrink:0;box-shadow:inset 0 0 0 0.5px rgba(0,0,0,0.06);">
             <img src="${url}" draggable="false" style="width:100%;height:100%;object-fit:cover;display:block;" onerror="this.onerror=null;this.src='assets/icons/chat.png';" />
@@ -1596,7 +1621,7 @@
         };
     }
 
-    // 🌟 早期主动预热加载：脚本装载即刻启动 IndexedDB 读取通道，在用户打开微信前将单聊历史充盈至运行内存
+    // 早期主动预热加载
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', () => {
             restoreChatHistoryFromLocalBackup();
