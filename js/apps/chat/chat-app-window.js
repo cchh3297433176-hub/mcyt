@@ -5,7 +5,10 @@
  *    重新生成回复的确认与执行（confirmRetryLastAIReply / doRetryLastAIReply）、
  *    🌟 微信原生直显大图与沉浸式大图文字查看器对接、拟真生活排版卡片（ui_card）渲染。
  * 🌟 存储升级：重说撤回逻辑接入 await syncChatHistoryToLocalBackup() 异步原子落盘。
- * 🌟 修复：我方头像全面接入 getPlayerAvatarSafe() 杜绝掉落回默认图标；头像框完美继承缩放 (scale) 与全向偏移 (offsetX, offsetY)。
+ * 🌟 修复与升级：
+ *  1. 我方头像全面接入 getPlayerAvatarSafe() 杜绝掉落回默认图标；
+ *  2. 头像框完美继承缩放 (scale) 与全向偏移 (offsetX, offsetY)；
+ *  3. 气泡全面接入 buildDecorBubbleHtml 管道，支持角色专属气泡、插画框选气泡、点九图与自由缩放！
  */
 
 (function() {
@@ -19,7 +22,7 @@
         return '8px';
     }
 
-    // 辅助：获取气泡样式字符串
+    // 辅助：获取气泡样式字符串（回退兜底）
     function getDecorBubbleCss(bubbleId, isSelf) {
         let bubbles = [];
         try {
@@ -28,16 +31,6 @@
                     id: 'bubble_default',
                     userStyle: 'background-color: #95ec69; color: #000000; border-radius: 6px;',
                     npcStyle: 'background-color: #ffffff; color: #000000; border-radius: 6px; border: 1px solid #e7e7e7;'
-                },
-                {
-                    id: 'bubble_cyber_dark',
-                    userStyle: 'background: linear-gradient(135deg, #00c6ff, #0072ff); color: #ffffff; border-radius: 14px 4px 14px 14px; box-shadow: 0 2px 8px rgba(0, 114, 255, 0.3);',
-                    npcStyle: 'background: #181924; color: #00e5ff; border: 1px solid #00e5ff; border-radius: 4px 14px 14px 14px; box-shadow: 0 2px 8px rgba(0, 229, 255, 0.2);'
-                },
-                {
-                    id: 'bubble_retro_terminal',
-                    userStyle: 'background: #022b1c; color: #00ff66; border: 1px solid #00ff66; border-radius: 4px; font-family: monospace;',
-                    npcStyle: 'background: #0b1311; color: #4af626; border: 1px solid #235937; border-radius: 4px; font-family: monospace;'
                 }
             ];
             const stored = JSON.parse(localStorage.getItem('mcyt_decor_bubbles') || '[]');
@@ -55,6 +48,19 @@
         } else {
             return isSelf ? (b.userStyle || 'background-color: #95ec69; color: #000;') : (b.npcStyle || 'background-color: #ffffff; color: #000;');
         }
+    }
+
+    // 辅助：统一渲染气泡内容（优先调用 theme-chat-decor.js 提供的统一渲染器）
+    function renderSafeBubbleHtml(contentHtml, isSelf, bubbleId, customClass = '') {
+        if (typeof window.buildDecorBubbleHtml === 'function') {
+            return window.buildDecorBubbleHtml(contentHtml, isSelf, bubbleId, customClass);
+        }
+        const fallbackCss = getDecorBubbleCss(bubbleId, isSelf);
+        return `
+            <div class="chat-bubble ${isSelf ? 'self-bubble' : ''} ${customClass}" style="width:fit-content;max-width:100%;display:inline-block;padding:8px 12px;border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,0.05);font-size:14.5px;line-height:1.5;word-break:break-word;${fallbackCss};">
+                ${contentHtml}
+            </div>
+        `;
     }
 
     // 辅助：渲染带装扮与头像框的头像元素（精准遵循配置的 scale 与全向偏移 offsetX, offsetY）
@@ -193,7 +199,7 @@
     };
 
     // ============================================================
-    // 💬 单人私聊窗口渲染（仿群聊双层工具栏 · 顶栏闪电继续说 · 纯图标重说键 · 消息折叠 · 装扮系统挂载）
+    // 💬 单人私聊窗口渲染
     // ============================================================
     window.renderSingleChatWindow = function renderSingleChatWindow(container, renderOpts = {}) {
         if (!container) container = document.getElementById('appModalBody') || document.getElementById('socialTab');
@@ -228,7 +234,7 @@
 
         const decor = (npc.chatSettings && npc.chatSettings.decor) || {};
         const npcShape = decor.avatarShape || globalShape;
-        const npcBubbleId = decor.bubbleId || globalBubbleId;
+        const npcBubbleId = decor.bubbleId || globalBubbleId; // 对方专属气泡
         const userBubbleId = globalBubbleId; // 我方默认使用全局气泡
 
         // 计算头像框池
@@ -241,16 +247,11 @@
         ];
         framesList = [...DEFAULT_FRAMES, ...framesList];
 
-        // 对方专属头像框对象
         const targetFrameId = decor.frameId !== undefined && decor.frameId !== null ? decor.frameId : globalFrameId;
         const targetFrameObj = framesList.find(f => f.id === targetFrameId) || null;
-
-        // 我方全局头像框对象
         const userFrameObj = framesList.find(f => f.id === globalFrameId) || null;
 
         const npcAvatarUrl = npc.avatarUrl || npc.avatar || 'assets/icons/chat.png';
-        
-        // 🌟 核心修复：我方头像绝对优先走高保真安全管道 getPlayerAvatarSafe()，杜绝掉落回 assets/icons/chat.png
         const userAvatarUrl = (typeof window.getPlayerAvatarSafe === 'function') 
             ? window.getPlayerAvatarSafe() 
             : ((typeof getPlayerAvatar === 'function' ? getPlayerAvatar() : null) || 'assets/icons/chat.png');
@@ -289,16 +290,12 @@
         let messagesHtml = collapseBannerHtml;
         for (const msg of visibleMessages) {
             const isSelf = (msg.from === 'player');
+            const currentBubbleId = isSelf ? userBubbleId : npcBubbleId;
 
-            // 头像与装扮挂载（精准传入头像框完整对象，完美继承尺寸 scale 与 offsetX, offsetY 偏移）
+            // 头像与装扮挂载
             const currentAvatarHtml = isSelf
                 ? renderDecorAvatarHtml(userAvatarUrl, globalShape, userFrameObj, 38)
                 : renderDecorAvatarHtml(npcAvatarUrl, npcShape, targetFrameObj, 38);
-
-            // 气泡 CSS 挂载
-            const currentBubbleCss = isSelf
-                ? getDecorBubbleCss(userBubbleId, true)
-                : getDecorBubbleCss(npcBubbleId, false);
 
             let quoteHtml = '';
             if (msg.quote) {
@@ -451,6 +448,7 @@
             } else if (msg.type === 'voice') {
                 const seconds = Math.min(60, Math.max(1, parseInt(msg.seconds) || 3));
                 const bubbleWidth = Math.min(220, 68 + seconds * 4.5);
+                const currentBubbleCss = getDecorBubbleCss(currentBubbleId, isSelf);
 
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
@@ -512,24 +510,25 @@
                 const displayMainText = hasOriginal ? msg.originalText : msg.text;
                 let bubbleBody = isSelf ? escapeHtml(displayMainText || '').replace(/\n/g, '<br>') : ((typeof renderContentWithThoughts === 'function') ? renderContentWithThoughts(displayMainText || '') : escapeHtml(displayMainText || ''));
 
+                const transPartHtml = hasOriginal ? `
+                    <div id="transBox_${msg._id}" style="display:none;margin-top:6px;padding-top:6px;border-top:0.5px dashed #d5d5d5;font-size:13px;color:#222;line-height:1.45;">
+                        <div style="font-size:10px;color:#999;margin-bottom:2px;display:flex;align-items:center;gap:3px;">
+                            <svg viewBox="0 0 24 24" style="width:10px;height:10px;fill:none;stroke:currentColor;stroke-width:2;"><path d="M5 8l6 6M11 8L5 14M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6"/></svg>
+                            <span>微信翻译</span>
+                        </div>
+                        <div>${escapeHtml(msg.text || '')}</div>
+                    </div>
+                ` : '';
+
+                const bubbleInnerHtml = `<div>${bubbleBody}</div>${transPartHtml}`;
+                const renderedBubbleHtml = renderSafeBubbleHtml(bubbleInnerHtml, isSelf, currentBubbleId);
+
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
                     ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${currentAvatarHtml}</div>` : ''}
-                    <div style="max-width:74%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
+                    <div style="max-width:78%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                         ${quoteHtml}
-                        <div class="chat-bubble ${isSelf ? 'self-bubble' : ''}" data-msgid="${msg._id || ''}" style="width:fit-content;max-width:100%;display:inline-block;padding:8px 12px;box-shadow:0 1px 2px rgba(0,0,0,0.05);font-size:14.5px;line-height:1.5;word-break:break-word;cursor:pointer;${currentBubbleCss};">
-                            <div>${bubbleBody}</div>
-
-                            ${hasOriginal ? `
-                            <div id="transBox_${msg._id}" style="display:none;margin-top:6px;padding-top:6px;border-top:0.5px dashed #d5d5d5;font-size:13px;color:#222;line-height:1.45;">
-                                <div style="font-size:10px;color:#999;margin-bottom:2px;display:flex;align-items:center;gap:3px;">
-                                    <svg viewBox="0 0 24 24" style="width:10px;height:10px;fill:none;stroke:currentColor;stroke-width:2;"><path d="M5 8l6 6M11 8L5 14M2 5h12M7 2h1M22 22l-5-10-5 10M14 18h6"/></svg>
-                                    <span>微信翻译</span>
-                                </div>
-                                <div>${escapeHtml(msg.text || '')}</div>
-                            </div>
-                            ` : ''}
-                        </div>
+                        ${renderedBubbleHtml}
 
                         <div style="display:flex;align-items:center;gap:6px;margin-top:2px;">
                             ${hasOriginal ? `

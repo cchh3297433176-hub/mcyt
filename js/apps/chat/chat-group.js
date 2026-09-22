@@ -4,9 +4,10 @@
  * 🌟 存储架构升级（Phase 1 & 2）：
  * 1. 群聊历史对白（mcyt_wechat_group_histories）全面接入 IndexedDB！
  * 2. 群基础信息字典（mcyt_wechat_group_chats）全面接入 IndexedDB！
- * 🌟 装扮升级：
+ * 🌟 装扮与气泡升级：
  * 1. 我方头像全面接入 getPlayerAvatarSafe() 杜绝掉落回默认图标。
  * 2. 群内各成员与我方头像框严格读取 scale 缩放以及 offsetX / offsetY 全向微调参数，完美贴合。
+ * 3. 🌟 群聊气泡与头像框一样，自动跟随单独聊天里对应角色的专属气泡设置（插画框选/点九图/缩放全继承）！
  */
 
 (function() {
@@ -22,6 +23,9 @@
         return '8px';
     }
 
+    /**
+     * 🌟 获取群发言人的装扮：完全自动继承其在单独聊天里的角色配置
+     */
     function getGroupMemberDecor(senderId, isSelf) {
         const globalShape = localStorage.getItem('mcyt_active_avatar_shape') || 'circle';
         const globalBubbleId = localStorage.getItem('mcyt_active_decor_bubble') || 'bubble_default';
@@ -40,11 +44,12 @@
 
         return {
             shape: decor.avatarShape || globalShape,
-            bubbleId: decor.bubbleId || globalBubbleId,
+            bubbleId: decor.bubbleId || globalBubbleId, // 🌟 自动跟随单聊中角色的专属气泡
             frameId: decor.frameId !== undefined && decor.frameId !== null ? decor.frameId : globalFrameId
         };
     }
 
+    // 辅助：获取气泡样式字符串（回退兜底）
     function getBubbleCssByDecor(bubbleId, isSelf) {
         let bubbles = [];
         try {
@@ -53,16 +58,6 @@
                     id: 'bubble_default',
                     userStyle: 'background-color: #95ec69; color: #000000; border-radius: 6px;',
                     npcStyle: 'background-color: #ffffff; color: #000000; border-radius: 6px; border: 1px solid #e7e7e7;'
-                },
-                {
-                    id: 'bubble_cyber_dark',
-                    userStyle: 'background: linear-gradient(135deg, #00c6ff, #0072ff); color: #ffffff; border-radius: 14px 4px 14px 14px; box-shadow: 0 2px 8px rgba(0, 114, 255, 0.3);',
-                    npcStyle: 'background: #181924; color: #00e5ff; border: 1px solid #00e5ff; border-radius: 4px 14px 14px 14px; box-shadow: 0 2px 8px rgba(0, 229, 255, 0.2);'
-                },
-                {
-                    id: 'bubble_retro_terminal',
-                    userStyle: 'background: #022b1c; color: #00ff66; border: 1px solid #00ff66; border-radius: 4px; font-family: monospace;',
-                    npcStyle: 'background: #0b1311; color: #4af626; border: 1px solid #235937; border-radius: 4px; font-family: monospace;'
                 }
             ];
             const stored = JSON.parse(localStorage.getItem('mcyt_decor_bubbles') || '[]');
@@ -80,6 +75,19 @@
         } else {
             return isSelf ? (b.userStyle || 'background-color: #95ec69; color: #000;') : (b.npcStyle || 'background-color: #ffffff; color: #000;');
         }
+    }
+
+    // 辅助：统一渲染气泡内容（优先调用 theme-chat-decor.js 提供的统一渲染器）
+    function renderSafeGroupBubbleHtml(contentHtml, isSelf, bubbleId, customClass = '') {
+        if (typeof window.buildDecorBubbleHtml === 'function') {
+            return window.buildDecorBubbleHtml(contentHtml, isSelf, bubbleId, customClass);
+        }
+        const fallbackCss = getBubbleCssByDecor(bubbleId, isSelf);
+        return `
+            <div class="chat-bubble ${isSelf ? 'self-bubble' : ''} ${customClass}" style="width:fit-content;max-width:100%;display:inline-block;padding:8px 12px;border-radius:5px;box-shadow:0 1px 2px rgba(0,0,0,0.05);font-size:14.5px;line-height:1.5;word-break:break-word;${fallbackCss};">
+                ${contentHtml}
+            </div>
+        `;
     }
 
     // 辅助：精准根据头像框的 scale、offsetX、offsetY 渲染
@@ -284,7 +292,7 @@
             let avatarUrl = '';
 
             if (isSelf) {
-                // 🌟 我方头像走高保真管道，杜绝降级
+                // 我方头像高保真提取
                 avatarUrl = (typeof window.getPlayerAvatarSafe === 'function')
                     ? window.getPlayerAvatarSafe()
                     : ((typeof getPlayerAvatar === 'function' ? getPlayerAvatar() : null) || 'assets/icons/chat.png');
@@ -303,10 +311,9 @@
                 }
             }
 
-            // 🌟 读取角色专属装扮或全局装扮（含完整的 scale 和偏移）
+            // 🌟 自动继承对应联系人在单聊里的专属气泡与头像框
             const memberDecor = getGroupMemberDecor(msg.senderId, isSelf);
             const memberAvatarHtml = renderGroupMemberAvatarHtml(avatarUrl, memberDecor.shape, memberDecor.frameId, 38);
-            const memberBubbleCss = getBubbleCssByDecor(memberDecor.bubbleId, isSelf);
 
             const senderName = isSelf ? '我' : (msg.senderName || senderNpc?.name || '群友');
             const title = (!isSelf && msg.senderId) ? groupTitles[msg.senderId] : (isSelf ? '群主' : '');
@@ -353,6 +360,7 @@
             if (msg.type === 'voice') {
                 const seconds = Math.min(60, Math.max(1, parseInt(msg.seconds) || 3));
                 const bubbleWidth = Math.min(220, 68 + seconds * 4.5);
+                const memberBubbleCss = getBubbleCssByDecor(memberDecor.bubbleId, isSelf);
 
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
@@ -440,15 +448,17 @@
             }
             else {
                 let text = isSelf ? escapeHtml(msg.text || '').replace(/\n/g, '<br>') : ((typeof renderContentWithThoughts === 'function') ? renderContentWithThoughts(msg.text || '') : escapeHtml(msg.text || ''));
+                
+                // 🌟 群聊气泡直接调用统一样式生成器，完美继承对应单聊联系人的专属气泡
+                const bubbleHtml = renderSafeGroupBubbleHtml(text, isSelf, memberDecor.bubbleId);
+
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
                     ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${memberAvatarHtml}</div>` : ''}
-                    <div style="max-width:74%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
+                    <div style="max-width:78%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                         ${senderHeaderHtml}
                         ${quoteHtml}
-                        <div class="chat-bubble ${isSelf ? 'self-bubble' : ''}" data-msgid="${msg._id || ''}" style="width:fit-content;max-width:100%;display:inline-block;padding:8px 12px;border-radius:5px;box-shadow:0 1px 2px rgba(0,0,0,0.05);font-size:14.5px;line-height:1.5;word-break:break-word;${memberBubbleCss};">
-                            ${text}
-                        </div>
+                        ${bubbleHtml}
                         <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
                     </div>
                     ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${memberAvatarHtml}</div>` : ''}
@@ -971,5 +981,5 @@
         window.renderChatApp();
     };
 
-    console.log('✅ ChatGroup 多人群聊独立模块已成功升级（群基础字典与群历史 IndexedDB 驱动，装扮与气泡已全面挂载）');
+    console.log('✅ ChatGroup 多人群聊独立模块已成功升级（群聊气泡已完全继承对应单聊联系人的专属气泡与框选配置）');
 })();
