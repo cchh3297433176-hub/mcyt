@@ -1,13 +1,11 @@
 /**
  * js/apps/chat/chat-card.js
- * 📇 微信名片与人设资料设置独立模块（已从 chat-app.js 解耦减负）
+ * 📇 微信名片与人设资料设置独立模块
  * 职责：
- * 1. 角色极简原生名片卡（保留头像、姓名/备注、个性签名、地区与好感度）
- * 2. 右上角双功能入口：新增「装扮中心」按钮（头像方圆、专属头像框、专属气泡）+ 齿轮「资料设置」
- * 3. 独立齿轮“资料设置”白灰拟真弹窗（备注名、原名、签名、地区、恋爱状态、人设Prompt修改）
- * 4. 角色回复偏好设置：单次最少/最多发送条数控制、语音发送频率控制、关闭时差与关闭双语独立开关
- * 5. 角色卡 PNG 导出入口（支持自定义文件名）、换头像与角色卡导入（导入与相册更换头像全量接入纳米压缩）
- * 6. 推荐名片详情弹窗与添加通讯录
+ * 1. 角色极简原生名片卡（仅保留必要信息，头像精准保活）
+ * 2. 右上角「装扮中心」：支持【我的装扮】与【对方装扮】双轨分流
+ * 3. 头像框缩略图折叠栏试穿预览（点击试穿，再次点击卸下）
+ * 4. 彻底消除杂乱 emoji，保持原生微信极简白灰微绿
  */
 
 (function() {
@@ -25,7 +23,20 @@
         return '8px';
     }
 
-    // 📇 极简原生微信名片卡
+    // 辅助获取装扮池
+    function getStoredFramesList() {
+        return (typeof window.getStoredDecorFrames === 'function')
+            ? window.getStoredDecorFrames()
+            : [{ id: 'frame_none', name: '无头像框', url: '', scale: 1.15 }];
+    }
+
+    function getStoredBubblesList() {
+        return (typeof window.getStoredDecorBubbles === 'function')
+            ? window.getStoredDecorBubbles()
+            : [{ id: 'bubble_default', name: '原生微信白灰微绿', type: 'css' }];
+    }
+
+    // 📇 极简微信名片卡
     function openNpcProfileCardModal(npcId) {
         if (!window.G || !window.G.npcs) return;
         const npc = window.G.npcs[npcId];
@@ -39,38 +50,32 @@
         const curFavor = parseFloat(npc.favor !== undefined ? npc.favor : 50);
         const favorText = `${formatFavorNumber(curFavor)} (${isDating ? '恋人' : (curFavor >= 80 ? '暧昧期' : '朋友')})`;
 
-        // 计算当前名片头像框与形状
         const decor = (npc.chatSettings && npc.chatSettings.decor) || {};
         const globalShape = localStorage.getItem('mcyt_active_avatar_shape') || 'circle';
         const avatarShape = decor.avatarShape || globalShape;
         const borderRadius = getShapeBorderRadius(avatarShape);
 
-        // 头像框计算
         let frameUrl = '';
-        if (decor.frameId) {
-            if (decor.frameId !== 'frame_none') {
-                const list = getStoredFramesList();
-                const f = list.find(x => x.id === decor.frameId);
-                if (f && f.url) frameUrl = f.url;
-            }
-        } else {
-            // 跟随全局
+        let frameScale = 1.18;
+        const frames = getStoredFramesList();
+
+        if (decor.frameId && decor.frameId !== 'frame_none') {
+            const f = frames.find(x => x.id === decor.frameId);
+            if (f && f.url) { frameUrl = f.url; frameScale = f.scale || 1.18; }
+        } else if (!decor.frameId) {
             const globalFrameId = localStorage.getItem('mcyt_active_decor_frame') || 'frame_none';
-            if (globalFrameId !== 'frame_none') {
-                const list = getStoredFramesList();
-                const f = list.find(x => x.id === globalFrameId);
-                if (f && f.url) frameUrl = f.url;
-            }
+            const f = frames.find(x => x.id === globalFrameId);
+            if (f && f.url) { frameUrl = f.url; frameScale = f.scale || 1.18; }
         }
+
+        const avatarSrc = npc.avatarUrl || npc.avatar || 'assets/icons/chat.png';
 
         let mask = document.createElement('div');
         mask.className = 'wechat-clean-modal-mask';
         mask.innerHTML = `
             <div class="wechat-clean-modal-card" style="max-width:320px;padding:20px 18px;position:relative;background:#ffffff;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.12);box-sizing:border-box;">
-                
-                <!-- 右上角操作区：装扮入口 + 资料设置 -->
                 <div style="position:absolute;top:14px;right:14px;display:flex;align-items:center;gap:6px;">
-                    <button type="button" id="btnNpcCardDecor" title="装扮设置（头像框与气泡）" style="border:none;background:none;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;color:#07c160;">
+                    <button type="button" id="btnNpcCardDecor" title="装扮设置" style="border:none;background:none;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;color:#07c160;">
                         <svg viewBox="0 0 24 24" style="width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;">
                             <path d="M20.38 3.46L16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"></path>
                         </svg>
@@ -84,12 +89,9 @@
                 </div>
 
                 <div style="display:flex;align-items:center;gap:14px;padding-bottom:16px;border-bottom:0.5px solid #f0f0f0;margin-bottom:14px;padding-right:65px;">
-                    <div style="position:relative;width:56px;height:56px;flex-shrink:0;cursor:pointer;" onclick="window.triggerChangeNpcAvatar('${npcId}')" title="点击更换头像">
-                        <img id="npcCardAvatarDisplay" src="${npc.avatarUrl || npc.avatar || (typeof getRandomAvatar === 'function' ? getRandomAvatar() : 'assets/icons/chat.png')}" style="width:100%;height:100%;border-radius:${borderRadius};object-fit:cover;" onerror="this.src='assets/icons/chat.png';" />
-                        ${frameUrl ? `<img src="${frameUrl}" style="position:absolute;top:-10%;left:-10%;width:120%;height:120%;pointer-events:none;" onerror="this.style.display='none'" />` : ''}
-                        <div style="position:absolute;bottom:0;right:0;background:rgba(0,0,0,0.45);border-radius:2px 0 8px 0;width:16px;height:16px;display:flex;align-items:center;justify-content:center;">
-                            <svg viewBox="0 0 24 24" style="width:9px;height:9px;fill:#ffffff;"><path d="M4 4h3l2-2h6l2 2h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2zm8 3a5 5 0 1 0 0 10 5 5 0 0 0 0-10zm0 2a3 3 0 1 1 0 6 3 3 0 0 1 0-6z"/></svg>
-                        </div>
+                    <div style="position:relative;width:56px;height:56px;flex-shrink:0;cursor:pointer;" onclick="window.triggerChangeNpcAvatar('${npcId}')" title="更换头像">
+                        <img id="npcCardAvatarDisplay" src="${avatarSrc}" style="width:100%;height:100%;border-radius:${borderRadius};object-fit:cover;display:block;" onerror="this.src='assets/icons/chat.png';" />
+                        ${frameUrl ? `<img src="${frameUrl}" style="position:absolute;top:50%;left:50%;transform:translate(-50%, -50%) scale(${frameScale});width:100%;height:100%;pointer-events:none;" onerror="this.style.display='none';" />` : ''}
                     </div>
                     <div style="flex:1;min-width:0;">
                         <div style="font-size:16.5px;font-weight:600;color:#181818;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
@@ -141,57 +143,7 @@
     }
     window.openNpcProfileCardModal = openNpcProfileCardModal;
 
-    // 辅助获取装扮数据池
-    function getStoredFramesList() {
-        const DEFAULT_FRAMES = [
-            { id: 'frame_none', name: '无头像框', url: '', isBuiltin: true },
-            { id: 'frame_gold_star', name: '金色辉光', url: 'assets/decor/frames/frame_gold.png', isBuiltin: true },
-            { id: 'frame_cat_ear', name: '萌动猫耳', url: 'assets/decor/frames/frame_cat.png', isBuiltin: true }
-        ];
-        try {
-            const list = JSON.parse(localStorage.getItem('mcyt_decor_frames') || '[]');
-            return [...DEFAULT_FRAMES, ...list];
-        } catch (_) {
-            return DEFAULT_FRAMES;
-        }
-    }
-
-    function getStoredBubblesList() {
-        const DEFAULT_BUBBLES = [
-            {
-                id: 'bubble_default',
-                name: '原生微信白灰微绿',
-                type: 'css',
-                userStyle: 'background-color: #95ec69; color: #000000; border-radius: 6px;',
-                npcStyle: 'background-color: #ffffff; color: #000000; border-radius: 6px; border: 1px solid #e7e7e7;',
-                isBuiltin: true
-            },
-            {
-                id: 'bubble_cyber_dark',
-                name: '赛博霓虹黑夜',
-                type: 'css',
-                userStyle: 'background: linear-gradient(135deg, #00c6ff, #0072ff); color: #ffffff; border-radius: 14px 4px 14px 14px; box-shadow: 0 2px 8px rgba(0, 114, 255, 0.3);',
-                npcStyle: 'background: #181924; color: #00e5ff; border: 1px solid #00e5ff; border-radius: 4px 14px 14px 14px; box-shadow: 0 2px 8px rgba(0, 229, 255, 0.2);',
-                isBuiltin: true
-            },
-            {
-                id: 'bubble_retro_terminal',
-                name: '复古终端微光',
-                type: 'css',
-                userStyle: 'background: #022b1c; color: #00ff66; border: 1px solid #00ff66; border-radius: 4px; font-family: monospace;',
-                npcStyle: 'background: #0b1311; color: #4af626; border: 1px solid #235937; border-radius: 4px; font-family: monospace;',
-                isBuiltin: true
-            }
-        ];
-        try {
-            const list = JSON.parse(localStorage.getItem('mcyt_decor_bubbles') || '[]');
-            return [...DEFAULT_BUBBLES, ...list];
-        } catch (_) {
-            return DEFAULT_BUBBLES;
-        }
-    }
-
-    // 🎨 角色专属装扮选择弹窗（白灰微绿原生质感）
+    // 🎨 装扮弹窗（支持【我方】与【角色】分流切换 + 缩略图抽屉试穿预览）
     function openNpcDecorModal(npcId) {
         if (!window.G || !window.G.npcs) return;
         const npc = window.G.npcs[npcId];
@@ -199,160 +151,218 @@
 
         if (!npc.chatSettings) npc.chatSettings = {};
         if (!npc.chatSettings.decor) npc.chatSettings.decor = {};
-        const decor = npc.chatSettings.decor;
 
-        // 当前选中的装扮
-        let curShape = decor.avatarShape || 'inherit'; // 'inherit' | 'circle' | 'squircle' | 'square'
-        let curFrameId = decor.frameId !== undefined ? decor.frameId : 'inherit'; // 'inherit' | 'frame_none' | frameId
-        let curBubbleId = decor.bubbleId !== undefined ? decor.bubbleId : 'inherit'; // 'inherit' | bubbleId
+        let activeDecorTarget = 'npc'; // 'npc' | 'user'
 
         const frames = getStoredFramesList();
         const bubbles = getStoredBubblesList();
 
+        // 对方配置
+        let npcShape = npc.chatSettings.decor.avatarShape || 'inherit';
+        let npcFrameId = npc.chatSettings.decor.frameId !== undefined ? npc.chatSettings.decor.frameId : 'inherit';
+        let npcBubbleId = npc.chatSettings.decor.bubbleId !== undefined ? npc.chatSettings.decor.bubbleId : 'inherit';
+
+        // 我方配置（来自 localStorage 全局）
+        let userShape = localStorage.getItem('mcyt_active_avatar_shape') || 'circle';
+        let userFrameId = localStorage.getItem('mcyt_active_decor_frame') || 'frame_none';
+        let userBubbleId = localStorage.getItem('mcyt_active_decor_bubble') || 'bubble_default';
+
+        const userAvatar = (typeof window.getPlayerAvatarSafe === 'function') ? window.getPlayerAvatarSafe() : 'assets/icons/chat.png';
+        const npcAvatar = npc.avatarUrl || npc.avatar || 'assets/icons/chat.png';
+
         let mask = document.createElement('div');
         mask.className = 'wechat-clean-modal-mask';
-        mask.innerHTML = `
-            <div class="wechat-clean-modal-card" style="max-width:340px;padding:18px;position:relative;background:#ffffff;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.14);box-sizing:border-box;max-height:85vh;display:flex;flex-direction:column;">
-                <div style="font-size:15px;font-weight:700;color:#181818;margin-bottom:4px;display:flex;justify-content:space-between;align-items:center;">
-                    <span>🎨「${escapeHtml(npc.name || 'NPC')}」专属装扮</span>
-                    <button type="button" id="btnNpcDecorClose" style="border:none;background:#f2f2f2;border-radius:50%;width:22px;height:22px;color:#777;cursor:pointer;font-size:12px;line-height:1;">✕</button>
-                </div>
-                <div style="font-size:11.5px;color:#888;margin-bottom:12px;">可指定角色的独立头像形状、专属头像框与气泡。</div>
 
-                <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:14px;padding-right:2px;">
-                    <!-- 1. 头像形状 -->
-                    <div>
-                        <div style="font-size:12px;font-weight:600;color:#444;margin-bottom:6px;">头像形状：</div>
-                        <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:6px;" id="npcShapeSelector">
-                            <button type="button" class="decor-shape-opt" data-shape="inherit" style="padding:6px 0;font-size:11px;border-radius:6px;border:1px solid ${curShape === 'inherit' ? '#07c160' : '#e0e0e0'};background:${curShape === 'inherit' ? '#e8f7ed' : '#fff'};color:${curShape === 'inherit' ? '#07c160' : '#444'};cursor:pointer;">跟随全局</button>
-                            <button type="button" class="decor-shape-opt" data-shape="circle" style="padding:6px 0;font-size:11px;border-radius:6px;border:1px solid ${curShape === 'circle' ? '#07c160' : '#e0e0e0'};background:${curShape === 'circle' ? '#e8f7ed' : '#fff'};color:${curShape === 'circle' ? '#07c160' : '#444'};cursor:pointer;">⚪ 正圆</button>
-                            <button type="button" class="decor-shape-opt" data-shape="squircle" style="padding:6px 0;font-size:11px;border-radius:6px;border:1px solid ${curShape === 'squircle' ? '#07c160' : '#e0e0e0'};background:${curShape === 'squircle' ? '#e8f7ed' : '#fff'};color:${curShape === 'squircle' ? '#07c160' : '#444'};cursor:pointer;">◽ 圆角方</button>
-                            <button type="button" class="decor-shape-opt" data-shape="square" style="padding:6px 0;font-size:11px;border-radius:6px;border:1px solid ${curShape === 'square' ? '#07c160' : '#e0e0e0'};background:${curShape === 'square' ? '#e8f7ed' : '#fff'};color:${curShape === 'square' ? '#07c160' : '#444'};cursor:pointer;">⬛ 正方</button>
+        function renderDecorModalInner() {
+            const isUser = (activeDecorTarget === 'user');
+            const curAvatar = isUser ? userAvatar : npcAvatar;
+            const curShape = isUser ? userShape : (npcShape === 'inherit' ? userShape : npcShape);
+            const curFrameId = isUser ? userFrameId : (npcFrameId === 'inherit' ? userFrameId : npcFrameId);
+            const curBubbleId = isUser ? userBubbleId : (npcBubbleId === 'inherit' ? userBubbleId : npcBubbleId);
+
+            const curFrameObj = frames.find(f => f.id === curFrameId);
+            const curFrameUrl = (curFrameObj && curFrameObj.url) ? curFrameObj.url : '';
+            const curFrameScale = (curFrameObj && curFrameObj.scale) ? curFrameObj.scale : 1.18;
+
+            mask.innerHTML = `
+                <div class="wechat-clean-modal-card" style="max-width:340px;padding:16px;position:relative;background:#ffffff;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.14);box-sizing:border-box;max-height:88vh;display:flex;flex-direction:column;">
+                    <div style="font-size:14.5px;font-weight:600;color:#181818;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
+                        <span>装扮设置</span>
+                        <button type="button" id="btnDecorModalX" style="border:none;background:#f2f2f2;border-radius:50%;width:22px;height:22px;color:#777;cursor:pointer;font-size:12px;">✕</button>
+                    </div>
+
+                    <!-- 双选分流：我方装扮 vs 角色装扮 -->
+                    <div style="display:flex;background:#f2f2f2;border-radius:8px;padding:2px;margin-bottom:12px;">
+                        <button type="button" id="tabTargetNpc" style="flex:1;padding:6px 0;border-radius:6px;border:none;font-size:12px;font-weight:600;cursor:pointer;background:${!isUser ? '#ffffff' : 'transparent'};color:${!isUser ? '#07c160' : '#666'};">
+                            角色「${escapeHtml(npc.name || 'NPC')}」
+                        </button>
+                        <button type="button" id="tabTargetUser" style="flex:1;padding:6px 0;border-radius:6px;border:none;font-size:12px;font-weight:600;cursor:pointer;background:${isUser ? '#ffffff' : 'transparent'};color:${isUser ? '#07c160' : '#666'};">
+                            我方（用户自身）
+                        </button>
+                    </div>
+
+                    <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding-right:2px;">
+                        <!-- 试穿展示舞台 -->
+                        <div style="background:#f7f7f7;border-radius:8px;padding:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                            <div style="position:relative;width:54px;height:54px;">
+                                <img src="${curAvatar}" style="width:100%;height:100%;object-fit:cover;border-radius:${getShapeBorderRadius(curShape)};display:block;" onerror="this.src='assets/icons/chat.png';" />
+                                ${curFrameUrl ? `<img src="${curFrameUrl}" style="position:absolute;top:50%;left:50%;transform:translate(-50%, -50%) scale(${curFrameScale});width:100%;height:100%;pointer-events:none;" />` : ''}
+                            </div>
+                            <span style="font-size:11px;color:#777;margin-top:6px;">${curFrameUrl ? (curFrameObj.name || '已选框') : '未穿戴头像框'}</span>
+                        </div>
+
+                        <!-- 头像形状 -->
+                        <div>
+                            <div style="font-size:12px;font-weight:600;color:#444;margin-bottom:6px;">头像形状：</div>
+                            <div style="display:flex;gap:6px;">
+                                ${!isUser ? `<button type="button" class="opt-shape-btn" data-val="inherit" style="flex:1;padding:6px 0;font-size:11px;border-radius:6px;border:1px solid ${npcShape === 'inherit' ? '#07c160' : '#e0e0e0'};background:${npcShape === 'inherit' ? '#e8f7ed' : '#fff'};color:${npcShape === 'inherit' ? '#07c160' : '#444'};cursor:pointer;">跟随全局</button>` : ''}
+                                <button type="button" class="opt-shape-btn" data-val="circle" style="flex:1;padding:6px 0;font-size:11px;border-radius:6px;border:1px solid ${(isUser ? userShape : npcShape) === 'circle' ? '#07c160' : '#e0e0e0'};background:${(isUser ? userShape : npcShape) === 'circle' ? '#e8f7ed' : '#fff'};color:${(isUser ? userShape : npcShape) === 'circle' ? '#07c160' : '#444'};cursor:pointer;">正圆</button>
+                                <button type="button" class="opt-shape-btn" data-val="squircle" style="flex:1;padding:6px 0;font-size:11px;border-radius:6px;border:1px solid ${(isUser ? userShape : npcShape) === 'squircle' ? '#07c160' : '#e0e0e0'};background:${(isUser ? userShape : npcShape) === 'squircle' ? '#e8f7ed' : '#fff'};color:${(isUser ? userShape : npcShape) === 'squircle' ? '#07c160' : '#444'};cursor:pointer;">圆角方</button>
+                                <button type="button" class="opt-shape-btn" data-val="square" style="flex:1;padding:6px 0;font-size:11px;border-radius:6px;border:1px solid ${(isUser ? userShape : npcShape) === 'square' ? '#07c160' : '#e0e0e0'};background:${(isUser ? userShape : npcShape) === 'square' ? '#e8f7ed' : '#fff'};color:${(isUser ? userShape : npcShape) === 'square' ? '#07c160' : '#444'};cursor:pointer;">直角方</button>
+                            </div>
+                        </div>
+
+                        <!-- 头像框折叠缩略图选择 -->
+                        <div>
+                            <div onclick="window.toggleCardDecorFramesCollapse()" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;margin-bottom:6px;">
+                                <span style="font-size:12px;font-weight:600;color:#444;">头像框（点击试穿，再次点击脱下）：</span>
+                                <span id="cardDecorFramesArrow" style="font-size:11px;color:#07c160;font-weight:bold;">▼ 收起</span>
+                            </div>
+
+                            <div id="cardDecorFramesGrid" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(64px, 1fr));gap:8px;">
+                                ${!isUser ? `
+                                    <div class="opt-frame-card" data-val="inherit" style="background:${npcFrameId === 'inherit' ? '#e8f7ed' : '#f9f9f9'};border:1px solid ${npcFrameId === 'inherit' ? '#07c160' : '#eee'};border-radius:8px;padding:6px 2px;display:flex;flex-direction:column;align-items:center;cursor:pointer;">
+                                        <div style="width:36px;height:36px;border-radius:50%;background:#eee;display:flex;align-items:center;justify-content:center;font-size:10px;color:#777;margin-bottom:4px;">默认</div>
+                                        <span style="font-size:10px;color:#333;">跟随全局</span>
+                                    </div>
+                                ` : ''}
+
+                                ${frames.map(f => {
+                                    const isSelected = (isUser ? userFrameId : npcFrameId) === f.id;
+                                    const sVal = f.scale || 1.18;
+                                    return `
+                                        <div class="opt-frame-card" data-val="${f.id}" style="position:relative;background:${isSelected ? '#e8f7ed' : '#f9f9f9'};border:1px solid ${isSelected ? '#07c160' : '#eee'};border-radius:8px;padding:6px 2px;display:flex;flex-direction:column;align-items:center;cursor:pointer;">
+                                            <div style="position:relative;width:36px;height:36px;margin-bottom:4px;">
+                                                <img src="${curAvatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;" onerror="this.src='assets/icons/chat.png';" />
+                                                ${f.url ? `<img src="${f.url}" style="position:absolute;top:50%;left:50%;transform:translate(-50%, -50%) scale(${sVal});width:100%;height:100%;pointer-events:none;" />` : ''}
+                                            </div>
+                                            <span style="font-size:10px;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:56px;text-align:center;">${escapeHtml(f.name)}</span>
+                                        </div>
+                                    `;
+                                }).join('')}
+                            </div>
+                        </div>
+
+                        <!-- 气泡样式 -->
+                        <div>
+                            <div style="font-size:12px;font-weight:600;color:#444;margin-bottom:6px;">气泡样式：</div>
+                            <div style="display:flex;flex-direction:column;gap:6px;">
+                                ${!isUser ? `
+                                    <button type="button" class="opt-bubble-btn" data-val="inherit" style="padding:7px 10px;font-size:11.5px;border-radius:6px;border:1px solid ${npcBubbleId === 'inherit' ? '#07c160' : '#e0e0e0'};background:${npcBubbleId === 'inherit' ? '#e8f7ed' : '#fff'};color:${npcBubbleId === 'inherit' ? '#07c160' : '#444'};cursor:pointer;text-align:left;display:flex;justify-content:space-between;">
+                                        <span>跟随全局装扮</span>
+                                        ${npcBubbleId === 'inherit' ? '<span style="color:#07c160;font-weight:bold;">✓</span>' : ''}
+                                    </button>
+                                ` : ''}
+                                ${bubbles.map(b => {
+                                    const isBSelected = (isUser ? userBubbleId : npcBubbleId) === b.id;
+                                    return `
+                                        <button type="button" class="opt-bubble-btn" data-val="${b.id}" style="padding:7px 10px;font-size:11.5px;border-radius:6px;border:1px solid ${isBSelected ? '#07c160' : '#e0e0e0'};background:${isBSelected ? '#e8f7ed' : '#fff'};color:${isBSelected ? '#07c160' : '#444'};cursor:pointer;text-align:left;display:flex;justify-content:space-between;">
+                                            <span>${escapeHtml(b.name)}</span>
+                                            ${isBSelected ? '<span style="color:#07c160;font-weight:bold;">✓</span>' : ''}
+                                        </button>
+                                    `;
+                                }).join('')}
+                            </div>
                         </div>
                     </div>
 
-                    <!-- 2. 专属头像框 -->
-                    <div>
-                        <div style="font-size:12px;font-weight:600;color:#444;margin-bottom:6px;">专属头像框：</div>
-                        <div style="display:flex;flex-wrap:wrap;gap:6px;" id="npcFrameSelector">
-                            <button type="button" class="decor-frame-opt" data-fid="inherit" style="padding:4px 8px;font-size:11px;border-radius:6px;border:1px solid ${curFrameId === 'inherit' ? '#07c160' : '#e0e0e0'};background:${curFrameId === 'inherit' ? '#e8f7ed' : '#fff'};color:${curFrameId === 'inherit' ? '#07c160' : '#444'};cursor:pointer;">跟随全局</button>
-                            ${frames.map(f => `
-                                <button type="button" class="decor-frame-opt" data-fid="${f.id}" style="padding:4px 8px;font-size:11px;border-radius:6px;border:1px solid ${curFrameId === f.id ? '#07c160' : '#e0e0e0'};background:${curFrameId === f.id ? '#e8f7ed' : '#fff'};color:${curFrameId === f.id ? '#07c160' : '#444'};cursor:pointer;">${f.name}</button>
-                            `).join('')}
-                        </div>
-                    </div>
-
-                    <!-- 3. 专属气泡样式 -->
-                    <div>
-                        <div style="font-size:12px;font-weight:600;color:#444;margin-bottom:6px;">专属对白气泡：</div>
-                        <div style="display:flex;flex-direction:column;gap:6px;" id="npcBubbleSelector">
-                            <button type="button" class="decor-bubble-opt" data-bid="inherit" style="padding:8px 10px;text-align:left;font-size:11.5px;border-radius:6px;border:1px solid ${curBubbleId === 'inherit' ? '#07c160' : '#e0e0e0'};background:${curBubbleId === 'inherit' ? '#e8f7ed' : '#fff'};color:${curBubbleId === 'inherit' ? '#07c160' : '#444'};cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
-                                <span>跟随全局装扮</span>
-                                ${curBubbleId === 'inherit' ? '<span style="color:#07c160;font-weight:bold;">✓</span>' : ''}
-                            </button>
-                            ${bubbles.map(b => `
-                                <button type="button" class="decor-bubble-opt" data-bid="${b.id}" style="padding:8px 10px;text-align:left;font-size:11.5px;border-radius:6px;border:1px solid ${curBubbleId === b.id ? '#07c160' : '#e0e0e0'};background:${curBubbleId === b.id ? '#e8f7ed' : '#fff'};color:${curBubbleId === b.id ? '#07c160' : '#444'};cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
-                                    <span>${b.name} (${b.type === 'nine_slice' ? '点九图' : 'CSS'})</span>
-                                    ${curBubbleId === b.id ? '<span style="color:#07c160;font-weight:bold;">✓</span>' : ''}
-                                </button>
-                            `).join('')}
-                        </div>
+                    <div style="display:flex;gap:8px;margin-top:12px;">
+                        <button type="button" id="btnSaveDecorChoice" style="flex:1;padding:8px;background:#07c160;border:none;border-radius:6px;color:#fff;font-size:12.5px;font-weight:600;cursor:pointer;">保存装扮</button>
+                        <button type="button" id="btnCancelDecorChoice" style="flex:1;padding:8px;background:#f2f2f2;border:none;border-radius:6px;color:#555;font-size:12.5px;cursor:pointer;">返回名片</button>
                     </div>
                 </div>
+            `;
 
-                <div style="display:flex;gap:8px;margin-top:14px;">
-                    <button type="button" id="btnSaveNpcDecor" style="flex:1;padding:8.5px;background:#07c160;border:none;border-radius:6px;color:#fff;font-size:13px;font-weight:600;cursor:pointer;">保存装扮</button>
-                    <button type="button" id="btnCancelNpcDecor" style="flex:1;padding:8.5px;background:#f2f2f2;border:none;border-radius:6px;color:#555;font-size:13px;cursor:pointer;">返回名片</button>
-                </div>
-            </div>
-        `;
+            // 切换对象
+            mask.querySelector('#tabTargetNpc').onclick = () => { activeDecorTarget = 'npc'; renderDecorModalInner(); };
+            mask.querySelector('#tabTargetUser').onclick = () => { activeDecorTarget = 'user'; renderDecorModalInner(); };
+
+            // 形状切换
+            mask.querySelectorAll('.opt-shape-btn').forEach(btn => {
+                btn.onclick = () => {
+                    const val = btn.getAttribute('data-val');
+                    if (isUser) userShape = val;
+                    else npcShape = val;
+                    renderDecorModalInner();
+                };
+            });
+
+            // 框切换（再次点击卸下为 frame_none）
+            mask.querySelectorAll('.opt-frame-card').forEach(card => {
+                card.onclick = () => {
+                    const val = card.getAttribute('data-val');
+                    if (isUser) {
+                        userFrameId = (userFrameId === val) ? 'frame_none' : val;
+                    } else {
+                        npcFrameId = (npcFrameId === val) ? 'frame_none' : val;
+                    }
+                    renderDecorModalInner();
+                };
+            });
+
+            // 气泡切换
+            mask.querySelectorAll('.opt-bubble-btn').forEach(btn => {
+                btn.onclick = () => {
+                    const val = btn.getAttribute('data-val');
+                    if (isUser) userBubbleId = val;
+                    else npcBubbleId = val;
+                    renderDecorModalInner();
+                };
+            });
+
+            mask.querySelector('#btnDecorModalX').onclick = () => { mask.remove(); openNpcProfileCardModal(npcId); };
+            mask.querySelector('#btnCancelDecorChoice').onclick = () => { mask.remove(); openNpcProfileCardModal(npcId); };
+
+            mask.querySelector('#btnSaveDecorChoice').onclick = () => {
+                // 保存我方全局
+                localStorage.setItem('mcyt_active_avatar_shape', userShape);
+                localStorage.setItem('mcyt_active_decor_frame', userFrameId);
+                localStorage.setItem('mcyt_active_decor_bubble', userBubbleId);
+
+                // 保存角色专属
+                npc.chatSettings.decor = {
+                    avatarShape: npcShape === 'inherit' ? null : npcShape,
+                    frameId: npcFrameId === 'inherit' ? null : npcFrameId,
+                    bubbleId: npcBubbleId === 'inherit' ? null : npcBubbleId
+                };
+
+                if (typeof window.syncCustomNpcsToLocalBackup === 'function') window.syncCustomNpcsToLocalBackup();
+                if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+                if (typeof showToast === 'function') showToast('装扮配置已保存');
+
+                mask.remove();
+                openNpcProfileCardModal(npcId);
+                if (window.G.currentChatNpc === npcId && typeof window.renderSingleChatWindow === 'function') {
+                    window.renderSingleChatWindow();
+                }
+            };
+        }
+
+        window.toggleCardDecorFramesCollapse = function () {
+            const grid = document.getElementById('cardDecorFramesGrid');
+            const arrow = document.getElementById('cardDecorFramesArrow');
+            if (!grid || !arrow) return;
+            const isHidden = (grid.style.display === 'none');
+            grid.style.display = isHidden ? 'grid' : 'none';
+            arrow.textContent = isHidden ? '▼ 收起' : '▶ 展开';
+        };
+
+        renderDecorModalInner();
         document.body.appendChild(mask);
-
-        // 交互逻辑
-        const shapeBtns = mask.querySelectorAll('.decor-shape-opt');
-        shapeBtns.forEach(btn => {
-            btn.onclick = () => {
-                shapeBtns.forEach(b => {
-                    b.style.borderColor = '#e0e0e0';
-                    b.style.background = '#fff';
-                    b.style.color = '#444';
-                });
-                btn.style.borderColor = '#07c160';
-                btn.style.background = '#e8f7ed';
-                btn.style.color = '#07c160';
-                curShape = btn.getAttribute('data-shape');
-            };
-        });
-
-        const frameBtns = mask.querySelectorAll('.decor-frame-opt');
-        frameBtns.forEach(btn => {
-            btn.onclick = () => {
-                frameBtns.forEach(b => {
-                    b.style.borderColor = '#e0e0e0';
-                    b.style.background = '#fff';
-                    b.style.color = '#444';
-                });
-                btn.style.borderColor = '#07c160';
-                btn.style.background = '#e8f7ed';
-                btn.style.color = '#07c160';
-                curFrameId = btn.getAttribute('data-fid');
-            };
-        });
-
-        const bubbleBtns = mask.querySelectorAll('.decor-bubble-opt');
-        bubbleBtns.forEach(btn => {
-            btn.onclick = () => {
-                bubbleBtns.forEach(b => {
-                    b.style.borderColor = '#e0e0e0';
-                    b.style.background = '#fff';
-                    b.style.color = '#444';
-                    const check = b.querySelector('span:last-child');
-                    if (check && check.textContent === '✓') check.remove();
-                });
-                btn.style.borderColor = '#07c160';
-                btn.style.background = '#e8f7ed';
-                btn.style.color = '#07c160';
-                const span = document.createElement('span');
-                span.style.color = '#07c160';
-                span.style.fontWeight = 'bold';
-                span.textContent = '✓';
-                btn.appendChild(span);
-                curBubbleId = btn.getAttribute('data-bid');
-            };
-        });
-
-        const closeAll = () => { if (mask && mask.parentNode) mask.parentNode.removeChild(mask); };
-
-        mask.querySelector('#btnNpcDecorClose').onclick = () => {
-            closeAll();
-            openNpcProfileCardModal(npcId);
-        };
-        mask.querySelector('#btnCancelNpcDecor').onclick = () => {
-            closeAll();
-            openNpcProfileCardModal(npcId);
-        };
-
-        mask.querySelector('#btnSaveNpcDecor').onclick = () => {
-            npc.chatSettings.decor = {
-                avatarShape: curShape === 'inherit' ? null : curShape,
-                frameId: curFrameId === 'inherit' ? null : curFrameId,
-                bubbleId: curBubbleId === 'inherit' ? null : curBubbleId
-            };
-
-            if (typeof window.syncCustomNpcsToLocalBackup === 'function') window.syncCustomNpcsToLocalBackup();
-            if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
-            if (typeof showToast === 'function') showToast('专属装扮已保存！', 'success', 1200);
-
-            closeAll();
-            openNpcProfileCardModal(npcId);
-            if (window.G.currentChatNpc === npcId && typeof window.renderSingleChatWindow === 'function') {
-                window.renderSingleChatWindow();
-            }
-        };
     }
     window.openNpcDecorModal = openNpcDecorModal;
 
-    // ⚙️ 角色资料设置弹窗（内含发送条数限制、语音频率设置、时差/双语开关、人设导出 PNG 按钮）
+    // ⚙️ 角色资料设置弹窗
     function openNpcSettingsModal(npcId) {
         if (!window.G || !window.G.npcs) return;
         const npc = window.G.npcs[npcId];
@@ -365,7 +375,6 @@
             <option value="${r}" ${npc.region === r ? 'selected' : ''}>${r}</option>
         `).join('');
 
-        // 默认回复条数与语音设置读取
         if (!npc.chatSettings) {
             npc.chatSettings = {
                 minMsgs: 1,
@@ -386,11 +395,11 @@
             openWechatCleanModal('资料设置', `
                 <div style="display:flex;flex-direction:column;gap:11px;text-align:left;max-height:68vh;overflow-y:auto;padding-right:2px;">
                     <div>
-                        <label style="font-size:11.5px;color:#777;font-weight:500;">备注名（仅自己在聊天与列表中显示）</label>
+                        <label style="font-size:11.5px;color:#777;font-weight:500;">备注名</label>
                         <input type="text" id="wcleanSetNpcRemark" value="${escapeHtml(npc.remark || '')}" placeholder="添加备注名..." maxlength="20" class="wechat-clean-input" style="margin-top:3px;">
                     </div>
                     <div>
-                        <label style="font-size:11.5px;color:#777;font-weight:500;">角色真实名字</label>
+                        <label style="font-size:11.5px;color:#777;font-weight:500;">角色名字</label>
                         <input type="text" id="wcleanSetNpcName" value="${escapeHtml(npc.name || '')}" placeholder="输入角色真实名字..." maxlength="20" class="wechat-clean-input" style="margin-top:3px;">
                     </div>
                     <div>
@@ -404,14 +413,9 @@
                         </select>
                     </div>
 
-                    <!-- 聊天回复条数与语音偏好设置面板 -->
                     <div style="background:#f8f9fa;border-radius:8px;padding:10px 12px;border:0.5px solid #eee;display:flex;flex-direction:column;gap:10px;">
-                        <div style="font-size:12px;font-weight:600;color:#181818;display:flex;align-items:center;gap:5px;">
-                            <span style="display:inline-block;width:3px;height:12px;background:#07c160;border-radius:2px;"></span>
-                            聊天偏好与输出控制
-                        </div>
+                        <div style="font-size:12px;font-weight:600;color:#181818;">聊天偏好与输出控制</div>
 
-                        <!-- 条数范围设置 -->
                         <div>
                             <div style="display:flex;justify-content:space-between;align-items:center;font-size:11.5px;color:#666;margin-bottom:5px;">
                                 <span>单次发送条数</span>
@@ -425,7 +429,6 @@
                             </div>
                         </div>
 
-                        <!-- 语音频率设置 -->
                         <div>
                             <div style="font-size:11.5px;color:#666;margin-bottom:5px;">语音发送频率</div>
                             <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:6px;" id="voiceFreqSelectorGroup">
@@ -437,14 +440,13 @@
                             <input type="hidden" id="wcleanSetVoiceFreqVal" value="${voiceFreq}">
                         </div>
 
-                        <!-- 时差与双语对话独立开关 -->
                         <div style="border-top:0.5px solid #eee;padding-top:8px;display:flex;flex-direction:column;gap:7px;">
                             <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-size:12px;color:#333;">
                                 <span>关闭时差计算（作息完全步调一致）</span>
                                 <input type="checkbox" id="wcleanSetDisableTimezone" ${disableTimezone ? 'checked' : ''} style="width:16px;height:16px;accent-color:#07c160;cursor:pointer;">
                             </label>
                             <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-size:12px;color:#333;">
-                                <span>关闭双语对话（纯中文交流，不发外文原句）</span>
+                                <span>关闭双语对话（纯中文交流）</span>
                                 <input type="checkbox" id="wcleanSetDisableBilingual" ${disableBilingual ? 'checked' : ''} style="width:16px;height:16px;accent-color:#07c160;cursor:pointer;">
                             </label>
                         </div>
@@ -467,7 +469,6 @@
                         <label style="font-size:11.5px;color:#777;font-weight:500;">人设档案 / 说话风格</label>
                         <textarea id="wcleanSetNpcPersona" rows="4" placeholder="填写人设特征、性格习惯与聊天口吻..." class="wechat-clean-input" style="margin-top:3px;resize:none;line-height:1.45;">${escapeHtml(npc.persona || '')}</textarea>
                     </div>
-                    <!-- 极简人设卡导出 -->
                     <div style="border-top:0.5px solid #f0f0f0;padding-top:10px;margin-top:4px;">
                         <button type="button" id="btnExportTavernPngCard" style="width:100%;border:1px solid #dcdcdc;background:#ffffff;color:#181818;padding:8px 10px;border-radius:6px;font-size:12.5px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
                             <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:#07c160;stroke-width:2;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
@@ -502,7 +503,6 @@
                 npc.persona = personaVal;
                 npc.favor = favorVal;
 
-                // 写入角色条数、语音偏好以及关闭时差/双语选项（保留 decor 配置）
                 const existingDecor = (npc.chatSettings && npc.chatSettings.decor) || {};
                 npc.chatSettings = {
                     minMsgs: curMin,
@@ -546,19 +546,13 @@
                     minRange.oninput = () => {
                         let minV = parseInt(minRange.value) || 1;
                         let maxV = parseInt(maxRange.value) || 3;
-                        if (minV > maxV) {
-                            maxRange.value = minV;
-                            maxLabel.textContent = minV;
-                        }
+                        if (minV > maxV) { maxRange.value = minV; maxLabel.textContent = minV; }
                         minLabel.textContent = minV;
                     };
                     maxRange.oninput = () => {
                         let minV = parseInt(minRange.value) || 1;
                         let maxV = parseInt(maxRange.value) || 3;
-                        if (maxV < minV) {
-                            minRange.value = maxV;
-                            minLabel.textContent = maxV;
-                        }
+                        if (maxV < minV) { minRange.value = maxV; minLabel.textContent = maxV; }
                         maxLabel.textContent = maxV;
                         minLabel.textContent = minRange.value;
                     };
@@ -609,16 +603,13 @@
 
                 const exportBtn = document.getElementById('btnExportTavernPngCard');
                 if (exportBtn) {
-                    exportBtn.onclick = () => {
-                        promptExportFilename(npc);
-                    };
+                    exportBtn.onclick = () => { promptExportFilename(npc); };
                 }
             }, 30);
         }
     }
     window.openNpcSettingsModal = openNpcSettingsModal;
 
-    // 命名并执行导出
     function promptExportFilename(npc) {
         const defaultName = (npc.remark && npc.remark.trim()) ? npc.remark.trim() : (npc.name || 'NPC');
         if (typeof openWechatCleanModal === 'function') {
@@ -639,7 +630,6 @@
         }
     }
 
-    // 换头像（相册导入亦接入纳米压缩保护）
     function triggerChangeNpcAvatar(npcId) {
         if (!window.G || !window.G.npcs) return;
         const npc = window.G.npcs[npcId];
@@ -707,7 +697,6 @@
         if (typeof showToast === 'function') showToast('已更换头像', 'success', 1000);
     };
 
-    // 查看名片详情弹窗
     function openContactCardDetailModal(id, name, persona, avatar, signature) {
         const exists = !!(window.G && window.G.npcs && window.G.npcs[id]);
 
@@ -765,7 +754,6 @@
     }
     window.addContactFromCard = addContactFromCard;
 
-    // 📥 导入角色卡弹窗处理
     function openImportCharacterCardModal(onSuccess = null) {
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
