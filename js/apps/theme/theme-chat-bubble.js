@@ -3,9 +3,9 @@
  * 微信装扮中心模块（超级气泡工坊独立中枢）
  * 
  * 核心功能：
- *  1. 专业 8 点手柄自由拉伸变形系统（上3点、下3点、左右各1中点）
- *  2. 第二阶段：气泡尺寸锁定不变，文字拥有 8 点框自由缩放排版，支持点击精准修改字号、居中/靠左/靠右对齐切换，自动精准换算四向保护 Padding
- *  3. 第三阶段：1:1 复刻真实微信单聊与试穿舞台，彻底废除 0.7 缩水，宽高 100% 同步落盘，真实头像与头像框联动，两方尺寸共通，位置独立拖拽
+ *  1. 专业 8 点手柄自由拉伸变形系统（上3点、下3点、左右各1中点，26px 大热区防误触）
+ *  2. 第二阶段：气泡尺寸与第三阶段完全统一，文字拥有 8 点框自由缩放排版，支持点击精准修改字号、居中/靠左/靠右对齐切换
+ *  3. 第三阶段：1:1 复刻真实微信单聊与试穿舞台，顺畅正向手势拉伸，尺寸双向共通，位置独立拖拽，100% 真实落盘
  *  4. Canvas 物理像素级底图水平翻转，双轨存入 IndexedDB（mcyt_decor_bubbles）
  *  5. 主题级正等边三角 HSV 动态色轮与统一气泡渲染器 buildDecorBubbleHtml
  */
@@ -140,7 +140,7 @@
     }
 
     /**
-     * 全局气泡 HTML 核心渲染器（100% 忠实还原 boxWidth/boxHeight，废除 0.7 缩水惩罚）
+     * 全局气泡 HTML 核心渲染器（100% 忠实还原 boxWidth/boxHeight，废除缩水惩罚）
      */
     window.buildDecorBubbleHtml = function (textHtml, isSelf, bubbleId, customClass = '') {
         const bubbles = window.getStoredDecorBubbles();
@@ -154,7 +154,6 @@
         const offY = isSelf ? (b.userOffsetY || 0) : (b.npcOffsetY || 0);
         const origin = isSelf ? 'center right' : 'center left';
 
-        // 🌟 100% 继承设置宽度与高度，绝不乘以 0.7 降质缩水
         const minWStyle = (b.boxWidth && b.boxWidth > 30) ? `min-width: ${b.boxWidth}px;` : '';
         const minHStyle = (b.boxHeight && b.boxHeight > 25) ? `min-height: ${b.boxHeight}px;` : '';
 
@@ -666,7 +665,7 @@
                         <div class="b-preset-color-block" data-col="${col}" style="height:22px;border-radius:4px;background:${col};border:1px solid ${col.toLowerCase() === '#ffffff' ? '#ddd' : 'transparent'};cursor:pointer;"></div>
                     `).join('')}
                 </div>
-                <div style="display:flex;gap:8px;">
+                <div style="display:gap:8px;display:flex;">
                     <button onclick="document.getElementById('wechatColorPickerModal').remove()" style="flex:1;padding:8px;background:#f5f5f5;border:1px solid #ddd;border-radius:6px;font-size:12px;color:#666;cursor:pointer;">取消</button>
                     <button id="btnBPaletteConfirm" style="flex:1.4;padding:8px;background:#07c160;border:none;border-radius:6px;font-size:12px;color:#fff;font-weight:600;cursor:pointer;">应用此颜色</button>
                 </div>
@@ -773,27 +772,29 @@
     };
 
     /**
-     * 生成通用 8 点发光变形手柄 HTML
+     * 生成通用 8 点高灵敏度防误触手柄 HTML
+     * （26px 大触控感应区域 + 13px 白色发光居中实心圆，彻底解决手机抓不住手柄的 Bug）
      */
     function build8PointHandlesHtml(prefix = 'h8') {
-        const dotStyle = "position:absolute;width:14px;height:14px;border-radius:50%;background:#ffffff;border:2.5px solid #07c160;box-shadow:0 0 5px rgba(0,0,0,0.35);box-sizing:border-box;touch-action:none;";
+        const hitArea = "position:absolute;width:26px;height:26px;display:flex;align-items:center;justify-content:center;touch-action:none;pointer-events:auto;z-index:20;";
+        const dot = "<div style=\"width:13px;height:13px;border-radius:50%;background:#ffffff;border:2.5px solid #07c160;box-shadow:0 0 5px rgba(0,0,0,0.4);box-sizing:border-box;pointer-events:none;\"></div>";
         return `
             <!-- 上三点 -->
-            <div class="${prefix}-handle" data-dir="tl" style="${dotStyle}left:-7px;top:-7px;cursor:nwse-resize;"></div>
-            <div class="${prefix}-handle" data-dir="tc" style="${dotStyle}left:calc(50% - 7px);top:-7px;cursor:ns-resize;"></div>
-            <div class="${prefix}-handle" data-dir="tr" style="${dotStyle}right:-7px;top:-7px;cursor:nesw-resize;"></div>
+            <div class="${prefix}-handle" data-dir="tl" style="${hitArea}left:-13px;top:-13px;cursor:nwse-resize;">${dot}</div>
+            <div class="${prefix}-handle" data-dir="tc" style="${hitArea}left:calc(50% - 13px);top:-13px;cursor:ns-resize;">${dot}</div>
+            <div class="${prefix}-handle" data-dir="tr" style="${hitArea}right:-13px;top:-13px;cursor:nesw-resize;">${dot}</div>
             <!-- 左右中间两点 -->
-            <div class="${prefix}-handle" data-dir="ml" style="${dotStyle}left:-7px;top:calc(50% - 7px);cursor:ew-resize;"></div>
-            <div class="${prefix}-handle" data-dir="mr" style="${dotStyle}right:-7px;top:calc(50% - 7px);cursor:ew-resize;"></div>
+            <div class="${prefix}-handle" data-dir="ml" style="${hitArea}left:-13px;top:calc(50% - 13px);cursor:ew-resize;">${dot}</div>
+            <div class="${prefix}-handle" data-dir="mr" style="${hitArea}right:-13px;top:calc(50% - 13px);cursor:ew-resize;">${dot}</div>
             <!-- 下三点 -->
-            <div class="${prefix}-handle" data-dir="bl" style="${dotStyle}left:-7px;bottom:-7px;cursor:nesw-resize;"></div>
-            <div class="${prefix}-handle" data-dir="bc" style="${dotStyle}left:calc(50% - 7px);bottom:-7px;cursor:ns-resize;"></div>
-            <div class="${prefix}-handle" data-dir="br" style="${dotStyle}right:-7px;bottom:-7px;cursor:nwse-resize;"></div>
+            <div class="${prefix}-handle" data-dir="bl" style="${hitArea}left:-13px;bottom:-13px;cursor:nesw-resize;">${dot}</div>
+            <div class="${prefix}-handle" data-dir="bc" style="${hitArea}left:calc(50% - 13px);bottom:-13px;cursor:ns-resize;">${dot}</div>
+            <div class="${prefix}-handle" data-dir="br" style="${hitArea}right:-13px;bottom:-13px;cursor:nwse-resize;">${dot}</div>
         `;
     }
 
     /**
-     * 🌟🌟🌟 点九图自适应气泡向导工坊（8 点自由变形重构）
+     * 🌟 点九图自适应气泡向导工坊
      */
     window.openNineSliceDiyModal = function (bubbleId = null, initialUrl = '', initialName = '') {
         let bubbleObj = null;
@@ -808,15 +809,9 @@
             return { top, right, bottom, left };
         }
         function parsePadding(str) {
-            if (!str) return { top: 8, right: 12, bottom: 8, left: 12 };
-            const parts = str.replace(/px/g, '').trim().split(/\s+/).map(Number);
-            if (parts.length === 4) {
-                return { top: parts[0], right: parts[1], bottom: parts[2], left: parts[3] };
-            }
-            if (parts.length === 2) {
-                return { top: parts[0], right: parts[1], bottom: parts[0], left: parts[1] };
-            }
-            return { top: parts[0] || 8, right: parts[0] || 12, bottom: parts[0] || 8, left: parts[0] || 12 };
+            const parts = (str || '8px 12px').replace(/px/g, '').trim().split(/\s+/).map(Number);
+            if (parts.length >= 2) return { v: parts[0], h: parts[1] };
+            return { v: parts[0] || 8, h: parts[0] || 12 };
         }
 
         const state = {
@@ -826,7 +821,7 @@
             author: bubbleObj ? (bubbleObj.author || '') : '玩家自制',
             scale: (bubbleObj && bubbleObj.scale !== undefined) ? bubbleObj.scale : 1.0,
             fontSize: (bubbleObj && bubbleObj.fontSize) ? bubbleObj.fontSize : 14.5,
-            textAlign: bubbleObj?.textAlign || 'left', // 对齐方式：left | center | right
+            textAlign: bubbleObj?.textAlign || 'left',
             fontFamily: (bubbleObj && bubbleObj.fontFamily) ? bubbleObj.fontFamily : '',
 
             // 第二阶段：文字在气泡内的相对偏移与独立选区尺寸
@@ -835,9 +830,9 @@
             textBoxWidth: 160,
             textBoxHeight: 45,
 
-            // 第三阶段：两端气泡共通的尺寸（宽与高，控制拉伸区）
-            boxWidth: bubbleObj?.boxWidth || 180,
-            boxHeight: bubbleObj?.boxHeight || 55,
+            // 第三阶段：两端气泡共通的尺寸（宽与高，与第二步初始视觉完全统一）
+            boxWidth: bubbleObj?.boxWidth || 210,
+            boxHeight: bubbleObj?.boxHeight || 65,
 
             // 第三阶段：角色与用户独立屏幕坐标偏移
             userOffsetX: bubbleObj?.userOffsetX || bubbleObj?.offsetX || 0,
@@ -874,10 +869,7 @@
             return `${cfg.slice.top}% ${cfg.slice.right}% ${cfg.slice.bottom}% ${cfg.slice.left}%`;
         }
         function padCss(cfg) {
-            if (cfg.padding.top !== undefined) {
-                return `${cfg.padding.top}px ${cfg.padding.right}px ${cfg.padding.bottom}px ${cfg.padding.left}px`;
-            }
-            return `${cfg.padding.v || 8}px ${cfg.padding.h || 12}px`;
+            return `${cfg.padding.v}px ${cfg.padding.h}px`;
         }
 
         async function ensureNpcMirroredImage() {
@@ -962,7 +954,7 @@
             }
         }
 
-        // ================= 阶段 2：气泡固定不随字动，文字拥有 8 点变形框、可输入字号与三段对齐 =================
+        // ================= 阶段 2：气泡尺寸锁定不变，文字 8 点自由排版与对齐 =================
         function renderStep2TextTransform() {
             const cfg = state.user;
             modal.innerHTML = `
@@ -972,14 +964,14 @@
                         <button onclick="document.getElementById('nineSliceDiyModal').remove()" style="border:none;background:none;font-size:16px;color:#999;cursor:pointer;">✕</button>
                     </div>
                     <div style="font-size:11px;color:#666;margin-bottom:12px;line-height:1.4;">
-                        气泡外框已锁定！按住文字可<b>在气泡内随意移动</b>；拉动外围 <b>8 个手柄</b>可自由拉宽高、扭曲自适应字号！
+                        气泡外框已锁定！按住文字可<b>在气泡内随意移动</b>；拉动外围 <b>8 个手柄</b>可自由拉宽高、自适应字号！
                     </div>
 
-                    <!-- 触控舞台：气泡尺寸完全固定 -->
-                    <div id="step2TransformStage" style="position:relative;background:#f2f2f2;border-radius:12px;padding:24px 10px;display:flex;justify-content:center;align-items:center;margin-bottom:14px;min-height:180px;touch-action:none;user-select:none;-webkit-user-select:none;">
+                    <!-- 触控舞台：气泡尺寸与第三步 100% 对应联动 -->
+                    <div id="step2TransformStage" style="position:relative;background:#ededed;border-radius:12px;padding:24px 10px;display:flex;justify-content:center;align-items:center;margin-bottom:14px;min-height:180px;touch-action:none;user-select:none;-webkit-user-select:none;">
                         
-                        <!-- 固定的气泡容器（绝不因文字变大而改变自身大小） -->
-                        <div id="step2LockedBubble" style="position:relative;width:240px;height:100px;border-style:solid;border-width:${cfg.borderWidth}px;border-image:url('${cfg.url}') ${sliceCss(cfg)} fill stretch;-webkit-border-image:url('${cfg.url}') ${sliceCss(cfg)} fill stretch;box-sizing:border-box;display:flex;align-items:center;justify-content:center;overflow:visible;">
+                        <!-- 气泡容器（尺寸严格对应 state.boxWidth 与 state.boxHeight，二三步完全一致） -->
+                        <div id="step2LockedBubble" style="position:relative;width:${state.boxWidth}px;height:${state.boxHeight}px;border-style:solid;border-width:${cfg.borderWidth}px;border-image:url('${cfg.url}') ${sliceCss(cfg)} fill stretch;-webkit-border-image:url('${cfg.url}') ${sliceCss(cfg)} fill stretch;box-sizing:border-box;display:flex;align-items:center;justify-content:center;overflow:visible;">
                             
                             <!-- 文字 8 点控制框 -->
                             <div id="step2TextBox8" style="position:absolute;left:calc(50% - ${state.textBoxWidth / 2}px + ${state.textOffsetX}px);top:calc(50% - ${state.textBoxHeight / 2}px + ${state.textOffsetY}px);width:${state.textBoxWidth}px;height:${state.textBoxHeight}px;border:1.5px solid #07c160;background:rgba(7,193,96,0.08);box-sizing:border-box;cursor:move;touch-action:none;display:flex;align-items:center;justify-content:center;padding:2px 4px;">
@@ -1032,7 +1024,7 @@
 
             bindStep2Text8PointInteraction(modal, state);
 
-            // 点击输入数值调整字号
+            // 点击直接修改字号数值
             const fsInput = modal.querySelector('#step2FontSizeInput');
             if (fsInput) {
                 const handleManualFontSize = (e) => {
@@ -1073,17 +1065,7 @@
             };
 
             modal.querySelector('#btnStep2Prev').onclick = () => { state.step = 1; renderStage(); };
-            
-            // 🌟 核心：进入第 3 步时，将第 2 步排版出的避让区自动精准算入 Padding
             modal.querySelector('#btnStep2Next').onclick = async () => {
-                const padL = Math.max(10, Math.round(120 - state.textBoxWidth / 2 + state.textOffsetX));
-                const padR = Math.max(10, Math.round(240 - padL - state.textBoxWidth));
-                const padT = Math.max(8, Math.round(50 - state.textBoxHeight / 2 + state.textOffsetY));
-                const padB = Math.max(8, Math.round(100 - padT - state.textBoxHeight));
-
-                state.user.padding = { top: padT, right: padR, bottom: padB, left: padL };
-                state.npc.padding = { top: padT, right: padL, bottom: padB, left: padR };
-
                 await ensureNpcMirroredImage();
                 state.step = 3;
                 renderStage();
@@ -1107,7 +1089,7 @@
             const getPos = (e) => (e.touches && e.touches[0]) ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : { x: e.clientX, y: e.clientY };
 
             box.addEventListener('touchstart', (e) => {
-                if (e.target.classList.contains('t8-handle')) return;
+                if (e.target.closest('.t8-handle')) return;
                 isDragging = true;
                 const p = getPos(e);
                 startX = p.x; startY = p.y;
@@ -1117,6 +1099,7 @@
             modalRoot.querySelectorAll('.t8-handle').forEach(h => {
                 h.addEventListener('touchstart', (e) => {
                     activeHandleDir = h.getAttribute('data-dir');
+                    isDragging = false;
                     const p = getPos(e);
                     startX = p.x; startY = p.y;
                     initBoxW = st.textBoxWidth; initBoxH = st.textBoxHeight;
@@ -1141,10 +1124,10 @@
                     let nw = initBoxW;
                     let nh = initBoxH;
 
-                    if (activeHandleDir.includes('r')) nw = Math.max(70, initBoxW + dx);
-                    if (activeHandleDir.includes('l')) nw = Math.max(70, initBoxW - dx);
-                    if (activeHandleDir.includes('b')) nh = Math.max(30, initBoxH + dy);
-                    if (activeHandleDir.includes('t')) nh = Math.max(30, initBoxH - dy);
+                    if (activeHandleDir.includes('r')) nw = Math.max(60, initBoxW + dx);
+                    if (activeHandleDir.includes('l')) nw = Math.max(60, initBoxW - dx);
+                    if (activeHandleDir.includes('b')) nh = Math.max(26, initBoxH + dy);
+                    if (activeHandleDir.includes('t')) nh = Math.max(26, initBoxH - dy);
 
                     st.textBoxWidth = Math.round(nw);
                     st.textBoxHeight = Math.round(nh);
@@ -1167,7 +1150,7 @@
             window.addEventListener('touchend', () => { isDragging = false; activeHandleDir = null; });
         }
 
-        // ================= 阶段 3：虚拟实景试穿（100% 真实布局 + 1:1 CSS 规则仿真） =================
+        // ================= 阶段 3：虚拟实景试穿（8 点丝滑正向拉伸，二三步完全对齐） =================
         function renderStep3VirtualChat() {
             const userAvatar = (typeof window.getPlayerAvatarSafe === 'function') 
                 ? window.getPlayerAvatarSafe() 
@@ -1191,17 +1174,17 @@
                         <button onclick="document.getElementById('nineSliceDiyModal').remove()" style="border:none;background:none;font-size:16px;color:#999;cursor:pointer;">✕</button>
                     </div>
                     <div style="font-size:11px;color:#666;margin-bottom:10px;line-height:1.4;">
-                        拉动绿色 <b>8 个手柄</b>变形拉伸中间区（圆角尾巴受保护不形变）；按住气泡可<b>分别独立挪移屏幕位置</b>！
+                        拉动绿色 <b>8 个手柄</b>变形拉伸中间区；按住气泡空白处可<b>独立挪移屏幕位置</b>！
                     </div>
 
-                    <!-- 1:1 仿真真实微信单聊视口，使用与真实聊天 100% 一致的 min-width / min-height 与自适应规则 -->
+                    <!-- 1:1 真实微信单聊视口 -->
                     <div id="vChatStage" style="position:relative;background:#ededed;border-radius:12px;padding:16px 10px;margin-bottom:12px;display:flex;flex-direction:column;gap:16px;min-height:240px;box-sizing:border-box;touch-action:none;user-select:none;-webkit-user-select:none;overflow:hidden;">
                         
                         <!-- 对方消息行（左侧：真实头像框 + 对方物理镜像切图气泡） -->
                         <div style="display:flex;justify-content:flex-start;align-items:flex-start;gap:8px;width:100%;">
                             ${renderWorkshopStageAvatar(npcAvatar, activeShape, activeFrameObj, 38)}
                             <div style="max-width:78%;display:flex;flex-direction:column;align-items:flex-start;">
-                                <div id="vBubbleNpc" class="v-stage-bubble" data-side="npc" style="position:relative;display:inline-flex;align-items:center;width:fit-content;max-width:86%;min-width:${state.boxWidth}px;min-height:${state.boxHeight}px;border-style:solid;border-width:${state.npc.borderWidth}px;border-image:url('${state.npc.url || state.user.url}') ${sliceCss(state.npc)} fill stretch;-webkit-border-image:url('${state.npc.url || state.user.url}') ${sliceCss(state.npc)} fill stretch;padding:${padCss(state.npc)};color:${state.npc.textColor};box-sizing:border-box;word-break:break-word;font-size:${state.fontSize}px;line-height:1.4;transform:translate(${state.npcOffsetX}px, ${state.npcOffsetY}px);cursor:move;touch-action:none;">
+                                <div id="vBubbleNpc" class="v-stage-bubble" data-side="npc" style="position:relative;display:inline-flex;align-items:center;width:${state.boxWidth}px;height:${state.boxHeight}px;border-style:solid;border-width:${state.npc.borderWidth}px;border-image:url('${state.npc.url || state.user.url}') ${sliceCss(state.npc)} fill stretch;-webkit-border-image:url('${state.npc.url || state.user.url}') ${sliceCss(state.npc)} fill stretch;padding:${padCss(state.npc)};color:${state.npc.textColor};box-sizing:border-box;word-break:break-word;font-size:${state.fontSize}px;line-height:1.4;transform:translate(${state.npcOffsetX}px, ${state.npcOffsetY}px);cursor:move;touch-action:none;">
                                     <div style="width:100%;text-align:${state.textAlign};pointer-events:none;">气泡只拉伸中间，圆角尾巴不变形！</div>
                                     <div class="bubble-8-frame" data-side="npc" style="display:none;position:absolute;inset:-3px;border:1.5px dashed #07c160;border-radius:4px;pointer-events:none;">
                                         ${build8PointHandlesHtml('b8')}
@@ -1213,7 +1196,7 @@
                         <!-- 我方消息行（右侧：我方真实头像框 + 我方气泡，尺寸与对方共通） -->
                         <div style="display:flex;justify-content:flex-end;align-items:flex-start;gap:8px;width:100%;">
                             <div style="max-width:78%;display:flex;flex-direction:column;align-items:flex-end;">
-                                <div id="vBubbleUser" class="v-stage-bubble" data-side="user" style="position:relative;display:inline-flex;align-items:center;width:fit-content;max-width:86%;min-width:${state.boxWidth}px;min-height:${state.boxHeight}px;border-style:solid;border-width:${state.user.borderWidth}px;border-image:url('${state.user.url}') ${sliceCss(state.user)} fill stretch;-webkit-border-image:url('${state.user.url}') ${sliceCss(state.user)} fill stretch;padding:${padCss(state.user)};color:${state.user.textColor};box-sizing:border-box;word-break:break-word;font-size:${state.fontSize}px;line-height:1.4;transform:translate(${state.userOffsetX}px, ${state.userOffsetY}px);cursor:move;touch-action:none;">
+                                <div id="vBubbleUser" class="v-stage-bubble" data-side="user" style="position:relative;display:inline-flex;align-items:center;width:${state.boxWidth}px;height:${state.boxHeight}px;border-style:solid;border-width:${state.user.borderWidth}px;border-image:url('${state.user.url}') ${sliceCss(state.user)} fill stretch;-webkit-border-image:url('${state.user.url}') ${sliceCss(state.user)} fill stretch;padding:${padCss(state.user)};color:${state.user.textColor};box-sizing:border-box;word-break:break-word;font-size:${state.fontSize}px;line-height:1.4;transform:translate(${state.userOffsetX}px, ${state.userOffsetY}px);cursor:move;touch-action:none;">
                                     <div style="width:100%;text-align:${state.textAlign};pointer-events:none;">两边宽高共通，位置分开拖动！</div>
                                     <div class="bubble-8-frame" data-side="user" style="display:block;position:absolute;inset:-3px;border:1.5px dashed #07c160;border-radius:4px;pointer-events:none;">
                                         ${build8PointHandlesHtml('b8')}
@@ -1252,7 +1235,7 @@
                     textAlign: state.textAlign || 'left',
                     fontFamily: state.fontFamily,
 
-                    // 8 点变形锁定的气泡拉伸区最小保底尺寸（绝不乘以 0.7 降权）
+                    // 8 点变形锁定的气泡拉伸区最小保底尺寸（绝不缩水）
                     boxWidth: state.boxWidth,
                     boxHeight: state.boxHeight,
 
@@ -1285,7 +1268,7 @@
             };
         }
 
-        // 阶段 3 交互：8 点变形只拉伸中间区（共通宽高）+ 气泡独立移动坐标
+        // 阶段 3 交互：8 点平滑顺畅正向拉伸 + 气泡位置独立移动
         function bindStep3VirtualChatInteraction(modalRoot, st) {
             const bubbles = modalRoot.querySelectorAll('.v-stage-bubble');
             const bUser = modalRoot.querySelector('#vBubbleUser');
@@ -1301,15 +1284,14 @@
             const getPos = (e) => (e.touches && e.touches[0]) ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : { x: e.clientX, y: e.clientY };
 
             function updateStageView() {
-                // 1:1 同步更新 minWidth / minHeight
                 if (bUser) {
-                    bUser.style.minWidth = `${st.boxWidth}px`;
-                    bUser.style.minHeight = `${st.boxHeight}px`;
+                    bUser.style.width = `${st.boxWidth}px`;
+                    bUser.style.height = `${st.boxHeight}px`;
                     bUser.style.transform = `translate(${st.userOffsetX}px, ${st.userOffsetY}px)`;
                 }
                 if (bNpc) {
-                    bNpc.style.minWidth = `${st.boxWidth}px`;
-                    bNpc.style.minHeight = `${st.boxHeight}px`;
+                    bNpc.style.width = `${st.boxWidth}px`;
+                    bNpc.style.height = `${st.boxHeight}px`;
                     bNpc.style.transform = `translate(${st.npcOffsetX}px, ${st.npcOffsetY}px)`;
                 }
             }
@@ -1319,7 +1301,6 @@
                 modalRoot.querySelectorAll('.bubble-8-frame').forEach(f => {
                     const isTarget = (f.getAttribute('data-side') === side);
                     f.style.display = isTarget ? 'block' : 'none';
-                    f.style.pointerEvents = isTarget ? 'auto' : 'none';
                 });
             }
 
@@ -1327,10 +1308,11 @@
 
             bubbles.forEach(b => {
                 b.addEventListener('touchstart', (e) => {
-                    if (e.target.classList.contains('b8-handle')) return;
+                    if (e.target.closest('.b8-handle')) return;
                     const side = b.getAttribute('data-side');
                     selectBubbleSide(side);
                     isMovingBubble = true;
+                    activeHandleDir = null;
                     const p = getPos(e);
                     startX = p.x; startY = p.y;
                     initOffX = (side === 'user') ? st.userOffsetX : st.npcOffsetX;
@@ -1341,6 +1323,7 @@
             modalRoot.querySelectorAll('.b8-handle').forEach(h => {
                 h.addEventListener('touchstart', (e) => {
                     activeHandleDir = h.getAttribute('data-dir');
+                    isMovingBubble = false;
                     const p = getPos(e);
                     startX = p.x; startY = p.y;
                     initBoxW = st.boxWidth; initBoxH = st.boxHeight;
@@ -1356,7 +1339,7 @@
                 const dy = p.y - startY;
 
                 if (isMovingBubble) {
-                    // 位置独立拖动
+                    // 按住气泡空白处：独立挪动屏幕位置
                     if (activeSide === 'user') {
                         st.userOffsetX = Math.round(initOffX + dx);
                         st.userOffsetY = Math.round(initOffY + dy);
@@ -1366,14 +1349,14 @@
                     }
                     updateStageView();
                 } else if (activeHandleDir) {
-                    // 8 点变形：共通改变中间拉伸区宽高
+                    // 拉动 8 个手柄：丝滑正向拉伸中间区（与第二步逻辑 100% 相同）
                     let nw = initBoxW;
                     let nh = initBoxH;
 
-                    if (activeHandleDir.includes('r')) nw = Math.max(90, initBoxW + (activeSide === 'user' ? -dx : dx));
-                    if (activeHandleDir.includes('l')) nw = Math.max(90, initBoxW + (activeSide === 'user' ? dx : -dx));
-                    if (activeHandleDir.includes('b')) nh = Math.max(38, initBoxH + dy);
-                    if (activeHandleDir.includes('t')) nh = Math.max(38, initBoxH - dy);
+                    if (activeHandleDir.includes('r')) nw = Math.max(70, initBoxW + dx);
+                    if (activeHandleDir.includes('l')) nw = Math.max(70, initBoxW - dx);
+                    if (activeHandleDir.includes('b')) nh = Math.max(30, initBoxH + dy);
+                    if (activeHandleDir.includes('t')) nh = Math.max(30, initBoxH - dy);
 
                     st.boxWidth = Math.round(nw);
                     st.boxHeight = Math.round(nh);
