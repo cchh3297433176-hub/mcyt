@@ -4,10 +4,10 @@
  * 
  * 核心功能：
  *  1. 专业 8 点手柄自由拉伸变形系统（上3点、下3点、左右各1中点）
- *  2. 第二阶段：气泡尺寸锁定不变，文字拥有 8 点框自由缩放排版与位置挪动
- *  3. 第三阶段：虚拟实景聊天，气泡拥有 8 点框拉伸变形（仅拉伸九切中间区，角标不形变），两方尺寸共通，位置独立拖拽
- *  4. Canvas 物理像素级底图水平翻转，双轨存入 IndexedDB
- *  5. 主题级正等边三角 HSV 动态色轮与水滴取色
+ *  2. 第二阶段：气泡尺寸锁定不变，文字拥有 8 点框自由缩放排版，支持点击精准修改字号与居中/靠左/靠右对齐切换
+ *  3. 第三阶段：1:1 复刻真实微信单聊与试穿舞台，真实头像与头像框联动，8点框仅拉伸九切中间区，两方尺寸共通，位置独立拖拽
+ *  4. Canvas 物理像素级底图水平翻转，双轨存入 IndexedDB（mcyt_decor_bubbles）
+ *  5. 主题级正等边三角 HSV 动态色轮与统一气泡渲染器 buildDecorBubbleHtml
  */
 
 (function () {
@@ -23,6 +23,7 @@
             npcStyle: 'background-color: #ffffff; color: #000000; border-radius: 6px; border: 1px solid #e7e7e7;',
             scale: 1.0,
             fontSize: 14.5,
+            textAlign: 'left',
             fontFamily: '',
             userOffsetX: 0,
             userOffsetY: 0,
@@ -36,6 +37,16 @@
 
     window._decorBubblesCache = [...DEFAULT_BUBBLES];
     let _bubblesLoadedPromise = null;
+
+    /**
+     * 辅助：获取形状圆角
+     */
+    function getShapeBorderRadius(shape) {
+        if (shape === 'circle') return '50%';
+        if (shape === 'squircle') return '8px';
+        if (shape === 'square') return '2px';
+        return '50%';
+    }
 
     /**
      * 异步预装载气泡（IndexedDB 绝对优先）
@@ -129,7 +140,7 @@
     }
 
     /**
-     * 全局气泡 HTML 核心渲染器
+     * 全局气泡 HTML 核心渲染器（支持 textAlign 与 8点变形坐标）
      */
     window.buildDecorBubbleHtml = function (textHtml, isSelf, bubbleId, customClass = '') {
         const bubbles = window.getStoredDecorBubbles();
@@ -137,6 +148,7 @@
         const scale = (b && b.scale !== undefined) ? b.scale : 1.0;
         const fontSize = (b && b.fontSize) ? b.fontSize : 14.5;
         const fontFamilyCss = (b && b.fontFamily) ? `font-family: ${b.fontFamily};` : '';
+        const textAlign = b.textAlign || (isSelf ? b.visualConfig?.user?.align : b.visualConfig?.npc?.align) || 'left';
 
         const offX = isSelf ? (b.userOffsetX || 0) : (b.npcOffsetX || 0);
         const offY = isSelf ? (b.userOffsetY || 0) : (b.npcOffsetY || 0);
@@ -151,11 +163,11 @@
             const bgUrl = sideCfg?.url || b.visualConfig.user?.url || '';
             let rect = sideCfg?.rect || { left: 15, top: 15, width: 70, height: 70 };
             const textColor = sideCfg?.color || '#000000';
-            const textAlign = sideCfg?.align || 'left';
+            const curAlign = sideCfg?.align || textAlign;
 
             if (!bgUrl) {
                 return `
-                    <div class="chat-bubble ${isSelf ? 'self-bubble' : ''} ${customClass}" style="width:fit-content;max-width:100%;padding:8px 12px;border-radius:6px;font-size:${fontSize}px;${fontFamilyCss}line-height:1.5;background:${isSelf ? '#95ec69' : '#fff'};color:#000;border:${isSelf ? 'none' : '1px solid #e0e0e0'};">
+                    <div class="chat-bubble ${isSelf ? 'self-bubble' : ''} ${customClass}" style="width:fit-content;max-width:100%;padding:8px 12px;border-radius:6px;font-size:${fontSize}px;${fontFamilyCss}line-height:1.5;background:${isSelf ? '#95ec69' : '#fff'};color:#000;border:${isSelf ? 'none' : '1px solid #e0e0e0'};text-align:${curAlign};">
                         ${textHtml}
                     </div>
                 `;
@@ -165,7 +177,7 @@
                 <div class="chat-bubble visual-decor-bubble ${isSelf ? 'self-bubble' : ''} ${customClass}" 
                      style="position:relative;display:inline-block;max-width:88%;transform:translate(${offX}px, ${offY}px) scale(${scale});transform-origin:${origin};user-select:none;-webkit-user-select:none;line-height:0;${fontFamilyCss}">
                     <img src="${bgUrl}" style="display:block;width:100%;max-width:280px;height:auto;pointer-events:none;" onerror="this.style.display='none';" />
-                    <div style="position:absolute;left:${rect.left}%;top:${rect.top}%;width:${rect.width}%;height:${rect.height}%;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;align-items:${textAlign === 'center' ? 'center' : (textAlign === 'right' ? 'flex-end' : 'flex-start')};overflow:hidden;word-break:break-word;line-height:1.45;font-size:${fontSize}px;color:${textColor};text-align:${textAlign};padding:2px 4px;">
+                    <div style="position:absolute;left:${rect.left}%;top:${rect.top}%;width:${rect.width}%;height:${rect.height}%;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;align-items:${curAlign === 'center' ? 'center' : (curAlign === 'right' ? 'flex-end' : 'flex-start')};overflow:hidden;word-break:break-word;line-height:1.45;font-size:${fontSize}px;color:${textColor};text-align:${curAlign};padding:2px 4px;">
                         <div style="max-height:100%;overflow-y:auto;width:100%;">${textHtml}</div>
                     </div>
                 </div>
@@ -182,7 +194,7 @@
 
             if (!imgUrl) {
                 return `
-                    <div class="chat-bubble ${isSelf ? 'self-bubble' : ''} ${customClass}" style="width:fit-content;max-width:100%;padding:8px 12px;border-radius:6px;font-size:${fontSize}px;${fontFamilyCss}line-height:1.5;background:${isSelf ? '#95ec69' : '#fff'};color:#000;border:${isSelf ? 'none' : '1px solid #e0e0e0'};">
+                    <div class="chat-bubble ${isSelf ? 'self-bubble' : ''} ${customClass}" style="width:fit-content;max-width:100%;padding:8px 12px;border-radius:6px;font-size:${fontSize}px;${fontFamilyCss}line-height:1.5;background:${isSelf ? '#95ec69' : '#fff'};color:#000;border:${isSelf ? 'none' : '1px solid #e0e0e0'};text-align:${textAlign};">
                         ${textHtml}
                     </div>
                 `;
@@ -191,7 +203,7 @@
             return `
                 <div class="chat-bubble nine-slice-bubble ${isSelf ? 'self-bubble' : ''} ${customClass}" 
                      style="display:inline-flex;align-items:center;border-style:solid;border-width:${borderWidth}px;border-image:url('${imgUrl}') ${slice} fill stretch;-webkit-border-image:url('${imgUrl}') ${slice} fill stretch;padding:${padding};background:transparent;color:${textColor};width:fit-content;max-width:86%;${minWStyle}${minHStyle}box-sizing:border-box;word-break:break-word;font-size:${fontSize}px;${fontFamilyCss}line-height:1.45;transform:translate(${offX}px, ${offY}px) scale(${scale});transform-origin:${origin};">
-                    <div style="width:100%;">${textHtml}</div>
+                    <div style="width:100%;text-align:${textAlign};">${textHtml}</div>
                 </div>
             `;
         }
@@ -203,11 +215,31 @@
 
         return `
             <div class="chat-bubble ${isSelf ? 'self-bubble' : ''} ${customClass}" 
-                 style="width:fit-content;max-width:86%;display:inline-block;padding:8px 12px;border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,0.05);font-size:${fontSize}px;${fontFamilyCss}line-height:1.5;word-break:break-word;${css};transform:translate(${offX}px, ${offY}px) scale(${scale});transform-origin:${origin};">
+                 style="width:fit-content;max-width:86%;display:inline-block;padding:8px 12px;border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,0.05);font-size:${fontSize}px;${fontFamilyCss}line-height:1.5;word-break:break-word;text-align:${textAlign};${css};transform:translate(${offX}px, ${offY}px) scale(${scale});transform-origin:${origin};">
                 ${textHtml}
             </div>
         `;
     };
+
+    /**
+     * 辅助：在工坊试穿中渲染带头像框的真实头像（1:1 对齐 chat-app-window）
+     */
+    function renderWorkshopStageAvatar(avatarUrl, shape, frameObj, size = 38) {
+        const rad = getShapeBorderRadius(shape);
+        const fUrl = frameObj ? (frameObj.url || '') : '';
+        const fScale = (frameObj && frameObj.scale !== undefined) ? frameObj.scale : 1.18;
+        const fX = (frameObj && frameObj.offsetX !== undefined) ? frameObj.offsetX : 0;
+        const fY = (frameObj && frameObj.offsetY !== undefined) ? frameObj.offsetY : 0;
+
+        return `
+            <div style="position:relative;width:${size}px;height:${size}px;flex-shrink:0;">
+                <img src="${avatarUrl || 'assets/icons/chat.png'}" style="width:100%;height:100%;object-fit:cover;border-radius:${rad};display:block;" onerror="this.src='assets/icons/chat.png';" />
+                ${fUrl ? `
+                    <img src="${fUrl}" style="position:absolute;top:50%;left:50%;transform:translate(calc(-50% + ${fX}px), calc(-50% + ${fY}px)) scale(${fScale});width:100%;height:100%;pointer-events:none;" onerror="this.style.display='none';" />
+                ` : ''}
+            </div>
+        `;
+    }
 
     /**
      * 渲染气泡样式库独立列表（装扮中心入口）
@@ -374,7 +406,7 @@
                     </div>
                     <input type="file" id="bubbleSourceFileInput" accept="image/*" style="display:none;" onchange="window.handleBubbleSourceLocalUpload(event)">
                     <button onclick="document.getElementById('bubbleSourceFileInput').click()" style="width:100%;padding:11px;background:#07c160;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:6px;">
-                        <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2;"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                        <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2;"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"></polyline></svg>
                         <span>从手机相册选取图片</span>
                     </button>
                     <div style="display:flex;align-items:center;margin:10px 0;gap:8px;">
@@ -489,6 +521,7 @@
                     type: 'css',
                     scale: 1.0,
                     fontSize: 14.5,
+                    textAlign: 'left',
                     userStyle: parsed.userStyle || 'background:#95ec69;color:#000;',
                     npcStyle: parsed.npcStyle || 'background:#fff;color:#000;border:1px solid #eee;',
                     isBuiltin: false
@@ -740,7 +773,6 @@
 
     /**
      * 生成通用 8 点发光变形手柄 HTML
-     * (tl, tc, tr, mr, br, bc, bl, ml)
      */
     function build8PointHandlesHtml(prefix = 'h8') {
         const dotStyle = "position:absolute;width:14px;height:14px;border-radius:50%;background:#ffffff;border:2.5px solid #07c160;box-shadow:0 0 5px rgba(0,0,0,0.35);box-sizing:border-box;touch-action:none;";
@@ -787,6 +819,7 @@
             author: bubbleObj ? (bubbleObj.author || '') : '玩家自制',
             scale: (bubbleObj && bubbleObj.scale !== undefined) ? bubbleObj.scale : 1.0,
             fontSize: (bubbleObj && bubbleObj.fontSize) ? bubbleObj.fontSize : 14.5,
+            textAlign: bubbleObj?.textAlign || 'left', // 对齐方式：left | center | right
             fontFamily: (bubbleObj && bubbleObj.fontFamily) ? bubbleObj.fontFamily : '',
 
             // 第二阶段：文字在气泡内的相对偏移与独立选区尺寸
@@ -919,7 +952,7 @@
             }
         }
 
-        // ================= 阶段 2：气泡固定不随字动，文字拥有 8 点变形框自由缩放与拖动 =================
+        // ================= 阶段 2：气泡固定不随字动，文字拥有 8 点变形框、可输入字号与三段对齐 =================
         function renderStep2TextTransform() {
             const cfg = state.user;
             modal.innerHTML = `
@@ -941,7 +974,7 @@
                             <!-- 文字 8 点控制框 -->
                             <div id="step2TextBox8" style="position:absolute;left:calc(50% - ${state.textBoxWidth / 2}px + ${state.textOffsetX}px);top:calc(50% - ${state.textBoxHeight / 2}px + ${state.textOffsetY}px);width:${state.textBoxWidth}px;height:${state.textBoxHeight}px;border:1.5px solid #07c160;background:rgba(7,193,96,0.08);box-sizing:border-box;cursor:move;touch-action:none;display:flex;align-items:center;justify-content:center;padding:2px 4px;">
                                 
-                                <span id="step2TextDemoSpan" style="display:block;width:100%;text-align:center;font-size:${state.fontSize}px;color:${cfg.textColor};line-height:1.35;word-break:break-word;pointer-events:none;">
+                                <span id="step2TextDemoSpan" style="display:block;width:100%;text-align:${state.textAlign};font-size:${state.fontSize}px;color:${cfg.textColor};line-height:1.35;word-break:break-word;pointer-events:none;">
                                     你好！文字随8点框自由拉伸排版～
                                 </span>
 
@@ -951,14 +984,32 @@
                         </div>
                     </div>
 
-                    <div style="background:#f9f9f9;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;">
-                        <div>
-                            <span style="font-size:12px;font-weight:600;color:#333;">文字颜色与字号</span>
-                            <span style="font-size:10px;color:#888;display:block;">当前字号: <span id="step2FontValBadge" style="color:#07c160;font-weight:bold;">${state.fontSize.toFixed(1)}px</span></span>
+                    <!-- 字号、颜色与对齐控制板 -->
+                    <div style="background:#f9f9f9;border:1px solid #eee;border-radius:8px;padding:10px 12px;margin-bottom:14px;display:flex;flex-direction:column;gap:10px;">
+                        
+                        <!-- 字号与颜色 -->
+                        <div style="display:flex;align-items:center;justify-content:space-between;">
+                            <div style="display:flex;align-items:center;gap:6px;">
+                                <span style="font-size:12px;font-weight:600;color:#333;">文字字号</span>
+                                <div style="display:flex;align-items:center;gap:2px;background:#ffffff;border:1px solid #dcdcdc;border-radius:5px;padding:2px 6px;">
+                                    <input type="number" id="step2FontSizeInput" value="${state.fontSize.toFixed(1)}" min="9" max="36" step="0.5" style="width:48px;border:none;outline:none;font-size:12px;font-weight:700;color:#07c160;text-align:center;background:transparent;">
+                                    <span style="font-size:11px;color:#888;">px</span>
+                                </div>
+                            </div>
+                            <div id="btnStep2ColorTrigger" style="display:flex;align-items:center;gap:6px;cursor:pointer;background:#fff;padding:4px 10px;border-radius:6px;border:1px solid #ddd;">
+                                <div style="width:16px;height:16px;border-radius:4px;background:${cfg.textColor};border:1px solid #ccc;"></div>
+                                <span style="font-size:11px;font-family:monospace;color:#333;">${cfg.textColor}</span>
+                            </div>
                         </div>
-                        <div id="btnStep2ColorTrigger" style="display:flex;align-items:center;gap:6px;cursor:pointer;background:#fff;padding:4px 10px;border-radius:6px;border:1px solid #ddd;">
-                            <div style="width:18px;height:18px;border-radius:4px;background:${cfg.textColor};border:1px solid #ccc;"></div>
-                            <span style="font-size:11px;font-family:monospace;color:#333;">${cfg.textColor}</span>
+
+                        <!-- 居中、靠左、靠右排版选项 -->
+                        <div style="display:flex;align-items:center;justify-content:space-between;border-top:1px dashed #e5e5e5;padding-top:8px;">
+                            <span style="font-size:12px;font-weight:600;color:#333;">文本排版</span>
+                            <div style="display:flex;gap:5px;">
+                                <button type="button" class="btn-align-switch" data-align="left" style="padding:4px 10px;border-radius:5px;font-size:11px;cursor:pointer;border:1px solid ${state.textAlign === 'left' ? '#07c160' : '#ddd'};background:${state.textAlign === 'left' ? '#e8f7ed' : '#ffffff'};color:${state.textAlign === 'left' ? '#07c160' : '#555'};font-weight:${state.textAlign === 'left' ? '600' : 'normal'};">靠左</button>
+                                <button type="button" class="btn-align-switch" data-align="center" style="padding:4px 10px;border-radius:5px;font-size:11px;cursor:pointer;border:1px solid ${state.textAlign === 'center' ? '#07c160' : '#ddd'};background:${state.textAlign === 'center' ? '#e8f7ed' : '#ffffff'};color:${state.textAlign === 'center' ? '#07c160' : '#555'};font-weight:${state.textAlign === 'center' ? '600' : 'normal'};">居中</button>
+                                <button type="button" class="btn-align-switch" data-align="right" style="padding:4px 10px;border-radius:5px;font-size:11px;cursor:pointer;border:1px solid ${state.textAlign === 'right' ? '#07c160' : '#ddd'};background:${state.textAlign === 'right' ? '#e8f7ed' : '#ffffff'};color:${state.textAlign === 'right' ? '#07c160' : '#555'};font-weight:${state.textAlign === 'right' ? '600' : 'normal'};">靠右</button>
+                            </div>
                         </div>
                     </div>
 
@@ -970,6 +1021,39 @@
             `;
 
             bindStep2Text8PointInteraction(modal, state);
+
+            // 点击输入数值调整字号
+            const fsInput = modal.querySelector('#step2FontSizeInput');
+            if (fsInput) {
+                const handleManualFontSize = (e) => {
+                    let num = parseFloat(e.target.value);
+                    if (!isNaN(num) && num >= 8 && num <= 40) {
+                        state.fontSize = parseFloat(num.toFixed(1));
+                        const demoText = modal.querySelector('#step2TextDemoSpan');
+                        if (demoText) demoText.style.fontSize = `${state.fontSize}px`;
+                    }
+                };
+                fsInput.oninput = handleManualFontSize;
+                fsInput.onchange = handleManualFontSize;
+            }
+
+            // 对齐方式切换
+            modal.querySelectorAll('.btn-align-switch').forEach(btn => {
+                btn.onclick = () => {
+                    const chosen = btn.getAttribute('data-align');
+                    state.textAlign = chosen;
+                    const demoText = modal.querySelector('#step2TextDemoSpan');
+                    if (demoText) demoText.style.textAlign = chosen;
+
+                    modal.querySelectorAll('.btn-align-switch').forEach(b => {
+                        const isCur = (b.getAttribute('data-align') === chosen);
+                        b.style.borderColor = isCur ? '#07c160' : '#ddd';
+                        b.style.background = isCur ? '#e8f7ed' : '#ffffff';
+                        b.style.color = isCur ? '#07c160' : '#555';
+                        b.style.fontWeight = isCur ? '600' : 'normal';
+                    });
+                };
+            });
 
             modal.querySelector('#btnStep2ColorTrigger').onclick = () => {
                 window.openWechatColorPickerModal(cfg.textColor, (col) => {
@@ -990,7 +1074,7 @@
         function bindStep2Text8PointInteraction(modalRoot, st) {
             const box = modalRoot.querySelector('#step2TextBox8');
             const demoText = modalRoot.querySelector('#step2TextDemoSpan');
-            const fontBadge = modalRoot.querySelector('#step2FontValBadge');
+            const fsInput = modalRoot.querySelector('#step2FontSizeInput');
             if (!box || !demoText) return;
 
             let isDragging = false;
@@ -1047,7 +1131,7 @@
 
                     // 字体自适应框选大小变形
                     const scaleFactor = Math.sqrt((nw * nh) / (initBoxW * initBoxH));
-                    let nextFont = Math.max(9, Math.min(24, initFontSize * scaleFactor));
+                    let nextFont = Math.max(9, Math.min(28, initFontSize * scaleFactor));
                     st.fontSize = parseFloat(nextFont.toFixed(1));
 
                     box.style.width = `${st.textBoxWidth}px`;
@@ -1055,7 +1139,7 @@
                     box.style.left = `calc(50% - ${st.textBoxWidth / 2}px + ${st.textOffsetX}px)`;
                     box.style.top = `calc(50% - ${st.textBoxHeight / 2}px + ${st.textOffsetY}px)`;
                     demoText.style.fontSize = `${st.fontSize}px`;
-                    if (fontBadge) fontBadge.textContent = `${st.fontSize}px`;
+                    if (fsInput) fsInput.value = st.fontSize.toFixed(1);
                 }
                 if (e.cancelable) e.preventDefault();
             }, { passive: false });
@@ -1063,8 +1147,24 @@
             window.addEventListener('touchend', () => { isDragging = false; activeHandleDir = null; });
         }
 
-        // ================= 阶段 3：虚拟实景试穿（气泡 8 点变形只拉伸中间区，宽窄高低共通，位置独立拖动） =================
+        // ================= 阶段 3：虚拟实景试穿（1:1 仿真微信聊天真实对白与真实头像框） =================
         function renderStep3VirtualChat() {
+            // 提取当前真实生效的头像、形状与头像框（1:1 对齐真实聊天与 P1 试穿舞台）
+            const userAvatar = (typeof window.getPlayerAvatarSafe === 'function') 
+                ? window.getPlayerAvatarSafe() 
+                : 'assets/icons/chat.png';
+            
+            let npcAvatar = 'assets/icons/chat.png';
+            if (window.G && window.G.npcs) {
+                const firstNpc = Object.values(window.G.npcs)[0];
+                if (firstNpc) npcAvatar = firstNpc.avatarUrl || firstNpc.avatar || 'assets/icons/chat.png';
+            }
+
+            const activeShape = localStorage.getItem('mcyt_active_avatar_shape') || 'circle';
+            const activeFrameId = localStorage.getItem('mcyt_active_decor_frame') || 'frame_none';
+            const framesList = (typeof window.getStoredDecorFrames === 'function') ? window.getStoredDecorFrames() : [];
+            const activeFrameObj = framesList.find(f => f.id === activeFrameId) || null;
+
             modal.innerHTML = `
                 <div style="background:#ffffff;border-radius:14px;width:100%;max-width:360px;max-height:94vh;overflow-y:auto;padding:16px;box-shadow:0 12px 32px rgba(0,0,0,0.2);box-sizing:border-box;">
                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
@@ -1075,15 +1175,15 @@
                         拉动绿色 <b>8 个手柄</b>变形拉伸中间区（圆角尾巴受保护不形变）；按住气泡可<b>分别独立挪移屏幕位置</b>！
                     </div>
 
-                    <!-- 1:1 虚拟真实聊天视口 -->
-                    <div id="vChatStage" style="position:relative;background:#ededed;border-radius:12px;padding:16px 10px;margin-bottom:12px;display:flex;flex-direction:column;gap:18px;min-height:260px;box-sizing:border-box;touch-action:none;user-select:none;-webkit-user-select:none;overflow:hidden;">
+                    <!-- 1:1 仿真真实微信单聊视口 -->
+                    <div id="vChatStage" style="position:relative;background:#ededed;border-radius:12px;padding:16px 10px;margin-bottom:12px;display:flex;flex-direction:column;gap:16px;min-height:240px;box-sizing:border-box;touch-action:none;user-select:none;-webkit-user-select:none;overflow:hidden;">
                         
-                        <!-- 对方消息（左侧，物理镜像切图，8点变形只拉伸中间区） -->
-                        <div style="display:flex;align-items:flex-start;gap:8px;width:100%;">
-                            <div style="width:36px;height:36px;border-radius:6px;background:#ff9800;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:bold;">对方</div>
-                            <div style="flex:1;display:flex;justify-content:flex-start;">
+                        <!-- 对方消息行（左侧：真实头像框 + 对方物理镜像切图气泡） -->
+                        <div style="display:flex;justify-content:flex-start;align-items:flex-start;gap:8px;width:100%;">
+                            ${renderWorkshopStageAvatar(npcAvatar, activeShape, activeFrameObj, 38)}
+                            <div style="max-width:78%;display:flex;flex-direction:column;align-items:flex-start;">
                                 <div id="vBubbleNpc" class="v-stage-bubble" data-side="npc" style="position:relative;display:inline-flex;align-items:center;width:${state.boxWidth}px;height:${state.boxHeight}px;border-style:solid;border-width:${state.npc.borderWidth}px;border-image:url('${state.npc.url || state.user.url}') ${sliceCss(state.npc)} fill stretch;-webkit-border-image:url('${state.npc.url || state.user.url}') ${sliceCss(state.npc)} fill stretch;padding:${padCss(state.npc)};color:${state.npc.textColor};box-sizing:border-box;word-break:break-word;font-size:${state.fontSize}px;line-height:1.4;transform:translate(${state.npcOffsetX}px, ${state.npcOffsetY}px);cursor:move;touch-action:none;">
-                                    <span style="width:100%;">气泡只拉伸中间，圆角尾巴不变形！</span>
+                                    <div style="width:100%;text-align:${state.textAlign};pointer-events:none;">气泡只拉伸中间，圆角尾巴不变形！</div>
                                     <div class="bubble-8-frame" data-side="npc" style="display:none;position:absolute;inset:-3px;border:1.5px dashed #07c160;border-radius:4px;pointer-events:none;">
                                         ${build8PointHandlesHtml('b8')}
                                     </div>
@@ -1091,17 +1191,17 @@
                             </div>
                         </div>
 
-                        <!-- 我方消息（右侧，尺寸与对方共通） -->
-                        <div style="display:flex;align-items:flex-start;flex-direction:row-reverse;gap:8px;width:100%;">
-                            <div style="width:36px;height:36px;border-radius:6px;background:#07c160;flex-shrink:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:11px;font-weight:bold;">我</div>
-                            <div style="flex:1;display:flex;justify-content:flex-end;">
+                        <!-- 我方消息行（右侧：我方真实头像框 + 我方气泡，尺寸与对方共通） -->
+                        <div style="display:flex;justify-content:flex-end;align-items:flex-start;gap:8px;width:100%;">
+                            <div style="max-width:78%;display:flex;flex-direction:column;align-items:flex-end;">
                                 <div id="vBubbleUser" class="v-stage-bubble" data-side="user" style="position:relative;display:inline-flex;align-items:center;width:${state.boxWidth}px;height:${state.boxHeight}px;border-style:solid;border-width:${state.user.borderWidth}px;border-image:url('${state.user.url}') ${sliceCss(state.user)} fill stretch;-webkit-border-image:url('${state.user.url}') ${sliceCss(state.user)} fill stretch;padding:${padCss(state.user)};color:${state.user.textColor};box-sizing:border-box;word-break:break-word;font-size:${state.fontSize}px;line-height:1.4;transform:translate(${state.userOffsetX}px, ${state.userOffsetY}px);cursor:move;touch-action:none;">
-                                    <span style="width:100%;">两边宽高共通，位置分开拖动！</span>
+                                    <div style="width:100%;text-align:${state.textAlign};pointer-events:none;">两边宽高共通，位置分开拖动！</div>
                                     <div class="bubble-8-frame" data-side="user" style="display:block;position:absolute;inset:-3px;border:1.5px dashed #07c160;border-radius:4px;pointer-events:none;">
                                         ${build8PointHandlesHtml('b8')}
                                     </div>
                                 </div>
                             </div>
+                            ${renderWorkshopStageAvatar(userAvatar, activeShape, activeFrameObj, 38)}
                         </div>
                     </div>
 
@@ -1130,6 +1230,7 @@
                     type: 'nine_slice',
                     scale: state.scale,
                     fontSize: state.fontSize,
+                    textAlign: state.textAlign || 'left',
                     fontFamily: state.fontFamily,
 
                     // 8 点变形锁定的气泡拉伸区尺寸（共通）
@@ -1331,6 +1432,7 @@
             author: bubbleObj ? (bubbleObj.author || '') : '玩家自制',
             scale: (bubbleObj && bubbleObj.scale !== undefined) ? bubbleObj.scale : 1.0,
             fontSize: (bubbleObj && bubbleObj.fontSize) ? bubbleObj.fontSize : 13.5,
+            textAlign: bubbleObj?.textAlign || 'left',
             fontFamily: (bubbleObj && bubbleObj.fontFamily) ? bubbleObj.fontFamily : '',
             userOffsetX: bubbleObj?.userOffsetX || 0,
             userOffsetY: bubbleObj?.userOffsetY || 0,
@@ -1367,8 +1469,8 @@
                 </div>
                 <div id="visualBoxStageContainer" style="position:relative;width:100%;background:#ebebeb;border-radius:10px;overflow:hidden;margin-bottom:12px;display:flex;align-items:center;justify-content:center;min-height:200px;user-select:none;touch-action:none;">
                     <img src="${state.user.url}" style="width:100%;max-width:280px;height:auto;display:block;pointer-events:none;" onerror="this.style.display='none';" />
-                    <div id="visualDragBox" style="position:absolute;left:${state.user.rect.left}%;top:${state.user.rect.top}%;width:${state.user.rect.width}%;height:${state.user.rect.height}%;background:rgba(7, 193, 96, 0.22);border:2px dashed #07c160;border-radius:6px;cursor:move;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;padding:4px;overflow:hidden;touch-action:none;">
-                        <span style="font-size:${state.fontSize}px;color:${state.user.color};line-height:1.3;pointer-events:none;word-break:break-word;">对白文字预览</span>
+                    <div id="visualDragBox" style="position:absolute;left:${state.user.rect.left}%;top:${state.user.rect.top}%;width:${state.user.rect.width}%;height:${state.user.rect.height}%;background:rgba(7, 193, 96, 0.22);border:2px dashed #07c160;border-radius:6px;cursor:move;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;align-items:${state.textAlign === 'center' ? 'center' : (state.textAlign === 'right' ? 'flex-end' : 'flex-start')};padding:4px;overflow:hidden;touch-action:none;">
+                        <span style="font-size:${state.fontSize}px;color:${state.user.color};line-height:1.3;pointer-events:none;word-break:break-word;text-align:${state.textAlign};">对白文字预览</span>
                     </div>
                 </div>
                 <button id="btnSaveVisualBubble" style="width:100%;padding:10px;background:#07c160;border:none;border-radius:6px;font-size:12.5px;color:#fff;font-weight:600;cursor:pointer;">保存并选用</button>
@@ -1383,13 +1485,14 @@
                 type: 'visual_box',
                 scale: state.scale,
                 fontSize: state.fontSize,
+                textAlign: state.textAlign || 'left',
                 fontFamily: state.fontFamily,
                 userOffsetX: state.userOffsetX,
                 userOffsetY: state.userOffsetY,
                 npcOffsetX: state.npcOffsetX,
                 npcOffsetY: state.npcOffsetY,
                 mirrorNpcFromUser: state.mirrorNpcFromUser,
-                visualConfig: { user: { ...state.user }, npc: { ...state.npc } },
+                visualConfig: { user: { ...state.user, align: state.textAlign }, npc: { ...state.npc, align: state.textAlign } },
                 isBuiltin: false
             };
             await window.saveCustomBubbleAsync(itemToSave);
