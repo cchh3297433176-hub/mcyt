@@ -5,7 +5,7 @@
  *    拟真语音环境音（audio_bg）与声调细节还原；
  *    带跨时段、隔夜双时间戳感知、塔罗牌解读感知、Rememori 证据链沉淀、
  *    专属好友独立联网搜索检索与权威网页卡片推送、以及好感度铁律动态结算机制；
- *    🌟 升级：注入客观时间绝对防幻觉锚点（Hard Fact Time Anchor），根治时差胡编、早晚颠倒与错乱捏造时间问题；
+ *    🌟 极简优化：机器直接在末尾提供确定的时间事实，杜绝大模型计算，节省 Token 与注意力；
  *    🌟 角色主动发送文字图片（[IMAGE_TEXT]）与拟真生活排版卡片（[UI_CARD]）无损解析与安全消毒。
  */
 
@@ -313,17 +313,12 @@
                 userPrompt: recentDialogue ? `最近对话：\n${recentDialogue}${searchContextPrompt}\n\n回复：` : '打个招呼。'
             };
 
-        // ⏰ 终极硬核事实防幻觉锚点（Hard Fact Time Anchor）：
-        // 在 userPrompt 紧挨着模型生成输出的最后一刻打上绝对钢印，防长上下文衰减与大模型凭空捏造时间
+        // ⏰ 极简时间事实注入（直接给结果，AI 零计算，不浪费 Token）
         if (promptCtx.timeCtx) {
             const tc = promptCtx.timeCtx;
             const disableTz = !!(npc.chatSettings && npc.chatSettings.disableTimezone);
             if (!disableTz && tc.isCrossTimezone) {
-                const timeHardAnchor = `\n\n【⏰ 现实客观时间唯一真理（防幻觉绝对铁律，严禁胡编）】：\n` +
-                    `- 你所在地区「${npc.region || '德国'}」当前的唯一真实时间是：【${tc.nPeriod} ${tc.nTime}】（生理感知：${tc.nState}）！\n` +
-                    `- 对方所在地区「${curAcc.region || '中国'}」当前的唯一真实时间是：【${tc.pPeriod} ${tc.pTime}】！\n` +
-                    `- 若你在本次回复中提到自己现在的时间、正在做的事或生活作息，【绝对强制】只能基于你当地的 ${tc.nPeriod} ${tc.nTime}，绝对禁止凭空捏造虚假数字（如胡编成早上8点、深夜等）！`;
-                promptCtx.userPrompt += timeHardAnchor;
+                promptCtx.userPrompt += `\n\n【当前时间事实】：你现在是【${tc.nDirect}】，对方现在是【${tc.pDirect}】。`;
             }
         }
 
