@@ -4,7 +4,7 @@
  * 职责：
  * 1. 角色极简原生名片卡（仅保留头像、姓名/备注、个性签名、地区与好感度）
  * 2. 独立齿轮“资料设置”白灰拟真弹窗（备注名、原名、签名、地区、恋爱状态、人设Prompt修改）
- * 3. 角色回复偏好设置：单次最少/最多发送条数控制、语音发送频率控制
+ * 3. 角色回复偏好设置：单次最少/最多发送条数控制、语音发送频率控制、关闭时差与关闭双语独立开关
  * 4. 角色卡 PNG 导出入口（支持自定义文件名）、换头像与角色卡导入（导入与相册更换头像全量接入纳米压缩）
  * 5. 推荐名片详情弹窗与添加通讯录
  */
@@ -95,14 +95,14 @@
     }
     window.openNpcProfileCardModal = openNpcProfileCardModal;
 
-    // ⚙️ 角色资料设置弹窗（内含发送条数限制、语音频率设置、人设导出 PNG 按钮）
+    // ⚙️ 角色资料设置弹窗（内含发送条数限制、语音频率设置、时差/双语开关、人设导出 PNG 按钮）
     function openNpcSettingsModal(npcId) {
         if (!window.G || !window.G.npcs) return;
         const npc = window.G.npcs[npcId];
         if (!npc) return;
 
         const isDating = window.ChatPromptEngine && window.ChatPromptEngine.isNpcInDatingRelationship(npc);
-        const regionList = ['中国', '美国 - 东部', '美国 - 西部', '英国', '日本', '韩国', '加拿大', '澳大利亚', '德国', '法国'];
+        const regionList = ['中国', '美国 - 东部', '美国 - 西部', '英国', '西班牙', '日本', '韩国', '加拿大', '澳大利亚', '德国', '法国', '俄罗斯 - 莫斯科', '意大利', '新加坡', '泰国'];
 
         const regionOptionsHtml = regionList.map(r => `
             <option value="${r}" ${npc.region === r ? 'selected' : ''}>${r}</option>
@@ -113,12 +113,16 @@
             npc.chatSettings = {
                 minMsgs: 1,
                 maxMsgs: 3,
-                voiceFreq: 'rare'
+                voiceFreq: 'rare',
+                disableTimezone: false,
+                disableBilingual: false
             };
         }
         const minMsgs = Math.max(1, parseInt(npc.chatSettings.minMsgs) || 1);
         const maxMsgs = Math.max(minMsgs, parseInt(npc.chatSettings.maxMsgs) || 3);
         const voiceFreq = npc.chatSettings.voiceFreq || 'rare';
+        const disableTimezone = !!npc.chatSettings.disableTimezone;
+        const disableBilingual = !!npc.chatSettings.disableBilingual;
         const curFavor = parseFloat(npc.favor !== undefined ? npc.favor : 50);
 
         if (typeof openWechatCleanModal === 'function') {
@@ -175,6 +179,18 @@
                             </div>
                             <input type="hidden" id="wcleanSetVoiceFreqVal" value="${voiceFreq}">
                         </div>
+
+                        <!-- 🌟 新增：时差与双语对话独立开关 -->
+                        <div style="border-top:0.5px solid #eee;padding-top:8px;display:flex;flex-direction:column;gap:7px;">
+                            <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-size:12px;color:#333;">
+                                <span>关闭时差计算（作息完全步调一致）</span>
+                                <input type="checkbox" id="wcleanSetDisableTimezone" ${disableTimezone ? 'checked' : ''} style="width:16px;height:16px;accent-color:#07c160;cursor:pointer;">
+                            </label>
+                            <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-size:12px;color:#333;">
+                                <span>关闭双语对话（纯中文交流，不发外文原句）</span>
+                                <input type="checkbox" id="wcleanSetDisableBilingual" ${disableBilingual ? 'checked' : ''} style="width:16px;height:16px;accent-color:#07c160;cursor:pointer;">
+                            </label>
+                        </div>
                     </div>
 
                     <div>
@@ -219,6 +235,9 @@
                 const finalMax = Math.max(curMin, curMax);
                 const curVoiceFreq = document.getElementById('wcleanSetVoiceFreqVal')?.value || 'rare';
 
+                const curDisableTimezone = !!document.getElementById('wcleanSetDisableTimezone')?.checked;
+                const curDisableBilingual = !!document.getElementById('wcleanSetDisableBilingual')?.checked;
+
                 npc.remark = remarkVal;
                 npc.name = nameVal;
                 npc.signature = sigVal;
@@ -226,11 +245,13 @@
                 npc.persona = personaVal;
                 npc.favor = favorVal;
 
-                // 写入角色条数与语音偏好
+                // 写入角色条数、语音偏好以及关闭时差/双语选项
                 npc.chatSettings = {
                     minMsgs: curMin,
                     maxMsgs: finalMax,
-                    voiceFreq: curVoiceFreq
+                    voiceFreq: curVoiceFreq,
+                    disableTimezone: curDisableTimezone,
+                    disableBilingual: curDisableBilingual
                 };
 
                 if (npc.favor < 60 && npc.relationshipStage === 'dating') {
@@ -474,7 +495,9 @@
             chatSettings: {
                 minMsgs: 1,
                 maxMsgs: 3,
-                voiceFreq: 'rare'
+                voiceFreq: 'rare',
+                disableTimezone: false,
+                disableBilingual: false
             }
         };
 
@@ -536,7 +559,9 @@
                         chatSettings: {
                             minMsgs: 1,
                             maxMsgs: 3,
-                            voiceFreq: 'rare'
+                            voiceFreq: 'rare',
+                            disableTimezone: false,
+                            disableBilingual: false
                         }
                     };
 

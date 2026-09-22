@@ -1,7 +1,11 @@
 /**
  * js/apps/chat/chat-prompt-engine.js
  * 🧠 微信聊天活人感提示词架构引擎
- * 模块化装配：主体通用拟人核心 + 关系进阶状态机 + 异地恋模块 + 时差生理感知 + 双时间戳隔夜作息感知 + 双语与仿微信语音协议 + 真实语义表情包索引 + 动态发布协议 + 大小号双重身份认知与名片接纳状态机 + 🌟 Rememori 忆海向量长效记忆挂载 + 🔮 塔罗牌阵拟人认知与特色解读协议 + 🎭 {{user}} / {{y/n}} 动态宏变量替换 + 📸 文字图片发送协议 + 🧾 拟真生活排版卡片协议
+ * 模块化装配：主体通用拟人核心 + 关系进阶状态机 + 异地恋模块 + 时差生理感知 + 双时间戳隔夜作息感知 + 动态母语双语与仿微信语音协议 + 真实语义表情包索引 + 动态发布协议 + 大小号双重身份认知与名片接纳状态机 + 🌟 Rememori 忆海向量长效记忆挂载 + 🔮 塔罗牌阵拟人认知与特色解读协议 + 🎭 {{user}} / {{y/n}} 动态宏变量替换 + 📸 文字图片发送协议 + 🧾 拟真生活排版卡片协议
+ * 🌟 升级优化：
+ * 1. 严格比对双方地区时差，新增可配置时差关闭开关（disableTimezone）；
+ * 2. 动态自适应多国母语（如西班牙语、日语、韩语、法语、德语、英语等），新增可配置关闭双语选项（disableBilingual）；
+ * 3. 注入防过度催睡约束：严禁爹味多轮逼迫催睡，若用户明确示意则立即打住顺应畅聊。
  */
 
 (function() {
@@ -15,11 +19,59 @@
         '英国': 0,
         '德国': 1,
         '法国': 1,
+        '西班牙': 1,
+        '意大利': 1,
+        '俄罗斯 - 莫斯科': 3,
         '美国 - 东部': -5,
         '美国 - 西部': -8,
         '加拿大': -5,
-        '澳大利亚': 10
+        '澳大利亚': 10,
+        '新加坡': 8,
+        '泰国': 7,
+        '越南': 7
     };
+
+    // 地区对应当地语言映射字典
+    const REGION_LANGUAGE_MAP = {
+        '中国': '中文',
+        '日本': '日语',
+        '韩国': '韩语',
+        '西班牙': '西班牙语',
+        '法国': '法语',
+        '德国': '德语',
+        '意大利': '意大利语',
+        '俄罗斯 - 莫斯科': '俄语',
+        '泰国': '泰语',
+        '越南': '越南语',
+        '美国 - 东部': '英语',
+        '美国 - 西部': '英语',
+        '英国': '英语',
+        '加拿大': '英语',
+        '澳大利亚': '英语',
+        '新加坡': '英语或中文'
+    };
+
+    /**
+     * 根据常驻地区解析主要语言名称
+     */
+    function resolveRegionLanguage(region = '中国') {
+        if (!region) return '外语';
+        for (const [regKey, lang] of Object.entries(REGION_LANGUAGE_MAP)) {
+            if (region.includes(regKey) || regKey.includes(region)) {
+                return lang;
+            }
+        }
+        if (/美国|英国|加拿大|澳大利亚|新西兰|爱尔兰/i.test(region)) return '英语';
+        if (/西班|阿根廷|智利|哥伦比亚|墨西哥|秘鲁/i.test(region)) return '西班牙语';
+        if (/日本/i.test(region)) return '日语';
+        if (/韩国/i.test(region)) return '韩语';
+        if (/法国/i.test(region)) return '法语';
+        if (/德国|奥地利/i.test(region)) return '德语';
+        if (/俄罗斯|乌克兰/i.test(region)) return '俄语';
+        if (/意大利/i.test(region)) return '意大利语';
+        if (/葡萄牙|巴西/i.test(region)) return '葡萄牙语';
+        return '当地外文语言';
+    }
 
     /**
      * 🎭 宏变量替换引擎：将人设与对白中的 {{user}}、{{User}}、{{y/n}}、{{Y/N}} 自动替换为当前用户身份名称
@@ -40,8 +92,18 @@
         const utcHours = now.getUTCHours();
         const utcMinutes = now.getUTCMinutes();
 
-        const pOffset = REGION_TIMEZONE_OFFSETS[playerRegion] !== undefined ? REGION_TIMEZONE_OFFSETS[playerRegion] : 8;
-        const nOffset = REGION_TIMEZONE_OFFSETS[npcRegion] !== undefined ? REGION_TIMEZONE_OFFSETS[npcRegion] : 8;
+        const findOffset = (reg) => {
+            if (REGION_TIMEZONE_OFFSETS[reg] !== undefined) return REGION_TIMEZONE_OFFSETS[reg];
+            for (const key in REGION_TIMEZONE_OFFSETS) {
+                if (reg && (reg.includes(key) || key.includes(reg))) {
+                    return REGION_TIMEZONE_OFFSETS[key];
+                }
+            }
+            return 8;
+        };
+
+        const pOffset = findOffset(playerRegion);
+        const nOffset = findOffset(npcRegion);
 
         const calcLocalTime = (offset) => {
             let h = (utcHours + offset) % 24;
@@ -115,7 +177,7 @@
     /**
      * 模块一：主体通用规范（脱水指令体）
      */
-    function getModule1Prompt(isForeign, npcRegion) {
+    function getModule1Prompt(isBilingualEnabled, npcRegion, detectedLanguage) {
         const stickersSummary = getAvailableStickersSummary();
 
         return `
@@ -131,8 +193,9 @@
    - 每条微信气泡必须用 [MSG]...[/MSG] 包裹。
 3. 【打字手滑与错字补正】：
    - 允许偶尔（每 8 轮左右）自然出现拼音手滑打错一个同音字，并在紧接着的下一个气泡发一两个字做纠正（例：上一句"我独自饿了"，下一句补"肚子"）。不要过于频繁。
-4. 【独立人格与边界】：
-   - 有自己的审美与看法，敢于真诚说不；不讨好附和，不当爹味保姆，关心点到为止，对方熬夜或拖延就顺应吐槽。
+4. 【独立人格与社交界限】：
+   - 有自己的审美与看法，敢于真诚说不；不讨好附和，不当爹味保姆，关心点到为止。
+   - 【防过度催促休息铁律】：即便对方处于深夜，随口提醒一句早点休息即可，【绝对严禁】反复多轮连环催促、逼迫、命令对方睡觉！若对方已经说明了“还不困”、“还要忙会儿”、“别催了”或继续聊其他话题，你必须立即彻底停止催促，自然顺着对方的话题继续聊，绝对禁止说教叨念！
    - 对方发任何消息【绝不默认】是在想你或求关注！严禁开口就问"想我了？""怎么突然找我"。
    - 严禁将"怎么……"当固定宠溺开场，严禁将"好不好"当固定撒娇句尾。
    - 严禁客服腔，严禁每轮结尾强迫抛问，严禁分点列出 1234。
@@ -144,12 +207,12 @@
    - 示例：[STICKER category="猪猪" desc="开心"]
    - 【⚠️ 绝对独立，禁止嵌套】：[STICKER ...] 必须与 [MSG] 并列独立输出，【绝对严厉禁止】把 [STICKER ...] 塞进 [MSG]...[/MSG] 标签内部或文字末尾！[MSG] 只能包含纯文字！
    - 频率控制：真人不会每句话都配图，平均 5~8 轮才偶发 1 次，或者单独只发一个表情包表达情绪。
-${isForeign ? `
-6. 【跨国双语对话】：
-   - 你常驻「${npcRegion}」，母语日常为外语。
-   - 你的 [MSG] 气泡必须附带 original 属性放外文原句，标签内部放地道中文翻译！
-   - 格式：[MSG original="英文或当地外文原句"]中文翻译[/MSG]
-   - 示例：[MSG original="Yo bro, check this out!"]卧槽兄弟 快看这个[/MSG]
+${isBilingualEnabled ? `
+6. 【跨国母语双语对话】：
+   - 你常驻「${npcRegion}」，日常第一母语为「${detectedLanguage}」。
+   - 你的 [MSG] 气泡必须附带 original 属性放你的母语原句（${detectedLanguage}），标签内部放地道口语中文翻译！
+   - 格式：[MSG original="${detectedLanguage}原句"]地道中文翻译[/MSG]
+   - 示例：[MSG original="Hey bro, did you see that?"]兄弟 快看这个[/MSG]
 ` : ''}
 7. 【拟真语音条输出与环境音规范（真实听觉细节）】：
    - 当你发语音时，格式必须为：
@@ -191,14 +254,14 @@ ${isForeign ? `
     }
 
     /**
-     * 模块三：异地恋专属相处模块（双方跨地区且恋爱时注入）
+     * 模块三：异地恋专属相处模块（双方跨时区/跨地区且恋爱时注入）
      */
     function getModule3Prompt() {
         return `
 【异地恋专属相处模块】
-你们物理上无法见面。
+你们物理上分隔两地，无法随时线下见面。
 1. 距离是客观生活背景，不哀怨、不拿距离当武器，绝不说暗示在同一物理空间的话（严禁说"开门""去找你"）。
-2. 自然带出时差生活细节、网络卡顿与杂音。
+2. 自然带出异地网络联系的细节、网络卡顿与杂音。
 3. 用细腻文字建立陪伴感，绝不用动作描写。
 `;
     }
@@ -228,7 +291,7 @@ ${isForeign ? `
     /**
      * 微信跨时段与隔夜活人感时钟分析
      */
-    function analyzeMessageTimeGapContext(lastMsgTime, lastMsgTimestamp, nowTimestamp, timeCtx) {
+    function analyzeMessageTimeGapContext(lastMsgTime, lastMsgTimestamp, nowTimestamp, timeCtx, disableTimezone = false) {
         if (!lastMsgTimestamp && !lastMsgTime) return '';
         const now = nowTimestamp ? new Date(nowTimestamp) : new Date();
         const prev = lastMsgTimestamp ? new Date(lastMsgTimestamp) : null;
@@ -241,15 +304,17 @@ ${isForeign ? `
             const isDifferentDay = (now.getDate() !== prev.getDate()) || (diffHours >= 6);
             if (isDifferentDay) {
                 const prevHour = prev.getHours();
+                const myReplyTime = (!disableTimezone && timeCtx) ? `${timeCtx.nPeriod} ${timeCtx.nTime}` : `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
                 gapDesc = `【真实微信隔夜回复感知】：\n` +
                           `- 对方上一条消息发出时间为昨夜或数小时前（约 ${prevHour.toString().padStart(2, '0')}:${prev.getMinutes().toString().padStart(2, '0')}）。\n` +
-                          `- 当前你回复的时间为：${timeCtx.nPeriod} ${timeCtx.nTime}（已相隔约 ${diffHours} 小时）。\n` +
+                          `- 当前你回复的时间为：${myReplyTime}（已相隔约 ${diffHours} 小时）。\n` +
                           `- 【活人回复指引】：你昨晚可能睡着了、忙别的事，直到现在才看到消息。请像真人隔夜回微信一样自然应对（如“昨晚睡着了没看到”、“刚醒，昨晚你怎么那么晚”等），绝对严禁把对方昨晚的消息当作刚刚发出的！\n`;
             } else if (diffMinutes >= 60) {
                 gapDesc = `【微信消息间隔】：对方上一句是 ${diffHours} 小时前发送的，你现在才看到并回复，态度保持自然，可带出刚才忙完的日常感。\n`;
             }
         } else if (lastMsgTime) {
-            gapDesc = `【上一条消息时间参考】：对方上一句在 ${lastMsgTime} 发出，当前你回复的时间是 ${timeCtx.nTime}。\n`;
+            const myReplyTime = (!disableTimezone && timeCtx) ? timeCtx.nTime : `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+            gapDesc = `【上一条消息时间参考】：对方上一句在 ${lastMsgTime} 发出，当前你回复的时间是 ${myReplyTime}。\n`;
         }
         return gapDesc;
     }
@@ -278,15 +343,25 @@ ${isForeign ? `
     }
 
     /**
-     * 主提示词组装总装配器（已增强接纳条数、语音偏好、好感度、文字图片、拟真UI卡片等 extraConstraint）
+     * 主提示词组装总装配器
      */
     function buildWechatAIPromptContext({ npc, curAcc, recentDialogueText = '', isBehindActive = false, lastMsgTime = '', lastMsgTimestamp = null, extraConstraint = '' }) {
         if (!npc) return { sysPrompt: '', userPrompt: '' };
 
         const currentUserName = curAcc?.name || '用户';
-        const pRegion = curAcc.region || '中国';
-        const nRegion = npc.region || '中国';
-        const isForeign = (nRegion !== '中国');
+        const pRegion = curAcc?.region || '中国';
+        const nRegion = npc?.region || '中国';
+
+        // 读取独立设置开关：是否关闭时差、是否关闭双语
+        const chatSettings = npc.chatSettings || {};
+        const disableTimezone = !!chatSettings.disableTimezone;
+        const disableBilingual = !!chatSettings.disableBilingual;
+
+        // 判定双语机制：只要角色不是中国地区，且用户没有勾选关闭双语
+        const isForeign = !nRegion.includes('中国');
+        const isBilingualEnabled = isForeign && !disableBilingual;
+        const detectedLanguage = resolveRegionLanguage(nRegion);
+
         const timeCtx = calculateTimeAndZoneContext(pRegion, nRegion);
         const isDating = isNpcInDatingRelationship(npc);
 
@@ -296,28 +371,38 @@ ${isForeign ? `
         let assembledSysPrompt = `你正在微信上扮演角色「${npc.name}」。\n`;
         assembledSysPrompt += `【你的档案】：\n- 设定/性格：${processedPersona}\n- 常驻地区：${nRegion}\n- 当前好感度：${npc.favor || 50}/100\n- 恋爱关系状态：${isDating ? '已确立恋人关系（交往中）' : (npc.favor >= 80 ? '关系亲密/暧昧试探期' : '普通朋友')}\n\n`;
 
-        assembledSysPrompt += `【客观时空与生理状态】：\n`;
-        assembledSysPrompt += `- 你的本地时间：${timeCtx.nPeriod} ${timeCtx.nTime}（生理状态：${timeCtx.nState}）\n`;
-        assembledSysPrompt += `- 对方所在地(${pRegion})时间：${timeCtx.pPeriod} ${timeCtx.pTime}\n`;
-        assembledSysPrompt += `- 时差情况：${timeCtx.diffDesc}\n`;
-        assembledSysPrompt += `【要求】：必须体现出你当下的生理时间与困意状态！\n\n`;
+        // 🕰️ 时差生理感知模块：若用户关闭时差，则作息完全与用户同步，不注入时差困意或睡觉阻碍
+        if (!disableTimezone) {
+            if (timeCtx.isCrossTimezone) {
+                assembledSysPrompt += `【客观时空与生理状态】：\n`;
+                assembledSysPrompt += `- 你的本地时间：${timeCtx.nPeriod} ${timeCtx.nTime}（生理状态：${timeCtx.nState}）\n`;
+                assembledSysPrompt += `- 对方所在地(${pRegion})时间：${timeCtx.pPeriod} ${timeCtx.pTime}\n`;
+                assembledSysPrompt += `- 时差情况：${timeCtx.diffDesc}\n`;
+                assembledSysPrompt += `【要求】：体现出你当下的生理时间与作息状态，但绝不可因对方深夜而过度催睡！\n\n`;
+            } else {
+                assembledSysPrompt += `【客观时空与生理状态】：\n`;
+                assembledSysPrompt += `- 双方处于同一地区/时区（${nRegion}，当前时间：${timeCtx.nPeriod} ${timeCtx.nTime}），作息步调完全一致。\n\n`;
+            }
+        } else {
+            assembledSysPrompt += `【时差设置】：时差换算已关闭。你与对方处于相同作息节奏，无任何时差阻碍，正常日常互动交流。\n\n`;
+        }
 
         // 🌟 挂载 Rememori 忆海深层证据切片
-        const rememoriMem = getRememoriContextForNpc(npc.id, curAcc.id, currentUserName);
+        const rememoriMem = getRememoriContextForNpc(npc.id, curAcc?.id, currentUserName);
         if (rememoriMem) {
             assembledSysPrompt += rememoriMem;
         }
 
         // 注入隔夜作息感知
-        const gapContext = analyzeMessageTimeGapContext(lastMsgTime, lastMsgTimestamp, Date.now(), timeCtx);
+        const gapContext = analyzeMessageTimeGapContext(lastMsgTime, lastMsgTimestamp, Date.now(), timeCtx, disableTimezone);
         if (gapContext) {
             assembledSysPrompt += `${gapContext}\n`;
         }
 
-        assembledSysPrompt += getModule1Prompt(isForeign, nRegion);
+        assembledSysPrompt += getModule1Prompt(isBilingualEnabled, nRegion, detectedLanguage);
 
         // 注入大小号多重身份认知
-        assembledSysPrompt += getAccountDualityPrompt(npc, curAcc);
+        assembledSysPrompt += getAccountDualityPrompt(npc, curAcc || { id: 'main', name: '用户' });
 
         if (isDating) {
             assembledSysPrompt += getModule2Prompt(npc);
@@ -325,7 +410,8 @@ ${isForeign ? `
             assembledSysPrompt += `\n【暧昧期规范】：好感度较高，有相互在意与试探，但未挑明前严禁叫宝贝/老婆等正式称呼，留有适度拉扯。\n`;
         }
 
-        if (isDating && (pRegion !== nRegion)) {
+        // 异地恋模块：只有在没有关闭时差，且双方确立恋爱且地区不一致/存在时差时才注入
+        if (isDating && !disableTimezone && (timeCtx.isCrossTimezone || pRegion !== nRegion)) {
             assembledSysPrompt += getModule3Prompt();
         }
 
@@ -344,7 +430,7 @@ ${isForeign ? `
         return {
             sysPrompt: assembledSysPrompt.trim(),
             userPrompt: userPrompt.trim(),
-            isForeign,
+            isForeign: isBilingualEnabled,
             timeCtx
         };
     }
@@ -355,8 +441,9 @@ ${isForeign ? `
         getAvailableStickersSummary,
         buildWechatAIPromptContext,
         getRememoriContextForNpc,
-        replaceUserMacroVariables
+        replaceUserMacroVariables,
+        resolveRegionLanguage
     };
 
-    console.log('✅ ChatPromptEngine 微信活人感提示词架构引擎已升级装载：文字图片协议与拟真生活排版卡片协议');
+    console.log('✅ ChatPromptEngine 微信活人感提示词架构引擎已升级装载：多国母语自适应与时差/双语独立开关');
 })();
