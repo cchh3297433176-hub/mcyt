@@ -5,7 +5,7 @@
  *  1. 头像框缩略图折叠抽屉与试穿预览模式（极简图标 + / ▲）
  *  2. 导入头像框后自动进入微调舞台（支持 80%~180% 自由缩放及上下左右全向对齐偏移）
  *  3. 头像框独立保存按钮与持久化配置（scale, offsetX, offsetY）
- *  4. 气泡工坊：点九图 (border-image) 自适应切片 DIY 制作舞台、纯 CSS 气泡
+ *  4. 气泡视觉框选工坊：支持手指/鼠标在图片上直接拖拽框选文本区，支持【保持原画插画】与【九宫格拉伸】双模
  *  5. 气泡导入导出中枢：支持标准 JSON 一键复制/导入与跨设备分享
  *  6. 遵循微信原生克制质感，彻底消除陈旧冗余文案
  */
@@ -13,11 +13,12 @@
 (function () {
     'use strict';
 
-    // 默认头像框（支持配置独立的 scale 与偏移）
+    // 默认头像框
     const DEFAULT_FRAMES = [
         { id: 'frame_none', name: '无头像框', url: '', scale: 1.18, offsetX: 0, offsetY: 0, isBuiltin: true }
     ];
 
+    // 默认气泡
     const DEFAULT_BUBBLES = [
         {
             id: 'bubble_default',
@@ -119,20 +120,20 @@
                         </div>
                         <div style="display:flex;flex-direction:column;gap:2px;">
                             <span style="font-size:12px;font-weight:600;color:#333;">${activeFrame && activeFrame.url ? escapeHtml(activeFrame.name) : '无头像框'}</span>
-                            <span style="font-size:11px;color:#888;">当前选用气泡：${escapeHtml(activeBubble ? activeBubble.name : '默认')}</span>
+                            <span style="font-size:11px;color:#888;">当前气泡：${escapeHtml(activeBubble ? activeBubble.name : '默认')}</span>
                         </div>
                     </div>
 
                     <!-- 气泡效果试穿行 -->
-                    <div style="display:flex;flex-direction:column;gap:8px;padding-top:8px;border-top:1px dashed #e0e0e0;">
+                    <div style="display:flex;flex-direction:column;gap:10px;padding-top:10px;border-top:1px dashed #e0e0e0;">
                         <div style="display:flex;justify-content:flex-start;">
-                            <div style="max-width:80%;font-size:12px;box-sizing:border-box;padding:8px 12px;${activeBubble ? (activeBubble.npcStyle || '') : ''}">
-                                对方消息：你好呀，这是气泡效果试穿！
+                            <div style="max-width:85%;font-size:12px;box-sizing:border-box;padding:8px 12px;${activeBubble ? (activeBubble.npcStyle || '') : ''}">
+                                对方：气泡效果试穿中～
                             </div>
                         </div>
                         <div style="display:flex;justify-content:flex-end;">
-                            <div style="max-width:80%;font-size:12px;box-sizing:border-box;padding:8px 12px;${activeBubble ? (activeBubble.userStyle || '') : ''}">
-                                我方消息：气泡自适应排版非常棒～
+                            <div style="max-width:85%;font-size:12px;box-sizing:border-box;padding:8px 12px;${activeBubble ? (activeBubble.userStyle || '') : ''}">
+                                我方：自适应排版非常自然！
                             </div>
                         </div>
                     </div>
@@ -198,12 +199,12 @@
                 </div>
             </div>
 
-            <!-- 气泡样式库（新增 DIY 制作、JSON导入导出） -->
+            <!-- 气泡样式库 -->
             <div style="background:#ffffff;border-radius:12px;border:1px solid #eeeeee;padding:14px;">
                 <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
                     <div>
                         <div style="font-size:13.5px;font-weight:600;color:#222;">气泡样式库</div>
-                        <div style="font-size:11.5px;color:#888;">点九图自适应拉伸与个性配色</div>
+                        <div style="font-size:11.5px;color:#888;">可视化框选与个性气泡</div>
                     </div>
                     <div style="display:flex;gap:6px;">
                         <button onclick="window.openImportBubbleModal()" style="padding:4px 8px;font-size:11px;border-radius:6px;border:1px solid #ddd;background:#f9f9f9;color:#333;cursor:pointer;">导入</button>
@@ -217,7 +218,9 @@
                             <div style="display:flex;flex-direction:column;gap:2px;max-width:65%;">
                                 <div style="display:flex;align-items:center;gap:6px;">
                                     <span style="font-size:12.5px;font-weight:600;color:#222;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(b.name)}</span>
-                                    <span style="font-size:9.5px;padding:1px 5px;border-radius:3px;background:${b.type === 'nine_slice' ? '#e1f3d8' : '#e9e9eb'};color:${b.type === 'nine_slice' ? '#529b2e' : '#606266'};">${b.type === 'nine_slice' ? '点九图DIY' : 'CSS'}</span>
+                                    <span style="font-size:9.5px;padding:1px 5px;border-radius:3px;background:${b.type === 'frame_box' ? '#e1f3d8' : (b.type === 'nine_slice' ? '#d9ecff' : '#e9e9eb')};color:${b.type === 'frame_box' ? '#529b2e' : (b.type === 'nine_slice' ? '#409eff' : '#606266')};">
+                                        ${b.type === 'frame_box' ? '原画插画' : (b.type === 'nine_slice' ? '点九拉伸' : 'CSS')}
+                                    </span>
                                 </div>
                                 <span style="font-size:10px;color:#888;">${b.author ? ('作者: ' + escapeHtml(b.author)) : (b.isBuiltin ? '系统预设' : '自定义气泡')}</span>
                             </div>
@@ -246,7 +249,6 @@
         arrow.textContent = isHidden ? '▼' : '▲';
     };
 
-    // 试穿与卸下头像框
     window.toggleSelectFrameItem = function (id) {
         const current = localStorage.getItem('mcyt_active_decor_frame') || 'frame_none';
         const nextId = (current === id) ? 'frame_none' : id;
@@ -254,7 +256,6 @@
         refreshDecorView();
     };
 
-    // 快速滑块调节当前头像框尺寸
     window.updateCurrentFrameScale = function (val) {
         const num = parseFloat(val) / 100;
         const curId = localStorage.getItem('mcyt_active_decor_frame');
@@ -555,8 +556,8 @@
                 <div style="font-size:14px;font-weight:600;color:#222;margin-bottom:12px;">创建新气泡</div>
                 
                 <div style="display:flex;flex-direction:column;gap:8px;">
-                    <button onclick="document.getElementById('bubbleActionModal').remove(); window.openDiyBubbleModal();" style="width:100%;padding:11px;background:#07c160;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
-                        <span>🎨 点九图 DIY 制作工坊</span>
+                    <button onclick="document.getElementById('bubbleActionModal').remove(); window.openVisualCropBubbleModal();" style="width:100%;padding:11px;background:#07c160;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
+                        <span>🎨 可视化框选气泡工坊</span>
                     </button>
                     <button onclick="document.getElementById('bubbleActionModal').remove(); window.openAddCssBubbleModal();" style="width:100%;padding:10px;background:#f5f5f5;border:1px solid #e0e0e0;border-radius:8px;font-size:12.5px;color:#333;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
                         <span>💻 编写纯 CSS 代码气泡</span>
@@ -574,252 +575,331 @@
     };
 
     // ==========================================
-    // 🌟 点九图 DIY 制作工坊（核心自适应切片舞台）
+    // 🌟 可视化框选气泡工坊（彻底消灭填数字，支持原画插画与点九拉伸）
     // ==========================================
-    window.openDiyBubbleModal = function (bubbleObj = null) {
-        let modal = document.getElementById('diyBubbleModal');
+    window.openVisualCropBubbleModal = function (bubbleObj = null) {
+        let modal = document.getElementById('visualCropBubbleModal');
         if (!modal) {
             modal = document.createElement('div');
-            modal.id = 'diyBubbleModal';
-            modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100000;padding:12px;box-sizing:border-box;';
+            modal.id = 'visualCropBubbleModal';
+            modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;z-index:100000;padding:10px;box-sizing:border-box;';
             document.body.appendChild(modal);
         }
 
+        // 默认状态：top%, right%, bottom%, left% 为框选边距占图片尺寸的百分比
         const state = {
             id: bubbleObj ? bubbleObj.id : ('bubble_' + Date.now()),
-            name: bubbleObj ? bubbleObj.name : '我的点九气泡',
+            name: bubbleObj ? bubbleObj.name : '我的插画气泡',
             author: bubbleObj ? (bubbleObj.author || '') : '',
-            activeSide: 'user', // 'user' | 'npc'
-            syncMirror: true, // 自动将我方图水平镜像给对方
-            user: {
-                url: bubbleObj?.diyConfig?.user?.url || '',
-                top: bubbleObj?.diyConfig?.user?.top ?? 14,
-                right: bubbleObj?.diyConfig?.user?.right ?? 14,
-                bottom: bubbleObj?.diyConfig?.user?.bottom ?? 14,
-                left: bubbleObj?.diyConfig?.user?.left ?? 14,
-                padTop: bubbleObj?.diyConfig?.user?.padTop ?? 8,
-                padRight: bubbleObj?.diyConfig?.user?.padRight ?? 12,
-                padBottom: bubbleObj?.diyConfig?.user?.padBottom ?? 8,
-                padLeft: bubbleObj?.diyConfig?.user?.padLeft ?? 12,
-                color: bubbleObj?.diyConfig?.user?.color || '#000000'
-            },
-            npc: {
-                url: bubbleObj?.diyConfig?.npc?.url || '',
-                top: bubbleObj?.diyConfig?.npc?.top ?? 14,
-                right: bubbleObj?.diyConfig?.npc?.right ?? 14,
-                bottom: bubbleObj?.diyConfig?.npc?.bottom ?? 14,
-                left: bubbleObj?.diyConfig?.npc?.left ?? 14,
-                padTop: bubbleObj?.diyConfig?.npc?.padTop ?? 8,
-                padRight: bubbleObj?.diyConfig?.npc?.padRight ?? 12,
-                padBottom: bubbleObj?.diyConfig?.npc?.padBottom ?? 8,
-                padLeft: bubbleObj?.diyConfig?.npc?.padLeft ?? 12,
-                color: bubbleObj?.diyConfig?.npc?.color || '#000000'
+            imgUrl: bubbleObj?.decorConfig?.imgUrl || '',
+            // 模式：'frame_box' 保持原画插画比例不拉伸（立绘人物最完美）；'nine_slice' 点九自适应拉伸
+            renderMode: bubbleObj?.type === 'nine_slice' ? 'nine_slice' : 'frame_box',
+            textColor: bubbleObj?.decorConfig?.textColor || '#222222',
+            // 选框边缘距离四周的百分比（0~100）
+            crop: {
+                top: bubbleObj?.decorConfig?.crop?.top ?? 18,
+                right: bubbleObj?.decorConfig?.crop?.right ?? 18,
+                bottom: bubbleObj?.decorConfig?.crop?.bottom ?? 38,
+                left: bubbleObj?.decorConfig?.crop?.left ?? 18
             }
         };
 
-        function buildBubbleCss(cfg, mirror = false) {
-            if (!cfg.url) {
-                return mirror 
-                    ? 'background-color:#ffffff;color:#000;border:1px solid #e0e0e0;border-radius:6px;'
-                    : 'background-color:#95ec69;color:#000;border-radius:6px;';
+        // 动态生成气泡 CSS 样式
+        function generateBubbleStyles() {
+            if (!state.imgUrl) {
+                return {
+                    user: 'background-color:#95ec69;color:#000;border-radius:8px;padding:8px 12px;',
+                    npc: 'background-color:#ffffff;color:#000;border:1px solid #e0e0e0;border-radius:8px;padding:8px 12px;'
+                };
             }
-            const slice = `${cfg.top} ${cfg.right} ${cfg.bottom} ${cfg.left}`;
-            const pad = `${cfg.padTop}px ${cfg.padRight}px ${cfg.padBottom}px ${cfg.padLeft}px`;
-            const transform = mirror ? 'transform: scaleX(-1);' : '';
-            return `border-style: solid; border-width: ${cfg.top}px ${cfg.right}px ${cfg.bottom}px ${cfg.left}px; border-image-source: url(${cfg.url}); border-image-slice: ${slice} fill; border-image-repeat: stretch; padding: ${pad}; color: ${cfg.color}; background: transparent; ${transform}`;
+
+            const c = state.crop;
+            if (state.renderMode === 'frame_box') {
+                // 【原画插画模式】保持原画完整，文字根据框选位置被安全局限在内部
+                const padTop = Math.max(8, Math.round(c.top * 1.8));
+                const padRight = Math.max(10, Math.round(c.right * 1.8));
+                const padBottom = Math.max(8, Math.round(c.bottom * 1.8));
+                const padLeft = Math.max(10, Math.round(c.left * 1.8));
+
+                const baseStyle = `background-image: url('${state.imgUrl}'); background-size: 100% 100%; background-repeat: no-repeat; background-position: center; color: ${state.textColor}; box-sizing: border-box; min-width: 140px;`;
+                return {
+                    user: `${baseStyle} padding: ${padTop}px ${padRight}px ${padBottom}px ${padLeft}px;`,
+                    npc: `${baseStyle} padding: ${padTop}px ${padRight}px ${padBottom}px ${padLeft}px;`
+                };
+            } else {
+                // 【点九图拉伸模式】以百分比作为切片
+                const slice = `${c.top}% ${c.right}% ${c.bottom}% ${c.left}%`;
+                const pad = `${c.top}px ${c.right}px ${c.bottom}px ${c.left}px`;
+                const baseStyle = `border-style: solid; border-width: 16px; border-image-source: url('${state.imgUrl}'); border-image-slice: ${slice} fill; border-image-repeat: stretch; color: ${state.textColor}; padding: ${pad}; background: transparent;`;
+                return {
+                    user: baseStyle,
+                    npc: baseStyle
+                };
+            }
         }
 
-        function renderDiyStage() {
-            const curSide = state.activeSide;
-            const curCfg = state[curSide];
-
-            const userCss = buildBubbleCss(state.user, false);
-            const npcCss = (state.syncMirror && state.user.url && !state.npc.url) 
-                ? buildBubbleCss(state.user, false)
-                : buildBubbleCss(state.npc, false);
+        function renderStage() {
+            const styles = generateBubbleStyles();
 
             modal.innerHTML = `
-                <div style="background:#ffffff;border-radius:14px;width:100%;max-width:340px;max-height:92vh;overflow-y:auto;padding:16px;box-shadow:0 12px 32px rgba(0,0,0,0.2);box-sizing:border-box;-webkit-overflow-scrolling:touch;">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                        <span style="font-size:14px;font-weight:600;color:#222;">点九图气泡 DIY 工坊</span>
-                        <button onclick="document.getElementById('diyBubbleModal').remove()" style="border:none;background:none;font-size:16px;color:#999;cursor:pointer;">✕</button>
+                <div style="background:#ffffff;border-radius:14px;width:100%;max-width:340px;max-height:94vh;overflow-y:auto;padding:14px;box-shadow:0 12px 32px rgba(0,0,0,0.2);box-sizing:border-box;-webkit-overflow-scrolling:touch;">
+                    <!-- 顶栏标题与关闭 -->
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                        <span style="font-size:14px;font-weight:600;color:#222;">气泡框选工坊</span>
+                        <button onclick="document.getElementById('visualCropBubbleModal').remove()" style="border:none;background:none;font-size:16px;color:#999;cursor:pointer;">✕</button>
                     </div>
 
                     <!-- 实时聊天预览舞台 -->
-                    <div style="background:#f4f4f4;border-radius:10px;padding:12px;margin-bottom:12px;display:flex;flex-direction:column;gap:8px;">
+                    <div style="background:#f4f4f4;border-radius:10px;padding:10px;margin-bottom:10px;display:flex;flex-direction:column;gap:8px;">
                         <div style="font-size:10.5px;color:#888;display:flex;justify-content:space-between;">
-                            <span>实时对白拉伸预览</span>
-                            <span>${state.activeSide === 'user' ? '正在调节我方' : '正在调节对方'}</span>
+                            <span>实时对白效果预览</span>
+                            <span>${state.renderMode === 'frame_box' ? '插画画框模式（保全立绘）' : '自适应点九拉伸'}</span>
                         </div>
                         <div style="display:flex;justify-content:flex-start;">
-                            <div style="max-width:85%;font-size:11.5px;box-sizing:border-box;${npcCss}">
-                                对方对白：测试九宫格圆角拉伸
+                            <div id="cropPreviewNpc" style="max-width:85%;font-size:12px;line-height:1.4;word-break:break-word;${styles.npc}">
+                                对方：好可爱的气泡！
                             </div>
                         </div>
                         <div style="display:flex;justify-content:flex-end;">
-                            <div style="max-width:85%;font-size:11.5px;box-sizing:border-box;${userCss}">
-                                我方对白：长文本自适应拉伸效果，不论多少字都不会破坏尖角！
+                            <div id="cropPreviewUser" style="max-width:85%;font-size:12px;line-height:1.4;word-break:break-word;${styles.user}">
+                                我方：文字不论多长都呆在框选区里，小人完全不会变形～
                             </div>
                         </div>
                     </div>
 
-                    <!-- 基础信息 -->
-                    <div style="display:flex;gap:8px;margin-bottom:10px;">
-                        <input type="text" id="diyBubbleNameInput" value="${escapeHtml(state.name)}" placeholder="气泡名称" style="flex:2;padding:6px 8px;border-radius:6px;border:1px solid #ddd;font-size:11.5px;outline:none;">
-                        <input type="text" id="diyBubbleAuthorInput" value="${escapeHtml(state.author)}" placeholder="作者名" style="flex:1.2;padding:6px 8px;border-radius:6px;border:1px solid #ddd;font-size:11.5px;outline:none;">
+                    <!-- 模式切换与图片选取 -->
+                    <div style="display:flex;gap:6px;margin-bottom:8px;">
+                        <button id="btnModeFrame" style="flex:1;padding:6px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid ${state.renderMode === 'frame_box' ? '#07c160' : '#e0e0e0'};background:${state.renderMode === 'frame_box' ? '#e8f7ed' : '#fff'};color:${state.renderMode === 'frame_box' ? '#07c160' : '#333'};font-weight:600;">
+                            🖼️ 保持原画（插画立绘推荐）
+                        </button>
+                        <button id="btnModeNine" style="flex:1;padding:6px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid ${state.renderMode === 'nine_slice' ? '#07c160' : '#e0e0e0'};background:${state.renderMode === 'nine_slice' ? '#e8f7ed' : '#fff'};color:${state.renderMode === 'nine_slice' ? '#07c160' : '#333'};">
+                            ↔️ 九宫格拉伸（长条框）
+                        </button>
                     </div>
 
-                    <!-- 角色端切换 -->
+                    <!-- 图片上传栏 -->
+                    <input type="file" id="visualCropFileInput" accept="image/*" style="display:none;">
                     <div style="display:flex;gap:6px;margin-bottom:10px;">
-                        <button id="btnDiyTabUser" style="flex:1;padding:6px;border-radius:6px;font-size:11.5px;cursor:pointer;border:1px solid ${curSide === 'user' ? '#07c160' : '#e0e0e0'};background:${curSide === 'user' ? '#e8f7ed' : '#fff'};color:${curSide === 'user' ? '#07c160' : '#333'};">我方气泡设置</button>
-                        <button id="btnDiyTabNpc" style="flex:1;padding:6px;border-radius:6px;font-size:11.5px;cursor:pointer;border:1px solid ${curSide === 'npc' ? '#07c160' : '#e0e0e0'};background:${curSide === 'npc' ? '#e8f7ed' : '#fff'};color:${curSide === 'npc' ? '#07c160' : '#333'};">对方气泡设置</button>
-                    </div>
-
-                    <!-- 图片上传操作 -->
-                    <div style="background:#fafafa;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:10px;">
-                        <input type="file" id="diyImgFileInput" accept="image/*" style="display:none;">
-                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-                            <span style="font-size:11px;font-weight:600;color:#444;">${curSide === 'user' ? '我方底图' : '对方底图'}</span>
-                            <button onclick="document.getElementById('diyImgFileInput').click()" style="padding:4px 8px;font-size:10.5px;border-radius:4px;border:none;background:#07c160;color:#fff;cursor:pointer;">相册选取图片</button>
-                        </div>
-                        <input type="text" id="diyImgUrlInput" value="${curCfg.url || ''}" placeholder="或输入图片 Base64 / URL" style="width:100%;box-sizing:border-box;padding:5px 8px;border-radius:5px;border:1px solid #ddd;font-size:11px;outline:none;">
-                    </div>
-
-                    <!-- 九宫格切片 Slice 调节 -->
-                    <div style="background:#fafafa;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:10px;">
-                        <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
-                            <span style="font-size:11px;font-weight:600;color:#444;">四边切片防拉伸（Slice）</span>
-                            <span style="font-size:10px;color:#888;">上/右/下/左 (px)</span>
-                        </div>
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-                            <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:#666;">
-                                <span>上:</span>
-                                <input type="number" id="diySliceTop" value="${curCfg.top}" min="0" max="100" style="width:100%;padding:4px;border-radius:4px;border:1px solid #ddd;font-size:11px;">
-                            </div>
-                            <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:#666;">
-                                <span>右:</span>
-                                <input type="number" id="diySliceRight" value="${curCfg.right}" min="0" max="100" style="width:100%;padding:4px;border-radius:4px;border:1px solid #ddd;font-size:11px;">
-                            </div>
-                            <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:#666;">
-                                <span>下:</span>
-                                <input type="number" id="diySliceBottom" value="${curCfg.bottom}" min="0" max="100" style="width:100%;padding:4px;border-radius:4px;border:1px solid #ddd;font-size:11px;">
-                            </div>
-                            <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:#666;">
-                                <span>左:</span>
-                                <input type="number" id="diySliceLeft" value="${curCfg.left}" min="0" max="100" style="width:100%;padding:4px;border-radius:4px;border:1px solid #ddd;font-size:11px;">
-                            </div>
+                        <button onclick="document.getElementById('visualCropFileInput').click()" style="flex:1;padding:7px;border-radius:6px;border:none;background:#07c160;color:#fff;font-size:11.5px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:4px;">
+                            <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:none;stroke:#fff;stroke-width:2;"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><polyline points="21 15 16 10 5 21"></polyline></svg>
+                            <span>选取气泡底图</span>
+                        </button>
+                        <div style="display:flex;align-items:center;gap:4px;background:#f8f8f8;padding:0 8px;border-radius:6px;border:1px solid #ddd;">
+                            <span style="font-size:11px;color:#666;">字色:</span>
+                            <input type="color" id="cropTextColorInput" value="${state.textColor}" style="width:20px;height:20px;border:none;background:none;padding:0;cursor:pointer;">
                         </div>
                     </div>
 
-                    <!-- 安全文字边距 Padding 与文字颜色 -->
-                    <div style="background:#fafafa;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:14px;">
-                        <div style="display:flex;justify-content:space-between;margin-bottom:6px;">
-                            <span style="font-size:11px;font-weight:600;color:#444;">文本内边距（Padding）与颜色</span>
-                            <div style="display:flex;align-items:center;gap:4px;">
-                                <span style="font-size:10px;color:#666;">文字颜色:</span>
-                                <input type="color" id="diyTextColorInput" value="${curCfg.color || '#000000'}" style="width:22px;height:22px;border:none;padding:0;background:none;cursor:pointer;">
+                    <!-- 🌟 核心：大图可视化框选舞台 -->
+                    <div style="position:relative;background:#f0f0f0;border-radius:8px;padding:8px;margin-bottom:8px;display:flex;justify-content:center;align-items:center;user-select:none;touch-action:none;">
+                        ${state.imgUrl ? `
+                            <div id="cropStageWrapper" style="position:relative;width:240px;height:220px;background:#fff;border-radius:6px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);display:flex;align-items:center;justify-content:center;">
+                                <img id="cropTargetImg" src="${state.imgUrl}" style="width:100%;height:100%;object-fit:contain;pointer-events:none;display:block;" />
+                                
+                                <!-- 绿色半透明可视化框选框 -->
+                                <div id="cropBoxRect" style="position:absolute;top:${state.crop.top}%;left:${state.crop.left}%;right:${state.crop.right}%;bottom:${state.crop.bottom}%;border:2px dashed #07c160;background:rgba(7,193,96,0.18);box-sizing:border-box;pointer-events:none;">
+                                    <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#07c160;font-size:11px;font-weight:600;text-shadow:0 0 3px #fff;">
+                                        文字区域
+                                    </div>
+                                </div>
+
+                                <!-- 4 根可拖动的交互参考线/手柄（全触控覆盖） -->
+                                <div id="handleTop" style="position:absolute;top:${state.crop.top}%;left:0;right:0;height:16px;margin-top:-8px;cursor:ns-resize;display:flex;align-items:center;justify-content:center;z-index:10;">
+                                    <div style="width:36px;height:4px;background:#07c160;border-radius:2px;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
+                                </div>
+                                <div id="handleBottom" style="position:absolute;bottom:${state.crop.bottom}%;left:0;right:0;height:16px;margin-bottom:-8px;cursor:ns-resize;display:flex;align-items:center;justify-content:center;z-index:10;">
+                                    <div style="width:36px;height:4px;background:#07c160;border-radius:2px;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
+                                </div>
+                                <div id="handleLeft" style="position:absolute;left:${state.crop.left}%;top:0;bottom:0;width:16px;margin-left:-8px;cursor:ew-resize;display:flex;align-items:center;justify-content:center;z-index:10;">
+                                    <div style="height:36px;width:4px;background:#07c160;border-radius:2px;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
+                                </div>
+                                <div id="handleRight" style="position:absolute;right:${state.crop.right}%;top:0;bottom:0;width:16px;margin-right:-8px;cursor:ew-resize;display:flex;align-items:center;justify-content:center;z-index:10;">
+                                    <div style="height:36px;width:4px;background:#07c160;border-radius:2px;box-shadow:0 1px 3px rgba(0,0,0,0.3);"></div>
+                                </div>
                             </div>
-                        </div>
-                        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;">
-                            <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:#666;">
-                                <span>上:</span>
-                                <input type="number" id="diyPadTop" value="${curCfg.padTop}" min="0" max="80" style="width:100%;padding:4px;border-radius:4px;border:1px solid #ddd;font-size:11px;">
+                        ` : `
+                            <div onclick="document.getElementById('visualCropFileInput').click()" style="width:240px;height:160px;background:#fff;border:2px dashed #ddd;border-radius:8px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;gap:6px;">
+                                <svg viewBox="0 0 24 24" style="width:28px;height:28px;fill:none;stroke:#aaa;stroke-width:1.5;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+                                <span style="font-size:12px;color:#888;">请先点此选取气泡图片</span>
                             </div>
-                            <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:#666;">
-                                <span>右:</span>
-                                <input type="number" id="diyPadRight" value="${curCfg.padRight}" min="0" max="80" style="width:100%;padding:4px;border-radius:4px;border:1px solid #ddd;font-size:11px;">
-                            </div>
-                            <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:#666;">
-                                <span>下:</span>
-                                <input type="number" id="diyPadBottom" value="${curCfg.padBottom}" min="0" max="80" style="width:100%;padding:4px;border-radius:4px;border:1px solid #ddd;font-size:11px;">
-                            </div>
-                            <div style="display:flex;align-items:center;gap:4px;font-size:11px;color:#666;">
-                                <span>左:</span>
-                                <input type="number" id="diyPadLeft" value="${curCfg.padLeft}" min="0" max="80" style="width:100%;padding:4px;border-radius:4px;border:1px solid #ddd;font-size:11px;">
-                            </div>
-                        </div>
+                        `}
                     </div>
 
-                    <!-- 保存与应用 -->
+                    <!-- 一键常用预设框选 -->
+                    <div style="display:flex;gap:6px;margin-bottom:10px;">
+                        <button id="btnPresetCenter" style="flex:1;padding:5px;background:#f5f5f5;border:1px solid #ddd;border-radius:4px;font-size:10.5px;color:#555;cursor:pointer;">居中留白</button>
+                        <button id="btnPresetBottomRight" style="flex:1;padding:5px;background:#f5f5f5;border:1px solid #ddd;border-radius:4px;font-size:10.5px;color:#555;cursor:pointer;">避开右下小人</button>
+                        <button id="btnPresetTopLeft" style="flex:1;padding:5px;background:#f5f5f5;border:1px solid #ddd;border-radius:4px;font-size:10.5px;color:#555;cursor:pointer;">避开左上徽章</button>
+                    </div>
+
+                    <!-- 气泡名称与作者 -->
+                    <div style="display:flex;gap:6px;margin-bottom:12px;">
+                        <input type="text" id="cropBubbleNameInput" value="${escapeHtml(state.name)}" placeholder="气泡名称" style="flex:2;padding:6px 8px;border-radius:6px;border:1px solid #ddd;font-size:11.5px;outline:none;">
+                        <input type="text" id="cropBubbleAuthorInput" value="${escapeHtml(state.author)}" placeholder="作者名" style="flex:1.2;padding:6px 8px;border-radius:6px;border:1px solid #ddd;font-size:11.5px;outline:none;">
+                    </div>
+
+                    <!-- 保存与选用 -->
                     <div style="display:flex;gap:8px;">
-                        <button onclick="document.getElementById('diyBubbleModal').remove()" style="flex:1;padding:9px;background:#f5f5f5;border:1px solid #ddd;border-radius:6px;font-size:12px;color:#555;cursor:pointer;">取消</button>
-                        <button id="btnSaveDiyBubble" style="flex:1.4;padding:9px;background:#07c160;border:none;border-radius:6px;font-size:12px;color:#fff;font-weight:600;cursor:pointer;">保存并选用气泡</button>
+                        <button onclick="document.getElementById('visualCropBubbleModal').remove()" style="flex:1;padding:9px;background:#f5f5f5;border:1px solid #ddd;border-radius:6px;font-size:12px;color:#555;cursor:pointer;">取消</button>
+                        <button id="btnSaveCropBubble" style="flex:1.4;padding:9px;background:#07c160;border:none;border-radius:6px;font-size:12px;color:#fff;font-weight:600;cursor:pointer;">保存并选用气泡</button>
                     </div>
                 </div>
             `;
 
             // 事件绑定
-            modal.querySelector('#diyBubbleNameInput').oninput = (e) => { state.name = e.target.value; };
-            modal.querySelector('#diyBubbleAuthorInput').oninput = (e) => { state.author = e.target.value; };
-
-            modal.querySelector('#btnDiyTabUser').onclick = () => {
-                state.activeSide = 'user';
-                renderDiyStage();
+            modal.querySelector('#btnModeFrame').onclick = () => {
+                state.renderMode = 'frame_box';
+                renderStage();
             };
-            modal.querySelector('#btnDiyTabNpc').onclick = () => {
-                state.activeSide = 'npc';
-                renderDiyStage();
+            modal.querySelector('#btnModeNine').onclick = () => {
+                state.renderMode = 'nine_slice';
+                renderStage();
             };
 
-            const fileInput = modal.querySelector('#diyImgFileInput');
-            fileInput.onchange = (e) => {
+            const fileIn = modal.querySelector('#visualCropFileInput');
+            fileIn.onchange = (e) => {
                 const file = e.target.files && e.target.files[0];
                 if (!file) return;
                 const reader = new FileReader();
                 reader.onload = function(evt) {
-                    state[state.activeSide].url = evt.target.result;
-                    renderDiyStage();
+                    state.imgUrl = evt.target.result;
+                    renderStage();
                 };
                 reader.readAsDataURL(file);
             };
 
-            modal.querySelector('#diyImgUrlInput').onchange = (e) => {
-                state[state.activeSide].url = e.target.value.trim();
-                renderDiyStage();
+            modal.querySelector('#cropTextColorInput').oninput = (e) => {
+                state.textColor = e.target.value;
+                updateLivePreview();
             };
 
-            const bindNum = (id, key) => {
-                const el = modal.querySelector(id);
-                if (el) {
-                    el.oninput = (e) => {
-                        state[state.activeSide][key] = parseInt(e.target.value) || 0;
-                        renderDiyStage();
+            modal.querySelector('#cropBubbleNameInput').oninput = (e) => { state.name = e.target.value; };
+            modal.querySelector('#cropBubbleAuthorInput').oninput = (e) => { state.author = e.target.value; };
+
+            // 预设快速框选
+            modal.querySelector('#btnPresetCenter').onclick = () => {
+                state.crop = { top: 20, right: 20, bottom: 20, left: 20 };
+                updateCropVisuals();
+            };
+            modal.querySelector('#btnPresetBottomRight').onclick = () => {
+                state.crop = { top: 16, right: 18, bottom: 42, left: 16 };
+                updateCropVisuals();
+            };
+            modal.querySelector('#btnPresetTopLeft').onclick = () => {
+                state.crop = { top: 35, right: 16, bottom: 16, left: 24 };
+                updateCropVisuals();
+            };
+
+            // 手指与鼠标拖拽控制手柄
+            setupHandleDrag('handleTop', (deltaY, rect) => {
+                const pctDelta = (deltaY / rect.height) * 100;
+                state.crop.top = Math.max(5, Math.min(80 - state.crop.bottom, state.crop.top + pctDelta));
+            });
+            setupHandleDrag('handleBottom', (deltaY, rect) => {
+                const pctDelta = (-deltaY / rect.height) * 100;
+                state.crop.bottom = Math.max(5, Math.min(80 - state.crop.top, state.crop.bottom + pctDelta));
+            });
+            setupHandleDrag('handleLeft', (deltaX, rect) => {
+                const pctDelta = (deltaX / rect.width) * 100;
+                state.crop.left = Math.max(5, Math.min(80 - state.crop.right, state.crop.left + pctDelta));
+            });
+            setupHandleDrag('handleRight', (deltaX, rect) => {
+                const pctDelta = (-deltaX / rect.width) * 100;
+                state.crop.right = Math.max(5, Math.min(80 - state.crop.left, state.crop.right + pctDelta));
+            });
+
+            function setupHandleDrag(handleId, onMove) {
+                const handle = modal.querySelector('#' + handleId);
+                const wrapper = modal.querySelector('#cropStageWrapper');
+                if (!handle || !wrapper) return;
+
+                let startX = 0, startY = 0;
+
+                const startDrag = (cx, cy) => {
+                    startX = cx;
+                    startY = cy;
+                    const onDragging = (e) => {
+                        const curX = e.touches ? e.touches[0].clientX : e.clientX;
+                        const curY = e.touches ? e.touches[0].clientY : e.clientY;
+                        const dx = curX - startX;
+                        const dy = curY - startY;
+                        startX = curX;
+                        startY = curY;
+                        const r = wrapper.getBoundingClientRect();
+                        onMove(dx, dy, r);
+                        updateCropVisuals();
                     };
+                    const stopDrag = () => {
+                        window.removeEventListener('mousemove', onDragging);
+                        window.removeEventListener('mouseup', stopDrag);
+                        window.removeEventListener('touchmove', onDragging);
+                        window.removeEventListener('touchend', stopDrag);
+                    };
+                    window.addEventListener('mousemove', onDragging);
+                    window.addEventListener('mouseup', stopDrag);
+                    window.addEventListener('touchmove', onDragging);
+                    window.addEventListener('touchend', stopDrag);
+                };
+
+                handle.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    startDrag(e.clientX, e.clientY);
+                });
+                handle.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    startDrag(e.touches[0].clientX, e.touches[0].clientY);
+                }, { passive: false });
+            }
+
+            function updateCropVisuals() {
+                const box = modal.querySelector('#cropBoxRect');
+                const hTop = modal.querySelector('#handleTop');
+                const hBottom = modal.querySelector('#handleBottom');
+                const hLeft = modal.querySelector('#handleLeft');
+                const hRight = modal.querySelector('#handleRight');
+
+                if (box) {
+                    box.style.top = state.crop.top + '%';
+                    box.style.right = state.crop.right + '%';
+                    box.style.bottom = state.crop.bottom + '%';
+                    box.style.left = state.crop.left + '%';
                 }
-            };
-            bindNum('#diySliceTop', 'top');
-            bindNum('#diySliceRight', 'right');
-            bindNum('#diySliceBottom', 'bottom');
-            bindNum('#diySliceLeft', 'left');
+                if (hTop) hTop.style.top = state.crop.top + '%';
+                if (hBottom) hBottom.style.bottom = state.crop.bottom + '%';
+                if (hLeft) hLeft.style.left = state.crop.left + '%';
+                if (hRight) hRight.style.right = state.crop.right + '%';
 
-            bindNum('#diyPadTop', 'padTop');
-            bindNum('#diyPadRight', 'padRight');
-            bindNum('#diyPadBottom', 'padBottom');
-            bindNum('#diyPadLeft', 'padLeft');
+                updateLivePreview();
+            }
 
-            modal.querySelector('#diyTextColorInput').oninput = (e) => {
-                state[state.activeSide].color = e.target.value;
-                renderDiyStage();
-            };
+            function updateLivePreview() {
+                const s = generateBubbleStyles();
+                const pUser = modal.querySelector('#cropPreviewUser');
+                const pNpc = modal.querySelector('#cropPreviewNpc');
+                if (pUser) pUser.style.cssText = `max-width:85%;font-size:12px;line-height:1.4;word-break:break-word;${s.user}`;
+                if (pNpc) pNpc.style.cssText = `max-width:85%;font-size:12px;line-height:1.4;word-break:break-word;${s.npc}`;
+            }
 
-            modal.querySelector('#btnSaveDiyBubble').onclick = () => {
-                const finalName = state.name.trim() || '自定义点九气泡';
-                
-                const finalUserCss = buildBubbleCss(state.user, false);
-                const finalNpcCss = (state.syncMirror && state.user.url && !state.npc.url) 
-                    ? buildBubbleCss(state.user, false)
-                    : buildBubbleCss(state.npc, false);
+            // 保存并选用
+            modal.querySelector('#btnSaveCropBubble').onclick = () => {
+                if (!state.imgUrl) {
+                    if (typeof showToast === 'function') showToast('请先选取一张气泡底图');
+                    return;
+                }
 
+                const finalStyles = generateBubbleStyles();
                 const bubbleData = {
                     id: state.id,
-                    name: finalName,
-                    author: state.author.trim() || '玩家自制',
-                    type: 'nine_slice',
-                    userStyle: finalUserCss,
-                    npcStyle: finalNpcCss,
-                    diyConfig: {
-                        user: { ...state.user },
-                        npc: { ...state.npc }
+                    name: (state.name || '我的插画气泡').trim(),
+                    author: (state.author || '玩家自制').trim(),
+                    type: state.renderMode,
+                    userStyle: finalStyles.user,
+                    npcStyle: finalStyles.npc,
+                    decorConfig: {
+                        imgUrl: state.imgUrl,
+                        crop: { ...state.crop },
+                        textColor: state.textColor,
+                        renderMode: state.renderMode
                     },
                     isBuiltin: false
                 };
@@ -833,7 +913,7 @@
             };
         }
 
-        renderDiyStage();
+        renderStage();
     };
 
     // ==========================================
@@ -855,7 +935,7 @@
                 type: b.type || 'css',
                 userStyle: b.userStyle || '',
                 npcStyle: b.npcStyle || '',
-                diyConfig: b.diyConfig || null
+                decorConfig: b.decorConfig || null
             }
         };
 
@@ -875,7 +955,7 @@
                     <span style="font-size:14px;font-weight:600;color:#222;">导出气泡配置</span>
                     <button onclick="document.getElementById('bubbleExportModal').remove()" style="border:none;background:none;font-size:16px;color:#999;cursor:pointer;">✕</button>
                 </div>
-                <div style="font-size:11px;color:#888;margin-bottom:10px;">你可以复制下方的 JSON 代码分享给朋友，或者下载为文件。</div>
+                <div style="font-size:11px;color:#888;margin-bottom:10px;">复制 JSON 代码分享给朋友，或下载为文件。</div>
 
                 <textarea id="bubbleExportJsonArea" readonly style="width:100%;box-sizing:border-box;min-height:120px;max-height:180px;padding:8px;border-radius:6px;border:1px solid #ddd;font-size:10.5px;font-family:monospace;resize:none;background:#f9f9f9;margin-bottom:12px;">${escapeHtml(jsonStr)}</textarea>
 
@@ -917,7 +997,7 @@
                 };
                 reader.readAsDataURL(blob);
             } catch (_) {
-                if (typeof showToast === 'function') showToast('下载失败，请直接复制上方文本');
+                if (typeof showToast === 'function') showToast('下载失败，请直接复制文本');
             }
         };
     };
@@ -940,7 +1020,7 @@
                     <span style="font-size:14px;font-weight:600;color:#222;">导入气泡配置</span>
                     <button onclick="document.getElementById('bubbleImportModal').remove()" style="border:none;background:none;font-size:16px;color:#999;cursor:pointer;">✕</button>
                 </div>
-                <div style="font-size:11px;color:#888;margin-bottom:10px;">粘贴创作者分享的 JSON 文本或者选取 .json 文件导入。</div>
+                <div style="font-size:11px;color:#888;margin-bottom:10px;">粘贴创作者分享的 JSON 文本或选取 .json 文件。</div>
 
                 <textarea id="bubbleImportJsonArea" placeholder="在此粘贴气泡 JSON 数据..." style="width:100%;box-sizing:border-box;min-height:120px;max-height:180px;padding:8px;border-radius:6px;border:1px solid #ddd;font-size:10.5px;font-family:monospace;resize:none;margin-bottom:10px;outline:none;"></textarea>
 
@@ -979,7 +1059,7 @@
                 const parsed = JSON.parse(raw);
                 const bubbleObj = parsed.bubble || parsed;
 
-                if (!bubbleObj.name || (!bubbleObj.userStyle && !bubbleObj.npcStyle && !bubbleObj.diyConfig)) {
+                if (!bubbleObj.name || (!bubbleObj.userStyle && !bubbleObj.npcStyle && !bubbleObj.decorConfig)) {
                     throw new Error('格式不符合气泡协议');
                 }
 
@@ -988,10 +1068,10 @@
                     id: newId,
                     name: bubbleObj.name || '导入的气泡',
                     author: bubbleObj.author || '分享者',
-                    type: bubbleObj.type || (bubbleObj.diyConfig ? 'nine_slice' : 'css'),
+                    type: bubbleObj.type || (bubbleObj.decorConfig ? bubbleObj.decorConfig.renderMode : 'css'),
                     userStyle: bubbleObj.userStyle || '',
                     npcStyle: bubbleObj.npcStyle || '',
-                    diyConfig: bubbleObj.diyConfig || null,
+                    decorConfig: bubbleObj.decorConfig || null,
                     isBuiltin: false
                 };
 
