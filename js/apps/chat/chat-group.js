@@ -1,6 +1,6 @@
 /**
  * js/apps/chat/chat-group.js
- * 💬 微信多人群聊独立模块（仿QQ上下分层工具栏 · 具体角色输入提示 · 多角色2~5条交错发言 · 群斗图与配图 · 朋友圈轻量NPC生态协同）
+ * 💬 微信多人群聊独立模块（仿QQ上下分层工具栏 · 角色专属装扮继承 · 多角色2~5条交错发言 · 群斗图与配图 · 朋友圈轻量NPC生态协同）
  * 🌟 存储架构升级（Phase 1 & 2）：
  * 1. 群聊历史对白（mcyt_wechat_group_histories）全面接入 IndexedDB！
  * 2. 群基础信息字典（mcyt_wechat_group_chats）全面接入 IndexedDB！
@@ -13,7 +13,95 @@
     const GROUPS_STORAGE_KEY = 'mcyt_wechat_group_chats';
     const GROUP_HISTORY_STORAGE_KEY = 'mcyt_wechat_group_histories';
 
-    // 🛡️ 辅助：localforage 统一获取器
+    function getShapeBorderRadius(shape) {
+        if (shape === 'circle') return '50%';
+        if (shape === 'squircle') return '8px';
+        if (shape === 'square') return '2px';
+        return '8px';
+    }
+
+    function getGroupMemberDecor(senderId, isSelf) {
+        const globalShape = localStorage.getItem('mcyt_active_avatar_shape') || 'circle';
+        const globalBubbleId = localStorage.getItem('mcyt_active_decor_bubble') || 'bubble_default';
+        const globalFrameId = localStorage.getItem('mcyt_active_decor_frame') || 'frame_none';
+
+        if (isSelf) {
+            return {
+                shape: globalShape,
+                bubbleId: globalBubbleId,
+                frameId: globalFrameId
+            };
+        }
+
+        const npc = (window.G && window.G.npcs && senderId) ? window.G.npcs[senderId] : null;
+        const decor = (npc && npc.chatSettings && npc.chatSettings.decor) || {};
+
+        return {
+            shape: decor.avatarShape || globalShape,
+            bubbleId: decor.bubbleId || globalBubbleId,
+            frameId: decor.frameId !== undefined && decor.frameId !== null ? decor.frameId : globalFrameId
+        };
+    }
+
+    function getBubbleCssByDecor(bubbleId, isSelf) {
+        let bubbles = [];
+        try {
+            const DEFAULT_BUBBLES = [
+                {
+                    id: 'bubble_default',
+                    userStyle: 'background-color: #95ec69; color: #000000; border-radius: 6px;',
+                    npcStyle: 'background-color: #ffffff; color: #000000; border-radius: 6px; border: 1px solid #e7e7e7;'
+                },
+                {
+                    id: 'bubble_cyber_dark',
+                    userStyle: 'background: linear-gradient(135deg, #00c6ff, #0072ff); color: #ffffff; border-radius: 14px 4px 14px 14px; box-shadow: 0 2px 8px rgba(0, 114, 255, 0.3);',
+                    npcStyle: 'background: #181924; color: #00e5ff; border: 1px solid #00e5ff; border-radius: 4px 14px 14px 14px; box-shadow: 0 2px 8px rgba(0, 229, 255, 0.2);'
+                },
+                {
+                    id: 'bubble_retro_terminal',
+                    userStyle: 'background: #022b1c; color: #00ff66; border: 1px solid #00ff66; border-radius: 4px; font-family: monospace;',
+                    npcStyle: 'background: #0b1311; color: #4af626; border: 1px solid #235937; border-radius: 4px; font-family: monospace;'
+                }
+            ];
+            const stored = JSON.parse(localStorage.getItem('mcyt_decor_bubbles') || '[]');
+            bubbles = [...DEFAULT_BUBBLES, ...stored];
+        } catch (_) {}
+
+        const b = bubbles.find(x => x.id === bubbleId) || bubbles[0];
+        if (!b) return isSelf ? 'background-color: #95ec69; color: #000;' : 'background-color: #ffffff; color: #000;';
+
+        if (b.type === 'nine_slice') {
+            const imgUrl = isSelf ? (b.userBorderImage || b.borderImage) : (b.npcBorderImage || b.borderImage);
+            const slice = b.slice || '12 12 12 12';
+            const padding = b.padding || '8px 12px';
+            return `border-style: solid; border-width: 10px; border-image: url('${imgUrl}') ${slice} fill stretch; padding: ${padding}; background: transparent; color: ${isSelf ? '#111' : '#222'};`;
+        } else {
+            return isSelf ? (b.userStyle || 'background-color: #95ec69; color: #000;') : (b.npcStyle || 'background-color: #ffffff; color: #000;');
+        }
+    }
+
+    function renderGroupMemberAvatarHtml(avatarUrl, shape, frameId, size = 38) {
+        let framesList = [];
+        try { framesList = JSON.parse(localStorage.getItem('mcyt_decor_frames') || '[]'); } catch (_) {}
+        const DEFAULT_FRAMES = [
+            { id: 'frame_none', url: '' },
+            { id: 'frame_gold_star', url: 'assets/decor/frames/frame_gold.png' },
+            { id: 'frame_cat_ear', url: 'assets/decor/frames/frame_cat.png' }
+        ];
+        framesList = [...DEFAULT_FRAMES, ...framesList];
+
+        const targetFrame = framesList.find(f => f.id === frameId);
+        const frameUrl = (targetFrame && targetFrame.url) ? targetFrame.url : '';
+        const rad = getShapeBorderRadius(shape);
+
+        return `
+            <div style="position:relative;width:${size}px;height:${size}px;flex-shrink:0;">
+                <img src="${avatarUrl || 'assets/icons/chat.png'}" style="width:100%;height:100%;object-fit:cover;border-radius:${rad};display:block;" onerror="this.src='assets/icons/chat.png';" />
+                ${frameUrl ? `<img src="${frameUrl}" style="position:absolute;top:-10%;left:-10%;width:120%;height:120%;pointer-events:none;" onerror="this.style.display='none';" />` : ''}
+            </div>
+        `;
+    }
+
     function getStorageDriver() {
         if (typeof window.localforage !== 'undefined') {
             return window.localforage;
@@ -21,7 +109,6 @@
         return null;
     }
 
-    // 🛡️ 群聊冷启动自动恢复（群列表与群历史双轨无损迁移至 IndexedDB）
     async function restoreGroupsFromStorage() {
         if (!window.G) window.G = {};
         if (!window.G.groups) window.G.groups = {};
@@ -29,7 +116,6 @@
 
         const storage = getStorageDriver();
 
-        // 1. 群列表基础字典：优先 IndexedDB，无感迁移旧版 localStorage
         let loadedGroups = null;
         if (storage) {
             try {
@@ -57,7 +143,6 @@
             window.G.groups = Object.assign({}, loadedGroups, window.G.groups);
         }
 
-        // 2. 群历史记录：优先 IndexedDB，无感迁移旧版 localStorage
         let loadedHist = null;
         if (storage) {
             try {
@@ -85,21 +170,17 @@
             for (const gid in loadedHist) {
                 const storedList = loadedHist[gid];
                 if (!Array.isArray(storedList)) continue;
-                
-                // 🌟 纯净装载：就地赋给运行态，保持绝对权威
                 window.G.groupChatHistory[gid] = storedList;
             }
         }
     }
     window.restoreGroupsFromStorage = restoreGroupsFromStorage;
 
-    // 💾 群聊双轨持久化备份（群基础字典与群历史全面接入 IndexedDB 异步原子落盘）
     window.syncGroupChatsToLocalBackup = async function() {
         try {
             if (!window.G) return;
             const storage = getStorageDriver();
 
-            // 1. 群基础字典落盘至 IndexedDB（兜底兼容 localStorage）
             if (window.G.groups && typeof window.G.groups === 'object') {
                 if (storage) {
                     await storage.setItem(GROUPS_STORAGE_KEY, window.G.groups);
@@ -108,7 +189,6 @@
                 }
             }
 
-            // 2. 群历史对白落盘至 IndexedDB（兜底兼容 localStorage）
             if (window.G.groupChatHistory && typeof window.G.groupChatHistory === 'object') {
                 if (storage) {
                     await storage.setItem(GROUP_HISTORY_STORAGE_KEY, window.G.groupChatHistory);
@@ -121,10 +201,8 @@
         }
     };
 
-    // 初始化静默自恢复
     restoreGroupsFromStorage().catch(err => console.warn('初始化群聊恢复异常:', err));
 
-    // 🔍 辅助：安全打开大图/假图片查看器
     window.openGroupImageViewerSafe = function(imgSrc, textDesc) {
         if (typeof window.openChatImageViewer === 'function') {
             window.openChatImageViewer(imgSrc || '', textDesc || '');
@@ -194,24 +272,29 @@
         for (const msg of history) {
             const isSelf = msg.from === 'player';
             let senderNpc = null;
-            let avatarObj = null;
+            let avatarUrl = '';
 
             if (isSelf) {
-                avatarObj = { isPlayer: true };
+                avatarUrl = (typeof getPlayerAvatar === 'function') ? getPlayerAvatar() : 'assets/icons/chat.png';
             } else {
                 if (msg.senderId && window.G.npcs && window.G.npcs[msg.senderId]) {
                     senderNpc = window.G.npcs[msg.senderId];
-                    avatarObj = senderNpc;
+                    avatarUrl = senderNpc.avatarUrl || senderNpc.avatar || 'assets/icons/chat.png';
                 } else if (msg.senderId && group.momentNpcs) {
                     const matchedMnpc = group.momentNpcs.find(m => m.id === msg.senderId || m.name === msg.senderName);
                     if (matchedMnpc) {
-                        avatarObj = { avatarUrl: matchedMnpc.avatar || matchedMnpc.avatarUrl, name: matchedMnpc.name };
+                        avatarUrl = matchedMnpc.avatar || matchedMnpc.avatarUrl || 'assets/icons/chat.png';
                     }
                 }
-                if (!avatarObj) {
-                    avatarObj = { avatarUrl: msg.senderAvatar || 'assets/icons/chat.png', name: msg.senderName || '群友' };
+                if (!avatarUrl) {
+                    avatarUrl = msg.senderAvatar || 'assets/icons/chat.png';
                 }
             }
+
+            // 🌟 读取角色专属装扮或全局装扮
+            const memberDecor = getGroupMemberDecor(msg.senderId, isSelf);
+            const memberAvatarHtml = renderGroupMemberAvatarHtml(avatarUrl, memberDecor.shape, memberDecor.frameId, 38);
+            const memberBubbleCss = getBubbleCssByDecor(memberDecor.bubbleId, isSelf);
 
             const senderName = isSelf ? '我' : (msg.senderName || senderNpc?.name || '群友');
             const title = (!isSelf && msg.senderId) ? groupTitles[msg.senderId] : (isSelf ? '群主' : '');
@@ -261,11 +344,11 @@
 
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
-                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
+                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${memberAvatarHtml}</div>` : ''}
                     <div style="max-width:68%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                         ${senderHeaderHtml}
                         ${quoteHtml}
-                        <div class="wechat-voice-bubble" onclick="window.toggleVoiceMessageDetailsDirect('${msg._id}')" style="width:${bubbleWidth}px;background:${isSelf ? '#95ec69' : '#ffffff'};color:${isSelf ? '#111' : '#222'};justify-content:${isSelf ? 'flex-end' : 'flex-start'};">
+                        <div class="wechat-voice-bubble" onclick="window.toggleVoiceMessageDetailsDirect('${msg._id}')" style="width:${bubbleWidth}px;${memberBubbleCss};justify-content:${isSelf ? 'flex-end' : 'flex-start'};box-sizing:border-box;">
                             ${!isSelf ? `
                                 <div class="wechat-voice-wave" style="color:#444;"><div class="wechat-voice-bar"></div><div class="wechat-voice-bar"></div><div class="wechat-voice-bar"></div></div>
                                 <span style="font-size:13px;font-weight:600;margin-left:4px;">${seconds}"</span>
@@ -280,14 +363,14 @@
                         </div>
                         <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
                     </div>
-                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
+                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${memberAvatarHtml}</div>` : ''}
                 </div>`;
             }
             else if (msg.imageUrl && (msg.type === 'image' || msg.text === '[图片]')) {
                 const safeImgUrl = escapeHtml(msg.imageUrl);
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
-                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
+                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${memberAvatarHtml}</div>` : ''}
                     <div style="max-width:68%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                         ${senderHeaderHtml}
                         ${quoteHtml}
@@ -297,7 +380,7 @@
                         </div>
                         <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
                     </div>
-                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
+                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${memberAvatarHtml}</div>` : ''}
                 </div>`;
             }
             else if (textImgDesc) {
@@ -305,7 +388,7 @@
                 const descAttr = safeDesc.replace(/'/g, "\\'");
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
-                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
+                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${memberAvatarHtml}</div>` : ''}
                     <div style="max-width:68%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                         ${senderHeaderHtml}
                         ${quoteHtml}
@@ -326,37 +409,37 @@
                         </div>
                         <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
                     </div>
-                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
+                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${memberAvatarHtml}</div>` : ''}
                 </div>`;
             }
             else if (msg.type === 'sticker' || msg.stickerUrl) {
                 const sUrl = msg.stickerUrl || 'assets/icons/chat.png';
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
-                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
+                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${memberAvatarHtml}</div>` : ''}
                     <div style="max-width:68%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                         ${senderHeaderHtml}
                         ${quoteHtml}
                         <img src="${escapeHtml(sUrl)}" alt="${escapeHtml(msg.stickerDesc || '表情')}" style="width:100px;height:100px;object-fit:contain;border-radius:6px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,0.05);">
                         <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
                     </div>
-                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
+                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${memberAvatarHtml}</div>` : ''}
                 </div>`;
             }
             else {
                 let text = isSelf ? escapeHtml(msg.text || '').replace(/\n/g, '<br>') : ((typeof renderContentWithThoughts === 'function') ? renderContentWithThoughts(msg.text || '') : escapeHtml(msg.text || ''));
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
-                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
+                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${memberAvatarHtml}</div>` : ''}
                     <div style="max-width:74%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                         ${senderHeaderHtml}
                         ${quoteHtml}
-                        <div class="chat-bubble ${isSelf ? 'self-bubble' : ''}" data-msgid="${msg._id || ''}" style="width:fit-content;max-width:100%;display:inline-block;background:${isSelf ? '#95ec69' : '#ffffff'};color:#111;padding:8px 12px;border-radius:5px;box-shadow:0 1px 2px rgba(0,0,0,0.05);font-size:14.5px;line-height:1.5;word-break:break-word;">
+                        <div class="chat-bubble ${isSelf ? 'self-bubble' : ''}" data-msgid="${msg._id || ''}" style="width:fit-content;max-width:100%;display:inline-block;padding:8px 12px;border-radius:5px;box-shadow:0 1px 2px rgba(0,0,0,0.05);font-size:14.5px;line-height:1.5;word-break:break-word;${memberBubbleCss};">
                             ${text}
                         </div>
                         <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
                     </div>
-                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge(avatarObj, 38)}</div>` : ''}
+                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${memberAvatarHtml}</div>` : ''}
                 </div>`;
             }
         }
@@ -538,9 +621,6 @@
         return randomGlobal ? randomGlobal.url : 'assets/icons/chat.png';
     }
 
-    /**
-     * 👥 群聊 AI 回复推进核心
-     */
     window.triggerGroupAIReply = async function(gid) {
         const group = window.G.groups && window.G.groups[gid];
         if (!group) return;
@@ -776,9 +856,6 @@
         }
     };
 
-    /**
-     * 🔄 群聊专属：重说上一轮发言
-     */
     window.regenerateLastGroupAIReply = async function(gid) {
         if (!gid) gid = window.G.currentChatGroup;
         if (!gid) return;
@@ -883,5 +960,5 @@
         window.renderChatApp();
     };
 
-    console.log('✅ ChatGroup 多人群聊独立模块已成功升级（群基础字典与群历史 IndexedDB 驱动）');
+    console.log('✅ ChatGroup 多人群聊独立模块已成功升级（群基础字典与群历史 IndexedDB 驱动，装扮与气泡已全面挂载）');
 })();

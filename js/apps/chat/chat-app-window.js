@@ -1,6 +1,6 @@
 /**
  * js/apps/chat/chat-app-window.js
- * 💬 微信主应用 · 拆分分片 3/7：单人私聊窗口渲染（renderSingleChatWindow，仿群聊双层工具栏 · 顶栏闪电继续说 · 输入栏纯图标重说键 · 消息折叠 · 防卡顿优化）、
+ * 💬 微信主应用 · 拆分分片 3/7：单人私聊窗口渲染（renderSingleChatWindow，仿群聊双层工具栏 · 顶栏闪电继续说 · 输入栏纯图标重说键 · 消息折叠 · 装扮与气泡/头像框自适应渲染）、
  *    微信内嵌全屏浏览器浮层（window.openWebPageLink）、
  *    重新生成回复的确认与执行（confirmRetryLastAIReply / doRetryLastAIReply）、
  *    🌟 微信原生直显大图与沉浸式大图文字查看器对接、拟真生活排版卡片（ui_card）渲染。
@@ -9,6 +9,63 @@
 
 (function() {
     'use strict';
+
+    // 辅助：获取形状圆角
+    function getShapeBorderRadius(shape) {
+        if (shape === 'circle') return '50%';
+        if (shape === 'squircle') return '8px';
+        if (shape === 'square') return '2px';
+        return '8px';
+    }
+
+    // 辅助：获取气泡样式字符串
+    function getDecorBubbleCss(bubbleId, isSelf) {
+        let bubbles = [];
+        try {
+            const DEFAULT_BUBBLES = [
+                {
+                    id: 'bubble_default',
+                    userStyle: 'background-color: #95ec69; color: #000000; border-radius: 6px;',
+                    npcStyle: 'background-color: #ffffff; color: #000000; border-radius: 6px; border: 1px solid #e7e7e7;'
+                },
+                {
+                    id: 'bubble_cyber_dark',
+                    userStyle: 'background: linear-gradient(135deg, #00c6ff, #0072ff); color: #ffffff; border-radius: 14px 4px 14px 14px; box-shadow: 0 2px 8px rgba(0, 114, 255, 0.3);',
+                    npcStyle: 'background: #181924; color: #00e5ff; border: 1px solid #00e5ff; border-radius: 4px 14px 14px 14px; box-shadow: 0 2px 8px rgba(0, 229, 255, 0.2);'
+                },
+                {
+                    id: 'bubble_retro_terminal',
+                    userStyle: 'background: #022b1c; color: #00ff66; border: 1px solid #00ff66; border-radius: 4px; font-family: monospace;',
+                    npcStyle: 'background: #0b1311; color: #4af626; border: 1px solid #235937; border-radius: 4px; font-family: monospace;'
+                }
+            ];
+            const stored = JSON.parse(localStorage.getItem('mcyt_decor_bubbles') || '[]');
+            bubbles = [...DEFAULT_BUBBLES, ...stored];
+        } catch (_) {}
+
+        const b = bubbles.find(x => x.id === bubbleId) || bubbles[0];
+        if (!b) return isSelf ? 'background-color: #95ec69; color: #000;' : 'background-color: #ffffff; color: #000;';
+
+        if (b.type === 'nine_slice') {
+            const imgUrl = isSelf ? (b.userBorderImage || b.borderImage) : (b.npcBorderImage || b.borderImage);
+            const slice = b.slice || '12 12 12 12';
+            const padding = b.padding || '8px 12px';
+            return `border-style: solid; border-width: 10px; border-image: url('${imgUrl}') ${slice} fill stretch; padding: ${padding}; background: transparent; color: ${isSelf ? '#111' : '#222'};`;
+        } else {
+            return isSelf ? (b.userStyle || 'background-color: #95ec69; color: #000;') : (b.npcStyle || 'background-color: #ffffff; color: #000;');
+        }
+    }
+
+    // 辅助：渲染带装扮与头像框的头像元素
+    function renderDecorAvatarHtml(avatarUrl, shape, frameUrl, size = 38) {
+        const rad = getShapeBorderRadius(shape);
+        return `
+            <div style="position:relative;width:${size}px;height:${size}px;flex-shrink:0;">
+                <img src="${avatarUrl || 'assets/icons/chat.png'}" style="width:100%;height:100%;object-fit:cover;border-radius:${rad};display:block;" onerror="this.src='assets/icons/chat.png';" />
+                ${frameUrl ? `<img src="${frameUrl}" style="position:absolute;top:-10%;left:-10%;width:120%;height:120%;pointer-events:none;" onerror="this.style.display='none';" />` : ''}
+            </div>
+        `;
+    }
 
     // 🌐 微信原生质感内嵌网页安全浏览器浮层（In-App Browser）
     window.openWebPageLink = function(url, pageTitle = '网页浏览') {
@@ -34,13 +91,7 @@
                     from { transform: translateY(100%); }
                     to { transform: translateY(0); }
                 }
-                @keyframes browserProgressAnim {
-                    0% { width: 0%; }
-                    50% { width: 70%; }
-                    100% { width: 100%; opacity: 0; }
-                }
             </style>
-            <!-- 浏览器白灰微绿顶栏 -->
             <div style="height: 48px; background: #f7f7f7; border-bottom: 0.5px solid #dcdcdc; display: flex; align-items: center; justify-content: space-between; padding: 0 12px; flex-shrink: 0; user-select: none;">
                 <div style="display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1;">
                     <button type="button" id="closeWechatBrowserBtn" style="border: none; background: none; font-size: 18px; color: #181818; cursor: pointer; padding: 4px 8px; display: flex; align-items: center; justify-content: center; line-height: 1;">✕</button>
@@ -59,10 +110,8 @@
                 </div>
             </div>
 
-            <!-- 加载微绿进度条 -->
             <div id="browserProgressBar" style="height: 2px; width: 0%; background: #07c160; transition: width 0.3s ease; flex-shrink: 0;"></div>
 
-            <!-- 网页容器 -->
             <div style="flex: 1; position: relative; width: 100%; height: 100%; overflow: hidden; background: #f2f2f2;">
                 <iframe id="wechatBrowserIframe" src="${escapeHtml(url)}" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" style="width: 100%; height: 100%; border: none; background: #ffffff;"></iframe>
                 
@@ -127,7 +176,7 @@
     };
 
     // ============================================================
-    // 💬 单人私聊窗口渲染（仿群聊双层工具栏 · 顶栏闪电继续说 · 纯图标重说键 · 消息折叠）
+    // 💬 单人私聊窗口渲染（仿群聊双层工具栏 · 顶栏闪电继续说 · 纯图标重说键 · 消息折叠 · 装扮系统挂载）
     // ============================================================
     window.renderSingleChatWindow = function renderSingleChatWindow(container, renderOpts = {}) {
         if (!container) container = document.getElementById('appModalBody') || document.getElementById('socialTab');
@@ -154,6 +203,37 @@
         const isGenerating = !!(window._MCYT_CHAT_GENERATING && window._MCYT_CHAT_GENERATING[npcId]);
 
         const topHeaderTitle = (npc.remark && npc.remark.trim()) ? `${npc.remark.trim()} (${npc.name})` : (npc.name || npc.id);
+
+        // 🌟 读取装扮配置（NPC专属装扮优先，平滑回退到全局装扮）
+        const globalShape = localStorage.getItem('mcyt_active_avatar_shape') || 'circle';
+        const globalBubbleId = localStorage.getItem('mcyt_active_decor_bubble') || 'bubble_default';
+        const globalFrameId = localStorage.getItem('mcyt_active_decor_frame') || 'frame_none';
+
+        const decor = (npc.chatSettings && npc.chatSettings.decor) || {};
+        const npcShape = decor.avatarShape || globalShape;
+        const npcBubbleId = decor.bubbleId || globalBubbleId;
+        const userBubbleId = globalBubbleId; // 我方默认使用全局气泡
+
+        // 计算头像框 URL
+        let framesList = [];
+        try { framesList = JSON.parse(localStorage.getItem('mcyt_decor_frames') || '[]'); } catch (_) {}
+        const DEFAULT_FRAMES = [
+            { id: 'frame_none', url: '' },
+            { id: 'frame_gold_star', url: 'assets/decor/frames/frame_gold.png' },
+            { id: 'frame_cat_ear', url: 'assets/decor/frames/frame_cat.png' }
+        ];
+        framesList = [...DEFAULT_FRAMES, ...framesList];
+
+        const targetFrameId = decor.frameId !== undefined && decor.frameId !== null ? decor.frameId : globalFrameId;
+        const targetFrameObj = framesList.find(f => f.id === targetFrameId);
+        const npcFrameUrl = (targetFrameObj && targetFrameObj.url) ? targetFrameObj.url : '';
+
+        // 我方全局头像框
+        const userFrameObj = framesList.find(f => f.id === globalFrameId);
+        const userFrameUrl = (userFrameObj && userFrameObj.url) ? userFrameObj.url : '';
+
+        const npcAvatarUrl = npc.avatarUrl || npc.avatar || 'assets/icons/chat.png';
+        const userAvatarUrl = (typeof getPlayerAvatar === 'function') ? getPlayerAvatar() : 'assets/icons/chat.png';
 
         const collapseCfg = (typeof getChatCollapseConfig === 'function') ? getChatCollapseConfig() : { enabled: true, limit: 50 };
         const chatKey = `single_${npcId}_${curAcc.id}`;
@@ -190,6 +270,16 @@
         for (const msg of visibleMessages) {
             const isSelf = (msg.from === 'player');
 
+            // 头像与装扮挂载
+            const currentAvatarHtml = isSelf
+                ? renderDecorAvatarHtml(userAvatarUrl, globalShape, userFrameUrl, 38)
+                : renderDecorAvatarHtml(npcAvatarUrl, npcShape, npcFrameUrl, 38);
+
+            // 气泡 CSS 挂载
+            const currentBubbleCss = isSelf
+                ? getDecorBubbleCss(userBubbleId, true)
+                : getDecorBubbleCss(npcBubbleId, false);
+
             let quoteHtml = '';
             if (msg.quote) {
                 quoteHtml = `
@@ -218,19 +308,19 @@
 
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
-                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(npc, 38)}</div>` : ''}
+                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${currentAvatarHtml}</div>` : ''}
                     <div style="max-width:76%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                         ${quoteHtml}
                         ${tarotCardHtml}
                         <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
                     </div>
-                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
+                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${currentAvatarHtml}</div>` : ''}
                 </div>`;
             } else if (msg.type === 'ui_card') {
                 const cardTypeLabel = msg.cardType || '生活便签';
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
-                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(npc, 38)}</div>` : ''}
+                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${currentAvatarHtml}</div>` : ''}
                     <div style="max-width:78%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                         ${quoteHtml}
                         <div class="wechat-ui-card-container" style="background:#ffffff;border:0.5px solid #e0e0e0;border-radius:8px;padding:12px 14px;box-shadow:0 2px 8px rgba(0,0,0,0.06);width:fit-content;max-width:270px;box-sizing:border-box;cursor:pointer;">
@@ -247,7 +337,7 @@
                         </div>
                         <div style="font-size:10px;color:#bbb;margin-top:3px;">${msg.time || ''}</div>
                     </div>
-                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
+                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${currentAvatarHtml}</div>` : ''}
                 </div>`;
             } else if (msg.type === 'web_page') {
                 const wp = msg.webPage || {};
@@ -258,7 +348,7 @@
 
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
-                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(npc, 38)}</div>` : ''}
+                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${currentAvatarHtml}</div>` : ''}
                     <div style="max-width:76%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                         ${quoteHtml}
                         <div class="wechat-web-card" onclick="window.openWebPageLink('${escapeHtml(pageUrl)}', '${escapeHtml(pageTitle)}')" style="background:#ffffff;border:0.5px solid #e2e8f0;border-radius:8px;padding:10px 12px;box-shadow:0 1px 4px rgba(0,0,0,0.06);cursor:pointer;width:240px;box-sizing:border-box;">
@@ -279,14 +369,14 @@
                         </div>
                         <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
                     </div>
-                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
+                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${currentAvatarHtml}</div>` : ''}
                 </div>`;
             } else if (msg.type === 'contact_card') {
                 const card = msg.contactCard || {};
                 const sigShow = card.signature ? `<div style="font-size:11px;color:#07c160;margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">“${escapeHtml(card.signature)}”</div>` : '';
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
-                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(npc, 38)}</div>` : ''}
+                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${currentAvatarHtml}</div>` : ''}
                     <div style="max-width:74%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                         ${quoteHtml}
                         <div class="wechat-contact-card" onclick="if(typeof window.openContactCardDetailModal==='function')window.openContactCardDetailModal('${escapeHtml(card.id || '')}', '${escapeHtml(card.name || '')}', '${escapeHtml(card.persona || '')}', '${escapeHtml(card.avatar || '')}', '${escapeHtml(card.signature || '')}')">
@@ -304,13 +394,13 @@
                         </div>
                         <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
                     </div>
-                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
+                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${currentAvatarHtml}</div>` : ''}
                 </div>`;
             } else if (msg.type === 'shared_moment') {
                 const moment = msg.sharedMoment || {};
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
-                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(npc, 38)}</div>` : ''}
+                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${currentAvatarHtml}</div>` : ''}
                     <div style="max-width:74%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                         ${quoteHtml}
                         <div class="wechat-share-moment-card" onclick="window.openMomentArtCardPreview(${moment.id})">
@@ -331,7 +421,7 @@
                         </div>
                         <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
                     </div>
-                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
+                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${currentAvatarHtml}</div>` : ''}
                 </div>`;
             } else if (msg.from === 'behind_screen') {
                 messagesHtml += `
@@ -344,10 +434,10 @@
 
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
-                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(npc, 38)}</div>` : ''}
+                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${currentAvatarHtml}</div>` : ''}
                     <div style="max-width:74%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                         ${quoteHtml}
-                        <div class="wechat-voice-bubble" onclick="window.toggleVoiceMessageDetailsDirect('${msg._id}')" style="width:${bubbleWidth}px;background:${isSelf ? '#95ec69' : '#ffffff'};color:${isSelf ? '#111' : '#222'};justify-content:${isSelf ? 'flex-end' : 'flex-start'};">
+                        <div class="wechat-voice-bubble" onclick="window.toggleVoiceMessageDetailsDirect('${msg._id}')" style="width:${bubbleWidth}px;${currentBubbleCss};justify-content:${isSelf ? 'flex-end' : 'flex-start'};box-sizing:border-box;">
                             ${!isSelf ? `
                                 <div class="wechat-voice-wave" style="color:#444;">
                                     <div class="wechat-voice-bar"></div><div class="wechat-voice-bar"></div><div class="wechat-voice-bar"></div>
@@ -368,7 +458,7 @@
 
                         <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
                     </div>
-                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
+                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${currentAvatarHtml}</div>` : ''}
                 </div>`;
             } else if (msg.type === 'image' || msg.type === 'image_flip' || msg.type === 'image_text_only' || msg.imageUrl || msg.imageDesc) {
                 const imageBubbleHtml = (typeof window.renderWechatPureImageBubbleHTML === 'function')
@@ -377,25 +467,25 @@
 
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
-                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(npc, 38)}</div>` : ''}
+                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${currentAvatarHtml}</div>` : ''}
                     <div style="max-width:72%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                         ${quoteHtml}
                         ${imageBubbleHtml}
                         <div style="font-size:10px;color:#bbb;margin-top:3px;">${msg.time || ''}</div>
                     </div>
-                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
+                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${currentAvatarHtml}</div>` : ''}
                 </div>`;
             } else if (msg.type === 'sticker' || msg.stickerUrl) {
                 const sUrl = msg.stickerUrl || 'assets/icons/chat.png';
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
-                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(npc, 38)}</div>` : ''}
+                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${currentAvatarHtml}</div>` : ''}
                     <div style="max-width:56%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                         ${quoteHtml}
                         <img class="chat-bubble ${isSelf ? 'self-bubble' : ''}" data-msgid="${msg._id || ''}" src="${escapeHtml(sUrl)}" alt="${escapeHtml(msg.stickerDesc || '表情')}" style="width:100px;height:100px;object-fit:contain;border-radius:6px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,0.05);cursor:pointer;">
                         <div style="font-size:10px;color:#bbb;margin-top:2px;">${msg.time || ''}</div>
                     </div>
-                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
+                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${currentAvatarHtml}</div>` : ''}
                 </div>`;
             } else {
                 const hasOriginal = !!msg.originalText;
@@ -404,10 +494,10 @@
 
                 messagesHtml += `
                 <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
-                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${window.renderAvatarBadge(npc, 38)}</div>` : ''}
+                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${currentAvatarHtml}</div>` : ''}
                     <div style="max-width:74%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
                         ${quoteHtml}
-                        <div class="chat-bubble ${isSelf ? 'self-bubble' : ''}" data-msgid="${msg._id || ''}" style="width:fit-content;max-width:100%;display:inline-block;background:${isSelf ? '#95ec69' : '#ffffff'};color:#111;padding:8px 12px;border-radius:5px;box-shadow:0 1px 2px rgba(0,0,0,0.05);font-size:14.5px;line-height:1.5;word-break:break-word;cursor:pointer;">
+                        <div class="chat-bubble ${isSelf ? 'self-bubble' : ''}" data-msgid="${msg._id || ''}" style="width:fit-content;max-width:100%;display:inline-block;padding:8px 12px;box-shadow:0 1px 2px rgba(0,0,0,0.05);font-size:14.5px;line-height:1.5;word-break:break-word;cursor:pointer;${currentBubbleCss};">
                             <div>${bubbleBody}</div>
 
                             ${hasOriginal ? `
@@ -430,7 +520,7 @@
                             <span style="font-size:10px;color:#bbb;">${msg.time || ''}</span>
                         </div>
                     </div>
-                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${window.renderAvatarBadge({ isPlayer: true }, 38)}</div>` : ''}
+                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${currentAvatarHtml}</div>` : ''}
                 </div>`;
             }
         }
@@ -602,7 +692,7 @@
         if (typeof window.syncChatHistoryToLocalBackup === 'function') {
             await window.syncChatHistoryToLocalBackup();
         }
-        if (typeof window.autoSaveGame === 'function') autoSaveGame();
+        if (typeof autoSaveGame === 'function') autoSaveGame();
         renderSingleChatWindow();
 
         window.triggerAIReplyForSingle(npcId);
