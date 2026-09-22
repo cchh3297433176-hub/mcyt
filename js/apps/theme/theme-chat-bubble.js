@@ -154,11 +154,11 @@
         const offY = isSelf ? (b.userOffsetY || 0) : (b.npcOffsetY || 0);
         const origin = isSelf ? 'center right' : 'center left';
 
-        // 🌟 该气泡框的定位思路：初始宽高/位置严格按你在编辑器里设定的来（min-width/min-height 只作为起始下限），
-        //    换行、字数变多时，框会跟随文字自然行高与字符宽度按比例继续撑大——这正是浏览器文本排版的原生行为
-        //    （每多一行就精确增加一个 line-height 的高度，多一个字就精确增加对应字宽），不需要额外写死比例公式。
-        const minWStyle = (b.boxWidth && b.boxWidth > 30) ? `min-width: ${b.boxWidth}px;` : '';
-        const minHStyle = (b.boxHeight && b.boxHeight > 25) ? `min-height: ${b.boxHeight}px;` : '';
+        // 🌟 该气泡框的尺寸完全由内容决定：宽度按字符实际宽度撑开（到 max-width 才换行），
+        //    高度按行数 × 行高累加，纯粹的 CSS 原生排版比例，不再叠加人为的最小宽高下限——
+        //    这样短短几个字也能撑出一个窄气泡，不会被强制撑到你在编辑器里随手定的参考尺寸。
+        // （此前这里用 min-width/min-height 把 boxWidth/boxHeight 当"绝不缩水"的下限，
+        //   导致短消息的气泡宽度无论如何都缩不小，现予以移除）
 
         // 1. 画框气泡
         if (b && b.type === 'visual_box' && b.visualConfig) {
@@ -205,7 +205,7 @@
 
             return `
                 <div class="chat-bubble nine-slice-bubble ${isSelf ? 'self-bubble' : ''} ${customClass}" 
-                     style="position:relative;display:inline-flex;align-items:center;border-style:solid;border-width:${borderWidth}px;border-image:url('${imgUrl}') ${slice} fill stretch;-webkit-border-image:url('${imgUrl}') ${slice} fill stretch;padding:${padding};background:transparent;color:${textColor};width:fit-content;max-width:86%;${minWStyle}${minHStyle}box-sizing:border-box;word-break:break-word;font-size:${fontSize}px;${fontFamilyCss}line-height:1.45;transform:translate(${offX}px, ${offY}px) scale(${scale});transform-origin:${origin};">
+                     style="position:relative;display:inline-flex;align-items:center;border-style:solid;border-width:${borderWidth}px;border-image:url('${imgUrl}') ${slice} fill stretch;-webkit-border-image:url('${imgUrl}') ${slice} fill stretch;padding:${padding};background:transparent;color:${textColor};width:fit-content;max-width:86%;box-sizing:border-box;word-break:break-word;font-size:${fontSize}px;${fontFamilyCss}line-height:1.45;transform:translate(${offX}px, ${offY}px) scale(${scale});transform-origin:${origin};">
                     <div style="width:100%;text-align:${textAlign};">${textHtml}</div>
                 </div>
             `;
@@ -1016,6 +1016,24 @@
                                 <button type="button" class="btn-align-switch" data-align="right" style="padding:4px 10px;border-radius:5px;font-size:11px;cursor:pointer;border:1px solid ${state.textAlign === 'right' ? '#07c160' : '#ddd'};background:${state.textAlign === 'right' ? '#e8f7ed' : '#ffffff'};color:${state.textAlign === 'right' ? '#07c160' : '#555'};font-weight:${state.textAlign === 'right' ? '600' : 'normal'};">靠右</button>
                             </div>
                         </div>
+
+                        <!-- 🌟 内边距：文字与气泡边框之间的留白（首尾横向 / 上下纵向），此前完全没有入口，改在这里加上 -->
+                        <div style="display:flex;align-items:center;justify-content:space-between;border-top:1px dashed #e5e5e5;padding-top:8px;">
+                            <div style="display:flex;align-items:center;gap:6px;">
+                                <span style="font-size:12px;font-weight:600;color:#333;">首尾横向间距</span>
+                                <div style="display:flex;align-items:center;gap:2px;background:#ffffff;border:1px solid #dcdcdc;border-radius:5px;padding:2px 6px;">
+                                    <input type="number" id="step2PaddingHInput" value="${cfg.padding.h}" min="0" max="60" step="1" style="width:40px;border:none;outline:none;font-size:12px;font-weight:700;color:#07c160;text-align:center;background:transparent;">
+                                    <span style="font-size:11px;color:#888;">px</span>
+                                </div>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:6px;">
+                                <span style="font-size:12px;font-weight:600;color:#333;">上下纵向间距</span>
+                                <div style="display:flex;align-items:center;gap:2px;background:#ffffff;border:1px solid #dcdcdc;border-radius:5px;padding:2px 6px;">
+                                    <input type="number" id="step2PaddingVInput" value="${cfg.padding.v}" min="0" max="60" step="1" style="width:40px;border:none;outline:none;font-size:12px;font-weight:700;color:#07c160;text-align:center;background:transparent;">
+                                    <span style="font-size:11px;color:#888;">px</span>
+                                </div>
+                            </div>
+                        </div>
                     </div>
 
                     <div style="display:flex;gap:8px;">
@@ -1066,6 +1084,22 @@
                     renderStep2TextTransform();
                 });
             };
+
+            // 首尾横向 / 上下纵向内边距：直接改 state.user.padding，Step3 预览与最终保存都读的这个字段
+            const padHInput = modal.querySelector('#step2PaddingHInput');
+            const padVInput = modal.querySelector('#step2PaddingVInput');
+            if (padHInput) {
+                padHInput.oninput = padHInput.onchange = (e) => {
+                    const num = parseFloat(e.target.value);
+                    if (!isNaN(num) && num >= 0) cfg.padding.h = num;
+                };
+            }
+            if (padVInput) {
+                padVInput.oninput = padVInput.onchange = (e) => {
+                    const num = parseFloat(e.target.value);
+                    if (!isNaN(num) && num >= 0) cfg.padding.v = num;
+                };
+            }
 
             modal.querySelector('#btnStep2Prev').onclick = () => { state.step = 1; renderStage(); };
             modal.querySelector('#btnStep2Next').onclick = async () => {
