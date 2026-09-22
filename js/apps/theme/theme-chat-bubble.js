@@ -10,6 +10,7 @@
  *  5. 主题级正等边三角 HSV 动态色轮拾色修复，支持角色与我方文字双轨独立调色
  *  6. 导出支持 WebView Base64 DataURL 静默下载 JSON 配置文件
  *  7. 气泡功能支持直接粘贴图片/HTML/CSS链接极速保存
+ *  8. 补齐独立的 openBubbleFontModal 弹窗，操作栏全面升级为极简轻量 SVG 图标
  */
 
 (function () {
@@ -145,9 +146,6 @@
 
     /**
      * 全局气泡 HTML 核心渲染器
-     * 解决文字周围虚大空白与装饰角色太小问题：
-     * 1. 采用文字 8 点核心区域与自定义 Padding 进行排版换行
-     * 2. 忠实还原 scale 与 border-width 粗细
      */
     window.buildDecorBubbleHtml = function (textHtml, isSelf, bubbleId, customClass = '') {
         const bubbles = window.getStoredDecorBubbles();
@@ -196,7 +194,6 @@
             const borderWidth = isSelf ? (b.userBorderWidth || b.borderWidth || 14) : (b.npcBorderWidth || b.borderWidth || 14);
             const textColor = isSelf ? (b.userTextColor || b.textColor || '#111111') : (b.npcTextColor || b.textColor || '#222222');
 
-            // 依据第二阶段文字框宽度的换行约束
             const textWrapStyle = (b.textBoxWidth && b.textBoxWidth > 60) 
                 ? `max-width: ${Math.min(b.textBoxWidth + 40, 260)}px;` 
                 : 'max-width: 86%;';
@@ -252,13 +249,19 @@
     }
 
     /**
-     * 渲染气泡样式库独立列表（装扮中心入口）
+     * 渲染气泡样式库独立列表（全面改用极简轻量 SVG 图标，紧凑无多余空白）
      */
     window.renderChatBubbleSection = function (container) {
         if (!container) return;
 
         const activeBubbleId = localStorage.getItem('mcyt_active_decor_bubble') || 'bubble_default';
         const bubbles = window.getStoredDecorBubbles();
+
+        // 极简 SVG 图标模板
+        const editSvg = `<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:#576b95;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>`;
+        const fontSvg = `<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:#576b95;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" y1="20" x2="15" y2="20"/><line x1="12" y1="4" x2="12" y2="20"/></svg>`;
+        const exportSvg = `<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:#07c160;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`;
+        const deleteSvg = `<svg viewBox="0 0 24 24" style="width:14px;height:14px;stroke:#fa5151;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>`;
 
         container.innerHTML = `
             <div style="background:#ffffff;border-radius:12px;border:1px solid #eeeeee;padding:14px;">
@@ -269,7 +272,7 @@
                     </div>
                     <div style="display:flex;align-items:center;gap:12px;">
                         <button onclick="event.stopPropagation(); window.openBubbleActionMenu();" title="新建与导入气泡" style="width:26px;height:26px;border-radius:50%;border:none;background:#07c160;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;">
-                            <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2.5;stroke-linecap:round;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="12" y2="12"></line></svg>
+                            <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2.5;stroke-linecap:round;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                         </button>
                         <span id="decorBubblesCollapseArrow" style="font-size:11px;color:#888;user-select:none;transition:transform 0.2s ease;">▼</span>
                     </div>
@@ -282,30 +285,33 @@
                             const curScale = b.scale !== undefined ? b.scale : 1.0;
                             const curFont = b.fontSize || 14.5;
                             return `
-                                <div onclick="window.selectDecorBubble('${b.id}')" style="background:${isCur ? '#e8f7ed' : '#f9f9f9'};border:1px solid ${isCur ? '#07c160' : '#eee'};border-radius:8px;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
-                                    <div style="display:flex;flex-direction:column;gap:2px;max-width:58%;">
-                                        <div style="display:flex;align-items:center;gap:6px;">
-                                            <span style="font-size:12.5px;font-weight:600;color:#222;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(b.name)}</span>
-                                            <span style="font-size:9.5px;padding:1px 5px;border-radius:3px;background:${b.type === 'visual_box' ? '#e1f3d8' : (b.type === 'nine_slice' ? '#e8f4ff' : '#f0f0f0')};color:${b.type === 'visual_box' ? '#529b2e' : (b.type === 'nine_slice' ? '#2b73af' : '#666')};">
-                                                ${b.type === 'visual_box' ? '画框' : (b.type === 'nine_slice' ? '点九图' : 'CSS')}
+                                <div onclick="window.selectDecorBubble('${b.id}')" style="background:${isCur ? '#e8f7ed' : '#f9f9f9'};border:1px solid ${isCur ? '#07c160' : '#eee'};border-radius:8px;padding:8px 10px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;gap:6px;">
+                                    <div style="display:flex;flex-direction:column;gap:2px;flex:1;min-width:0;">
+                                        <div style="display:flex;align-items:center;gap:5px;">
+                                            <span style="font-size:12.5px;font-weight:600;color:#222;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:130px;">${escapeHtml(b.name)}</span>
+                                            <span style="font-size:9.5px;padding:1px 4px;border-radius:3px;background:${b.type === 'visual_box' ? '#e1f3d8' : (b.type === 'nine_slice' ? '#e8f4ff' : '#f0f0f0')};color:${b.type === 'visual_box' ? '#529b2e' : (b.type === 'nine_slice' ? '#2b73af' : '#666')};flex-shrink:0;">
+                                                ${b.type === 'visual_box' ? '画框' : (b.type === 'nine_slice' ? '点九' : 'CSS')}
                                             </span>
-                                            ${b.mirrorNpcFromUser ? `<span style="font-size:9px;padding:1px 4px;border-radius:2px;background:#fdf6ec;color:#e6a23c;">镜像</span>` : ''}
+                                            ${b.mirrorNpcFromUser ? `<span style="font-size:9px;padding:1px 3px;border-radius:2px;background:#fdf6ec;color:#e6a23c;flex-shrink:0;">镜像</span>` : ''}
                                         </div>
-                                        <span style="font-size:10px;color:#888;">缩放 ${Math.round(curScale * 100)}% · 字号 ${curFont}px ${b.author ? ('· ' + escapeHtml(b.author)) : ''}</span>
+                                        <span style="font-size:10px;color:#888;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">缩放${Math.round(curScale * 100)}% · ${curFont}px ${b.author ? ('· ' + escapeHtml(b.author)) : ''}</span>
                                     </div>
-                                    <div style="display:flex;align-items:center;gap:6px;">
+
+                                    <!-- 极简 SVG 紧凑图标操作组 -->
+                                    <div style="display:flex;align-items:center;gap:4px;flex-shrink:0;">
                                         ${b.type === 'visual_box' ? `
-                                            <button onclick="event.stopPropagation(); window.openVisualBoxDiyModal('${b.id}')" title="编辑气泡" style="background:none;border:none;color:#576b95;font-size:11px;cursor:pointer;padding:2px 4px;">编辑</button>
+                                            <button onclick="event.stopPropagation(); window.openVisualBoxDiyModal('${b.id}')" title="编辑气泡" style="background:#fff;border:1px solid #e0e0e0;border-radius:5px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;">${editSvg}</button>
                                         ` : ''}
                                         ${b.type === 'nine_slice' ? `
-                                            <button onclick="event.stopPropagation(); window.openNineSliceDiyModal('${b.id}')" title="编辑气泡" style="background:none;border:none;color:#576b95;font-size:11px;cursor:pointer;padding:2px 4px;">编辑</button>
+                                            <button onclick="event.stopPropagation(); window.openNineSliceDiyModal('${b.id}')" title="编辑气泡" style="background:#fff;border:1px solid #e0e0e0;border-radius:5px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;">${editSvg}</button>
                                         ` : ''}
-                                        <button onclick="event.stopPropagation(); window.openBubbleFontModal('${b.id}')" title="设置气泡文字与字体" style="background:none;border:none;color:#576b95;font-size:11px;cursor:pointer;padding:2px 4px;">字体</button>
-                                        <button onclick="event.stopPropagation(); window.exportSingleBubble('${b.id}')" title="导出气泡文件" style="background:none;border:none;color:#07c160;font-size:11px;cursor:pointer;padding:2px 4px;">导出</button>
+                                        <button onclick="event.stopPropagation(); window.openBubbleFontModal('${b.id}')" title="设置字体与文字" style="background:#fff;border:1px solid #e0e0e0;border-radius:5px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;">${fontSvg}</button>
+                                        <button onclick="event.stopPropagation(); window.exportSingleBubble('${b.id}')" title="导出气泡文件" style="background:#fff;border:1px solid #e0e0e0;border-radius:5px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;">${exportSvg}</button>
                                         ${!b.isBuiltin ? `
-                                            <button onclick="event.stopPropagation(); window.deleteDecorBubble('${b.id}')" title="删除气泡" style="background:none;border:none;color:#fa5151;font-size:11px;cursor:pointer;padding:2px 4px;">删除</button>
+                                            <button onclick="event.stopPropagation(); window.deleteDecorBubble('${b.id}')" title="删除气泡" style="background:#fff;border:1px solid #fcdcdc;border-radius:5px;width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;">${deleteSvg}</button>
                                         ` : ''}
-                                        <span style="font-size:11px;color:${isCur ? '#07c160' : '#999'};font-weight:${isCur ? '600' : 'normal'};min-width:36px;text-align:right;">
+                                        <div style="width:1px;height:14px;background:#ddd;margin:0 2px;"></div>
+                                        <span style="font-size:11px;color:${isCur ? '#07c160' : '#888'};font-weight:${isCur ? '600' : 'normal'};padding:0 2px;">
                                             ${isCur ? '使用中' : '选用'}
                                         </span>
                                     </div>
@@ -316,6 +322,90 @@
                 </div>
             </div>
         `;
+    };
+
+    /**
+     * 补齐：气泡字体与文字排版独立配置弹窗（消灭 Uncaught TypeError 报错）
+     */
+    window.openBubbleFontModal = function (bubbleId) {
+        const bubbles = window.getStoredDecorBubbles();
+        const b = bubbles.find(x => x.id === bubbleId);
+        if (!b) return;
+
+        let modal = document.getElementById('bubbleFontSettingModal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'bubbleFontSettingModal';
+            modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:100000;padding:20px;';
+            document.body.appendChild(modal);
+        }
+
+        const curFontFamily = b.fontFamily || '';
+        const curFontSize = b.fontSize || 14.5;
+        const curAlign = b.textAlign || 'left';
+
+        modal.innerHTML = `
+            <div style="background:#ffffff;border-radius:14px;width:100%;max-width:320px;padding:16px;box-shadow:0 8px 24px rgba(0,0,0,0.15);box-sizing:border-box;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                    <span style="font-size:14px;font-weight:600;color:#222;">气泡字体与排版</span>
+                    <button onclick="document.getElementById('bubbleFontSettingModal').remove()" style="background:none;border:none;color:#999;font-size:16px;cursor:pointer;">✕</button>
+                </div>
+
+                <div style="margin-bottom:10px;">
+                    <div style="font-size:11px;color:#777;margin-bottom:4px;">自定义字体 (Font-Family)</div>
+                    <input type="text" id="bubbleFontFamilyInput" value="${escapeHtml(curFontFamily)}" placeholder="如：PingFang SC, 'Microsoft YaHei', sans-serif" style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:6px;border:1px solid #ddd;font-size:12px;outline:none;">
+                </div>
+
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                    <span style="font-size:12px;color:#333;font-weight:600;">基准字号大小</span>
+                    <div style="display:flex;align-items:center;gap:4px;background:#f9f9f9;border:1px solid #ddd;border-radius:6px;padding:2px 6px;">
+                        <input type="number" id="bubbleFontSizeNum" value="${curFontSize}" min="9" max="36" step="0.5" style="width:44px;border:none;background:transparent;font-size:12px;font-weight:700;color:#07c160;text-align:center;outline:none;">
+                        <span style="font-size:11px;color:#888;">px</span>
+                    </div>
+                </div>
+
+                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+                    <span style="font-size:12px;color:#333;font-weight:600;">文本默认对齐</span>
+                    <div style="display:flex;gap:4px;">
+                        <button type="button" class="btn-font-align" data-align="left" style="padding:4px 8px;border-radius:5px;font-size:11px;cursor:pointer;border:1px solid ${curAlign === 'left' ? '#07c160' : '#ddd'};background:${curAlign === 'left' ? '#e8f7ed' : '#fff'};color:${curAlign === 'left' ? '#07c160' : '#333'};">靠左</button>
+                        <button type="button" class="btn-font-align" data-align="center" style="padding:4px 8px;border-radius:5px;font-size:11px;cursor:pointer;border:1px solid ${curAlign === 'center' ? '#07c160' : '#ddd'};background:${curAlign === 'center' ? '#e8f7ed' : '#fff'};color:${curAlign === 'center' ? '#07c160' : '#333'};">居中</button>
+                        <button type="button" class="btn-font-align" data-align="right" style="padding:4px 8px;border-radius:5px;font-size:11px;cursor:pointer;border:1px solid ${curAlign === 'right' ? '#07c160' : '#ddd'};background:${curAlign === 'right' ? '#e8f7ed' : '#fff'};color:${curAlign === 'right' ? '#07c160' : '#333'};">靠右</button>
+                    </div>
+                </div>
+
+                <div style="display:flex;gap:8px;">
+                    <button onclick="document.getElementById('bubbleFontSettingModal').remove()" style="flex:1;padding:8px;background:#f5f5f5;border:1px solid #ddd;border-radius:6px;font-size:12px;color:#555;cursor:pointer;">取消</button>
+                    <button id="btnSaveBubbleFont" style="flex:1.4;padding:8px;background:#07c160;border:none;border-radius:6px;font-size:12px;color:#fff;font-weight:600;cursor:pointer;">保存字体配置</button>
+                </div>
+            </div>
+        `;
+
+        let selectedAlign = curAlign;
+        modal.querySelectorAll('.btn-font-align').forEach(btn => {
+            btn.onclick = () => {
+                selectedAlign = btn.getAttribute('data-align');
+                modal.querySelectorAll('.btn-font-align').forEach(b => {
+                    const isTarget = (b.getAttribute('data-align') === selectedAlign);
+                    b.style.borderColor = isTarget ? '#07c160' : '#ddd';
+                    b.style.background = isTarget ? '#e8f7ed' : '#fff';
+                    b.style.color = isTarget ? '#07c160' : '#333';
+                });
+            };
+        });
+
+        modal.querySelector('#btnSaveBubbleFont').onclick = async () => {
+            const fontF = (modal.querySelector('#bubbleFontFamilyInput')?.value || '').trim();
+            const fontS = parseFloat(modal.querySelector('#bubbleFontSizeNum')?.value) || curFontSize;
+
+            b.fontFamily = fontF;
+            b.fontSize = fontS;
+            b.textAlign = selectedAlign;
+
+            await window.saveCustomBubbleAsync(b);
+            modal.remove();
+            refreshDecorView();
+            if (typeof showToast === 'function') showToast('字体设置已更新');
+        };
     };
 
     window.toggleDecorBubblesCollapse = function () {
@@ -442,7 +532,6 @@
             const newId = 'bubble_link_' + Date.now();
             let newBubble = null;
 
-            // 判断是否为图片链接
             if (/^https?:\/\/.*\.(png|jpg|jpeg|gif|webp)(\?.*)?$/i.test(content) || content.startsWith('data:image/')) {
                 newBubble = {
                     id: newId,
@@ -471,7 +560,6 @@
                     isBuiltin: false
                 };
             } else {
-                // 视为 CSS / 样式代码
                 newBubble = {
                     id: newId,
                     name: name,
@@ -741,7 +829,7 @@
     }
 
     /**
-     * 修复的 HSV 取色弹窗（支持触摸与点击三角形内部拾色）
+     * 修复的 HSV 取色弹窗
      */
     window.openWechatColorPickerModal = function (initialColor = '#111111', onSelectCallback) {
         let modal = document.getElementById('wechatColorPickerModal');
@@ -982,17 +1070,14 @@
             textAlign: bubbleObj?.textAlign || 'left',
             fontFamily: (bubbleObj && bubbleObj.fontFamily) ? bubbleObj.fontFamily : '',
 
-            // 第二阶段：文字在气泡内的相对偏移与选区尺寸（决定排版核心区）
             textOffsetX: bubbleObj?.textOffsetX || 0,
             textOffsetY: bubbleObj?.textOffsetY || 0,
             textBoxWidth: bubbleObj?.textBoxWidth || 160,
             textBoxHeight: bubbleObj?.textBoxHeight || 45,
 
-            // 第三阶段：两端气泡共通的尺寸
             boxWidth: bubbleObj?.boxWidth || 210,
             boxHeight: bubbleObj?.boxHeight || 65,
 
-            // 第三阶段：独立屏幕坐标偏移
             userOffsetX: bubbleObj?.userOffsetX || bubbleObj?.offsetX || 0,
             userOffsetY: bubbleObj?.userOffsetY || bubbleObj?.offsetY || 0,
             npcOffsetX: bubbleObj?.npcOffsetX || bubbleObj?.offsetX || 0,
@@ -1168,7 +1253,7 @@
                             </div>
                         </div>
 
-                        <!-- 边框粗细（解决小人看不清、边框太细问题）与缩放 -->
+                        <!-- 边框粗细与缩放 -->
                         <div style="display:flex;align-items:center;justify-content:space-between;border-top:1px dashed #e5e5e5;padding-top:8px;">
                             <div style="display:flex;align-items:center;gap:6px;">
                                 <span style="font-size:12px;font-weight:600;color:#333;">边框粗细</span>
@@ -1224,7 +1309,6 @@
 
             bindStep2Text8PointInteraction(modal, state);
 
-            // 字号
             const fsInput = modal.querySelector('#step2FontSizeInput');
             if (fsInput) {
                 fsInput.oninput = fsInput.onchange = (e) => {
@@ -1237,7 +1321,6 @@
                 };
             }
 
-            // 边框粗细
             const bwInput = modal.querySelector('#step2BorderWidthInput');
             if (bwInput) {
                 bwInput.oninput = bwInput.onchange = (e) => {
@@ -1249,7 +1332,6 @@
                 };
             }
 
-            // 缩放
             const scInput = modal.querySelector('#step2ScaleInput');
             if (scInput) {
                 scInput.oninput = scInput.onchange = (e) => {
@@ -1258,7 +1340,6 @@
                 };
             }
 
-            // 对齐
             modal.querySelectorAll('.btn-align-switch').forEach(btn => {
                 btn.onclick = () => {
                     const chosen = btn.getAttribute('data-align');
@@ -1276,7 +1357,6 @@
                 };
             });
 
-            // 用户颜色
             modal.querySelector('#btnStep2UserColorTrigger').onclick = () => {
                 window.openWechatColorPickerModal(state.user.textColor, (col) => {
                     state.user.textColor = col;
@@ -1284,7 +1364,6 @@
                 });
             };
 
-            // 角色颜色
             modal.querySelector('#btnStep2NpcColorTrigger').onclick = () => {
                 window.openWechatColorPickerModal(state.npc.textColor, (col) => {
                     state.npc.textColor = col;
@@ -1292,7 +1371,6 @@
                 });
             };
 
-            // 内边距
             const padHInput = modal.querySelector('#step2PaddingHInput');
             const padVInput = modal.querySelector('#step2PaddingVInput');
             if (padHInput) {
@@ -1322,7 +1400,7 @@
             };
         }
 
-        // 阶段 2 交互：文字 8 点手柄拉伸与自由拖动
+        // 阶段 2 交互
         function bindStep2Text8PointInteraction(modalRoot, st) {
             const box = modalRoot.querySelector('#step2TextBox8');
             const demoText = modalRoot.querySelector('#step2TextDemoSpan');
@@ -1484,17 +1562,14 @@
                     textAlign: state.textAlign || 'left',
                     fontFamily: state.fontFamily,
 
-                    // 持久化第二阶段文字 8 点安全区尺寸
                     textOffsetX: state.textOffsetX,
                     textOffsetY: state.textOffsetY,
                     textBoxWidth: state.textBoxWidth,
                     textBoxHeight: state.textBoxHeight,
 
-                    // 第三阶段尺寸
                     boxWidth: state.boxWidth,
                     boxHeight: state.boxHeight,
 
-                    // 屏幕坐标独立偏移
                     userOffsetX: state.userOffsetX,
                     userOffsetY: state.userOffsetY,
                     npcOffsetX: state.npcOffsetX,
@@ -1761,7 +1836,7 @@
     };
 
     /**
-     * 🌟 导出气泡 JSON 文件（直接下载为 .json，穿透 WebView）
+     * 🌟 导出气泡 JSON 文件（直接静默下载，穿透 WebView）
      */
     window.exportSingleBubble = function (bubbleId) {
         const bubbles = window.getStoredDecorBubbles();
@@ -1776,7 +1851,6 @@
         const jsonStr = JSON.stringify(exportPayload, null, 2);
 
         try {
-            // 使用 Base64 DataURL 穿透 Android 原生 WebView 直接静默保存
             const encodedData = encodeURIComponent(jsonStr);
             const dataUrl = `data:application/json;charset=utf-8,${encodedData}`;
             const a = document.createElement('a');
@@ -1786,9 +1860,9 @@
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-            if (typeof showToast === 'function') showToast('气泡配置文件下载中...');
+            if (typeof showToast === 'function') showToast('气泡配置文件已开始下载');
         } catch (err) {
-            console.error('[Bubble] 下载 JSON 文件失败，降级弹窗:', err);
+            console.error('[Bubble] 下载 JSON 文件失败，降级剪贴板:', err);
             if (navigator.clipboard) {
                 navigator.clipboard.writeText(jsonStr).then(() => {
                     if (typeof showToast === 'function') showToast('已将配置复制到剪贴板');
