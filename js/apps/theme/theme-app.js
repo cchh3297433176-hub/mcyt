@@ -1,9 +1,9 @@
 /**
  * js/apps/theme/theme-app.js
- * 🎀 个性化与主题中心 App（仿微信白灰微绿原生架构）
+ * 个性化与主题中心 App（仿微信白灰微绿原生架构）
  * 职责：主体色彩定制、状态栏三维解耦、HSV 色相盘调控、桌面组件排版、
  *       壁纸裁剪、字体库扩展、主题方案管理器、
- *       🌟 双页签架构调度：调度 [手机主题] 与 [聊天装扮 (theme-chat-decor.js)]
+ *       🌟 双页签架构调度：调度 [手机主题] 与 [聊天装扮 (theme-chat-decor.js / theme-chat-bubble.js)]
  */
 
 (function () {
@@ -138,28 +138,30 @@
         }
     }
 
-    // 主题中心主渲染函数（白灰微绿双Tab中枢）
+    // 主题中心主渲染函数（原生白灰极简架构，坚固吸顶）
     window.renderThemeApp = function (container) {
         if (!container) return;
 
         container.innerHTML = `
-            <div class="theme-app-shell" style="background:#f7f7f7;min-height:100%;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#222;">
-                <!-- 顶部微信原生双页签导航 -->
-                <div style="background:#ffffff;border-bottom:1px solid #eeeeee;display:flex;position:sticky;top:0;z-index:20;">
+            <div class="theme-app-shell" style="background:#f7f7f7;height:100%;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;color:#222;overflow:hidden;box-sizing:border-box;">
+                <!-- 顶部微信原生双页签导航（永久置顶，消除丑陋emoji，增加极简SVG） -->
+                <div style="background:#ffffff;border-bottom:1px solid #eeeeee;display:flex;flex-shrink:0;z-index:100;box-shadow:0 1px 4px rgba(0,0,0,0.03);">
                     <div id="themeTabSystem" onclick="window.switchThemeAppTab('system')" 
-                         style="flex:1;text-align:center;padding:12px 0;font-size:14px;font-weight:${activeThemeTab === 'system' ? '700' : '500'};color:${activeThemeTab === 'system' ? '#07c160' : '#666666'};cursor:pointer;position:relative;transition:all 0.2s;">
-                        📱 手机主题
+                         style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:12px 0;font-size:14px;font-weight:${activeThemeTab === 'system' ? '700' : '500'};color:${activeThemeTab === 'system' ? '#07c160' : '#666666'};cursor:pointer;position:relative;transition:all 0.2s;">
+                        <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:${activeThemeTab === 'system' ? '#07c160' : '#888'};stroke-width:2;"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"></rect><line x1="12" y1="18" x2="12.01" y2="18"></line></svg>
+                        <span>手机主题</span>
                         ${activeThemeTab === 'system' ? '<div style="position:absolute;bottom:0;left:25%;width:50%;height:3px;background:#07c160;border-radius:3px 3px 0 0;"></div>' : ''}
                     </div>
                     <div id="themeTabChatDecor" onclick="window.switchThemeAppTab('chat_decor')" 
-                         style="flex:1;text-align:center;padding:12px 0;font-size:14px;font-weight:${activeThemeTab === 'chat_decor' ? '700' : '500'};color:${activeThemeTab === 'chat_decor' ? '#07c160' : '#666666'};cursor:pointer;position:relative;transition:all 0.2s;">
-                        💬 聊天装扮
+                         style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:12px 0;font-size:14px;font-weight:${activeThemeTab === 'chat_decor' ? '700' : '500'};color:${activeThemeTab === 'chat_decor' ? '#07c160' : '#666666'};cursor:pointer;position:relative;transition:all 0.2s;">
+                        <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:${activeThemeTab === 'chat_decor' ? '#07c160' : '#888'};stroke-width:2;"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>
+                        <span>聊天装扮</span>
                         ${activeThemeTab === 'chat_decor' ? '<div style="position:absolute;bottom:0;left:25%;width:50%;height:3px;background:#07c160;border-radius:3px 3px 0 0;"></div>' : ''}
                     </div>
                 </div>
 
-                <!-- 容器主体 -->
-                <div id="themeAppSubContent" style="padding:12px;flex:1;display:flex;flex-direction:column;gap:12px;"></div>
+                <!-- 独立平滑滚动内容区（保证顶栏牢牢吸顶不遮挡舞台） -->
+                <div id="themeAppSubContent" style="padding:12px;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;gap:12px;"></div>
             </div>
         `;
 
@@ -188,7 +190,7 @@
         }
     };
 
-    // 渲染第一页：手机主体与桌面设置（纯白卡片，消除粉白精致土）
+    // 渲染第一页：手机主体与桌面设置
     function renderSystemThemeSubView(container) {
         if (!container) return;
 
@@ -388,7 +390,7 @@
                         <!-- 组件 A：日历 -->
                         <div style="background:#f9f9f9;padding:10px;border-radius:8px;border:1px solid #eee;">
                             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                                <span style="font-size:12.5px;font-weight:700;color:#222;">📅 极简日历</span>
+                                <span style="font-size:12.5px;font-weight:700;color:#222;">极简日历</span>
                                 <button style="padding:2px 8px;font-size:11px;border-radius:6px;border:1px solid #e0e0e0;background:#fff;${calEnabled ? 'color:#07c160;font-weight:bold;' : 'color:#999;'}" onclick="window.toggleWidgetEnabled('calendar')">
                                     ${calEnabled ? '● 已开启' : '○ 已关闭'}
                                 </button>
@@ -405,7 +407,7 @@
                         <!-- 组件 B：待办便签 -->
                         <div style="background:#f9f9f9;padding:10px;border-radius:8px;border:1px solid #eee;">
                             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                                <span style="font-size:12.5px;font-weight:700;color:#222;">📝 待办便签</span>
+                                <span style="font-size:12.5px;font-weight:700;color:#222;">待办便签</span>
                                 <button style="padding:2px 8px;font-size:11px;border-radius:6px;border:1px solid #e0e0e0;background:#fff;${todoEnabled ? 'color:#07c160;font-weight:bold;' : 'color:#999;'}" onclick="window.toggleWidgetEnabled('todo')">
                                     ${todoEnabled ? '● 已开启' : '○ 已关闭'}
                                 </button>
@@ -422,7 +424,7 @@
                         <!-- 桌面排版模式入口 -->
                         <div style="background:#f2f9f5;border:1px dashed #b2e2c8;border-radius:8px;padding:10px;margin-top:4px;">
                             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                                <span style="font-size:12px;font-weight:700;color:#1b5e20;">📐 桌面各层手拖排版模式</span>
+                                <span style="font-size:12px;font-weight:700;color:#1b5e20;">桌面各层手拖排版模式</span>
                             </div>
                             <div style="font-size:11px;color:#666;margin-bottom:8px;">
                                 当前偏移：<span style="font-family:monospace;color:#07c160;">${offsetSummary}</span>
@@ -500,7 +502,7 @@
         renderInstalledFontsList();
     }
 
-    // 🌸 触发桌面手拖排版模式
+    // 触发桌面手拖排版模式
     window.triggerDesktopCustomLayoutMode = function () {
         if (typeof window.closePhoneApp === 'function') window.closePhoneApp();
         setTimeout(() => {
@@ -1455,7 +1457,7 @@
         renderInstalledFontsList();
     };
 
-    // 配置方案管理器（仿微信原生无弹窗浮层输入）
+    // 配置方案管理器
     function getStoredProfiles() {
         try { return JSON.parse(localStorage.getItem('mcyt_theme_profiles') || '[]'); } catch (e) { return []; }
     }

@@ -5,13 +5,14 @@
  * 职责：
  *  1. 气泡样式库折叠栏（极简 + 与 ▲/▼ 图标，默认折叠）
  *  2. 加号弹出菜单：AI生成气泡 / 导入已有设置(JSON与CSS) / 制作新气泡
- *  3. 点九图自适应拉伸气泡工坊 & 固定框选画框工坊
- *  4. 对方气泡“延续我方设置并自动水平镜像”翻转体系
- *  5. 文字手势/滑块自由缩放（fontSize、lineHeight、内边距调节）
- *  6. 仿微信白灰微绿调色盘中枢，消除原生丑陋取色器
- *  7. 字体库多轨联动（跟随小手机主题字体 / 选用主题已存字体 / 自定义 CSS 字体）
- *  8. localForage (IndexedDB) 驱动存储，无配额上限，支持高清大图
- *  9. 全局核心渲染器 window.buildDecorBubbleHtml
+ *  3. 图源选择弹窗 window.openSelectBubbleSourceModal（相册选取/图片直链）
+ *  4. 点九图自适应拉伸气泡工坊 & 固定框选画框工坊
+ *  5. 对方气泡“延续我方设置并自动水平镜像”翻转体系
+ *  6. 文字手势/滑块自由缩放（fontSize、lineHeight、内边距调节）
+ *  7. 仿微信白灰微绿调色盘中枢，消除原生丑陋取色器
+ *  8. 字体库多轨联动（跟随小手机主题字体 / 选用主题已存字体 / 自定义 CSS 字体）
+ *  9. localForage (IndexedDB) 驱动存储，无配额上限，支持高清大图
+ *  10. 全局核心渲染器 window.buildDecorBubbleHtml
  */
 
 (function () {
@@ -95,7 +96,6 @@
             if (window.localforage) {
                 await window.localforage.setItem('mcyt_decor_bubbles', list);
             }
-            // 备份元数据
             try {
                 localStorage.setItem('mcyt_decor_bubbles_meta_backup', JSON.stringify(list.map(b => ({ id: b.id, name: b.name }))));
             } catch (_) {}
@@ -128,7 +128,6 @@
             const bgUrl = sideCfg?.url || b.visualConfig.user?.url || '';
             let rect = sideCfg?.rect || { left: 15, top: 15, width: 70, height: 70 };
 
-            // 若开启对方自动镜像，将选框左右对调
             if (isMirror) {
                 rect = {
                     left: Math.max(0, 100 - rect.left - rect.width),
@@ -174,7 +173,6 @@
             const borderWidth = (isSelf ? (b.userBorderWidth || b.borderWidth) : (b.npcBorderWidth || b.borderWidth)) || 16;
             const textColor = (isSelf ? (b.userTextColor || b.textColor) : (b.npcTextColor || b.textColor)) || (isSelf ? '#111111' : '#222222');
 
-            // 镜像切割线处理
             if (isMirror) {
                 const parts = (b.userSlice || b.slice || '35% 35% 35% 35%').replace(/%/g, '').trim().split(/\s+/).map(Number);
                 const [t = 35, r = 35, bot = 35, l = 35] = parts;
@@ -191,7 +189,7 @@
 
             return `
                 <div class="chat-bubble nine-slice-bubble ${isSelf ? 'self-bubble' : ''} ${customClass}" 
-                     style="border-style: solid; border-width: ${borderWidth}px; border-image: url('${imgUrl}') ${slice} fill stretch; padding: ${padding}; background: transparent; color: ${textColor}; width:fit-content; max-width:100%; min-width:${borderWidth * 2}px; box-sizing:border-box; word-break:break-word; font-size:${fontSize}px; ${fontFamilyCss} line-height:1.5; transform:scale(${scale}); transform-origin:${origin}; ${isMirror ? 'box-reflect:none;' : ''}">
+                     style="border-style: solid; border-width: ${borderWidth}px; border-image: url('${imgUrl}') ${slice} fill stretch; padding: ${padding}; background: transparent; color: ${textColor}; width:fit-content; max-width:100%; min-width:${borderWidth * 2}px; box-sizing:border-box; word-break:break-word; font-size:${fontSize}px; ${fontFamilyCss} line-height:1.5; transform:scale(${scale}); transform-origin:${origin};">
                     ${textHtml}
                 </div>
             `;
@@ -229,7 +227,7 @@
                     </div>
                     <div style="display:flex;align-items:center;gap:12px;">
                         <button onclick="event.stopPropagation(); window.openBubbleActionMenu();" title="新建与导入气泡" style="width:26px;height:26px;border-radius:50%;border:none;background:#07c160;color:#fff;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;">
-                            <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2.5;stroke-linecap:round;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+                            <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2.5;stroke-linecap:round;"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="12" y2="12"></line></svg>
                         </button>
                         <span id="decorBubblesCollapseArrow" style="font-size:11px;color:#888;user-select:none;transition:transform 0.2s ease;">▼</span>
                     </div>
@@ -261,9 +259,6 @@
                                         ${b.type === 'nine_slice' ? `
                                             <button onclick="event.stopPropagation(); window.openNineSliceDiyModal('${b.id}')" title="编辑气泡" style="background:none;border:none;color:#576b95;font-size:11px;cursor:pointer;padding:2px 4px;">编辑</button>
                                         ` : ''}
-                                        ${b.type === 'css' && !b.isBuiltin ? `
-                                            <button onclick="event.stopPropagation(); window.openEditCssBubbleModal('${b.id}')" title="编辑CSS" style="background:none;border:none;color:#576b95;font-size:11px;cursor:pointer;padding:2px 4px;">编辑</button>
-                                        ` : ''}
                                         <button onclick="event.stopPropagation(); window.openBubbleFontModal('${b.id}')" title="设置气泡文字与字体" style="background:none;border:none;color:#576b95;font-size:11px;cursor:pointer;padding:2px 4px;">字体</button>
                                         <button onclick="event.stopPropagation(); window.exportSingleBubble('${b.id}')" title="导出气泡分享" style="background:none;border:none;color:#07c160;font-size:11px;cursor:pointer;padding:2px 4px;">导出</button>
                                         ${!b.isBuiltin ? `
@@ -282,7 +277,6 @@
         `;
     };
 
-    // 抽屉折叠展开切换
     window.toggleDecorBubblesCollapse = function () {
         const body = document.getElementById('decorBubblesBody');
         const arrow = document.getElementById('decorBubblesCollapseArrow');
@@ -292,14 +286,12 @@
         arrow.textContent = isHidden ? '▲' : '▼';
     };
 
-    // 气泡选用
     window.selectDecorBubble = function (id) {
         localStorage.setItem('mcyt_active_decor_bubble', id);
         refreshDecorView();
         if (typeof showToast === 'function') showToast('气泡已应用');
     };
 
-    // 气泡删除
     window.deleteDecorBubble = async function (id) {
         try {
             let list = window.getStoredDecorBubbles().filter(x => !x.isBuiltin && x.id !== id);
@@ -316,7 +308,7 @@
     };
 
     /**
-     * 🌟 点击加号弹出的微绿选项浮层菜单
+     * 点击加号弹出的微绿选项浮层菜单
      */
     window.openBubbleActionMenu = function () {
         let modal = document.getElementById('bubbleActionMenuModal');
@@ -335,7 +327,6 @@
                 </div>
 
                 <div style="display:flex;flex-direction:column;gap:10px;">
-                    <!-- 1. AI 智能生成 -->
                     <button onclick="document.getElementById('bubbleActionMenuModal').remove(); window.openAiGenerateBubbleModal();" style="width:100%;padding:11px 14px;background:#f0f9eb;border:1px solid #c2e7b0;border-radius:8px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:10px;">
                         <svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:#07c160;fill:none;stroke-width:2;"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/></svg>
                         <div>
@@ -344,7 +335,6 @@
                         </div>
                     </button>
 
-                    <!-- 2. 制作新气泡（本地图源） -->
                     <button onclick="document.getElementById('bubbleActionMenuModal').remove(); window.openSelectBubbleSourceModal();" style="width:100%;padding:11px 14px;background:#f9f9f9;border:1px solid #e5e5e5;border-radius:8px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:10px;">
                         <svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:#333;fill:none;stroke-width:2;"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
                         <div>
@@ -353,7 +343,6 @@
                         </div>
                     </button>
 
-                    <!-- 3. 导入已有设置 -->
                     <button onclick="document.getElementById('bubbleActionMenuModal').remove(); window.openImportBubbleHubModal();" style="width:100%;padding:11px 14px;background:#f9f9f9;border:1px solid #e5e5e5;border-radius:8px;text-align:left;cursor:pointer;display:flex;align-items:center;gap:10px;">
                         <svg viewBox="0 0 24 24" style="width:18px;height:18px;stroke:#333;fill:none;stroke-width:2;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                         <div>
@@ -367,7 +356,98 @@
     };
 
     /**
-     * 🤖 AI 生成气泡弹窗
+     * 🌟 修复报错核心：挂载气泡制作来源选择弹窗
+     */
+    window.openSelectBubbleSourceModal = function () {
+        let modal = document.getElementById('bubbleSourceModal');
+        if (!modal) {
+            modal = document.createElement('div');
+            modal.id = 'bubbleSourceModal';
+            modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);display:flex;align-items:center;justify-content:center;z-index:99999;padding:20px;';
+            document.body.appendChild(modal);
+        }
+
+        window._bubbleMakeMode = window._bubbleMakeMode || 'nine_slice';
+
+        function renderSourceModal() {
+            const mode = window._bubbleMakeMode;
+            modal.innerHTML = `
+                <div style="background:#ffffff;border-radius:14px;width:100%;max-width:300px;padding:16px;box-shadow:0 8px 24px rgba(0,0,0,0.15);">
+                    <div style="font-size:14px;font-weight:600;color:#222;margin-bottom:10px;">制作新气泡</div>
+
+                    <div style="display:flex;gap:6px;margin-bottom:10px;">
+                        <button id="btnModeNineSlice" style="flex:1;padding:8px 4px;border-radius:8px;font-size:11.5px;cursor:pointer;border:1px solid ${mode === 'nine_slice' ? '#07c160' : '#e0e0e0'};background:${mode === 'nine_slice' ? '#e8f7ed' : '#fff'};color:${mode === 'nine_slice' ? '#07c160' : '#333'};font-weight:${mode === 'nine_slice' ? '600' : 'normal'};line-height:1.4;">
+                            点九图自适应<br><span style="font-size:9.5px;opacity:0.8;">随文字自动伸展</span>
+                        </button>
+                        <button id="btnModeVisualBox" style="flex:1;padding:8px 4px;border-radius:8px;font-size:11.5px;cursor:pointer;border:1px solid ${mode === 'visual_box' ? '#07c160' : '#e0e0e0'};background:${mode === 'visual_box' ? '#e8f7ed' : '#fff'};color:${mode === 'visual_box' ? '#07c160' : '#333'};font-weight:${mode === 'visual_box' ? '600' : 'normal'};line-height:1.4;">
+                            固定框选画框<br><span style="font-size:9.5px;opacity:0.8;">插画类固定尺寸</span>
+                        </button>
+                    </div>
+                    <div style="font-size:10.5px;color:#888;margin-bottom:10px;line-height:1.4;">
+                        ${mode === 'nine_slice' ? '气泡本体随文字长短自动变大变宽，圆角和尾巴不失真。' : '气泡本体是一整张插画，文字放置在你框选的区域内。'}
+                    </div>
+
+                    <input type="file" id="bubbleSourceFileInput" accept="image/*" style="display:none;" onchange="window.handleBubbleSourceLocalUpload(event)">
+
+                    <button onclick="document.getElementById('bubbleSourceFileInput').click()" style="width:100%;padding:11px;background:#07c160;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:10px;display:flex;align-items:center;justify-content:center;gap:6px;">
+                        <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:#fff;stroke-width:2;"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                        <span>从手机相册选取图片</span>
+                    </button>
+
+                    <div style="display:flex;align-items:center;margin:10px 0;gap:8px;">
+                        <div style="flex:1;height:1px;background:#eee;"></div>
+                        <span style="font-size:11px;color:#aaa;">或输入图片直链</span>
+                        <div style="flex:1;height:1px;background:#eee;"></div>
+                    </div>
+
+                    <input type="text" id="bubbleSourceUrlInput" placeholder="https://..." style="width:100%;box-sizing:border-box;padding:8px 10px;border-radius:6px;border:1px solid #e0e0e0;font-size:12px;outline:none;margin-bottom:12px;">
+
+                    <div style="display:flex;gap:8px;">
+                        <button style="flex:1;padding:8px;background:#f9f9f9;border:1px solid #ddd;border-radius:6px;font-size:12px;color:#555;cursor:pointer;" onclick="document.getElementById('bubbleSourceModal').remove()">取消</button>
+                        <button style="flex:1;padding:8px;background:#181818;border:none;border-radius:6px;font-size:12px;color:#fff;font-weight:500;cursor:pointer;" onclick="window.confirmBubbleSourceUrl()">${mode === 'nine_slice' ? '下一步：切片' : '开始框选'}</button>
+                    </div>
+                </div>
+            `;
+            modal.querySelector('#btnModeNineSlice').onclick = () => { window._bubbleMakeMode = 'nine_slice'; renderSourceModal(); };
+            modal.querySelector('#btnModeVisualBox').onclick = () => { window._bubbleMakeMode = 'visual_box'; renderSourceModal(); };
+        }
+
+        renderSourceModal();
+    };
+
+    window.confirmBubbleSourceUrl = function () {
+        const url = (document.getElementById('bubbleSourceUrlInput')?.value || '').trim();
+        if (!url) {
+            if (typeof showToast === 'function') showToast('请填写有效的图片链接');
+            return;
+        }
+        document.getElementById('bubbleSourceModal')?.remove();
+        if (window._bubbleMakeMode === 'nine_slice') {
+            window.openNineSliceDiyModal(null, url, '我的自适应气泡');
+        } else {
+            window.openVisualBoxDiyModal(null, url, '我的画框气泡');
+        }
+    };
+
+    window.handleBubbleSourceLocalUpload = function (event) {
+        const file = event.target.files && event.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function (e) {
+            const rawData = e.target.result;
+            const defaultName = file.name.replace(/\.[^/.]+$/, "");
+            document.getElementById('bubbleSourceModal')?.remove();
+            if (window._bubbleMakeMode === 'nine_slice') {
+                window.openNineSliceDiyModal(null, rawData, defaultName);
+            } else {
+                window.openVisualBoxDiyModal(null, rawData, defaultName);
+            }
+        };
+        reader.readAsDataURL(file);
+    };
+
+    /**
+     * AI 生成气泡弹窗
      */
     window.openAiGenerateBubbleModal = function () {
         let modal = document.getElementById('aiGenerateBubbleModal');
@@ -476,7 +556,7 @@
     };
 
     /**
-     * 📥 导入已有设置综合中枢（JSON 与 CSS）
+     * 导入已有设置综合中枢（JSON 与 CSS）
      */
     window.openImportBubbleHubModal = function () {
         let modal = document.getElementById('bubbleImportHubModal');
@@ -487,7 +567,7 @@
             document.body.appendChild(modal);
         }
 
-        let importType = 'json'; // 'json' | 'css'
+        let importType = 'json';
 
         function renderHub() {
             modal.innerHTML = `
@@ -612,7 +692,7 @@
     };
 
     /**
-     * 🎨 精致白灰微绿调色盘选择器（替换原生醜陋的 input type="color"）
+     * 精致白灰微绿调色盘选择器
      */
     window.openWechatColorPickerModal = function (initialColor = '#000000', onSelectCallback) {
         let modal = document.getElementById('wechatColorPickerModal');
@@ -678,7 +758,7 @@
     };
 
     /**
-     * 🔤 气泡文字字号与字体设置弹窗
+     * 气泡文字字号与字体设置弹窗
      */
     window.openBubbleFontModal = function (bubbleId) {
         const bubbles = window.getStoredDecorBubbles();
@@ -696,7 +776,6 @@
         let curFont = b.fontSize || 14.5;
         let curFamily = b.fontFamily || '';
 
-        // 读取主题中心保存的字体
         let themeFontList = [];
         try {
             themeFontList = JSON.parse(localStorage.getItem('mcyt_theme_fonts') || '[]');
@@ -711,7 +790,6 @@
 
                 <div style="font-size:11px;color:#777;margin-bottom:12px;">调节此气泡内部文字的默认字号与字体排版。</div>
 
-                <!-- 字号滑块 -->
                 <div style="background:#f9f9f9;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:12px;">
                     <div style="display:flex;justify-content:space-between;font-size:11px;color:#555;margin-bottom:4px;">
                         <span>文字大小缩放</span>
@@ -720,7 +798,6 @@
                     <input type="range" id="fontModalSlider" min="11" max="22" step="0.5" value="${curFont}" style="width:100%;accent-color:#07c160;">
                 </div>
 
-                <!-- 字体选择模式 -->
                 <div style="margin-bottom:12px;">
                     <div style="font-size:11px;color:#555;margin-bottom:4px;">字体源</div>
                     <select id="fontSelectDropdown" style="width:100%;padding:7px;border-radius:6px;border:1px solid #ddd;font-size:12px;background:#fff;margin-bottom:8px;outline:none;">
@@ -765,7 +842,7 @@
     };
 
     /**
-     * 🎨 点九图自适应气泡工坊（支持对方镜像、文字缩放与调色板）
+     * 点九图自适应气泡工坊
      */
     window.openNineSliceDiyModal = function (bubbleId = null, initialUrl = '', initialName = '') {
         let bubbleObj = null;
@@ -793,7 +870,7 @@
             fontSize: (bubbleObj && bubbleObj.fontSize) ? bubbleObj.fontSize : 14.5,
             fontFamily: (bubbleObj && bubbleObj.fontFamily) ? bubbleObj.fontFamily : '',
             mirrorNpcFromUser: (bubbleObj && bubbleObj.mirrorNpcFromUser !== undefined) ? bubbleObj.mirrorNpcFromUser : true,
-            activeSide: 'user', // 'user' | 'npc'
+            activeSide: 'user',
             user: {
                 url: (bubbleObj?.userBorderImage || bubbleObj?.borderImage) || initialUrl || '',
                 slice: parseSlice(bubbleObj?.userSlice || bubbleObj?.slice),
@@ -846,7 +923,6 @@
                         拖动图上的四条线，把四个角（圆角/尾巴）圈起来，中间的十字区域随文字自动伸展。
                     </div>
 
-                    <!-- 对方镜像开关 -->
                     <div style="display:flex;justify-content:space-between;align-items:center;background:#f9f9f9;padding:8px 10px;border-radius:8px;border:1px solid #eee;margin-bottom:10px;">
                         <div>
                             <div style="font-size:12px;font-weight:600;color:#333;">对方气泡延续我方并自动镜像</div>
@@ -864,7 +940,6 @@
                         <button id="btnNsUploadSide" style="width:100%;padding:10px;background:#07c160;color:#fff;border:none;border-radius:8px;font-size:12.5px;font-weight:600;cursor:pointer;margin-bottom:12px;">上传气泡图片</button>
                         <input type="file" id="nsSideFileInput" accept="image/*" style="display:none;">
                     ` : `
-                        <!-- 切割线拖拽舞台 -->
                         <div id="nsStageContainer" style="position:relative;width:100%;background:#ebebeb;border-radius:10px;overflow:hidden;margin-bottom:10px;user-select:none;-webkit-user-select:none;touch-action:none;">
                             <img id="nsStageImg" src="${cfg.url}" style="width:100%;display:block;pointer-events:none;" />
 
@@ -877,7 +952,6 @@
                             <button id="btnNsReupload" style="font-size:10.5px;color:#576b95;background:none;border:none;cursor:pointer;padding:0;">更换图片</button>
                         </div>
 
-                        <!-- 边框厚度 -->
                         <div style="background:#f9f9f9;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:8px;">
                             <div style="display:flex;justify-content:space-between;font-size:11px;color:#555;margin-bottom:4px;">
                                 <span>边框粗细（圆角/尾巴保护大小）</span>
@@ -886,7 +960,6 @@
                             <input type="range" id="nsBorderWidthRange" min="6" max="40" value="${cfg.borderWidth}" style="width:100%;accent-color:#07c160;">
                         </div>
 
-                        <!-- 文字大小与内边距 -->
                         <div style="background:#f9f9f9;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:8px;">
                             <div style="display:flex;justify-content:space-between;font-size:11px;color:#555;margin-bottom:4px;">
                                 <span>文字大小缩放</span>
@@ -907,7 +980,6 @@
                             <input type="range" id="nsPadVRange" min="2" max="24" value="${cfg.padding.v}" style="width:100%;accent-color:#07c160;">
                         </div>
 
-                        <!-- 优雅文字颜色选择 -->
                         <div style="background:#f9f9f9;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:10px;display:flex;align-items:center;justify-content:space-between;">
                             <span style="font-size:11px;color:#555;">文字颜色</span>
                             <div id="btnNsTextColorTrigger" style="display:flex;align-items:center;gap:6px;cursor:pointer;">
@@ -916,7 +988,6 @@
                             </div>
                         </div>
 
-                        <!-- 实时伸展自适应预览 -->
                         <div style="background:#fff;border:1px dashed #ddd;border-radius:8px;padding:10px;margin-bottom:12px;">
                             <div style="font-size:10.5px;color:#999;margin-bottom:8px;">自适应伸展预览</div>
                             <div id="nsPreviewShort" style="margin-bottom:8px;">${buildPreviewBubble(cfg, '你好！')}</div>
@@ -924,7 +995,6 @@
                         </div>
                     `}
 
-                    <!-- 名称与作者 -->
                     <div style="display:flex;gap:8px;margin-bottom:12px;">
                         <input id="nsNameInput" type="text" placeholder="气泡名称" value="${escapeHtml(state.name)}" style="flex:1.3;padding:7px 8px;border-radius:6px;border:1px solid #e0e0e0;font-size:11.5px;outline:none;">
                         <input id="nsAuthorInput" type="text" placeholder="作者署名" value="${escapeHtml(state.author)}" style="flex:1;padding:7px 8px;border-radius:6px;border:1px solid #e0e0e0;font-size:11.5px;outline:none;">
@@ -1094,7 +1164,7 @@
                     lineLeft.style.left = `${cfg.slice.left}%`;
                 } else if (dragTarget === 'right') {
                     let val = 100 - ((pos.x - rect.left) / rect.width) * 100;
-                    val = Math.max(0, Math.min(100 - cfg.slice.left - minGap, val));
+                    val = Math.max(0, Math.min(100 - cfg.slice.right - minGap, val));
                     cfg.slice.right = Math.round(val);
                     lineRight.style.left = `${100 - cfg.slice.right}%`;
                 }
@@ -1120,7 +1190,7 @@
     };
 
     /**
-     * 🌟 固定框选画框工坊（支持文字缩放与对方镜像）
+     * 固定框选画框工坊
      */
     window.openVisualBoxDiyModal = function (bubbleId = null, initialUrl = '', initialName = '') {
         let bubbleObj = null;
@@ -1137,7 +1207,7 @@
             fontSize: (bubbleObj && bubbleObj.fontSize) ? bubbleObj.fontSize : 13.5,
             fontFamily: (bubbleObj && bubbleObj.fontFamily) ? bubbleObj.fontFamily : '',
             mirrorNpcFromUser: (bubbleObj && bubbleObj.mirrorNpcFromUser !== undefined) ? bubbleObj.mirrorNpcFromUser : true,
-            activeSide: 'user', // 'user' | 'npc'
+            activeSide: 'user',
             user: {
                 url: bubbleObj?.visualConfig?.user?.url || initialUrl || '',
                 rect: bubbleObj?.visualConfig?.user?.rect || { left: 20, top: 20, width: 60, height: 60 },
@@ -1171,7 +1241,6 @@
                         <button onclick="document.getElementById('visualBoxDiyModal').remove()" style="border:none;background:none;font-size:16px;color:#999;cursor:pointer;">✕</button>
                     </div>
 
-                    <!-- 对方镜像开关 -->
                     <div style="display:flex;justify-content:space-between;align-items:center;background:#f9f9f9;padding:8px 10px;border-radius:8px;border:1px solid #eee;margin-bottom:10px;">
                         <div>
                             <div style="font-size:12px;font-weight:600;color:#333;">对方气泡延续我方并自动镜像</div>
@@ -1185,7 +1254,6 @@
                         <button id="btnTabNpc" style="flex:1;padding:6px;border-radius:6px;font-size:11.5px;cursor:pointer;border:1px solid ${curSide === 'npc' ? '#07c160' : '#e0e0e0'};background:${curSide === 'npc' ? '#e8f7ed' : '#fff'};color:${curSide === 'npc' ? '#07c160' : '#333'};font-weight:${curSide === 'npc' ? '600' : 'normal'};" ${state.mirrorNpcFromUser ? 'disabled title="已开启自动镜像"' : ''}>对方气泡设置</button>
                     </div>
 
-                    <!-- 可视化拖拽舞台 -->
                     <div id="visualBoxStageContainer" style="position:relative;width:100%;background:#ebebeb;border-radius:10px;overflow:hidden;margin-bottom:12px;display:flex;align-items:center;justify-content:center;min-height:200px;user-select:none;-webkit-user-select:none;touch-action:none;">
                         <img id="stageBubbleImg" src="${curCfg.url}" style="width:100%;max-width:280px;height:auto;display:block;pointer-events:none;" onerror="this.style.display='none';" />
                         
@@ -1198,7 +1266,6 @@
                         </div>
                     </div>
 
-                    <!-- 属性微调 -->
                     <div style="background:#f9f9f9;border:1px solid #eee;border-radius:8px;padding:10px;margin-bottom:10px;">
                         <div style="display:flex;justify-content:space-between;font-size:11px;color:#555;margin-bottom:4px;">
                             <span>气泡尺寸缩放</span>
@@ -1388,7 +1455,7 @@
     };
 
     /**
-     * 📤 导出单个气泡为分享 JSON
+     * 导出单个气泡为分享 JSON
      */
     window.exportSingleBubble = function (bubbleId) {
         const bubbles = window.getStoredDecorBubbles();
