@@ -5,9 +5,10 @@
  *    重新生成回复的确认与执行（confirmRetryLastAIReply / doRetryLastAIReply）、
  *    🌟 微信原生直显大图与沉浸式大图文字查看器对接、拟真生活排版卡片（ui_card）渲染。
  * 🌟 升级：
- *  1. 输入栏增加「笔 / 麦克风」纯 SVG 图标无感切换文字键盘与真录音按键（零文字、零Emoji）；
- *  2. 录音按键表面伪装发送真实语音条（带真实秒数），后台实时 ASR 转文字发给 AI 进行剧情对话；
- *  3. 收到 NPC 回复自动接入 TTS 语音引擎朗读（若配置开启）。
+ *  1. 合并左下角语音中枢：去除输入框左侧冗余按键，左下角点击呼出纯图标微信原生轻量菜单（声波对讲/语音转文字/键盘输入）；
+ *  2. 麦克风硬件权限自动申请（getUserMedia）门禁，杜绝无授权静默录音失效；
+ *  3. 录音按键表面伪装发送真实语音条（带真实秒数），后台实时 ASR 转文字发给 AI 进行剧情对话；
+ *  4. 收到 NPC 回复自动接入 TTS 语音引擎朗读（若配置开启）。
  */
 
 (function() {
@@ -15,6 +16,8 @@
 
     // 运行时单聊输入模式：'text' | 'voice'
     window._chatInputMode = window._chatInputMode || 'text';
+    // 语音浮层开启状态
+    window._voiceActionMenuOpen = false;
     // 录音状态
     let _isRecordingVoice = false;
     let _voiceRecordStartTime = 0;
@@ -27,6 +30,25 @@
         if (shape === 'squircle') return '8px';
         if (shape === 'square') return '2px';
         return '8px';
+    }
+
+    // 🎤 硬件麦克风权限安全申请门禁
+    async function ensureMicrophonePermission() {
+        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                // 授权成功后立即释放临时流
+                stream.getTracks().forEach(track => track.stop());
+                return true;
+            } catch (err) {
+                console.warn('[Microphone] 麦克风权限获取失败或被拒绝:', err);
+                if (typeof showToast === 'function') {
+                    showToast('请在系统或浏览器设置中允许麦克风权限', 'info', 2000);
+                }
+                return false;
+            }
+        }
+        return true;
     }
 
     // 辅助：统一获取全局/运行时头像框配置列表（优先接入 IndexedDB 运行态池）
@@ -155,15 +177,32 @@
         }
     };
 
-    // 切换键盘/麦克风录音模式（纯图标驱动）
-    window.toggleChatInputMode = function() {
-        window._chatInputMode = (window._chatInputMode === 'text') ? 'voice' : 'text';
+    // 🌟 控制左下角语音纯图标弹出菜单
+    window.toggleVoiceActionMenu = function(type, npcId) {
+        window._voiceActionMenuOpen = !window._voiceActionMenuOpen;
+        window.renderSingleChatWindow(null, { keepScroll: true });
+    };
+
+    // 切换至打字/语音模式
+    window.switchChatVoiceMode = async function(mode, npcId) {
+        window._voiceActionMenuOpen = false;
+        if (mode === 'voice') {
+            const hasPerm = await ensureMicrophonePermission();
+            if (!hasPerm) return;
+            window._chatInputMode = 'voice';
+        } else {
+            window._chatInputMode = 'text';
+        }
         window.renderSingleChatWindow(null, { keepScroll: true });
     };
 
     // 真实录音与 ASR 伪装语音逻辑
-    window.startRealVoiceRecord = function(npcId) {
+    window.startRealVoiceRecord = async function(npcId) {
         if (_isRecordingVoice) return;
+
+        const hasPerm = await ensureMicrophonePermission();
+        if (!hasPerm) return;
+
         _isRecordingVoice = true;
         _voiceRecordStartTime = Date.now();
         _recognizedVoiceText = '';
@@ -174,7 +213,7 @@
             recordBtn.setAttribute('data-recording', 'true');
         }
 
-        // 尝试启动浏览器原生离线语音识别
+        // 尝试启动原生语音识别通道
         const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (SpeechRec) {
             try {
@@ -751,25 +790,9 @@
             topHeaderDisplayHtml = `<span style="color:#07c160;font-size:14px;">对方正在输入中...</span>`;
         }
 
-        // 🌟 纯 SVG 切换键盘 / 录音模态，无字无Emoji
         const isVoiceMode = (window._chatInputMode === 'voice');
 
-        const inputSwitchSvg = isVoiceMode ? `
-            <!-- 笔/键盘图标：切回文字 -->
-            <svg viewBox="0 0 24 24" style="width:23px;height:23px;fill:none;stroke:#555;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;">
-                <path d="M12 20h9"></path>
-                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
-            </svg>
-        ` : `
-            <!-- 麦克风图标：切换为录音 -->
-            <svg viewBox="0 0 24 24" style="width:23px;height:23px;fill:none;stroke:#555;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;">
-                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-                <line x1="12" y1="19" x2="12" y2="23"></line>
-                <line x1="8" y1="23" x2="16" y2="23"></line>
-            </svg>
-        `;
-
+        // 输入框中央核心区域：对讲按钮或者文本框
         const inputCenterHtml = isVoiceMode ? `
             <div id="btnVoiceRecordPress" style="flex:1;height:36px;border-radius:6px;background:#ffffff;box-shadow:inset 0 0 0 0.5px #dcdcdc;display:flex;align-items:center;justify-content:center;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;">
                 <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:#07c160;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;margin-right:6px;"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
@@ -778,6 +801,50 @@
         ` : `
             <textarea id="singleChatInput" rows="1" placeholder="发消息..." style="flex:1;padding:8px 12px;border-radius:6px;border:none;background:#ffffff;font-size:14px;resize:none;outline:none;font-family:inherit;box-shadow:inset 0 0 0 0.5px #dcdcdc;box-sizing:border-box;max-height:80px;"></textarea>
         `;
+
+        // 🌟 左下角纯图标选择浮层 (Popover)
+        const voiceMenuPopoverHtml = window._voiceActionMenuOpen ? `
+            <div id="wechatVoiceActionPopover" style="position:absolute;bottom:42px;left:0;z-index:999;background:#ffffff;border-radius:8px;box-shadow:0 4px 18px rgba(0,0,0,0.12);border:0.5px solid #e0e0e0;padding:6px;display:flex;align-items:center;gap:6px;animation:wechatPopIn 0.15s cubic-bezier(0.1, 0.9, 0.2, 1);">
+                <style>
+                    @keyframes wechatPopIn {
+                        from { opacity:0; transform: translateY(8px) scale(0.95); }
+                        to { opacity:1; transform: translateY(0) scale(1); }
+                    }
+                </style>
+                <!-- 纯图标 1：对讲发送真实语音条 -->
+                <button type="button" onclick="window.switchChatVoiceMode('voice','${npcId}')" title="直接对讲发送语音条" style="border:none;background:${isVoiceMode ? '#e8f8ee' : '#f7f7f7'};color:${isVoiceMode ? '#07c160' : '#444'};width:38px;height:38px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;">
+                    <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;">
+                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                        <line x1="12" y1="19" x2="12" y2="23"></line>
+                        <line x1="8" y1="23" x2="16" y2="23"></line>
+                    </svg>
+                </button>
+
+                <!-- 纯图标 2：语音转文字输入弹窗 -->
+                <button type="button" onclick="window._voiceActionMenuOpen=false;window.openVoiceInputModal('single','${npcId}')" title="语音换算输入" style="border:none;background:#f7f7f7;color:#444;width:38px;height:38px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;">
+                    <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;">
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                        <polyline points="14 2 14 8 20 8"></polyline>
+                        <line x1="16" y1="13" x2="8" y2="13"></line>
+                        <line x1="16" y1="17" x2="8" y2="17"></line>
+                        <polyline points="10 9 9 9 8 9"></polyline>
+                    </svg>
+                </button>
+
+                <!-- 纯图标 3：切回键盘打字 -->
+                <button type="button" onclick="window.switchChatVoiceMode('text','${npcId}')" title="文字键盘打字" style="border:none;background:${!isVoiceMode ? '#e8f8ee' : '#f7f7f7'};color:${!isVoiceMode ? '#07c160' : '#444'};width:38px;height:38px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;">
+                    <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;">
+                        <rect x="2" y="4" width="20" height="16" rx="2"></rect>
+                        <line x1="6" y1="8" x2="6" y2="8"></line>
+                        <line x1="10" y1="8" x2="10" y2="8"></line>
+                        <line x1="14" y1="8" x2="14" y2="8"></line>
+                        <line x1="18" y1="8" x2="18" y2="8"></line>
+                        <line x1="7" y1="16" x2="17" y2="16"></line>
+                    </svg>
+                </button>
+            </div>
+        ` : '';
 
         const html = `
         <div style="background:#ededed;display:flex;flex-direction:column;height:100%;min-height:100%;overflow:hidden;font-family:-apple-system,sans-serif;">
@@ -821,11 +888,7 @@
             <!-- 仿 QQ/群聊 双层输入区域 -->
             <div style="background:#f7f7f7;border-top:0.5px solid #dcdcdc;display:flex;flex-direction:column;padding:6px 10px 8px;flex-shrink:0;gap:6px;">
                 <div style="display:flex;align-items:center;gap:6px;">
-                    <!-- 模式切换开关（纯 SVG：麦克风 / 笔图标） -->
-                    <button type="button" onclick="window.toggleChatInputMode()" style="border:none;background:transparent;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
-                        ${inputSwitchSvg}
-                    </button>
-
+                    <!-- 舒展的中央输入区域（不再有左侧麦克风按键挤压） -->
                     ${inputCenterHtml}
                     
                     <button id="btnSingleRegenerateReply" onclick="window.confirmRetryLastAIReply('${npcId}')" title="重新生成上一条回复" style="border:0.5px solid #dcdcdc;background:#ffffff;color:#444;width:34px;height:34px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;">
@@ -839,9 +902,13 @@
 
                 <div style="display:flex;align-items:center;justify-content:space-between;padding:0 4px;">
                     <div style="display:flex;align-items:center;gap:18px;">
-                        <button onclick="window.openVoiceInputModal('single','${npcId}')" title="语音参数面板" style="border:none;background:none;cursor:pointer;padding:0;display:flex;align-items:center;color:#555;">
-                            <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-                        </button>
+                        <!-- 🌟 左下角合并统一语音键与纯图标选择浮层 -->
+                        <div style="position:relative;display:inline-flex;align-items:center;">
+                            <button type="button" onclick="window.toggleVoiceActionMenu('single','${npcId}')" title="语音模式选择" style="border:none;background:none;cursor:pointer;padding:0;display:flex;align-items:center;color:${isVoiceMode ? '#07c160' : '#555'};">
+                                <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
+                            </button>
+                            ${voiceMenuPopoverHtml}
+                        </div>
 
                         <button onclick="window.toggleChatSettingsDrawer('single','${npcId}')" title="系统设置与排版" style="border:none;background:none;cursor:pointer;padding:0;display:flex;align-items:center;color:#555;">
                             <svg viewBox="0 0 24 24" style="width:21px;height:21px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">
@@ -904,9 +971,9 @@
         // 绑定说话模式（按住/松开录音）
         const voiceRecordBtn = document.getElementById('btnVoiceRecordPress');
         if (voiceRecordBtn) {
-            const onRecordStart = (e) => {
+            const onRecordStart = async (e) => {
                 e.preventDefault();
-                window.startRealVoiceRecord(npcId);
+                await window.startRealVoiceRecord(npcId);
                 const tip = document.getElementById('voiceRecordTipText');
                 if (tip) tip.textContent = '松开 发送';
             };
