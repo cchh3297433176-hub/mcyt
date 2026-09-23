@@ -2,7 +2,7 @@
  * js/apps/chat/chat-app-ai.js
  * 💬 微信主应用 · 拆分分片 5/7：单人私聊 AI 回复触发核心（window.triggerAIReplyForSingle）。
  *    支持按角色独立设置的【单次回复条数最少~最多范围】与【语音发送频率】严格调度执行；
- *    拟真语音环境音（audio_bg）与声调细节还原；
+ *    🌟 全球母语多语言语音支持：拟真语音环境音（audio_bg）与【母语原声（英语/德语/日语等）+ 中文翻译对照】；
  *    带跨时段、隔夜双时间戳感知、塔罗牌解读感知、Rememori 证据链沉淀、
  *    专属好友独立联网搜索检索与权威网页卡片推送、以及好感度铁律动态结算机制；
  *    🌟 极简优化：机器直接在末尾提供确定的时间事实，杜绝大模型计算，节省 Token 与注意力；
@@ -12,7 +12,7 @@
 (function() {
     'use strict';
 
-    // 辅助函数：判断是否需要联网搜索并提取关键词（不区分大小写，强词与提问双通道穿透）
+    // 辅助函数：判断是否需要联网搜索并提取关键词
     function checkSearchIntent(lastPlayerText, searchCfg) {
         if (!lastPlayerText) {
             return { needSearch: false, query: '' };
@@ -21,12 +21,10 @@
         const text = lastPlayerText.trim();
         const lowerText = text.toLowerCase();
         
-        // 强指令关键词库
         const forcedKeywordsList = (searchCfg && searchCfg.forcedKeywords)
             ? searchCfg.forcedKeywords.split(/[,，\s]+/).filter(Boolean)
             : ['搜索', '查一下', '查查', '搜一下', '帮我找', '搜搜', '百度一下'];
 
-        // 1. 自定义关键词强制匹配（若玩家显式包含关键词，即使独立开关未开也允许穿透执行）
         for (const rawKw of forcedKeywordsList) {
             const kw = rawKw.trim();
             if (!kw) continue;
@@ -39,12 +37,10 @@
             }
         }
 
-        // 若当前角色未开启联网开关，则不触发自主意图判断
         if (!searchCfg || !searchCfg.enabled) {
             return { needSearch: false, query: '' };
         }
 
-        // 2. AI 自主判断：提问或生活百科/事实探知场景
         const autoPatterns = [
             /(?:怎么|如何|怎样)(?:做|弄|搞|办|弄出|搞定)/i,
             /(?:做法|菜谱|配方|步骤|教程|攻略)/i,
@@ -66,7 +62,7 @@
         return { needSearch: false, query: '' };
     }
 
-    // 辅助函数：根据标点将长文本拆分为多个短气泡（用于满足最少条数 minMsgs 限制）
+    // 辅助函数：根据标点将长文本拆分为多个短气泡
     function splitTextIntoMessages(text, targetCount) {
         if (!text || targetCount <= 1) return [text];
         const segs = text.split(/(?<=[，。！？!?~…\n])\s*/).map(s => s.trim()).filter(Boolean);
@@ -95,7 +91,7 @@
         return result.slice(0, targetCount);
     }
 
-    // 辅助函数：根据当前客观时段生成极其拟真生活化的语音背景音兜底
+    // 辅助函数：根据当前客观时段生成拟真生活化语音背景音
     function generateSmartVoiceAudioBg(hour = 14) {
         const nightBgs = [
             '被窝里翻身的布料摩擦声、伴随轻微疲倦哈欠与鼻音',
@@ -124,7 +120,7 @@
         return pool[Math.floor(Math.random() * pool.length)];
     }
 
-    // 辅助函数：清洗拟真 UI 卡片中的危险脚本标签与外部注入
+    // 辅助函数：清洗拟真 UI 卡片
     function sanitizeUiCardHtml(htmlStr) {
         if (!htmlStr) return '';
         let sanitized = htmlStr
@@ -135,13 +131,13 @@
         return sanitized.trim();
     }
 
-    // 辅助函数：剥离 HTML 标签提取纯文本描述（用于长期记忆与总结，防代码污染）
+    // 辅助函数：剥离 HTML 标签提取纯文本
     function extractTextFromHtml(htmlStr) {
         if (!htmlStr) return '';
         return htmlStr.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
     }
 
-    // 🤖 单人私聊 AI 回复触发（条数控制、拟真语音环境音还原、好感度动态铁律、文字图片、拟真UI卡片）
+    // 🤖 单人私聊 AI 回复触发（多语种母语语音条、条数控制、好感度动态铁律、文字图片、拟真UI卡片）
     window.triggerAIReplyForSingle = async function(npcId) {
         const npc = window.G.npcs ? window.G.npcs[npcId] : null;
         if (!npc) return;
@@ -170,13 +166,11 @@
         const history = window.getAccountChatHistory(npcId, curAcc.id) || [];
         const isBehindActive = !!(window.G._behindScreenActive && window.G._behindScreenActive[npcId]);
 
-        // 读取角色独立设定的发消息条数与语音偏好
         const chatCfg = npc.chatSettings || { minMsgs: 1, maxMsgs: 3, voiceFreq: 'rare' };
         const minMsgs = Math.max(1, parseInt(chatCfg.minMsgs) || 1);
         const maxMsgs = Math.max(minMsgs, parseInt(chatCfg.maxMsgs) || 3);
         const voiceFreq = chatCfg.voiceFreq || 'rare';
 
-        // 读取角色独立设定的拟真排版卡片配置
         const uiCardCfg = (typeof window.getNpcUiCardConfig === 'function')
             ? window.getNpcUiCardConfig(npcId)
             : { enabled: false, customPrompt: '' };
@@ -209,7 +203,11 @@
                 m.peekHandled = true;
                 return `[系统]: 对方撤回了一条消息`;
             }
-            if (m.type === 'voice') return `${speaker} [语音，背景音: ${m.audioBg || '无'}]: ${m.text || ''}`;
+            // 🌟 多语种语音注入：母语原声 + 中文对照完整告知大模型
+            if (m.type === 'voice') {
+                const bilingualShow = m.originalText ? `[母语原声: "${m.originalText}", 中文译: "${m.text}"]` : `"${m.text || ''}"`;
+                return `${speaker} [发了条语音，背景音: ${m.audioBg || '无'}]: ${bilingualShow}`;
+            }
             if (m.type === 'shared_tarot') {
                 if (window.ChatTarot && typeof window.ChatTarot.formatTarotForPrompt === 'function') {
                     return window.ChatTarot.formatTarotForPrompt(m, speaker);
@@ -263,14 +261,21 @@
             }
         }
 
-        // 针对条数范围、拟真语音环境音与好感度铁律注入强约束指令
+        // 🌟 针对全语种母语（德语/英语/日语/法语等）注入通用母语语音协议
         let styleConstraint = `【条数硬性约束】：本次回复必须分为 ${minMsgs} 到 ${maxMsgs} 个独立的 [MSG]...[/MSG] 消息气泡发送。\n`;
+        
+        styleConstraint += `【全语种拟真语音协议】：\n` +
+            `如果发送语音条，格式必须为：\n` +
+            `[VOICE seconds="秒数" audio_bg="生活环境音与语气" original="你的母语原声句子（若角色使用外语如德语/英语/日语等，必填）"]中文翻译或日常口语内容[/VOICE]\n` +
+            `其中 audio_bg 必须包含丰富生动的生活细节声音（如翻身布料摩擦、机械键盘敲击、轻笑、叹气、哈欠、风声等）。\n` +
+            `★ 如果角色人设设定为外国好友或使用外语（德语、英语、日语、俄语等），请务必在 original="..." 中填写生动纯正的外语母语原声，并在标签内容中填写对应的中文翻译，方便对方理解！\n`;
+
         if (voiceFreq === 'never') {
             styleConstraint += `【语音偏好】：你习惯只发文字打字，绝对严禁发送任何语音条 [VOICE]！\n`;
         } else if (voiceFreq === 'voice_only') {
-            styleConstraint += `【语音偏好】：你此时正在忙碌或懒得打字，本次回复全部使用拟真语音条发送！格式必须为：\n[VOICE seconds="秒数" audio_bg="耳朵听到的声音与语气"]语音口语文字[/VOICE]\naudio_bg 必须包含丰富的生活声音（如键盘打字声、叹气、哈欠、笑场、翻身摩擦声等），展现生动活人感！\n`;
+            styleConstraint += `【语音偏好】：你此时正在忙碌或懒得打字，本次回复全部使用拟真语音条发送！\n`;
         } else if (voiceFreq === 'often') {
-            styleConstraint += `【语音偏好】：你经常随手发语音，请在本次回复的气泡中穿插 1~2 条带真实环境音与语气的拟真语音条：\n[VOICE seconds="秒数" audio_bg="听到的细节声音与说话语气"]语音口语内容[/VOICE]\n`;
+            styleConstraint += `【语音偏好】：你经常随手发语音，请在本次回复的气泡中穿插 1~2 条拟真语音条！\n`;
         } else {
             styleConstraint += `【语音偏好】：主要发文字打字，偶尔极少才发语音条。\n`;
         }
@@ -287,7 +292,7 @@
                 `偏好要求：${uiCardCfg.customPrompt || '在分享购物结账、便签、清单或收到小票时生成拟真卡片'}\n` +
                 `在语境恰当自然时，允许输出一个高质感拟真卡片（严禁每轮都发，只在需要时出现）：\n` +
                 `格式为：[UI_CARD type="热敏小票/手写便签/行程单/电影票/清单"]内联CSS的DIV卡片HTML结构[/UI_CARD]\n` +
-                `卡片要求：全部使用内联 style 样式，宽度自适应（max-width:260px），字体精致、背景逼真（例如小票用微黄纸质感带虚线锯齿、便利贴用淡黄带投影）。必须独立输出，严禁塞进 [MSG] 中！\n`;
+                `卡片要求：全部使用内联 style 样式，宽度自适应（max-width:260px），字体精致、背景逼真。必须独立输出，严禁塞进 [MSG] 中！\n`;
         }
 
         // 注入好感度动态结算铁律协议
@@ -313,7 +318,6 @@
                 userPrompt: recentDialogue ? `最近对话：\n${recentDialogue}${searchContextPrompt}\n\n回复：` : '打个招呼。'
             };
 
-        // ⏰ 极简时间事实注入（直接给结果，AI 零计算，不浪费 Token）
         if (promptCtx.timeCtx) {
             const tc = promptCtx.timeCtx;
             const disableTz = !!(npc.chatSettings && npc.chatSettings.disableTimezone);
@@ -329,11 +333,8 @@
             ], { maxTokens: 10000, temperature: 0.86, silent: true });
 
             let clean = (typeof stripThought === 'function') ? stripThought(raw.trim()) : raw.trim();
-
-            // 仅清洗括号内的动作/神态描写，保护知识与搜索内容中正常的说明括号
             clean = clean.replace(/[\(（](?:揉|叹|眨|看|摸|笑|低头|抬头|轻笑|撇嘴|皱眉|转身|歪头|小声|抱|握|拉|推|咬|红着脸|动作)[^\)）]*[\)）]/gi, '').trim();
 
-            // 🛡️ 好感度变动提取与绝对门禁审核
             let favorDelta = 0;
             const favorMatch = clean.match(/\[FAVOR:\s*([+\-]?\d+(?:\.\d+)?)\s*\]/i);
             if (favorMatch) {
@@ -367,17 +368,15 @@
                 if (typeof window.syncCustomNpcsToLocalBackup === 'function') window.syncCustomNpcsToLocalBackup();
             }
 
-            // 📸 1. 提取角色主动发送的文字图片 [IMAGE_TEXT]...[/IMAGE_TEXT]
+            // 📸 提取文字图片
             const extractedImageTexts = [];
             clean = clean.replace(/\[IMAGE_TEXT\]([\s\S]*?)\[\/IMAGE_TEXT\]/gi, (match, p1) => {
                 const desc = p1.trim();
-                if (desc) {
-                    extractedImageTexts.push(desc);
-                }
+                if (desc) extractedImageTexts.push(desc);
                 return '';
             }).trim();
 
-            // 🧾 2. 提取拟真生活排版卡片 [UI_CARD type="..."]...[/UI_CARD]
+            // 🧾 提取拟真 UI 卡片
             const extractedUiCards = [];
             clean = clean.replace(/\[UI_CARD(?:\s+type="([^"]*)")?\]([\s\S]*?)\[\/UI_CARD\]/gi, (match, cardType, cardInner) => {
                 const innerHtml = cardInner.trim();
@@ -391,7 +390,7 @@
                 return '';
             }).trim();
 
-            // 🛡️ 智能自愈修复：防止模型因意外未闭合 [MSG] 导致前端掉格式
+            // 自愈闭合 [MSG]
             const openTagMatches = clean.match(/\[MSG(?:\s+original=(?:"[\s\S]*?"|'[\s\S]*?'|[^\]\s]+))?\]/gi) || [];
             const closeTagMatches = clean.match(/\[\/MSG\]/gi) || [];
             if (openTagMatches.length > closeTagMatches.length) {
@@ -444,15 +443,39 @@
                 clean = clean.replace(/\[BEHIND_SCREEN\][\s\S]*?\[\/BEHIND_SCREEN\]/gi, '').trim();
             }
 
-            let entities = (typeof window.parseAIReplyEntities === 'function')
-                ? window.parseAIReplyEntities(clean, npc.name)
-                : [{ type: 'text', text: clean.replace(/\[\/?MSG.*?\]/gi, '') }];
+            // 🌟 多语种外语语音正则捕获
+            let entities = [];
+            if (typeof window.parseAIReplyEntities === 'function') {
+                entities = window.parseAIReplyEntities(clean, npc.name);
+            } else {
+                const voiceRegex = /\[VOICE(?:\s+seconds="(\d+)")?(?:\s+audio_bg="([^"]*)")?(?:\s+original="([^"]*)")?\]([\s\S]*?)\[\/VOICE\]/gi;
+                let lastIndex = 0;
+                let match;
+                while ((match = voiceRegex.exec(clean)) !== null) {
+                    if (match.index > lastIndex) {
+                        const txt = clean.slice(lastIndex, match.index).replace(/\[\/?MSG.*?\]/gi, '').trim();
+                        if (txt) entities.push({ type: 'text', text: txt });
+                    }
+                    entities.push({
+                        type: 'voice',
+                        seconds: parseInt(match[1]) || 3,
+                        audioBg: match[2] || '',
+                        originalText: match[3] || '',
+                        text: match[4] ? match[4].trim() : ''
+                    });
+                    lastIndex = match.index + match[0].length;
+                }
+                if (lastIndex < clean.length) {
+                    const txt = clean.slice(lastIndex).replace(/\[\/?MSG.*?\]/gi, '').trim();
+                    if (txt) entities.push({ type: 'text', text: txt });
+                }
+            }
 
             if (!entities || !entities.length) {
                 entities = [{ type: 'text', text: '在呢' }];
             }
 
-            // 🎯 最少条数（minMsgs）不足时自动切分加固
+            // 🎯 最少条数加固
             if (entities.length < minMsgs) {
                 const expanded = [];
                 for (const ent of entities) {
@@ -467,14 +490,13 @@
                 entities = expanded;
             }
 
-            // 严格基于目标角色的当地时间小时数生成语音环境音（精准对齐生理时钟）
             const npcH = (promptCtx.timeCtx && promptCtx.timeCtx.nHour !== undefined) ? promptCtx.timeCtx.nHour : new Date().getHours();
 
-            // 🎯 语音偏好后处理与拟真背景音注入：
+            // 🎯 偏好后处理
             if (voiceFreq === 'never') {
                 entities = entities.map(ent => {
                     if (ent.type === 'voice') {
-                        return { type: 'text', text: ent.text || '' };
+                        return { type: 'text', text: ent.text || '', originalText: ent.originalText || null };
                     }
                     return ent;
                 });
@@ -485,6 +507,7 @@
                         return {
                             type: 'voice',
                             text: ent.text,
+                            originalText: ent.originalText || null,
                             seconds: sec,
                             audioBg: generateSmartVoiceAudioBg(npcH)
                         };
@@ -499,11 +522,12 @@
                     const textIndices = entities.map((e, idx) => (e.type === 'text' ? idx : -1)).filter(i => i !== -1);
                     if (textIndices.length > 0) {
                         const targetIdx = textIndices[textIndices.length - 1];
-                        const rawT = entities[targetIdx].text || '';
+                        const rawEnt = entities[targetIdx];
                         entities[targetIdx] = {
                             type: 'voice',
-                            text: rawT,
-                            seconds: Math.min(60, Math.max(2, Math.round(rawT.length * 0.45))),
+                            text: rawEnt.text || '',
+                            originalText: rawEnt.originalText || null,
+                            seconds: Math.min(60, Math.max(2, Math.round((rawEnt.text || '').length * 0.45))),
                             audioBg: generateSmartVoiceAudioBg(npcH)
                         };
                     }
@@ -522,7 +546,7 @@
                 });
             }
 
-            // 🎯 严格把控单次回复条数在最大上限 maxMsgs 内
+            // 🎯 上限限制
             if (entities.length > maxMsgs) {
                 const kept = entities.slice(0, maxMsgs - 1);
                 const rest = entities.slice(maxMsgs - 1);
@@ -532,6 +556,7 @@
                     kept.push({
                         type: 'voice',
                         text: mergedText,
+                        originalText: lastItem.originalText || null,
                         seconds: Math.min(60, Math.max(2, Math.round(mergedText.length * 0.45))),
                         audioBg: lastItem.audioBg || generateSmartVoiceAudioBg(npcH)
                     });
@@ -541,7 +566,6 @@
                 entities = kept;
             }
 
-            // 📸 插入提取到的文字图片实体
             extractedImageTexts.forEach(imgDesc => {
                 entities.push({
                     type: 'image_flip',
@@ -550,7 +574,6 @@
                 });
             });
 
-            // 🧾 插入提取到的拟真 UI 卡片实体
             extractedUiCards.forEach(card => {
                 entities.push({
                     type: 'ui_card',
@@ -583,6 +606,7 @@
                         type: 'voice',
                         seconds: item.seconds || 3,
                         audioBg: item.audioBg || '轻微的呼吸声与环境微音',
+                        originalText: item.originalText || null,
                         text: item.text || '',
                         time,
                         timestamp: Date.now()
@@ -647,7 +671,6 @@
                 }
             }
 
-            // 🌐 推送搜索到的优质网页卡片
             if (searchCfg.sendWebPage && searchResults && searchResults.length > 0) {
                 const topPage = searchResults[0];
                 if (topPage && topPage.url) {
@@ -681,7 +704,6 @@
                 if (window.G.currentChatNpc === npcId && typeof renderSingleChatWindow === 'function') renderSingleChatWindow();
             }
 
-            // 🧠 历史滑动总结（此时卡片与网络检索已被剥离为干净文本，不污染长期记忆）
             if (!isSearchTriggered && typeof checkAndTriggerAutoMemorySummary === 'function') {
                 checkAndTriggerAutoMemorySummary(npcId, curAcc.id);
             }

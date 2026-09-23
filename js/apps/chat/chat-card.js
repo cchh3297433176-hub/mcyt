@@ -6,7 +6,9 @@
  * 2. 右上角「装扮中心」：支持【我的装扮】与【对方装扮】双轨分流
  * 3. 头像框缩略图折叠栏试穿预览（点击试穿，再次点击卸下）
  * 4. 彻底消除杂乱 emoji，保持原生微信极简白灰微绿
- * 5. 🌟 角色专属 TTS 语音音色配置：增加【一键拉取并点选 CloneTTS 音色】按钮
+ * 5. 🌟 角色专属 TTS 语音音色配置：
+ *    - 增加独立【启用角色专属 TTS 发音】开关（默认关闭，不强迫使用）；
+ *    - 支持一键拉取并点选 CloneTTS 音色与语速精调。
  */
 
 (function() {
@@ -350,7 +352,7 @@
     }
     window.openNpcDecorModal = openNpcDecorModal;
 
-    // ⚙️ 角色资料设置弹窗（含一键选择 CloneTTS 音色菜单）
+    // ⚙️ 角色资料设置弹窗（含专属 TTS 开关与一键选择音色菜单）
     function openNpcSettingsModal(npcId) {
         if (!window.G || !window.G.npcs) return;
         const npc = window.G.npcs[npcId];
@@ -370,7 +372,7 @@
                 voiceFreq: 'rare',
                 disableTimezone: false,
                 disableBilingual: false,
-                tts: { voice: '', speed: 1.0 }
+                tts: { enabled: false, voice: '', speed: 1.0 }
             };
         }
         const minMsgs = Math.max(1, parseInt(npc.chatSettings.minMsgs) || 1);
@@ -380,6 +382,8 @@
         const disableBilingual = !!npc.chatSettings.disableBilingual;
         const curFavor = parseFloat(npc.favor !== undefined ? npc.favor : 50);
 
+        // 🌟 读取角色独立 TTS 配置（默认关闭）
+        const curTtsEnabled = !!(npc.chatSettings.tts && npc.chatSettings.tts.enabled);
         const curTtsVoice = (npc.chatSettings.tts && npc.chatSettings.tts.voice) || '';
         const curTtsSpeed = (npc.chatSettings.tts && npc.chatSettings.tts.speed) || 1.0;
 
@@ -432,15 +436,25 @@
                             <input type="hidden" id="wcleanSetVoiceFreqVal" value="${voiceFreq}">
                         </div>
 
-                        <!-- 🌟 角色专属 TTS 语音音色设置（带一键点选菜单） -->
+                        <!-- 🌟 角色专属 TTS 语音音色设置（带开启开关，默认关闭） -->
                         <div style="border-top:0.5px solid #eee;padding-top:8px;">
-                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
-                                <div style="font-size:11.5px;font-weight:600;color:#333;">专属 TTS 语音音色</div>
-                                <button type="button" id="btnPickTtsVoiceDirect" style="border:1px solid #07c160;background:#f0faf4;color:#07c160;font-size:11px;padding:2px 8px;border-radius:4px;cursor:pointer;font-weight:600;">选择音色 ▾</button>
-                            </div>
-                            <div style="display:flex;gap:6px;align-items:center;">
-                                <input type="text" id="wcleanSetNpcTtsVoice" value="${escapeHtml(curTtsVoice)}" placeholder="音色名/Voice ID (可点击右上角选择)" class="wechat-clean-input" style="flex:1;font-size:12px;">
-                                <input type="number" id="wcleanSetNpcTtsSpeed" value="${curTtsSpeed}" step="0.1" min="0.5" max="2.0" placeholder="语速" class="wechat-clean-input" style="width:64px;font-size:12px;text-align:center;" title="语速倍率">
+                            <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-size:12px;color:#181818;margin-bottom:6px;">
+                                <div style="display:flex;flex-direction:column;">
+                                    <span style="font-weight:600;">启用角色专属语音 TTS</span>
+                                    <span style="font-size:10.5px;color:#888;">未启用时，点击语音条只展开文字与背景音</span>
+                                </div>
+                                <input type="checkbox" id="wcleanSetNpcTtsEnabled" ${curTtsEnabled ? 'checked' : ''} style="width:16px;height:16px;accent-color:#07c160;cursor:pointer;">
+                            </label>
+
+                            <div id="wcleanNpcTtsFieldsWrap" style="display:${curTtsEnabled ? 'flex' : 'none'};flex-direction:column;gap:6px;margin-top:6px;background:#ffffff;padding:8px;border-radius:6px;border:0.5px solid #e8e8e8;">
+                                <div style="display:flex;justify-content:space-between;align-items:center;">
+                                    <span style="font-size:11px;color:#666;">音色名称 / ID</span>
+                                    <button type="button" id="btnPickTtsVoiceDirect" style="border:1px solid #07c160;background:#f0faf4;color:#07c160;font-size:10.5px;padding:2px 8px;border-radius:4px;cursor:pointer;font-weight:600;">选择音色 ▾</button>
+                                </div>
+                                <div style="display:flex;gap:6px;align-items:center;">
+                                    <input type="text" id="wcleanSetNpcTtsVoice" value="${escapeHtml(curTtsVoice)}" placeholder="输入或点选音色..." class="wechat-clean-input" style="flex:1;font-size:12px;">
+                                    <input type="number" id="wcleanSetNpcTtsSpeed" value="${curTtsSpeed}" step="0.1" min="0.5" max="2.0" placeholder="语速" class="wechat-clean-input" style="width:58px;font-size:12px;text-align:center;" title="语速倍率">
+                                </div>
                             </div>
                         </div>
 
@@ -500,6 +514,8 @@
                 const curDisableTimezone = !!document.getElementById('wcleanSetDisableTimezone')?.checked;
                 const curDisableBilingual = !!document.getElementById('wcleanSetDisableBilingual')?.checked;
 
+                // 🌟 保存专属 TTS 设置（包含明确开关）
+                const ttsEnabled = !!document.getElementById('wcleanSetNpcTtsEnabled')?.checked;
                 const ttsVoice = document.getElementById('wcleanSetNpcTtsVoice')?.value.trim() || '';
                 const ttsSpeed = parseFloat(document.getElementById('wcleanSetNpcTtsSpeed')?.value) || 1.0;
 
@@ -517,7 +533,7 @@
                     voiceFreq: curVoiceFreq,
                     disableTimezone: curDisableTimezone,
                     disableBilingual: curDisableBilingual,
-                    tts: { voice: ttsVoice, speed: ttsSpeed },
+                    tts: { enabled: ttsEnabled, voice: ttsVoice, speed: ttsSpeed },
                     decor: existingDecor
                 };
 
@@ -584,7 +600,16 @@
                     };
                 });
 
-                // 🌟 绑定一键点选 CloneTTS 音色
+                // 🌟 TTS 开关点击联动折叠展开设置项
+                const ttsCheck = document.getElementById('wcleanSetNpcTtsEnabled');
+                const ttsWrap = document.getElementById('wcleanNpcTtsFieldsWrap');
+                if (ttsCheck && ttsWrap) {
+                    ttsCheck.onchange = () => {
+                        ttsWrap.style.display = ttsCheck.checked ? 'flex' : 'none';
+                    };
+                }
+
+                // 绑定一键点选 CloneTTS 音色
                 const btnPickVoice = document.getElementById('btnPickTtsVoiceDirect');
                 const voiceInput = document.getElementById('wcleanSetNpcTtsVoice');
                 if (btnPickVoice && voiceInput && window.ttsEngine) {
@@ -763,7 +788,7 @@
                 voiceFreq: 'rare',
                 disableTimezone: false,
                 disableBilingual: false,
-                tts: { voice: '', speed: 1.0 }
+                tts: { enabled: false, voice: '', speed: 1.0 }
             }
         };
 
@@ -827,7 +852,7 @@
                             voiceFreq: 'rare',
                             disableTimezone: false,
                             disableBilingual: false,
-                            tts: { voice: '', speed: 1.0 }
+                            tts: { enabled: false, voice: '', speed: 1.0 }
                         }
                     };
 
