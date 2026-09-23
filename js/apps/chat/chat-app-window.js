@@ -7,8 +7,9 @@
  * 🌟 升级：
  *  1. 合并左下角语音中枢：去除输入框左侧冗余按键，左下角点击呼出纯图标微信原生轻量菜单（声波对讲/语音转文字/键盘输入）；
  *  2. 麦克风硬件权限自动申请（getUserMedia）门禁，杜绝无授权静默录音失效；
- *  3. 录音按键表面伪装发送真实语音条（带真实秒数），后台实时 ASR 转文字发给 AI 进行剧情对话；
- *  4. 收到 NPC 回复自动接入 TTS 语音引擎朗读（若配置开启）。
+ *  3. 微信原生高级感录音 HUD 浮层（半透明毛玻璃居中卡片 + Web Audio 真实音高波形动态跳动 + 实时秒数计时器）；
+ *  4. 修复 pushChatMessageSafe 参数顺序 Bug，杜绝 Cannot create property '_id' on string 报错；
+ *  5. 收到 NPC 回复自动接入 TTS 语音引擎朗读（若配置开启）。
  */
 
 (function() {
@@ -24,6 +25,12 @@
     let _speechRecognitionInstance = null;
     let _recognizedVoiceText = '';
 
+    // 🌟 音量实时检测与 HUD 动画控制
+    let _audioContextInstance = null;
+    let _audioStreamInstance = null;
+    let _audioAnalyserInstance = null;
+    let _waveAnimFrameId = null;
+
     // 辅助：获取形状圆角
     function getShapeBorderRadius(shape) {
         if (shape === 'circle') return '50%';
@@ -37,13 +44,12 @@
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
             try {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                // 授权成功后立即释放临时流
                 stream.getTracks().forEach(track => track.stop());
                 return true;
             } catch (err) {
                 console.warn('[Microphone] 麦克风权限获取失败或被拒绝:', err);
                 if (typeof showToast === 'function') {
-                    showToast('请在系统或浏览器设置中允许麦克风权限', 'info', 2000);
+                    showToast('请在系统或应用设置中允许麦克风权限', 'info', 2000);
                 }
                 return false;
             }
@@ -51,7 +57,118 @@
         return true;
     }
 
-    // 辅助：统一获取全局/运行时头像框配置列表（优先接入 IndexedDB 运行态池）
+    // 🎙️ 微信原生录音 HUD 动态渲染与波形采集
+    function showVoiceRecordingHUD() {
+        hideVoiceRecordingHUD();
+
+        const hud = document.createElement('div');
+        hud.id = 'wechatVoiceRecordingHUD';
+        hud.style.cssText = `
+            position: fixed; inset: 0; z-index: 100008;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(0, 0, 0, 0.35); pointer-events: none;
+            user-select: none; -webkit-user-select: none;
+            animation: wechatHudFadeIn 0.16s cubic-bezier(0.1, 0.9, 0.2, 1);
+        `;
+
+        hud.innerHTML = `
+            <style>
+                @keyframes wechatHudFadeIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+                @keyframes wechatHudFadeOut { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.92); } }
+            </style>
+            <div style="width: 156px; height: 156px; border-radius: 18px; background: rgba(22, 22, 22, 0.86); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 10px 30px rgba(0,0,0,0.35); border: 0.5px solid rgba(255,255,255,0.12); box-sizing: border-box; padding: 12px;">
+                <div style="display: flex; align-items: center; justify-content: center; gap: 14px; height: 60px; margin-bottom: 6px;">
+                    <!-- 极简录音麦克风图标 -->
+                    <div style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: rgba(7, 193, 96, 0.18);">
+                        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px; fill: none; stroke: #07c160; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round;">
+                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                            <line x1="12" y1="19" x2="12" y2="23"></line>
+                            <line x1="8" y1="23" x2="16" y2="23"></line>
+                        </svg>
+                    </div>
+
+                    <!-- 5 根动态根据音量跳动的原生波形条 -->
+                    <div style="display: flex; align-items: center; gap: 3.5px; height: 38px;">
+                        <span class="wechat-wave-bar" style="width: 3.5px; height: 8px; background: #07c160; border-radius: 2px; transition: height 0.08s ease;"></span>
+                        <span class="wechat-wave-bar" style="width: 3.5px; height: 14px; background: #07c160; border-radius: 2px; transition: height 0.08s ease;"></span>
+                        <span class="wechat-wave-bar" style="width: 3.5px; height: 22px; background: #07c160; border-radius: 2px; transition: height 0.08s ease;"></span>
+                        <span class="wechat-wave-bar" style="width: 3.5px; height: 14px; background: #07c160; border-radius: 2px; transition: height 0.08s ease;"></span>
+                        <span class="wechat-wave-bar" style="width: 3.5px; height: 8px; background: #07c160; border-radius: 2px; transition: height 0.08s ease;"></span>
+                    </div>
+                </div>
+
+                <div id="hudVoiceDuration" style="font-size: 15px; font-weight: 700; color: #ffffff; letter-spacing: 0.5px; margin-bottom: 4px;">1"</div>
+                <div style="font-size: 11.5px; color: #a0a0a0; font-weight: 500;">手指松开 发送</div>
+            </div>
+        `;
+
+        document.body.appendChild(hud);
+
+        // 启动音频振幅分析
+        try {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (AudioCtx && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
+                    _audioStreamInstance = stream;
+                    _audioContextInstance = new AudioCtx();
+                    const source = _audioContextInstance.createMediaStreamSource(stream);
+                    _audioAnalyserInstance = _audioContextInstance.createAnalyser();
+                    _audioAnalyserInstance.fftSize = 64;
+                    source.connect(_audioAnalyserInstance);
+
+                    const dataArray = new Uint8Array(_audioAnalyserInstance.frequencyBinCount);
+                    const bars = hud.querySelectorAll('.wechat-wave-bar');
+
+                    const updateWaveBars = () => {
+                        if (!_isRecordingVoice) return;
+                        _audioAnalyserInstance.getByteFrequencyData(dataArray);
+
+                        let sum = 0;
+                        for (let i = 0; i < 16; i++) { sum += dataArray[i]; }
+                        const avg = sum / 16; // 0 ~ 255
+
+                        const durationEl = document.getElementById('hudVoiceDuration');
+                        if (durationEl) {
+                            const curSec = Math.max(1, Math.round((Date.now() - _voiceRecordStartTime) / 1000));
+                            durationEl.textContent = `${curSec}"`;
+                        }
+
+                        bars.forEach((bar, idx) => {
+                            const factor = 1 + Math.sin(idx * 0.8 + Date.now() / 150) * 0.4;
+                            const h = Math.min(36, Math.max(6, Math.round((avg / 255) * 36 * factor)));
+                            bar.style.height = `${h}px`;
+                        });
+
+                        _waveAnimFrameId = requestAnimationFrame(updateWaveBars);
+                    };
+                    updateWaveBars();
+                }).catch(() => {});
+            }
+        } catch (_) {}
+    }
+
+    function hideVoiceRecordingHUD() {
+        if (_waveAnimFrameId) {
+            cancelAnimationFrame(_waveAnimFrameId);
+            _waveAnimFrameId = null;
+        }
+        if (_audioStreamInstance) {
+            try { _audioStreamInstance.getTracks().forEach(t => t.stop()); } catch (_) {}
+            _audioStreamInstance = null;
+        }
+        if (_audioContextInstance) {
+            try { _audioContextInstance.close(); } catch (_) {}
+            _audioContextInstance = null;
+        }
+        const hud = document.getElementById('wechatVoiceRecordingHUD');
+        if (hud) {
+            hud.style.animation = 'wechatHudFadeOut 0.14s cubic-bezier(0.4, 0, 1, 1)';
+            setTimeout(() => { hud.remove(); }, 120);
+        }
+    }
+
+    // 辅助：统一获取全局/运行时头像框配置列表
     function getAvailableFramesList() {
         if (typeof window.getStoredDecorFrames === 'function') {
             const list = window.getStoredDecorFrames();
@@ -153,7 +270,6 @@
             const isHidden = (box.style.display === 'none' || getComputedStyle(box).display === 'none');
             box.style.display = isHidden ? 'block' : 'none';
         }
-        // 如果接入了真实 TTS，点击语音条直接发声朗读
         const curNpcId = window.G && window.G.currentChatNpc;
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
         const hist = window.getAccountChatHistory(curNpcId, curAcc.id) || [];
@@ -177,7 +293,7 @@
         }
     };
 
-    // 🌟 控制左下角语音纯图标弹出菜单
+    // 控制左下角语音纯图标弹出菜单
     window.toggleVoiceActionMenu = function(type, npcId) {
         window._voiceActionMenuOpen = !window._voiceActionMenuOpen;
         window.renderSingleChatWindow(null, { keepScroll: true });
@@ -207,13 +323,16 @@
         _voiceRecordStartTime = Date.now();
         _recognizedVoiceText = '';
 
+        // 唤起微信原生质感录音 HUD（带动态音浪）
+        showVoiceRecordingHUD();
+
         const recordBtn = document.getElementById('btnVoiceRecordPress');
         if (recordBtn) {
             recordBtn.style.background = '#e5e5e5';
             recordBtn.setAttribute('data-recording', 'true');
         }
 
-        // 尝试启动原生语音识别通道
+        // 启动原生语音识别通道
         const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (SpeechRec) {
             try {
@@ -241,6 +360,8 @@
 
         const durationSeconds = Math.max(1, Math.min(60, Math.round((Date.now() - _voiceRecordStartTime) / 1000)));
 
+        hideVoiceRecordingHUD();
+
         if (_speechRecognitionInstance) {
             try { _speechRecognitionInstance.stop(); } catch (_) {}
             _speechRecognitionInstance = null;
@@ -257,7 +378,6 @@
             finalText = '（发送了一条语音）';
         }
 
-        // 发送带真实语音条的消息（表面是语音，后台文本随之提交给 AI）
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
         const newMsg = {
             _id: 'msg_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
@@ -269,8 +389,9 @@
             timestamp: Date.now()
         };
 
+        // 🌟 核心修复：按标准传递 (npcId, msgObj, accId) 杜绝 _id 创建在 string 上的 TypeError
         if (typeof window.pushChatMessageSafe === 'function') {
-            window.pushChatMessageSafe(npcId, curAcc.id, newMsg);
+            window.pushChatMessageSafe(npcId, newMsg, curAcc.id);
         } else {
             const hist = window.getAccountChatHistory(npcId, curAcc.id);
             hist.push(newMsg);
@@ -792,7 +913,6 @@
 
         const isVoiceMode = (window._chatInputMode === 'voice');
 
-        // 输入框中央核心区域：对讲按钮或者文本框
         const inputCenterHtml = isVoiceMode ? `
             <div id="btnVoiceRecordPress" style="flex:1;height:36px;border-radius:6px;background:#ffffff;box-shadow:inset 0 0 0 0.5px #dcdcdc;display:flex;align-items:center;justify-content:center;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;">
                 <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:#07c160;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;margin-right:6px;"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
@@ -802,7 +922,6 @@
             <textarea id="singleChatInput" rows="1" placeholder="发消息..." style="flex:1;padding:8px 12px;border-radius:6px;border:none;background:#ffffff;font-size:14px;resize:none;outline:none;font-family:inherit;box-shadow:inset 0 0 0 0.5px #dcdcdc;box-sizing:border-box;max-height:80px;"></textarea>
         `;
 
-        // 🌟 左下角纯图标选择浮层 (Popover)
         const voiceMenuPopoverHtml = window._voiceActionMenuOpen ? `
             <div id="wechatVoiceActionPopover" style="position:absolute;bottom:42px;left:0;z-index:999;background:#ffffff;border-radius:8px;box-shadow:0 4px 18px rgba(0,0,0,0.12);border:0.5px solid #e0e0e0;padding:6px;display:flex;align-items:center;gap:6px;animation:wechatPopIn 0.15s cubic-bezier(0.1, 0.9, 0.2, 1);">
                 <style>
@@ -888,7 +1007,6 @@
             <!-- 仿 QQ/群聊 双层输入区域 -->
             <div style="background:#f7f7f7;border-top:0.5px solid #dcdcdc;display:flex;flex-direction:column;padding:6px 10px 8px;flex-shrink:0;gap:6px;">
                 <div style="display:flex;align-items:center;gap:6px;">
-                    <!-- 舒展的中央输入区域（不再有左侧麦克风按键挤压） -->
                     ${inputCenterHtml}
                     
                     <button id="btnSingleRegenerateReply" onclick="window.confirmRetryLastAIReply('${npcId}')" title="重新生成上一条回复" style="border:0.5px solid #dcdcdc;background:#ffffff;color:#444;width:34px;height:34px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;">
@@ -902,7 +1020,6 @@
 
                 <div style="display:flex;align-items:center;justify-content:space-between;padding:0 4px;">
                     <div style="display:flex;align-items:center;gap:18px;">
-                        <!-- 🌟 左下角合并统一语音键与纯图标选择浮层 -->
                         <div style="position:relative;display:inline-flex;align-items:center;">
                             <button type="button" onclick="window.toggleVoiceActionMenu('single','${npcId}')" title="语音模式选择" style="border:none;background:none;cursor:pointer;padding:0;display:flex;align-items:center;color:${isVoiceMode ? '#07c160' : '#555'};">
                                 <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
