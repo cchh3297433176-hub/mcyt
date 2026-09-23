@@ -2,7 +2,7 @@
 // 📱 系统设置中心 App（全站版本号唯一定义源 · 微信原生白灰微绿设计 · 小手机记忆卡原生直接下载 · 备份周期提醒）
 // ============================================================
 
-// 🌟【全项目版本号唯一真源】：以后打包发新软件，直接在此修改此常量即可！
+// 🌟【全项目版本号唯一真源】：以后打包发新版本，直接在此修改此常量即可！
 const CURRENT_APP_VERSION = '1.611';
 window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
 
@@ -806,6 +806,23 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
                         </div>
                     </div>
 
+                    <!-- 🌟 全新入口：真实语音与 TTS 引擎配置卡片 -->
+                    <div style="background:#ffffff;border-radius:12px;padding:12px 14px;box-shadow:0 1px 3px rgba(0,0,0,0.04);border:1px solid #eeeeee;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <div style="width:36px;height:36px;border-radius:8px;background:#f0f9eb;display:flex;align-items:center;justify-content:center;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#07c160" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                                </svg>
+                            </div>
+                            <div>
+                                <div style="font-size:13px;font-weight:600;color:#222;">语音与 TTS 引擎设置</div>
+                                <div style="font-size:11px;color:#888;">支持平台Key、本地部署与系统离线发声</div>
+                            </div>
+                        </div>
+                        <button id="openTtsSettingsModalBtn" style="padding:6px 14px;font-size:12px;font-weight:500;border:1px solid #07c160;background:#ffffff;color:#07c160;border-radius:6px;cursor:pointer;">配置语音</button>
+                    </div>
+
                     <div style="background:#ffffff;border-radius:12px;padding:12px 14px;box-shadow:0 1px 3px rgba(0,0,0,0.04);border:1px solid #eeeeee;">
                         <div id="profileArchiveHeader" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
                             <span style="font-size:12.5px;font-weight:600;color:#333;">已存配置方案 (${profiles.length + 1})</span>
@@ -1259,6 +1276,18 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
         const backupBtn = document.getElementById('backupConfigModalBtn');
         if (backupBtn) {
             backupBtn.onclick = () => openConfigBackupModal();
+        }
+
+        // 🌟 绑定打开 TTS 配置弹窗按钮
+        const openTtsBtn = document.getElementById('openTtsSettingsModalBtn');
+        if (openTtsBtn) {
+            openTtsBtn.onclick = () => {
+                if (window.ttsEngine && typeof window.ttsEngine.openSettingsModal === 'function') {
+                    window.ttsEngine.openSettingsModal();
+                } else {
+                    if (typeof showToast === 'function') showToast('语音引擎尚未初始化完毕', 'error');
+                }
+            };
         }
 
         const saveSearchBtn = document.getElementById('saveSearchConfigBtn');
