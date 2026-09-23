@@ -6,7 +6,7 @@
  * 2. 右上角「装扮中心」：支持【我的装扮】与【对方装扮】双轨分流
  * 3. 头像框缩略图折叠栏试穿预览（点击试穿，再次点击卸下）
  * 4. 彻底消除杂乱 emoji，保持原生微信极简白灰微绿
- * 5. 🌟 角色专属 TTS 语音音色配置：分配角色个性化音色（Voice ID / 平台音色）与语速倍率
+ * 5. 🌟 角色专属 TTS 语音音色配置：增加【一键拉取并点选 CloneTTS 音色】按钮
  */
 
 (function() {
@@ -350,7 +350,7 @@
     }
     window.openNpcDecorModal = openNpcDecorModal;
 
-    // ⚙️ 角色资料设置弹窗（含专属 TTS 音色配置）
+    // ⚙️ 角色资料设置弹窗（含一键选择 CloneTTS 音色菜单）
     function openNpcSettingsModal(npcId) {
         if (!window.G || !window.G.npcs) return;
         const npc = window.G.npcs[npcId];
@@ -432,11 +432,14 @@
                             <input type="hidden" id="wcleanSetVoiceFreqVal" value="${voiceFreq}">
                         </div>
 
-                        <!-- 🌟 角色专属真实音色设置 -->
+                        <!-- 🌟 角色专属 TTS 语音音色设置（带一键点选菜单） -->
                         <div style="border-top:0.5px solid #eee;padding-top:8px;">
-                            <div style="font-size:11.5px;font-weight:600;color:#333;margin-bottom:4px;">专属 TTS 语音音色</div>
+                            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:5px;">
+                                <div style="font-size:11.5px;font-weight:600;color:#333;">专属 TTS 语音音色</div>
+                                <button type="button" id="btnPickTtsVoiceDirect" style="border:1px solid #07c160;background:#f0faf4;color:#07c160;font-size:11px;padding:2px 8px;border-radius:4px;cursor:pointer;font-weight:600;">选择音色 ▾</button>
+                            </div>
                             <div style="display:flex;gap:6px;align-items:center;">
-                                <input type="text" id="wcleanSetNpcTtsVoice" value="${escapeHtml(curTtsVoice)}" placeholder="音色名/Voice ID (如 alloy, nova)" class="wechat-clean-input" style="flex:1;font-size:12px;">
+                                <input type="text" id="wcleanSetNpcTtsVoice" value="${escapeHtml(curTtsVoice)}" placeholder="音色名/Voice ID (可点击右上角选择)" class="wechat-clean-input" style="flex:1;font-size:12px;">
                                 <input type="number" id="wcleanSetNpcTtsSpeed" value="${curTtsSpeed}" step="0.1" min="0.5" max="2.0" placeholder="语速" class="wechat-clean-input" style="width:64px;font-size:12px;text-align:center;" title="语速倍率">
                             </div>
                         </div>
@@ -580,6 +583,18 @@
                         if (freqHidden) freqHidden.value = btn.getAttribute('data-val');
                     };
                 });
+
+                // 🌟 绑定一键点选 CloneTTS 音色
+                const btnPickVoice = document.getElementById('btnPickTtsVoiceDirect');
+                const voiceInput = document.getElementById('wcleanSetNpcTtsVoice');
+                if (btnPickVoice && voiceInput && window.ttsEngine) {
+                    btnPickVoice.onclick = () => {
+                        window.ttsEngine.openVoicePickerModal(voiceInput.value.trim(), (pickedId) => {
+                            voiceInput.value = pickedId;
+                            if (typeof showToast === 'function') showToast(`已选用音色: ${pickedId}`, 'success', 1000);
+                        });
+                    };
+                }
 
                 const datingBtn = document.getElementById('btnToggleDatingInSettings');
                 if (datingBtn) {
