@@ -1,8 +1,8 @@
 // js/apps/settings/settings-app.js
-// 📱 系统设置中心 App（全站版本号唯一定义源 · 微信原生白灰微绿设计 · 小手机记忆卡原生直接下载 · 备份周期提醒）
+// 系统设置中心 App（全站版本号唯一定义源 · 微信原生白灰微绿设计 · 小手机记忆卡原生直接下载 · 备份周期提醒）
 // ============================================================
 
-// 🌟【全项目版本号唯一真源】：以后打包发新版本，直接在此修改此常量即可！
+// 【全项目版本号唯一真源】：以后打包发新版本，直接在此修改此常量即可！
 const CURRENT_APP_VERSION = '1.611';
 window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
 
@@ -185,7 +185,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
 
         modalBody.innerHTML = `
             <div style="margin-bottom:10px;">
-                <input type="text" id="pickerSearchModelInput" placeholder="🔍 快速过滤模型..." style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #e5e5e5;background:#f9f9f9;font-size:12px;outline:none;box-sizing:border-box;">
+                <input type="text" id="pickerSearchModelInput" placeholder="过滤搜索模型..." style="width:100%;padding:8px 10px;border-radius:8px;border:1px solid #e5e5e5;background:#f9f9f9;font-size:12px;outline:none;box-sizing:border-box;">
             </div>
             <div id="pickerModelListContainer" style="max-height:280px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-right:2px;"></div>
             <div style="margin-top:14px;text-align:right;">
@@ -297,7 +297,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
     }
 
     // ============================================================
-    // 📇 PNG 底层 tEXt 块编码与 CRC32 校验工具（与角色卡相同规范）
+    // PNG 底层 tEXt 块编码与 CRC32 校验工具（与角色卡相同规范）
     // ============================================================
     function calculateCrc32(buf) {
         let table = window._mcytCrcTable;
@@ -341,7 +341,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
         return chunk;
     }
 
-    // 🌟 全量记忆备份卡导出：直接下载到设备存储（使用 DataURL 避免 WebView 拦截）
+    // 全量记忆备份卡导出：直接下载到设备存储（使用 DataURL 避免 WebView 拦截）
     function openMemoryCardExportModal() {
         if (!window.G) {
             if (typeof showToast === 'function') showToast('游戏状态未就绪', 'error');
@@ -377,7 +377,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
                 </div>
                 <div style="flex:1;">
                     <div style="font-size:12.5px;font-weight:600;color:#222;margin-bottom:4px;">卡面封面图像</div>
-                    <div style="font-size:11px;color:#888;margin-bottom:6px;">默认使用当前皮套/形象，支持自选相册封面</div>
+                    <div style="font-size:11px;color:#888;margin-bottom:6px;">默认使用当前形象，支持自选相册封面</div>
                     <button id="chooseCustomCardCoverBtn" style="padding:4px 10px;font-size:11px;border-radius:6px;border:1px solid #d0d0d0;background:#fff;color:#333;cursor:pointer;">更换封面图</button>
                     <input type="file" id="memoryCardCoverFileInput" accept="image/*" style="display:none;" />
                 </div>
@@ -462,7 +462,6 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
                     const jsonStr = JSON.stringify(fullCardData);
                     const base64Json = btoa(unescape(encodeURIComponent(jsonStr)));
 
-                    // 绘制底图 Canvas
                     const canvas = document.createElement('canvas');
                     canvas.width = 400;
                     canvas.height = 400;
@@ -516,7 +515,6 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
 
                     const outBlob = new Blob([out], { type: 'image/png' });
 
-                    // 🚀 核心关键：转为 DataURL（兼容原生 Android WebView 直接下到 Download 目录）
                     const reader = new FileReader();
                     reader.onloadend = () => {
                         const dataUrl = reader.result;
@@ -527,7 +525,6 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
                         a.click();
                         document.body.removeChild(a);
 
-                        // 更新备份周期记录
                         const rCfg = getBackupReminderConfig();
                         rCfg.lastBackupDay = window.G.day || 1;
                         rCfg.lastBackupTime = Date.now();
@@ -535,7 +532,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
 
                         closeModal();
                         if (typeof showToast === 'function') {
-                            showToast(`✅ 记忆卡 [${finalFilename}] 已直接下载到存储目录！`, 'success', 3500);
+                            showToast(`记忆卡 [${finalFilename}] 已直接下载到存储目录！`, 'success', 3500);
                         }
                     };
                     reader.readAsDataURL(outBlob);
@@ -551,7 +548,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
         }
     }
 
-    // 🌟 导入小手机记忆备份卡（PNG / JSON）
+    // 导入小手机记忆备份卡（PNG / JSON）
     function openMemoryCardImportModal() {
         let fileInput = document.getElementById('memoryCardImportFileInput');
         if (!fileInput) {
@@ -687,12 +684,175 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
                     saveBackupReminderConfig(rCfg);
 
                     renderSettingsApp();
-                    if (typeof showToast === 'function') showToast('🎉 记忆卡已成功还原至小手机！', 'success', 3000);
+                    if (typeof showToast === 'function') showToast('记忆卡已成功还原至小手机！', 'success', 3000);
                 } catch (e) {
                     openWechatConfirmModal('错误', '应用记忆卡数据时发生异常: ' + e.message);
                 }
             }
         );
+    }
+
+    // ============================================================
+    // 🎙️ 离线语音识别 (ASR) 模型管理弹窗与交互中枢
+    // ============================================================
+    async function openAsrSettingsModal() {
+        if (!window.mcytAsr) {
+            if (typeof showToast === 'function') showToast('离线语音识别组件未就绪', 'error');
+            return;
+        }
+
+        const modal = document.getElementById('modal');
+        const modalBody = document.getElementById('modalBody');
+        const retroModalTitle = document.getElementById('retroModalTitle');
+        if (!modal || !modalBody) return;
+
+        if (retroModalTitle) retroModalTitle.textContent = '离线语音识别模型';
+
+        const config = await window.mcytAsr.loadConfig();
+        const modelMeta = await window.mcytAsr.getModelMeta();
+
+        modalBody.innerHTML = `
+            <div style="font-size:12.5px;color:#666;margin-bottom:12px;line-height:1.5;">
+                基于 Whisper WebAssembly 本地推理，不消耗流量且不依赖外部加速器。
+            </div>
+
+            <!-- 当前已装载模型卡片 -->
+            <div style="background:#f9f9f9;border-radius:10px;padding:12px;border:1px solid #eeeeee;margin-bottom:14px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                    <span style="font-size:12.5px;font-weight:600;color:#222;">当前模型状态</span>
+                    <span id="asrModelStatusTag" style="font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;background:${modelMeta ? '#f0f9eb' : '#f5f5f5'};color:${modelMeta ? '#07c160' : '#888888'};">
+                        ${modelMeta ? '已就绪' : '未导入模型'}
+                    </span>
+                </div>
+                <div id="asrModelMetaDetail" style="font-size:11.5px;color:#555;line-height:1.6;">
+                    ${modelMeta ? `
+                        <div>文件名称：<b>${escapeHtml(modelMeta.name)}</b></div>
+                        <div>占用空间：<b>${escapeHtml(modelMeta.sizeFormatted || '')}</b></div>
+                    ` : `
+                        <div style="color:#999;">尚未在本地导入模型。请导入 ggml 格式模型文件（推荐 ggml-tiny-q5_1.bin 约31MB）。</div>
+                    `}
+                </div>
+            </div>
+
+            <!-- 模型导入通道 -->
+            <div style="margin-bottom:14px;">
+                <input type="file" id="asrModelFileInput" accept=".bin" style="display:none;" />
+                <button id="triggerChooseAsrModelBtn" style="width:100%;padding:9px;font-size:12px;font-weight:600;border:1px dashed #07c160;background:#f0f9eb;color:#07c160;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
+                    <svg style="width:14px;height:14px;fill:currentColor;" viewBox="0 0 24 24"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>
+                    <span>${modelMeta ? '覆盖导入新模型 (.bin)' : '导入本地语音模型 (.bin)'}</span>
+                </button>
+                <div id="asrImportProgressBox" style="display:none;margin-top:8px;">
+                    <div style="display:flex;justify-content:space-between;font-size:11px;color:#666;margin-bottom:4px;">
+                        <span id="asrProgressStatusText">准备读取...</span>
+                        <span id="asrProgressPercentText">0%</span>
+                    </div>
+                    <div style="width:100%;height:6px;background:#eee;border-radius:3px;overflow:hidden;">
+                        <div id="asrProgressBar" style="width:0%;height:100%;background:#07c160;transition:width 0.2s ease;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 识别偏好参数 -->
+            <div style="background:#ffffff;border-radius:8px;border:1px solid #eeeeee;padding:10px 12px;margin-bottom:14px;">
+                <div style="font-size:12px;font-weight:600;color:#222;margin-bottom:8px;">语言识别偏好</div>
+                <div style="display:flex;gap:6px;">
+                    <label style="flex:1;display:flex;align-items:center;justify-content:center;padding:6px 0;border:1px solid ${config.language === 'zh' ? '#07c160' : '#e0e0e0'};border-radius:6px;background:${config.language === 'zh' ? '#f0f9eb' : '#fff'};color:${config.language === 'zh' ? '#07c160' : '#333'};font-size:11.5px;cursor:pointer;">
+                        <input type="radio" name="asrLangRadio" value="zh" ${config.language === 'zh' ? 'checked' : ''} style="display:none;">
+                        <span>普通话 (zh)</span>
+                    </label>
+                    <label style="flex:1;display:flex;align-items:center;justify-content:center;padding:6px 0;border:1px solid ${config.language === 'en' ? '#07c160' : '#e0e0e0'};border-radius:6px;background:${config.language === 'en' ? '#f0f9eb' : '#fff'};color:${config.language === 'en' ? '#07c160' : '#333'};font-size:11.5px;cursor:pointer;">
+                        <input type="radio" name="asrLangRadio" value="en" ${config.language === 'en' ? 'checked' : ''} style="display:none;">
+                        <span>英语 (en)</span>
+                    </label>
+                    <label style="flex:1;display:flex;align-items:center;justify-content:center;padding:6px 0;border:1px solid ${config.language === 'auto' ? '#07c160' : '#e0e0e0'};border-radius:6px;background:${config.language === 'auto' ? '#f0f9eb' : '#fff'};color:${config.language === 'auto' ? '#07c160' : '#333'};font-size:11.5px;cursor:pointer;">
+                        <input type="radio" name="asrLangRadio" value="auto" ${config.language === 'auto' ? 'checked' : ''} style="display:none;">
+                        <span>自动检测</span>
+                    </label>
+                </div>
+            </div>
+
+            <!-- 操作按钮栏 -->
+            <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;">
+                <div>
+                    ${modelMeta ? `
+                        <button id="deleteAsrModelBtn" style="padding:6px 12px;font-size:11.5px;border-radius:6px;border:1px solid #ffdddd;background:#fff5f5;color:#e03131;cursor:pointer;">
+                            删除本地模型
+                        </button>
+                    ` : ''}
+                </div>
+                <div style="display:flex;gap:8px;">
+                    <button onclick="closeModal()" style="padding:6px 14px;border-radius:6px;border:1px solid #e0e0e0;background:#f5f5f5;color:#666;font-size:12px;cursor:pointer;">关闭</button>
+                </div>
+            </div>
+        `;
+
+        modal.classList.add('open');
+
+        // 文件导入逻辑
+        const chooseBtn = document.getElementById('triggerChooseAsrModelBtn');
+        const fileInp = document.getElementById('asrModelFileInput');
+        const progressBox = document.getElementById('asrImportProgressBox');
+        const progressBar = document.getElementById('asrProgressBar');
+        const statusText = document.getElementById('asrProgressStatusText');
+        const percentText = document.getElementById('asrProgressPercentText');
+
+        if (chooseBtn && fileInp) {
+            chooseBtn.onclick = () => fileInp.click();
+            fileInp.onchange = async (e) => {
+                const file = e.target.files && e.target.files[0];
+                if (!file) return;
+
+                if (!file.name.toLowerCase().endsWith('.bin')) {
+                    if (typeof showToast === 'function') showToast('请选择 .bin 格式的 whisper 模型文件', 'error');
+                    fileInp.value = '';
+                    return;
+                }
+
+                if (progressBox) progressBox.style.display = 'block';
+                chooseBtn.disabled = true;
+
+                try {
+                    await window.mcytAsr.importModelFromFile(file, (percent, msg) => {
+                        if (progressBar) progressBar.style.width = percent + '%';
+                        if (percentText) percentText.textContent = percent + '%';
+                        if (statusText) statusText.textContent = msg || '正在导入...';
+                    });
+
+                    if (typeof showToast === 'function') showToast('离线语音模型装载完毕！', 'success', 2500);
+                    openAsrSettingsModal();
+                    renderSettingsApp();
+                } catch (err) {
+                    console.error('导入离线模型失败:', err);
+                    if (typeof showToast === 'function') showToast('导入失败: ' + err.message, 'error', 3000);
+                } finally {
+                    chooseBtn.disabled = false;
+                    fileInp.value = '';
+                }
+            };
+        }
+
+        // 语言单选切换
+        modalBody.querySelectorAll('input[name="asrLangRadio"]').forEach(radio => {
+            radio.onchange = async () => {
+                const lang = radio.value;
+                await window.mcytAsr.saveConfig({ language: lang });
+                openAsrSettingsModal();
+                if (typeof showToast === 'function') showToast('已保存语言偏好', 'info', 1000);
+            };
+        });
+
+        // 删除模型
+        const deleteBtn = document.getElementById('deleteAsrModelBtn');
+        if (deleteBtn) {
+            deleteBtn.onclick = () => {
+                openWechatConfirmModal('删除语音模型', '确定要删除已缓存的本地语音模型吗？删除后将释放存储空间，但离线转文字将不可用。', async () => {
+                    await window.mcytAsr.removeModel();
+                    if (typeof showToast === 'function') showToast('模型已清除', 'info', 1500);
+                    openAsrSettingsModal();
+                    renderSettingsApp();
+                });
+            };
+        }
     }
 
     // 渲染系统设置主视窗
@@ -806,7 +966,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
                         </div>
                     </div>
 
-                    <!-- 🌟 全新入口：真实语音与 TTS 引擎配置卡片 -->
+                    <!-- 真实语音与 TTS 引擎配置卡片 -->
                     <div style="background:#ffffff;border-radius:12px;padding:12px 14px;box-shadow:0 1px 3px rgba(0,0,0,0.04);border:1px solid #eeeeee;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">
                         <div style="display:flex;align-items:center;gap:10px;">
                             <div style="width:36px;height:36px;border-radius:8px;background:#f0f9eb;display:flex;align-items:center;justify-content:center;">
@@ -821,6 +981,25 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
                             </div>
                         </div>
                         <button id="openTtsSettingsModalBtn" style="padding:6px 14px;font-size:12px;font-weight:500;border:1px solid #07c160;background:#ffffff;color:#07c160;border-radius:6px;cursor:pointer;">配置语音</button>
+                    </div>
+
+                    <!-- 🎙️ 全新卡片：离线语音识别 (ASR) 模型管理 -->
+                    <div style="background:#ffffff;border-radius:12px;padding:12px 14px;box-shadow:0 1px 3px rgba(0,0,0,0.04);border:1px solid #eeeeee;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <div style="width:36px;height:36px;border-radius:8px;background:#f0f9eb;display:flex;align-items:center;justify-content:center;">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#07c160" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                                    <line x1="12" y1="19" x2="12" y2="23"></line>
+                                    <line x1="8" y1="23" x2="16" y2="23"></line>
+                                </svg>
+                            </div>
+                            <div>
+                                <div style="font-size:13px;font-weight:600;color:#222;">离线语音识别 (ASR)</div>
+                                <div style="font-size:11px;color:#888;">导入 Whisper 本地模型，脱离加速器转文字</div>
+                            </div>
+                        </div>
+                        <button id="openAsrSettingsModalBtn" style="padding:6px 14px;font-size:12px;font-weight:500;border:1px solid #07c160;background:#ffffff;color:#07c160;border-radius:6px;cursor:pointer;">管理模型</button>
                     </div>
 
                     <div style="background:#ffffff;border-radius:12px;padding:12px 14px;box-shadow:0 1px 3px rgba(0,0,0,0.04);border:1px solid #eeeeee;">
@@ -1278,7 +1457,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
             backupBtn.onclick = () => openConfigBackupModal();
         }
 
-        // 🌟 绑定打开 TTS 配置弹窗按钮
+        // 绑定打开 TTS 配置弹窗按钮
         const openTtsBtn = document.getElementById('openTtsSettingsModalBtn');
         if (openTtsBtn) {
             openTtsBtn.onclick = () => {
@@ -1288,6 +1467,12 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
                     if (typeof showToast === 'function') showToast('语音引擎尚未初始化完毕', 'error');
                 }
             };
+        }
+
+        // 🎙️ 绑定打开离线 ASR 语音模型管理弹窗按钮
+        const openAsrBtn = document.getElementById('openAsrSettingsModalBtn');
+        if (openAsrBtn) {
+            openAsrBtn.onclick = () => openAsrSettingsModal();
         }
 
         const saveSearchBtn = document.getElementById('saveSearchConfigBtn');
@@ -1305,7 +1490,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
                 const selectedRadio = document.querySelector('input[name="searchProviderRadio"]:checked');
                 const provider = selectedRadio ? selectedRadio.value : 'bing_local';
                 const searchObj = {
-                    enabled: true, // 全局保留为底层就绪，具体触发由聊天抽屉按角色独立控制
+                    enabled: true,
                     provider: provider,
                     maxResults: parseInt(resultCountSlider?.value) || 3,
                     keys: {
@@ -1349,7 +1534,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
                 testSearchBtn.disabled = true;
                 testSearchBtn.textContent = '检索中...';
                 testSearchResultBox.style.display = 'block';
-                testSearchResultBox.innerHTML = '<span style="color:#888;">正在探查实时 Minecraft 资讯...</span>';
+                testSearchResultBox.innerHTML = '<span style="color:#888;">正在探查实时资讯...</span>';
 
                 const targetCount = parseInt(resultCountSlider?.value) || 3;
 
@@ -1636,7 +1821,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
         if (currentDay - lastDay >= cfg.intervalDays) {
             setTimeout(() => {
                 if (typeof showToast === 'function') {
-                    showToast(`💡 距上次备份已过 ${currentDay - lastDay} 天，建议前往设置中心导出记忆卡！`, 'info', 4000);
+                    showToast(`距上次备份已过 ${currentDay - lastDay} 天，建议前往设置中心导出记忆卡！`, 'info', 4000);
                 }
             }, 1000);
         }
@@ -1661,5 +1846,6 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
     window.renderSettingsApp = renderSettingsApp;
     window.openMemoryCardExportModal = openMemoryCardExportModal;
     window.openMemoryCardImportModal = openMemoryCardImportModal;
+    window.openAsrSettingsModal = openAsrSettingsModal;
 
 })(window);
