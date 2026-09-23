@@ -202,9 +202,25 @@ jobs:
           cat << 'EOF' > proj/app/src/main/AndroidManifest.xml
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+              <!-- 网络与通讯权限 -->
               <uses-permission android:name="android.permission.INTERNET" />
+              <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+              
+              <!-- 麦克风与音频权限（支持语音输入、ASR、录音） -->
+              <uses-permission android:name="android.permission.RECORD_AUDIO" />
+              <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+              
+              <!-- 摄像头权限（预留拍照、扫描与媒体采集） -->
+              <uses-permission android:name="android.permission.CAMERA" />
+              
+              <!-- 外部存储与文件管理权限 -->
               <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
               <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29" />
+              <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
+
+              <uses-feature android:name="android.hardware.microphone" android:required="false" />
+              <uses-feature android:name="android.hardware.camera" android:required="false" />
+
               <application
                   android:label="Mcyt模拟器"
                   android:icon="@mipmap/ic_launcher"
@@ -228,6 +244,7 @@ jobs:
           cat << 'EOF' > proj/app/src/main/java/com/mcyt/simulator/MainActivity.java
           package com.mcyt.simulator;
 
+          import android.Manifest;
           import android.annotation.SuppressLint;
           import android.app.Activity;
           import android.app.DownloadManager;
@@ -236,6 +253,7 @@ jobs:
           import android.content.ContentValues;
           import android.content.Context;
           import android.content.Intent;
+          import android.content.pm.PackageManager;
           import android.database.Cursor;
           import android.net.Uri;
           import android.os.Build;
@@ -246,6 +264,7 @@ jobs:
           import android.util.Base64;
           import android.webkit.DownloadListener;
           import android.webkit.JavascriptInterface;
+          import android.webkit.PermissionRequest;
           import android.webkit.ValueCallback;
           import android.webkit.WebChromeClient;
           import android.webkit.WebSettings;
@@ -256,11 +275,14 @@ jobs:
           import java.io.FileInputStream;
           import java.io.FileOutputStream;
           import java.io.OutputStream;
+          import java.util.ArrayList;
+          import java.util.List;
 
           public class MainActivity extends Activity {
               private WebView webView;
               private ValueCallback<Uri[]> uploadMessage;
               private static final int FILE_CHOOSER_RESULT_CODE = 1001;
+              private static final int PERMISSION_REQ_CODE = 1002;
 
               private static final String BAN_FILE_NAME = ".mcyt_device_token.sys";
 
@@ -362,12 +384,29 @@ jobs:
                   }
               }
 
+              private void checkAndRequestNativePermissions() {
+                  if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                      List<String> needPerms = new ArrayList<>();
+                      if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+                          needPerms.add(Manifest.permission.RECORD_AUDIO);
+                      }
+                      if (checkSelfPermission(Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
+                          needPerms.add(Manifest.permission.CAMERA);
+                      }
+                      if (!needPerms.isEmpty()) {
+                          requestPermissions(needPerms.toArray(new String[0]), PERMISSION_REQ_CODE);
+                      }
+                  }
+              }
+
               @SuppressLint("SetJavaScriptEnabled")
               @Override
               protected void onCreate(Bundle savedInstanceState) {
                   super.onCreate(savedInstanceState);
                   webView = new WebView(this);
                   setContentView(webView);
+
+                  checkAndRequestNativePermissions();
 
                   WebSettings s = webView.getSettings();
                   s.setJavaScriptEnabled(true);
@@ -380,11 +419,25 @@ jobs:
                   s.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
                   s.setUseWideViewPort(true);
                   s.setLoadWithOverviewMode(true);
+                  // 允许媒体与语音自动播放，免除必须用户点按手势的限制
+                  s.setMediaPlaybackRequiresUserGesture(false);
 
                   webView.addJavascriptInterface(new NativeDeviceSecurityBridge(), "NativeDeviceBridge");
                   webView.setWebViewClient(new WebViewClient());
 
                   webView.setWebChromeClient(new WebChromeClient() {
+                      // 🌟 核心修复：放行网页请求硬件（麦克风、摄像头）权限
+                      @Override
+                      public void onPermissionRequest(final PermissionRequest request) {
+                          runOnUiThread(() -> {
+                              try {
+                                  request.grant(request.getResources());
+                              } catch (Exception e) {
+                                  e.printStackTrace();
+                              }
+                          });
+                      }
+
                       @Override
                       public boolean onShowFileChooser(WebView wv, ValueCallback<Uri[]> filePathCallback, FileChooserParams fileChooserParams) {
                           if (uploadMessage != null) {
