@@ -4,7 +4,9 @@
  * 职责：
  * 1. 统一管理 TTS 配置（平台 Key / 本地部署 / 浏览器原生 Web Speech）
  * 2. 统一合成与播放音频流（ArrayBuffer/Blob 管道）
- * 3. 提供微信原生白灰微绿质感的 TTS 配置面板，不依赖外部大文件
+ * 3. 自动向本地 TTS 软件（CloneTTS 等）拉取全部可用音色列表（/api/voices）
+ * 4. 角色独立音色与语速自动注入，支持每个角色一人一个声音
+ * 5. 提供微信原生白灰微绿质感的 TTS 配置面板与音色挑选浮层
  */
 
 (function (window) {
@@ -17,28 +19,28 @@
   const DEFAULT_CONFIG = {
     enabled: false,           // 是否全局启用真实语音朗读
     autoPlay: false,          // 收到 AI 消息后是否自动朗读
-    provider: 'openai',       // 'openai' | 'local_rest' | 'web_speech'
+    provider: 'local_rest',   // 'openai' | 'local_rest' | 'web_speech'
     
-    // 1. OpenAI 兼容规范 (支持官方/硅基流动/聚合API/本地封装 /v1/audio/speech)
+    // 1. OpenAI 兼容规范
     openai: {
       baseUrl: 'https://api.openai.com/v1',
       apiKey: '',
       model: 'tts-1',
-      voice: 'alloy',         // alloy, echo, fable, onyx, nova, shimmer 或自定义
+      voice: 'alloy',
       speed: 1.0,
       responseFormat: 'mp3'
     },
 
-    // 2. 本地部署自定义 REST API (如 GPT-SoVITS, CosyVoice, ChatTTS 本地 HTTP 服务)
+    // 2. 本地部署自定义 REST API (如 CloneTTS, GPT-SoVITS, CosyVoice 本地服务)
     localRest: {
-      endpoint: 'http://127.0.0.1:9880/tts',
-      method: 'POST',         // GET 或 POST
-      textFieldName: 'text',  // 发送文本的参数名
-      extraParamsJson: '{\n  "text_lang": "zh",\n  "speed": 1.0\n}', // 额外自定义 JSON 参数
+      endpoint: 'http://127.0.0.1:8080/api/tts',
+      method: 'GET',
+      textFieldName: 'text',
+      extraParamsJson: '{\n  "speed": 10\n}',
       audioResponseFormat: 'audio/wav'
     },
 
-    // 3. 浏览器原生离线兜底 (Web Speech Synthesis，零配置，免费)
+    // 3. 浏览器原生离线兜底
     webSpeech: {
       lang: 'zh-CN',
       pitch: 1.0,
@@ -51,7 +53,7 @@
       this.config = this.loadConfig();
       this.currentAudio = null;
       this.isPlaying = false;
-      this.audioCache = new Map(); // 简易运行时缓存
+      this.cachedVoices = null; // 运行时音色缓存
     }
 
     // 读取配置
@@ -73,6 +75,7 @@
       try {
         this.config = Object.assign({}, this.config, newConfig);
         localStorage.setItem(STORAGE_KEY, JSON.stringify(this.config));
+        this.cachedVoices = null; // 配置变动后重置音色缓存
         return true;
       } catch (e) {
         console.error('[TTSEngine] 保存 TTS 配置失败:', e);
@@ -98,6 +101,142 @@
     }
 
     /**
+     * 自动从当前配置的服务端拉取可用音色列表（用于角色设置弹窗快速点选）
+     * @returns {Promise<Array<{id: string, name: string}>>}
+     */
+    async fetchVoicesList() {
+      if (this.cachedVoices && this.cachedVoices.length > 0) {
+        return this.cachedVoices;
+      }
+
+      const provider = this.config.provider;
+
+      // 1. 本地服务模式：尝试请求 /api/voices
+      if (provider === 'local_rest') {
+        const ep = (this.config.localRest && this.config.localRest.endpoint) || 'http://127.0.0.1:8080/api/tts';
+        try {
+          const urlObj = new URL(ep, window.location.href);
+          // 替换路径为 /api/voices
+          urlObj.pathname = '/api/voices';
+          urlObj.search = '';
+
+          const res = await fetch(urlObj.toString());
+          if (res.ok) {
+            const data = await res.json();
+            let list = [];
+            if (Array.isArray(data)) {
+              list = data.map(item => {
+                if (typeof item === 'string') return { id: item, name: item };
+                return {
+                  id: item.voice || item.id || item.alias || item.name || '',
+                  name: item.name || item.alias || item.voice || item.id || '未命名音色'
+                };
+              }).filter(x => x.id);
+            } else if (typeof data === 'object' && data !== null) {
+              list = Object.keys(data).map(k => ({ id: k, name: typeof data[k] === 'string' ? data[k] : k }));
+            }
+            if (list.length > 0) {
+              this.cachedVoices = list;
+              return list;
+            }
+          }
+        } catch (e) {
+          console.warn('[TTSEngine] 拉取本地音色菜单失败:', e);
+        }
+      }
+
+      // 2. 云端/OpenAI 模式预设音色
+      if (provider === 'openai') {
+        const builtinOpenAiVoices = [
+          { id: 'alloy', name: 'Alloy (中性沉稳)' },
+          { id: 'echo', name: 'Echo (清爽男声)' },
+          { id: 'fable', name: 'Fable (英音磁性)' },
+          { id: 'onyx', name: 'Onyx (深沉稳重)' },
+          { id: 'nova', name: 'Nova (明亮女声)' },
+          { id: 'shimmer', name: 'Shimmer (温柔女声)' }
+        ];
+        return builtinOpenAiVoices;
+      }
+
+      // 3. 系统原生兜底
+      if (provider === 'web_speech' && 'speechSynthesis' in window) {
+        const sysVoices = window.speechSynthesis.getVoices();
+        if (sysVoices && sysVoices.length > 0) {
+          return sysVoices.map(v => ({ id: v.lang, name: `${v.name} (${v.lang})` }));
+        }
+      }
+
+      return [];
+    }
+
+    /**
+     * 弹出仿微信原生白灰微绿的单选音色浮层弹窗
+     * @param {string} currentSelected 当前已选的音色
+     * @param {function(string):void} onSelectCallback 选中回调
+     */
+    async openVoicePickerModal(currentSelected, onSelectCallback) {
+      document.getElementById('mcyt-voice-picker-mask')?.remove();
+
+      const mask = document.createElement('div');
+      mask.id = 'mcyt-voice-picker-mask';
+      mask.style.cssText = `
+        position: fixed; inset: 0; z-index: 100002;
+        background: rgba(0, 0, 0, 0.45);
+        display: flex; align-items: center; justify-content: center;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      `;
+
+      mask.innerHTML = `
+        <div style="background: #ffffff; width: 85%; max-width: 330px; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); overflow: hidden; display: flex; flex-direction: column;">
+          <div style="padding: 12px 16px; border-bottom: 0.5px solid #eee; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 14px; font-weight: 600; color: #181818;">选择专属发音音色</span>
+            <button id="closeVoicePickerBtn" style="border: none; background: none; font-size: 16px; color: #888; cursor: pointer; padding: 2px;">✕</button>
+          </div>
+          <div id="voicePickerListContainer" style="padding: 10px 14px; max-height: 260px; overflow-y: auto; font-size: 13px;">
+            <div style="text-align: center; color: #888; padding: 20px 0;">正在拉取可用音色菜单...</div>
+          </div>
+        </div>
+      `;
+
+      document.body.appendChild(mask);
+      mask.querySelector('#closeVoicePickerBtn').onclick = () => mask.remove();
+      mask.onclick = (e) => { if (e.target === mask) mask.remove(); };
+
+      const container = mask.querySelector('#voicePickerListContainer');
+      const voices = await this.fetchVoicesList();
+
+      if (!voices || voices.length === 0) {
+        container.innerHTML = `
+          <div style="text-align: center; color: #888; padding: 14px 0; line-height: 1.5;">
+            未能自动拉取到音色列表。<br>
+            <span style="font-size: 11px; color: #aaa;">请确保 CloneTTS 处于运行状态，或直接在输入框手动键入音色名称。</span>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = voices.map(v => {
+        const isSelected = (v.id === currentSelected);
+        return `
+          <div class="voice-picker-row" data-id="${escapeHtml(v.id)}" style="display: flex; align-items: center; justify-content: space-between; padding: 9px 10px; margin-bottom: 6px; border-radius: 6px; border: 1px solid ${isSelected ? '#07c160' : '#eee'}; background: ${isSelected ? '#f0f9eb' : '#ffffff'}; cursor: pointer;">
+            <div style="font-weight: ${isSelected ? '600' : '500'}; color: ${isSelected ? '#07c160' : '#222'};">${escapeHtml(v.name)}</div>
+            ${isSelected ? `<span style="color: #07c160; font-weight: bold;">✓</span>` : ''}
+          </div>
+        `;
+      }).join('');
+
+      container.querySelectorAll('.voice-picker-row').forEach(row => {
+        row.onclick = () => {
+          const pickedId = row.getAttribute('data-id');
+          if (typeof onSelectCallback === 'function') {
+            onSelectCallback(pickedId);
+          }
+          mask.remove();
+        };
+      });
+    }
+
+    /**
      * 核心合成与播放入口
      * @param {string} text 需要朗读的文本
      * @param {object} customOverrides 允许角色覆盖参数（例如单个 NPC 指定的 voice、speed 等）
@@ -107,7 +246,6 @@
       if (!text || !text.trim()) return false;
       const cleanText = text.trim();
 
-      // 如果正在播放则停止上一条
       this.stopAudio();
 
       const provider = customOverrides.provider || this.config.provider;
@@ -138,19 +276,12 @@
       const speed = overrides.speed || cfg.speed || 1.0;
       const format = cfg.responseFormat || 'mp3';
 
-      if (!baseUrl) {
-        throw new Error('未配置 TTS 接口 Base URL');
-      }
+      if (!baseUrl) throw new Error('未配置 TTS 接口 Base URL');
 
-      // 组装请求 URL
       const targetUrl = baseUrl.endsWith('/audio/speech') ? baseUrl : `${baseUrl}/audio/speech`;
 
-      const headers = {
-        'Content-Type': 'application/json'
-      };
-      if (apiKey) {
-        headers['Authorization'] = `Bearer ${apiKey.trim()}`;
-      }
+      const headers = { 'Content-Type': 'application/json' };
+      if (apiKey) headers['Authorization'] = `Bearer ${apiKey.trim()}`;
 
       const bodyData = {
         model: model,
@@ -175,11 +306,11 @@
       return this._playBlobAudio(blob);
     }
 
-    // 2. 本地自定义 REST API 合成管道
+    // 2. 本地自定义 REST API 合成管道（支持角色独立 voice/speed 动态合并）
     async _speakLocalRest(text, overrides = {}) {
       const cfg = this.config.localRest;
       const endpoint = overrides.endpoint || cfg.endpoint;
-      const method = (overrides.method || cfg.method || 'POST').toUpperCase();
+      const method = (overrides.method || cfg.method || 'GET').toUpperCase();
       const textField = cfg.textFieldName || 'text';
 
       let extraParams = {};
@@ -189,6 +320,16 @@
         }
       } catch (e) {
         console.warn('[TTSEngine] 本地扩展参数解析错误，忽略:', e);
+      }
+
+      // 如果角色指定了专属 voice，自动覆盖/追加
+      if (overrides.voice && overrides.voice.trim()) {
+        extraParams.voice = overrides.voice.trim();
+      }
+
+      // 如果角色指定了专属语速，且 CloneTTS 使用 speed=10 为基准
+      if (overrides.speed && parseFloat(overrides.speed)) {
+        extraParams.speed = Math.round(parseFloat(overrides.speed) * 10);
       }
 
       let fetchUrl = endpoint;
@@ -221,14 +362,14 @@
     _speakWebSpeech(text, overrides = {}) {
       return new Promise((resolve, reject) => {
         if (!('speechSynthesis' in window)) {
-          return reject(new Error('当前浏览器环境不支持原生 Web Speech API'));
+          return reject(new Error('当前环境不支持原生 Web Speech API'));
         }
         window.speechSynthesis.cancel();
 
         const utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = overrides.lang || this.config.webSpeech.lang || 'zh-CN';
         utterance.pitch = overrides.pitch || this.config.webSpeech.pitch || 1.0;
-        utterance.rate = overrides.rate || this.config.webSpeech.rate || 1.0;
+        utterance.rate = overrides.rate || (overrides.speed ? parseFloat(overrides.speed) : this.config.webSpeech.rate) || 1.0;
 
         utterance.onend = () => {
           this.isPlaying = false;
@@ -260,7 +401,7 @@
             resolve(true);
           };
 
-          audio.onerror = (e) => {
+          audio.onerror = () => {
             URL.revokeObjectURL(audioUrl);
             this.isPlaying = false;
             this.currentAudio = null;
@@ -314,10 +455,9 @@
     }
 
     /**
-     * 弹出原生微信质感（白灰微绿）TTS 配置中心全功能模态框
+     * 弹出微信原生白灰微绿 TTS 配置中心
      */
     openSettingsModal() {
-      // 避免重复打开
       if (document.getElementById('mcyt-tts-modal-mask')) return;
 
       const mask = document.createElement('div');
@@ -333,7 +473,6 @@
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       `;
 
-      // 实时复制一份当前配置
       const cfg = JSON.parse(JSON.stringify(this.config));
 
       const card = document.createElement('div');
@@ -364,7 +503,6 @@
 
       const renderBody = `
         <div style="flex: 1; overflow-y: auto; padding: 14px 16px; font-size: 13px; color: #333333;">
-          <!-- 核心主开关 -->
           <div style="background: #ffffff; border-radius: 10px; padding: 12px 14px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
               <span style="font-weight: 500;">启用真实语音功能</span>
@@ -376,19 +514,43 @@
             </div>
           </div>
 
-          <!-- 提供商模式选择 -->
           <div style="margin-bottom: 6px; font-size: 12px; color: #888888; padding-left: 4px;">服务驱动方式</div>
           <div style="display: flex; gap: 8px; margin-bottom: 14px;">
-            <button type="button" class="tts-mode-tab ${cfg.provider === 'openai' ? 'active' : ''}" data-mode="openai" style="flex: 1; padding: 8px 4px; border-radius: 8px; border: 1px solid #ddd; background: ${cfg.provider === 'openai' ? '#07c160' : '#fff'}; color: ${cfg.provider === 'openai' ? '#fff' : '#444'}; font-size: 12px; cursor: pointer;">云端平台 / API</button>
             <button type="button" class="tts-mode-tab ${cfg.provider === 'local_rest' ? 'active' : ''}" data-mode="local_rest" style="flex: 1; padding: 8px 4px; border-radius: 8px; border: 1px solid #ddd; background: ${cfg.provider === 'local_rest' ? '#07c160' : '#fff'}; color: ${cfg.provider === 'local_rest' ? '#fff' : '#444'}; font-size: 12px; cursor: pointer;">本地部署 API</button>
+            <button type="button" class="tts-mode-tab ${cfg.provider === 'openai' ? 'active' : ''}" data-mode="openai" style="flex: 1; padding: 8px 4px; border-radius: 8px; border: 1px solid #ddd; background: ${cfg.provider === 'openai' ? '#07c160' : '#fff'}; color: ${cfg.provider === 'openai' ? '#fff' : '#444'}; font-size: 12px; cursor: pointer;">云端平台 / API</button>
             <button type="button" class="tts-mode-tab ${cfg.provider === 'web_speech' ? 'active' : ''}" data-mode="web_speech" style="flex: 1; padding: 8px 4px; border-radius: 8px; border: 1px solid #ddd; background: ${cfg.provider === 'web_speech' ? '#07c160' : '#fff'}; color: ${cfg.provider === 'web_speech' ? '#fff' : '#444'}; font-size: 12px; cursor: pointer;">系统原生离线</button>
+          </div>
+
+          <!-- 模式 2: 本地部署 (CloneTTS 等) -->
+          <div id="tts-panel-local_rest" style="display: ${cfg.provider === 'local_rest' ? 'block' : 'none'}; background: #ffffff; border-radius: 10px; padding: 12px; margin-bottom: 12px;">
+            <div style="margin-bottom: 10px;">
+              <div style="font-size: 12px; color: #666; margin-bottom: 4px;">本地接口完整 URL</div>
+              <input type="text" id="tts-local-endpoint" value="${cfg.localRest.endpoint || ''}" placeholder="例如 http://127.0.0.1:8080/api/tts" style="width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #e0e0e0; border-radius: 6px; font-size: 13px;">
+            </div>
+            <div style="display: flex; gap: 8px; margin-bottom: 10px;">
+              <div style="flex: 1;">
+                <div style="font-size: 12px; color: #666; margin-bottom: 4px;">请求方式</div>
+                <select id="tts-local-method" style="width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #e0e0e0; border-radius: 6px; font-size: 13px; background: #fff;">
+                  <option value="GET" ${cfg.localRest.method === 'GET' ? 'selected' : ''}>GET</option>
+                  <option value="POST" ${cfg.localRest.method === 'POST' ? 'selected' : ''}>POST</option>
+                </select>
+              </div>
+              <div style="flex: 1;">
+                <div style="font-size: 12px; color: #666; margin-bottom: 4px;">文本字段名</div>
+                <input type="text" id="tts-local-textfield" value="${cfg.localRest.textFieldName || 'text'}" placeholder="text" style="width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #e0e0e0; border-radius: 6px; font-size: 13px;">
+              </div>
+            </div>
+            <div>
+              <div style="font-size: 12px; color: #666; margin-bottom: 4px;">固定 JSON 参数 (默认语速等)</div>
+              <textarea id="tts-local-extra" rows="3" style="width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #e0e0e0; border-radius: 6px; font-family: monospace; font-size: 12px;">${cfg.localRest.extraParamsJson || ''}</textarea>
+            </div>
           </div>
 
           <!-- 模式 1: OpenAI / 平台接口 -->
           <div id="tts-panel-openai" style="display: ${cfg.provider === 'openai' ? 'block' : 'none'}; background: #ffffff; border-radius: 10px; padding: 12px; margin-bottom: 12px;">
             <div style="margin-bottom: 10px;">
               <div style="font-size: 12px; color: #666; margin-bottom: 4px;">API 接口地址 (Base URL)</div>
-              <input type="text" id="tts-openai-baseurl" value="${cfg.openai.baseUrl || ''}" placeholder="例如 https://api.openai.com/v1" style="width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #e0e0e0; border-radius: 6px; font-size: 13px;">
+              <input type="text" id="tts-openai-baseurl" value="${cfg.openai.baseUrl || ''}" placeholder="https://api.openai.com/v1" style="width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #e0e0e0; border-radius: 6px; font-size: 13px;">
             </div>
             <div style="margin-bottom: 10px;">
               <div style="font-size: 12px; color: #666; margin-bottom: 4px;">API Key (令牌)</div>
@@ -407,31 +569,6 @@
             <div>
               <div style="font-size: 12px; color: #666; margin-bottom: 4px;">语速倍率 (${cfg.openai.speed || 1.0}x)</div>
               <input type="range" id="tts-openai-speed" min="0.5" max="2.0" step="0.1" value="${cfg.openai.speed || 1.0}" style="width: 100%; accent-color: #07c160;">
-            </div>
-          </div>
-
-          <!-- 模式 2: 本地部署 (GPT-SoVITS 等) -->
-          <div id="tts-panel-local_rest" style="display: ${cfg.provider === 'local_rest' ? 'block' : 'none'}; background: #ffffff; border-radius: 10px; padding: 12px; margin-bottom: 12px;">
-            <div style="margin-bottom: 10px;">
-              <div style="font-size: 12px; color: #666; margin-bottom: 4px;">本地接口完整 URL</div>
-              <input type="text" id="tts-local-endpoint" value="${cfg.localRest.endpoint || ''}" placeholder="例如 http://127.0.0.1:9880/tts" style="width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #e0e0e0; border-radius: 6px; font-size: 13px;">
-            </div>
-            <div style="display: flex; gap: 8px; margin-bottom: 10px;">
-              <div style="flex: 1;">
-                <div style="font-size: 12px; color: #666; margin-bottom: 4px;">请求方式</div>
-                <select id="tts-local-method" style="width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #e0e0e0; border-radius: 6px; font-size: 13px; background: #fff;">
-                  <option value="POST" ${cfg.localRest.method === 'POST' ? 'selected' : ''}>POST</option>
-                  <option value="GET" ${cfg.localRest.method === 'GET' ? 'selected' : ''}>GET</option>
-                </select>
-              </div>
-              <div style="flex: 1;">
-                <div style="font-size: 12px; color: #666; margin-bottom: 4px;">文本字段名</div>
-                <input type="text" id="tts-local-textfield" value="${cfg.localRest.textFieldName || 'text'}" placeholder="text" style="width: 100%; box-sizing: border-box; padding: 8px 10px; border: 1px solid #e0e0e0; border-radius: 6px; font-size: 13px;">
-              </div>
-            </div>
-            <div>
-              <div style="font-size: 12px; color: #666; margin-bottom: 4px;">其他固定 JSON 请求体参数</div>
-              <textarea id="tts-local-extra" rows="3" style="width: 100%; box-sizing: border-box; padding: 6px 8px; border: 1px solid #e0e0e0; border-radius: 6px; font-family: monospace; font-size: 12px;">${cfg.localRest.extraParamsJson || ''}</textarea>
             </div>
           </div>
 
@@ -471,10 +608,8 @@
       mask.appendChild(card);
       document.body.appendChild(mask);
 
-      // 事件绑定
       let currentActiveProvider = cfg.provider;
 
-      // Tab 切换
       const tabBtns = card.querySelectorAll('.tts-mode-tab');
       tabBtns.forEach(btn => {
         btn.addEventListener('click', () => {
@@ -485,13 +620,12 @@
             b.style.background = isActive ? '#07c160' : '#ffffff';
             b.style.color = isActive ? '#ffffff' : '#444444';
           });
-          card.querySelector('#tts-panel-openai').style.display = mode === 'openai' ? 'block' : 'none';
           card.querySelector('#tts-panel-local_rest').style.display = mode === 'local_rest' ? 'block' : 'none';
+          card.querySelector('#tts-panel-openai').style.display = mode === 'openai' ? 'block' : 'none';
           card.querySelector('#tts-panel-web_speech').style.display = mode === 'web_speech' ? 'block' : 'none';
         });
       });
 
-      // 关闭与取消
       const closeModal = () => {
         this.stopAudio();
         mask.remove();
@@ -499,12 +633,18 @@
       card.querySelector('#tts-btn-close').addEventListener('click', closeModal);
       card.querySelector('#tts-btn-cancel').addEventListener('click', closeModal);
 
-      // 从界面提取当前输入的最新参数
       const gatherFormValues = () => {
         return {
           enabled: card.querySelector('#tts-cfg-enabled').checked,
           autoPlay: card.querySelector('#tts-cfg-autoplay').checked,
           provider: currentActiveProvider,
+          localRest: {
+            endpoint: card.querySelector('#tts-local-endpoint').value.trim(),
+            method: card.querySelector('#tts-local-method').value,
+            textFieldName: card.querySelector('#tts-local-textfield').value.trim() || 'text',
+            extraParamsJson: card.querySelector('#tts-local-extra').value.trim(),
+            audioResponseFormat: 'audio/wav'
+          },
           openai: {
             baseUrl: card.querySelector('#tts-openai-baseurl').value.trim(),
             apiKey: card.querySelector('#tts-openai-key').value.trim(),
@@ -512,13 +652,6 @@
             voice: card.querySelector('#tts-openai-voice').value.trim(),
             speed: parseFloat(card.querySelector('#tts-openai-speed').value) || 1.0,
             responseFormat: 'mp3'
-          },
-          localRest: {
-            endpoint: card.querySelector('#tts-local-endpoint').value.trim(),
-            method: card.querySelector('#tts-local-method').value,
-            textFieldName: card.querySelector('#tts-local-textfield').value.trim() || 'text',
-            extraParamsJson: card.querySelector('#tts-local-extra').value.trim(),
-            audioResponseFormat: 'audio/wav'
           },
           webSpeech: {
             lang: card.querySelector('#tts-web-lang').value.trim() || 'zh-CN',
@@ -528,7 +661,6 @@
         };
       };
 
-      // 测试发音
       const btnTest = card.querySelector('#tts-btn-test');
       btnTest.addEventListener('click', async () => {
         const testText = card.querySelector('#tts-test-input').value.trim();
@@ -538,22 +670,19 @@
         btnTest.disabled = true;
         btnTest.textContent = '合成中...';
 
-        // 临时将当前输入写给内存测试
         const originalConfig = this.config;
         this.config = tempValues;
 
         try {
           await this.speak(testText);
-        } catch (err) {
-          // 内部已有报错 toast
+        } catch (_) {
         } finally {
-          this.config = originalConfig; // 恢复原状态，等用户真正点击保存
+          this.config = originalConfig;
           btnTest.disabled = false;
           btnTest.textContent = '试听发音';
         }
       });
 
-      // 保存配置
       card.querySelector('#tts-btn-save').addEventListener('click', () => {
         const finalValues = gatherFormValues();
         this.saveConfig(finalValues);
@@ -563,7 +692,6 @@
     }
   }
 
-  // 挂载全局单例
   window.ttsEngine = new TTSEngine();
 
 })(window);
