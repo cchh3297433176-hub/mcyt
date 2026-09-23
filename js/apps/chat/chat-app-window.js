@@ -5,11 +5,12 @@
  *    重新生成回复的确认与执行（confirmRetryLastAIReply / doRetryLastAIReply）、
  *    🌟 微信原生直显大图与沉浸式大图文字查看器对接、拟真生活排版卡片（ui_card）渲染。
  * 🌟 升级：
- *  1. 合并左下角语音中枢：去除输入框左侧冗余按键，左下角点击呼出纯图标微信原生轻量菜单（声波对讲/语音转文字/键盘输入）；
- *  2. 麦克风硬件权限自动申请（getUserMedia）门禁，杜绝无授权静默录音失效；
- *  3. 微信原生高级感录音 HUD 浮层（半透明毛玻璃居中卡片 + Web Audio 真实音高波形动态跳动 + 实时秒数计时器）；
- *  4. 修复 pushChatMessageSafe 参数顺序 Bug，杜绝 Cannot create property '_id' on string 报错；
- *  5. 收到 NPC 回复自动接入 TTS 语音引擎朗读（若配置开启）。
+ *  1. 真实用户录音管线：引入 MediaRecorder 完整录制并落盘为 Base64 DataURL（audioData）；
+ *  2. 点击直接播放用户真实原声，杜绝玩家语音被错误判定并调用 TTS 朗读；
+ *  3. 发送语音后不再自动触发 AI 回复，严格遵循点击闪电才生成；
+ *  4. 麦克风硬件权限自动申请门禁与微信原生录音 HUD 动态声波；
+ *  5. 后台静默 Web Speech API 机器语音识别（ASR），界面只显语音条，后台留存文本供 AI 听取；
+ *  6. 修复 pushChatMessageSafe 参数顺序，杜绝 _id 报错。
  */
 
 (function() {
@@ -24,6 +25,14 @@
     let _voiceRecordStartTime = 0;
     let _speechRecognitionInstance = null;
     let _recognizedVoiceText = '';
+
+    // 🌟 真实音频录制器（MediaRecorder）实例与缓冲块
+    let _mediaRecorderInstance = null;
+    let _audioRecordedChunks = [];
+
+    // 🌟 音频实时播放实例状态（支持播放与停止）
+    let _currentPlayingAudio = null;
+    let _currentPlayingMsgId = null;
 
     // 🌟 音量实时检测与 HUD 动画控制
     let _audioContextInstance = null;
@@ -263,21 +272,81 @@
         `;
     }
 
-    // 🌟 全局挂载直接展开/折叠语音详情函数与朗读
+    // 🌟 全局统一语音播放中枢：区分玩家真实录音与 NPC 朗读（玩家语音绝不使用 TTS）
+    window.playVoiceMessageDirect = function(msgId) {
+        const curNpcId = window.G && window.G.currentChatNpc;
+        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
+        const hist = window.getAccountChatHistory(curNpcId, curAcc.id) || [];
+        const msg = hist.find(m => m._id === msgId);
+        if (!msg) return;
+
+        // 如果当前正在播放该音频，再次点击则停止
+        if (_currentPlayingAudio && _currentPlayingMsgId === msgId) {
+            try {
+                _currentPlayingAudio.pause();
+                _currentPlayingAudio.currentTime = 0;
+            } catch (_) {}
+            _currentPlayingAudio = null;
+            _currentPlayingMsgId = null;
+            return;
+        }
+
+        // 停止之前的播放
+        if (_currentPlayingAudio) {
+            try {
+                _currentPlayingAudio.pause();
+                _currentPlayingAudio.currentTime = 0;
+            } catch (_) {}
+            _currentPlayingAudio = null;
+            _currentPlayingMsgId = null;
+        }
+
+        // 1. 如果消息本身携带真实录制音频（用户录音或带音频文件的语音），直接播放真实音频
+        if (msg.audioData) {
+            try {
+                const aud = new Audio(msg.audioData);
+                _currentPlayingAudio = aud;
+                _currentPlayingMsgId = msgId;
+                aud.onended = () => {
+                    _currentPlayingAudio = null;
+                    _currentPlayingMsgId = null;
+                };
+                aud.onerror = () => {
+                    _currentPlayingAudio = null;
+                    _currentPlayingMsgId = null;
+                };
+                aud.play().catch(e => {
+                    console.warn('[VoicePlayer] 真实录音播放受阻:', e);
+                });
+                return;
+            } catch (err) {
+                console.warn('[VoicePlayer] 初始化 Audio 失败:', err);
+            }
+        }
+
+        // 2. 如果是用户发出的语音但没有音频流（例如旧数据），坚决杜绝 TTS 朗读，仅展开文本供查看
+        if (msg.from === 'player') {
+            window.toggleVoiceMessageDetailsDirect(msgId);
+            return;
+        }
+
+        // 3. 如果是 NPC 发出的语音，且系统开启了 TTS 引擎，则调用角色音色朗读
+        if (msg.from !== 'player' && msg.text && window.ttsEngine) {
+            const npc = window.G.npcs ? window.G.npcs[curNpcId] : null;
+            const npcVoiceCfg = (npc && npc.chatSettings && npc.chatSettings.tts) || {};
+            window.ttsEngine.speak(msg.text, npcVoiceCfg);
+        } else {
+            // 没有 TTS 时展开文字
+            window.toggleVoiceMessageDetailsDirect(msgId);
+        }
+    };
+
+    // 🌟 全局挂载直接展开/折叠语音详情文本（纯文本切换，不触发朗读）
     window.toggleVoiceMessageDetailsDirect = function(msgId) {
         const box = document.getElementById('voiceDescBox_' + msgId);
         if (box) {
             const isHidden = (box.style.display === 'none' || getComputedStyle(box).display === 'none');
             box.style.display = isHidden ? 'block' : 'none';
-        }
-        const curNpcId = window.G && window.G.currentChatNpc;
-        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
-        const hist = window.getAccountChatHistory(curNpcId, curAcc.id) || [];
-        const msg = hist.find(m => m._id === msgId);
-        if (msg && msg.text && window.ttsEngine) {
-            const npc = window.G.npcs ? window.G.npcs[curNpcId] : null;
-            const npcVoiceCfg = (npc && npc.chatSettings && npc.chatSettings.tts) || {};
-            window.ttsEngine.speak(msg.text, npcVoiceCfg);
         }
     };
 
@@ -312,7 +381,7 @@
         window.renderSingleChatWindow(null, { keepScroll: true });
     };
 
-    // 真实录音与 ASR 伪装语音逻辑
+    // 真实录音与 ASR 机器语音识别逻辑
     window.startRealVoiceRecord = async function(npcId) {
         if (_isRecordingVoice) return;
 
@@ -322,6 +391,7 @@
         _isRecordingVoice = true;
         _voiceRecordStartTime = Date.now();
         _recognizedVoiceText = '';
+        _audioRecordedChunks = [];
 
         // 唤起微信原生质感录音 HUD（带动态音浪）
         showVoiceRecordingHUD();
@@ -332,7 +402,30 @@
             recordBtn.setAttribute('data-recording', 'true');
         }
 
-        // 启动原生语音识别通道
+        // 1. 初始化 MediaRecorder 真实音频硬件流录制
+        try {
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder) {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                let options = {};
+                if (MediaRecorder.isTypeSupported('audio/webm')) {
+                    options = { mimeType: 'audio/webm' };
+                } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+                    options = { mimeType: 'audio/mp4' };
+                }
+                const mr = new MediaRecorder(stream, options);
+                mr.ondataavailable = (e) => {
+                    if (e.data && e.data.size > 0) {
+                        _audioRecordedChunks.push(e.data);
+                    }
+                };
+                mr.start(100);
+                _mediaRecorderInstance = mr;
+            }
+        } catch (recErr) {
+            console.warn('[VoiceRecord] 硬件媒体录音启动失败:', recErr);
+        }
+
+        // 2. 启动原生机器语音识别（Web Speech API），后台静默提取文字供 AI 理解
         const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (SpeechRec) {
             try {
@@ -354,7 +447,7 @@
         }
     };
 
-    window.stopRealVoiceRecordAndSend = function(npcId) {
+    window.stopRealVoiceRecordAndSend = async function(npcId) {
         if (!_isRecordingVoice) return;
         _isRecordingVoice = false;
 
@@ -362,6 +455,7 @@
 
         hideVoiceRecordingHUD();
 
+        // 停止并清理 ASR 识别实例
         if (_speechRecognitionInstance) {
             try { _speechRecognitionInstance.stop(); } catch (_) {}
             _speechRecognitionInstance = null;
@@ -371,6 +465,35 @@
         if (recordBtn) {
             recordBtn.style.background = '#ffffff';
             recordBtn.removeAttribute('data-recording');
+        }
+
+        // 停止真实音频录制并提取 Base64 DataURL
+        let audioBase64Data = '';
+        if (_mediaRecorderInstance) {
+            try {
+                if (_mediaRecorderInstance.state !== 'inactive') {
+                    _mediaRecorderInstance.stop();
+                }
+                if (_mediaRecorderInstance.stream) {
+                    _mediaRecorderInstance.stream.getTracks().forEach(t => t.stop());
+                }
+                await new Promise(r => setTimeout(r, 80));
+
+                if (_audioRecordedChunks.length > 0) {
+                    const mime = _mediaRecorderInstance.mimeType || 'audio/webm';
+                    const audioBlob = new Blob(_audioRecordedChunks, { type: mime });
+                    audioBase64Data = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onloadend = () => resolve(reader.result || '');
+                        reader.onerror = () => resolve('');
+                        reader.readAsDataURL(audioBlob);
+                    });
+                }
+            } catch (err) {
+                console.warn('[VoiceRecord] 音频 Blob 转换失败:', err);
+            }
+            _mediaRecorderInstance = null;
+            _audioRecordedChunks = [];
         }
 
         let finalText = _recognizedVoiceText ? _recognizedVoiceText.trim() : '';
@@ -385,11 +508,12 @@
             type: 'voice',
             seconds: durationSeconds,
             text: finalText,
+            audioData: audioBase64Data || '', // 🌟 存储真实录制音频 DataURL
             time: new Date().toLocaleTimeString().slice(0, 5),
             timestamp: Date.now()
         };
 
-        // 🌟 核心修复：按标准传递 (npcId, msgObj, accId) 杜绝 _id 创建在 string 上的 TypeError
+        // 按标准安全管道入库
         if (typeof window.pushChatMessageSafe === 'function') {
             window.pushChatMessageSafe(npcId, newMsg, curAcc.id);
         } else {
@@ -402,10 +526,7 @@
 
         window.renderSingleChatWindow();
 
-        // 触发 AI 回复
-        if (typeof window.triggerAIReplyForSingle === 'function') {
-            window.triggerAIReplyForSingle(npcId);
-        }
+        // 🌟 核心调整：发送语音后不再自动触发 AI 回复，完全像普通文本输入一样，点击右上角闪电才继续！
     };
 
     // 🌐 微信原生质感内嵌网页安全浏览器浮层
@@ -779,8 +900,9 @@
                 const seconds = Math.min(60, Math.max(1, parseInt(msg.seconds) || 3));
                 const voiceBarMinWidth = Math.min(180, Math.max(68, 56 + seconds * 4));
 
+                // 🌟 语音条点击直接触发 playVoiceMessageDirect，播放真实声音或 NPC TTS
                 const voiceBarInnerHtml = `
-                    <div onclick="window.toggleVoiceMessageDetailsDirect('${msg._id}')" style="display:flex;align-items:center;justify-content:${isSelf ? 'flex-end' : 'flex-start'};gap:6px;cursor:pointer;user-select:none;min-height:22px;width:100%;">
+                    <div onclick="window.playVoiceMessageDirect('${msg._id}')" style="display:flex;align-items:center;justify-content:${isSelf ? 'flex-end' : 'flex-start'};gap:6px;cursor:pointer;user-select:none;min-height:22px;width:100%;">
                         ${!isSelf ? `
                             <div class="wechat-voice-wave" style="color:inherit;opacity:0.85;display:flex;align-items:center;gap:2.5px;">
                                 <div class="wechat-voice-bar" style="background:currentColor;"></div>
@@ -799,6 +921,7 @@
                     </div>
                 `;
 
+                // 只有非玩家或者特别展开时才附带文本框（用户录音默认不显示转文字，保持原滋原味沉浸感）
                 const voiceDetailHtml = (msg.text || msg.audioBg) ? `
                     <div id="voiceDescBox_${msg._id}" style="display:none;margin-top:6px;padding-top:6px;border-top:0.5px dashed currentColor;opacity:0.92;font-size:12.5px;line-height:1.45;color:inherit;word-break:break-word;">
                         ${msg.audioBg ? `<div style="font-size:11px;opacity:0.75;margin-bottom:3px;font-style:italic;">（${escapeHtml(msg.audioBg)}）</div>` : ''}
