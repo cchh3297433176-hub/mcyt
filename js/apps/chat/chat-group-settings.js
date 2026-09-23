@@ -7,7 +7,7 @@
  * 3. 完美弹窗层级（z-index: 99999）：修改群名、修改公告、更换头像、解散群聊置于顶层，绝不被底层遮挡。
  * 4. 群主操作全量接入居中小灰字通知（撤回样式提示）：改群名、换头像、改公告、任命/撤销管理员、设置/清除群头衔、增删成员即时生成灰条并落盘。
  * 5. 群头像双轨落盘同步（group.avatar 与 group.avatarUrl），全站会话列表与群聊窗口即时同步更新。
- * 6. 高级设定：群成员网格、接话人数范围、朋友圈轻量 NPC 折叠栏（含添加与折叠）、群管理员任命、群成员专属头衔。
+ * 6. 高级设定：群成员网格、接话人数范围、朋友圈轻量 NPC 折叠栏、群管理员任命、群成员专属头衔、群聊真实语音播报（TTS）开关与配置。
  */
 
 (function() {
@@ -31,7 +31,8 @@
             allowStickers: true,
             admins: [],
             titles: {},
-            momentNpcs: []
+            momentNpcs: [],
+            ttsEnabled: false
         };
     }
 
@@ -93,7 +94,6 @@
                     <span style="font-size:16px;font-weight:600;color:#181818;">聊天信息</span>
                     
                     <div style="position:absolute;right:14px;top:0;height:100%;display:flex;align-items:center;gap:14px;">
-                        <!-- ⚙️ 微绿矢量齿轮（直通群聊高级设定） -->
                         <div id="btnGroupHeaderGear" title="群聊高级设定" style="cursor:pointer;display:flex;align-items:center;justify-content:center;color:#07c160;padding:2px;-webkit-tap-highlight-color:transparent;">
                             <svg viewBox="0 0 24 24" style="width:23px;height:23px;fill:none;stroke:#07c160;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;">
                                 <circle cx="12" cy="12" r="3"></circle>
@@ -101,7 +101,6 @@
                             </svg>
                         </div>
 
-                        <!-- ✕ 优雅细线关闭叉号 -->
                         <div id="btnGroupHeaderClose" title="关闭" style="cursor:pointer;display:flex;align-items:center;justify-content:center;color:#888;padding:2px;-webkit-tap-highlight-color:transparent;">
                             <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:none;stroke:#666666;stroke-width:2.2;stroke-linecap:round;"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
                         </div>
@@ -168,7 +167,7 @@
     };
 
     /**
-     * ⚙️ 群聊高级设定弹窗
+     * ⚙️ 群聊高级设定弹窗（增添 TTS 语音播报开关）
      */
     window.openGroupAdvancedSettingsModal = function(gid) {
         document.querySelectorAll('.wechat-clean-modal-mask, .group-info-modal-mask').forEach(el => el.remove());
@@ -267,6 +266,20 @@
                         ${addMemberBtn}
                         ${removeMemberBtn}
                     </div>
+                </div>
+
+                <!-- 🌟 真实语音播报（TTS）开关 -->
+                <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:0.5px solid #f0f0f0;padding-bottom:12px;">
+                    <div>
+                        <div style="font-size:13.5px;font-weight:600;color:#181818;">群聊发言朗读</div>
+                        <div style="font-size:11px;color:#888;">群成员说话时自动由 TTS 语音朗读</div>
+                    </div>
+                    <label style="position:relative;display:inline-block;width:38px;height:22px;">
+                        <input type="checkbox" id="chkGroupTtsEnabled" ${cfg.ttsEnabled ? 'checked' : ''} style="opacity:0;width:0;height:0;">
+                        <span style="position:absolute;cursor:pointer;inset:0;background:${cfg.ttsEnabled ? '#07c160' : '#ccc'};border-radius:22px;transition:.3s;">
+                            <span style="position:absolute;height:18px;width:18px;left:${cfg.ttsEnabled ? '18px' : '2px'};bottom:2px;background:white;border-radius:50%;transition:.3s;"></span>
+                        </span>
+                    </label>
                 </div>
 
                 <!-- 每次接话角色人数范围 -->
@@ -371,20 +384,19 @@
             });
 
             const chkMulti = document.getElementById('chkGroupMultiMsgs')?.checked ?? true;
+            const chkTts = document.getElementById('chkGroupTtsEnabled')?.checked ?? false;
             const currentSelectedMode = window._tempSelectedGroupApiMode || cfg.apiMode;
 
             const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { name: '我' };
             const oldAdmins = cfg.admins || [];
             const oldTitles = cfg.titles || {};
 
-            // 📣 管理员任命通知
             selectedAdmins.forEach(mid => {
                 if (!oldAdmins.includes(mid)) {
                     const mName = window.G.npcs[mid]?.name || '群成员';
                     pushGroupActionNotice(gid, `"${curAcc.name}" 设置 "${mName}" 为群管理员`);
                 }
             });
-            // 📣 管理员取消通知
             oldAdmins.forEach(mid => {
                 if (!selectedAdmins.includes(mid)) {
                     const mName = window.G.npcs[mid]?.name || '群成员';
@@ -392,7 +404,6 @@
                 }
             });
 
-            // 📣 群头衔变更通知
             Object.keys(newTitles).forEach(mid => {
                 if (newTitles[mid] !== oldTitles[mid]) {
                     const mName = window.G.npcs[mid]?.name || '群成员';
@@ -414,6 +425,7 @@
                 maxSpeakers: maxSpk,
                 admins: selectedAdmins,
                 titles: newTitles,
+                ttsEnabled: chkTts,
                 momentNpcs: group.momentNpcs || []
             });
 
@@ -442,6 +454,7 @@
             };
         };
         setupSwitchToggle('chkGroupMultiMsgs');
+        setupSwitchToggle('chkGroupTtsEnabled');
     };
 
     window.toggleGroupMomentNpcCollapse = function() {
@@ -529,7 +542,6 @@
             }
 
             if (newlyAddedNames.length > 0) {
-                // 📣 添加朋友圈NPC居中小灰字通知
                 pushGroupActionNotice(gid, `"${curAcc.name}" 邀请 "${newlyAddedNames.join('、')}" 加入了群聊`);
 
                 if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
@@ -554,7 +566,6 @@
         const removed = group.momentNpcs.splice(idx, 1)[0];
 
         if (removed) {
-            // 📣 移出朋友圈NPC居中小灰字通知
             pushGroupActionNotice(gid, `"${curAcc.name}" 将 "${removed.name}" 移出了群聊`);
         }
 
@@ -599,12 +610,11 @@
         }
     };
 
-    // 🎲 应用新群头像并实现全生态双轨同步落盘（消灭吞发言与重复冲刷）
+    // 🎲 应用新群头像并实现全生态双轨同步落盘
     function applyNewGroupAvatar(gid, newAvatarUrl) {
         const group = window.G.groups && window.G.groups[gid];
         if (!group || !newAvatarUrl) return;
 
-        // 双轨设置，消灭字段名不一致导致的列表不同步
         group.avatar = newAvatarUrl;
         group.avatarUrl = newAvatarUrl;
 
@@ -614,17 +624,14 @@
         }
 
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { name: '我' };
-        // 📣 更换头像居中小灰字通知（带标准 timestamp 防止被净化）
         pushGroupActionNotice(gid, `"${curAcc.name}" 更换了群头像`);
 
-        // 同步落盘备份
         if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
         if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
 
         const modalPreview = document.getElementById('modalGroupAvatarPreview');
         if (modalPreview) modalPreview.src = newAvatarUrl;
 
-        // 如果群聊处于前台窗口，仅平滑局部重绘群聊窗口自身，绝不强行重构全局会话根节点
         if (window.G.currentChatGroup === gid && typeof window.renderGroupChatWindow === 'function') {
             window.renderGroupChatWindow();
         } else if (typeof window.renderChatApp === 'function') {
@@ -726,7 +733,6 @@
             if (val !== oldName) {
                 group.name = val;
                 const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { name: '我' };
-                // 📣 改名居中小灰字通知
                 pushGroupActionNotice(gid, `"${curAcc.name}" 修改群名为 "${val}"`);
 
                 if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
@@ -760,7 +766,6 @@
             if (val !== oldDesc) {
                 group.description = val || '';
                 const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { name: '我' };
-                // 📣 更新群公告居中小灰字通知
                 pushGroupActionNotice(gid, `"${curAcc.name}" 更新了群公告`);
 
                 if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
@@ -814,7 +819,6 @@
             });
 
             if (removedNames.length > 0) {
-                // 📣 移出成员居中小灰字通知
                 pushGroupActionNotice(gid, `"${curAcc.name}" 将 "${removedNames.join('、')}" 移出了群聊`);
 
                 if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
@@ -880,7 +884,6 @@
             });
 
             if (addedNames.length > 0) {
-                // 📣 添加成员居中小灰字通知
                 pushGroupActionNotice(gid, `"${curAcc.name}" 邀请 "${addedNames.join('、')}" 加入了群聊`);
 
                 if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
@@ -895,7 +898,7 @@
         if (activeModal) activeModal.style.zIndex = '99999';
     };
 
-    // 解散群聊确认弹窗（顶层安全渲染，绝不被挡）
+    // 解散群聊确认弹窗
     window.dismissGroup = function(gid) {
         document.querySelectorAll('.wechat-clean-modal-mask, .group-info-modal-mask').forEach(el => el.remove());
         let mask = document.createElement('div');

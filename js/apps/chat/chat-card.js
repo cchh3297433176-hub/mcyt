@@ -6,6 +6,7 @@
  * 2. 右上角「装扮中心」：支持【我的装扮】与【对方装扮】双轨分流
  * 3. 头像框缩略图折叠栏试穿预览（点击试穿，再次点击卸下）
  * 4. 彻底消除杂乱 emoji，保持原生微信极简白灰微绿
+ * 5. 🌟 角色专属 TTS 语音音色配置：分配角色个性化音色（Voice ID / 平台音色）与语速倍率
  */
 
 (function() {
@@ -143,7 +144,7 @@
     }
     window.openNpcProfileCardModal = openNpcProfileCardModal;
 
-    // 🎨 装扮弹窗（支持【我方】与【角色】分流切换 + 缩略图抽屉试穿预览）
+    // 🎨 装扮弹窗
     function openNpcDecorModal(npcId) {
         if (!window.G || !window.G.npcs) return;
         const npc = window.G.npcs[npcId];
@@ -152,17 +153,15 @@
         if (!npc.chatSettings) npc.chatSettings = {};
         if (!npc.chatSettings.decor) npc.chatSettings.decor = {};
 
-        let activeDecorTarget = 'npc'; // 'npc' | 'user'
+        let activeDecorTarget = 'npc';
 
         const frames = getStoredFramesList();
         const bubbles = getStoredBubblesList();
 
-        // 对方配置
         let npcShape = npc.chatSettings.decor.avatarShape || 'inherit';
         let npcFrameId = npc.chatSettings.decor.frameId !== undefined ? npc.chatSettings.decor.frameId : 'inherit';
         let npcBubbleId = npc.chatSettings.decor.bubbleId !== undefined ? npc.chatSettings.decor.bubbleId : 'inherit';
 
-        // 我方配置（来自 localStorage 全局）
         let userShape = localStorage.getItem('mcyt_active_avatar_shape') || 'circle';
         let userFrameId = localStorage.getItem('mcyt_active_decor_frame') || 'frame_none';
         let userBubbleId = localStorage.getItem('mcyt_active_decor_bubble') || 'bubble_default';
@@ -191,7 +190,6 @@
                         <button type="button" id="btnDecorModalX" style="border:none;background:#f2f2f2;border-radius:50%;width:22px;height:22px;color:#777;cursor:pointer;font-size:12px;">✕</button>
                     </div>
 
-                    <!-- 双选分流：我方装扮 vs 角色装扮 -->
                     <div style="display:flex;background:#f2f2f2;border-radius:8px;padding:2px;margin-bottom:12px;">
                         <button type="button" id="tabTargetNpc" style="flex:1;padding:6px 0;border-radius:6px;border:none;font-size:12px;font-weight:600;cursor:pointer;background:${!isUser ? '#ffffff' : 'transparent'};color:${!isUser ? '#07c160' : '#666'};">
                             角色「${escapeHtml(npc.name || 'NPC')}」
@@ -202,7 +200,6 @@
                     </div>
 
                     <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding-right:2px;">
-                        <!-- 试穿展示舞台 -->
                         <div style="background:#f7f7f7;border-radius:8px;padding:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;">
                             <div style="position:relative;width:54px;height:54px;">
                                 <img src="${curAvatar}" style="width:100%;height:100%;object-fit:cover;border-radius:${getShapeBorderRadius(curShape)};display:block;" onerror="this.src='assets/icons/chat.png';" />
@@ -211,7 +208,6 @@
                             <span style="font-size:11px;color:#777;margin-top:6px;">${curFrameUrl ? (curFrameObj.name || '已选框') : '未穿戴头像框'}</span>
                         </div>
 
-                        <!-- 头像形状 -->
                         <div>
                             <div style="font-size:12px;font-weight:600;color:#444;margin-bottom:6px;">头像形状：</div>
                             <div style="display:flex;gap:6px;">
@@ -222,7 +218,6 @@
                             </div>
                         </div>
 
-                        <!-- 头像框折叠缩略图选择 -->
                         <div>
                             <div onclick="window.toggleCardDecorFramesCollapse()" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;margin-bottom:6px;">
                                 <span style="font-size:12px;font-weight:600;color:#444;">头像框（点击试穿，再次点击脱下）：</span>
@@ -253,7 +248,6 @@
                             </div>
                         </div>
 
-                        <!-- 气泡样式 -->
                         <div>
                             <div style="font-size:12px;font-weight:600;color:#444;margin-bottom:6px;">气泡样式：</div>
                             <div style="display:flex;flex-direction:column;gap:6px;">
@@ -283,11 +277,9 @@
                 </div>
             `;
 
-            // 切换对象
             mask.querySelector('#tabTargetNpc').onclick = () => { activeDecorTarget = 'npc'; renderDecorModalInner(); };
             mask.querySelector('#tabTargetUser').onclick = () => { activeDecorTarget = 'user'; renderDecorModalInner(); };
 
-            // 形状切换
             mask.querySelectorAll('.opt-shape-btn').forEach(btn => {
                 btn.onclick = () => {
                     const val = btn.getAttribute('data-val');
@@ -297,7 +289,6 @@
                 };
             });
 
-            // 框切换（再次点击卸下为 frame_none）
             mask.querySelectorAll('.opt-frame-card').forEach(card => {
                 card.onclick = () => {
                     const val = card.getAttribute('data-val');
@@ -310,7 +301,6 @@
                 };
             });
 
-            // 气泡切换
             mask.querySelectorAll('.opt-bubble-btn').forEach(btn => {
                 btn.onclick = () => {
                     const val = btn.getAttribute('data-val');
@@ -324,12 +314,10 @@
             mask.querySelector('#btnCancelDecorChoice').onclick = () => { mask.remove(); openNpcProfileCardModal(npcId); };
 
             mask.querySelector('#btnSaveDecorChoice').onclick = () => {
-                // 保存我方全局
                 localStorage.setItem('mcyt_active_avatar_shape', userShape);
                 localStorage.setItem('mcyt_active_decor_frame', userFrameId);
                 localStorage.setItem('mcyt_active_decor_bubble', userBubbleId);
 
-                // 保存角色专属
                 npc.chatSettings.decor = {
                     avatarShape: npcShape === 'inherit' ? null : npcShape,
                     frameId: npcFrameId === 'inherit' ? null : npcFrameId,
@@ -362,7 +350,7 @@
     }
     window.openNpcDecorModal = openNpcDecorModal;
 
-    // ⚙️ 角色资料设置弹窗
+    // ⚙️ 角色资料设置弹窗（含专属 TTS 音色配置）
     function openNpcSettingsModal(npcId) {
         if (!window.G || !window.G.npcs) return;
         const npc = window.G.npcs[npcId];
@@ -381,7 +369,8 @@
                 maxMsgs: 3,
                 voiceFreq: 'rare',
                 disableTimezone: false,
-                disableBilingual: false
+                disableBilingual: false,
+                tts: { voice: '', speed: 1.0 }
             };
         }
         const minMsgs = Math.max(1, parseInt(npc.chatSettings.minMsgs) || 1);
@@ -390,6 +379,9 @@
         const disableTimezone = !!npc.chatSettings.disableTimezone;
         const disableBilingual = !!npc.chatSettings.disableBilingual;
         const curFavor = parseFloat(npc.favor !== undefined ? npc.favor : 50);
+
+        const curTtsVoice = (npc.chatSettings.tts && npc.chatSettings.tts.voice) || '';
+        const curTtsSpeed = (npc.chatSettings.tts && npc.chatSettings.tts.speed) || 1.0;
 
         if (typeof openWechatCleanModal === 'function') {
             openWechatCleanModal('资料设置', `
@@ -438,6 +430,15 @@
                                 <button type="button" class="voice-freq-btn" data-val="voice_only" style="padding:5px 0;border-radius:5px;font-size:11.5px;cursor:pointer;border:1px solid ${voiceFreq === 'voice_only' ? '#07c160' : '#e0e0e0'};background:${voiceFreq === 'voice_only' ? '#f0f9eb' : '#fff'};color:${voiceFreq === 'voice_only' ? '#07c160' : '#444'};font-weight:${voiceFreq === 'voice_only' ? '600' : 'normal'};">全语音</button>
                             </div>
                             <input type="hidden" id="wcleanSetVoiceFreqVal" value="${voiceFreq}">
+                        </div>
+
+                        <!-- 🌟 角色专属真实音色设置 -->
+                        <div style="border-top:0.5px solid #eee;padding-top:8px;">
+                            <div style="font-size:11.5px;font-weight:600;color:#333;margin-bottom:4px;">专属 TTS 语音音色</div>
+                            <div style="display:flex;gap:6px;align-items:center;">
+                                <input type="text" id="wcleanSetNpcTtsVoice" value="${escapeHtml(curTtsVoice)}" placeholder="音色名/Voice ID (如 alloy, nova)" class="wechat-clean-input" style="flex:1;font-size:12px;">
+                                <input type="number" id="wcleanSetNpcTtsSpeed" value="${curTtsSpeed}" step="0.1" min="0.5" max="2.0" placeholder="语速" class="wechat-clean-input" style="width:64px;font-size:12px;text-align:center;" title="语速倍率">
+                            </div>
                         </div>
 
                         <div style="border-top:0.5px solid #eee;padding-top:8px;display:flex;flex-direction:column;gap:7px;">
@@ -496,6 +497,9 @@
                 const curDisableTimezone = !!document.getElementById('wcleanSetDisableTimezone')?.checked;
                 const curDisableBilingual = !!document.getElementById('wcleanSetDisableBilingual')?.checked;
 
+                const ttsVoice = document.getElementById('wcleanSetNpcTtsVoice')?.value.trim() || '';
+                const ttsSpeed = parseFloat(document.getElementById('wcleanSetNpcTtsSpeed')?.value) || 1.0;
+
                 npc.remark = remarkVal;
                 npc.name = nameVal;
                 npc.signature = sigVal;
@@ -510,6 +514,7 @@
                     voiceFreq: curVoiceFreq,
                     disableTimezone: curDisableTimezone,
                     disableBilingual: curDisableBilingual,
+                    tts: { voice: ttsVoice, speed: ttsSpeed },
                     decor: existingDecor
                 };
 
@@ -742,7 +747,8 @@
                 maxMsgs: 3,
                 voiceFreq: 'rare',
                 disableTimezone: false,
-                disableBilingual: false
+                disableBilingual: false,
+                tts: { voice: '', speed: 1.0 }
             }
         };
 
@@ -805,7 +811,8 @@
                             maxMsgs: 3,
                             voiceFreq: 'rare',
                             disableTimezone: false,
-                            disableBilingual: false
+                            disableBilingual: false,
+                            tts: { voice: '', speed: 1.0 }
                         }
                     };
 

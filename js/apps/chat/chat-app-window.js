@@ -4,16 +4,22 @@
  *    微信内嵌全屏浏览器浮层（window.openWebPageLink）、
  *    重新生成回复的确认与执行（confirmRetryLastAIReply / doRetryLastAIReply）、
  *    🌟 微信原生直显大图与沉浸式大图文字查看器对接、拟真生活排版卡片（ui_card）渲染。
- * 🌟 存储升级：重说撤回逻辑接入 await syncChatHistoryToLocalBackup() 异步原子落盘。
- * 🌟 修复与升级：
- *  1. 我方头像全面接入 getPlayerAvatarSafe() 杜绝掉落回默认图标；
- *  2. 头像框全面接入 window.getStoredDecorFrames() 管道（全面兼容 IndexedDB 动态扩容池与全向微调 offset/scale）；
- *  3. 气泡全面接入 buildDecorBubbleHtml 管道，语音条与语音转文字全面融合入气泡排版容器，彻底解决九图挤压变形与外挂白框问题；
- *  4. 微信翻译全面改为 color: inherit，完美跟随气泡文字自定义颜色（支持双轨调色）。
+ * 🌟 升级：
+ *  1. 输入栏增加「笔 / 麦克风」纯 SVG 图标无感切换文字键盘与真录音按键（零文字、零Emoji）；
+ *  2. 录音按键表面伪装发送真实语音条（带真实秒数），后台实时 ASR 转文字发给 AI 进行剧情对话；
+ *  3. 收到 NPC 回复自动接入 TTS 语音引擎朗读（若配置开启）。
  */
 
 (function() {
     'use strict';
+
+    // 运行时单聊输入模式：'text' | 'voice'
+    window._chatInputMode = window._chatInputMode || 'text';
+    // 录音状态
+    let _isRecordingVoice = false;
+    let _voiceRecordStartTime = 0;
+    let _speechRecognitionInstance = null;
+    let _recognizedVoiceText = '';
 
     // 辅助：获取形状圆角
     function getShapeBorderRadius(shape) {
@@ -78,7 +84,7 @@
         }
     }
 
-    // 辅助：统一渲染气泡内容（优先调用 theme-chat-bubble.js 提供的统一渲染器）
+    // 辅助：统一渲染气泡内容
     function renderSafeBubbleHtml(contentHtml, isSelf, bubbleId, customClass = '') {
         if (typeof window.buildDecorBubbleHtml === 'function') {
             return window.buildDecorBubbleHtml(contentHtml, isSelf, bubbleId, customClass);
@@ -91,7 +97,7 @@
         `;
     }
 
-    // 辅助：渲染带装扮与头像框的头像元素（精准遵循配置的 scale 与全向偏移 offsetX, offsetY）
+    // 辅助：渲染带装扮与头像框的头像元素
     function renderDecorAvatarHtml(avatarUrl, shape, frameObjOrUrl, size = 38) {
         const rad = getShapeBorderRadius(shape);
         let frameUrl = '';
@@ -118,12 +124,22 @@
         `;
     }
 
-    // 🌟 全局挂载直接展开/折叠语音详情函数
+    // 🌟 全局挂载直接展开/折叠语音详情函数与朗读
     window.toggleVoiceMessageDetailsDirect = function(msgId) {
         const box = document.getElementById('voiceDescBox_' + msgId);
         if (box) {
             const isHidden = (box.style.display === 'none' || getComputedStyle(box).display === 'none');
             box.style.display = isHidden ? 'block' : 'none';
+        }
+        // 如果接入了真实 TTS，点击语音条直接发声朗读
+        const curNpcId = window.G && window.G.currentChatNpc;
+        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
+        const hist = window.getAccountChatHistory(curNpcId, curAcc.id) || [];
+        const msg = hist.find(m => m._id === msgId);
+        if (msg && msg.text && window.ttsEngine) {
+            const npc = window.G.npcs ? window.G.npcs[curNpcId] : null;
+            const npcVoiceCfg = (npc && npc.chatSettings && npc.chatSettings.tts) || {};
+            window.ttsEngine.speak(msg.text, npcVoiceCfg);
         }
     };
 
@@ -139,7 +155,100 @@
         }
     };
 
-    // 🌐 微信原生质感内嵌网页安全浏览器浮层（In-App Browser）
+    // 切换键盘/麦克风录音模式（纯图标驱动）
+    window.toggleChatInputMode = function() {
+        window._chatInputMode = (window._chatInputMode === 'text') ? 'voice' : 'text';
+        window.renderSingleChatWindow(null, { keepScroll: true });
+    };
+
+    // 真实录音与 ASR 伪装语音逻辑
+    window.startRealVoiceRecord = function(npcId) {
+        if (_isRecordingVoice) return;
+        _isRecordingVoice = true;
+        _voiceRecordStartTime = Date.now();
+        _recognizedVoiceText = '';
+
+        const recordBtn = document.getElementById('btnVoiceRecordPress');
+        if (recordBtn) {
+            recordBtn.style.background = '#e5e5e5';
+            recordBtn.setAttribute('data-recording', 'true');
+        }
+
+        // 尝试启动浏览器原生离线语音识别
+        const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (SpeechRec) {
+            try {
+                const rec = new SpeechRec();
+                rec.lang = 'zh-CN';
+                rec.continuous = true;
+                rec.interimResults = true;
+                rec.onresult = (event) => {
+                    let full = '';
+                    for (let i = 0; i < event.results.length; ++i) {
+                        full += event.results[i][0].transcript;
+                    }
+                    _recognizedVoiceText = full;
+                };
+                rec.onerror = () => {};
+                rec.start();
+                _speechRecognitionInstance = rec;
+            } catch (_) {}
+        }
+    };
+
+    window.stopRealVoiceRecordAndSend = function(npcId) {
+        if (!_isRecordingVoice) return;
+        _isRecordingVoice = false;
+
+        const durationSeconds = Math.max(1, Math.min(60, Math.round((Date.now() - _voiceRecordStartTime) / 1000)));
+
+        if (_speechRecognitionInstance) {
+            try { _speechRecognitionInstance.stop(); } catch (_) {}
+            _speechRecognitionInstance = null;
+        }
+
+        const recordBtn = document.getElementById('btnVoiceRecordPress');
+        if (recordBtn) {
+            recordBtn.style.background = '#ffffff';
+            recordBtn.removeAttribute('data-recording');
+        }
+
+        let finalText = _recognizedVoiceText ? _recognizedVoiceText.trim() : '';
+        if (!finalText) {
+            finalText = '（发送了一条语音）';
+        }
+
+        // 发送带真实语音条的消息（表面是语音，后台文本随之提交给 AI）
+        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
+        const newMsg = {
+            _id: 'msg_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
+            from: 'player',
+            type: 'voice',
+            seconds: durationSeconds,
+            text: finalText,
+            time: new Date().toLocaleTimeString().slice(0, 5),
+            timestamp: Date.now()
+        };
+
+        if (typeof window.pushChatMessageSafe === 'function') {
+            window.pushChatMessageSafe(npcId, curAcc.id, newMsg);
+        } else {
+            const hist = window.getAccountChatHistory(npcId, curAcc.id);
+            hist.push(newMsg);
+        }
+
+        if (typeof window.syncChatHistoryToLocalBackup === 'function') window.syncChatHistoryToLocalBackup();
+        if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+
+        window.renderSingleChatWindow();
+
+        // 触发 AI 回复
+        if (typeof window.triggerAIReplyForSingle === 'function') {
+            window.triggerAIReplyForSingle(npcId);
+        }
+    };
+
+    // 🌐 微信原生质感内嵌网页安全浏览器浮层
     window.openWebPageLink = function(url, pageTitle = '网页浏览') {
         if (!url || url === '#' || !url.startsWith('http')) {
             if (typeof showToast === 'function') showToast('无法打开非 HTTP 网页链接', 'info', 1500);
@@ -254,7 +363,6 @@
         if (!container) container = document.getElementById('appModalBody') || document.getElementById('socialTab');
         if (!container) return;
 
-        // 静默触发装扮池异步预热与保活，确保 IndexedDB 头像框与气泡随时最新
         const _reopenNpcId = window.G && window.G.currentChatNpc;
         if (typeof window.loadStoredDecorFramesAsync === 'function' && !window._mcytDecorFramesReady) {
             window.loadStoredDecorFramesAsync().then(() => {
@@ -295,17 +403,15 @@
 
         const topHeaderTitle = (npc.remark && npc.remark.trim()) ? `${npc.remark.trim()} (${npc.name})` : (npc.name || npc.id);
 
-        // 🌟 读取装扮配置（NPC专属装扮优先，平滑回退到全局装扮）
         const globalShape = localStorage.getItem('mcyt_active_avatar_shape') || 'circle';
         const globalBubbleId = localStorage.getItem('mcyt_active_decor_bubble') || 'bubble_default';
         const globalFrameId = localStorage.getItem('mcyt_active_decor_frame') || 'frame_none';
 
         const decor = (npc.chatSettings && npc.chatSettings.decor) || {};
         const npcShape = decor.avatarShape || globalShape;
-        const npcBubbleId = decor.bubbleId || globalBubbleId; // 对方专属气泡
-        const userBubbleId = globalBubbleId; // 我方默认使用全局气泡
+        const npcBubbleId = decor.bubbleId || globalBubbleId;
+        const userBubbleId = globalBubbleId;
 
-        // 统一提取头像框池
         const framesList = getAvailableFramesList();
 
         const targetFrameId = decor.frameId !== undefined && decor.frameId !== null ? decor.frameId : globalFrameId;
@@ -357,7 +463,6 @@
             const isSelf = (msg.from === 'player');
             const currentBubbleId = isSelf ? userBubbleId : npcBubbleId;
 
-            // 头像与装扮挂载
             const currentAvatarHtml = isSelf
                 ? renderDecorAvatarHtml(userAvatarUrl, globalShape, userFrameObj, 38)
                 : renderDecorAvatarHtml(npcAvatarUrl, npcShape, targetFrameObj, 38);
@@ -511,10 +616,6 @@
                     <span style="font-weight:600;color:#181818;">动作感知：</span>${escapeHtml(msg.text || '')}
                 </div>`;
             } else if (msg.type === 'voice') {
-                // 🌟 语音消息彻底适配自定义气泡核心管道：
-                // 1. 统一接入 renderSafeBubbleHtml，杜绝硬编码类名引起的白底透出与九宫格挤压变形；
-                // 2. 语音转文字直接收归气泡内部，支持原生折叠与展开；
-                // 3. 所有文字、声波、图标全面继承气泡字体颜色。
                 const seconds = Math.min(60, Math.max(1, parseInt(msg.seconds) || 3));
                 const voiceBarMinWidth = Math.min(180, Math.max(68, 56 + seconds * 4));
 
@@ -596,7 +697,6 @@
                 const displayMainText = hasOriginal ? msg.originalText : msg.text;
                 let bubbleBody = isSelf ? escapeHtml(displayMainText || '').replace(/\n/g, '<br>') : ((typeof renderContentWithThoughts === 'function') ? renderContentWithThoughts(displayMainText || '') : escapeHtml(displayMainText || ''));
 
-                // 🌟 翻译区域彻底解绑死板灰色，全面使用 color: inherit 与半透明边框，完美同步气泡自选字色
                 const transPartHtml = hasOriginal ? `
                     <div id="transBox_${msg._id}" style="display:none;margin-top:6px;padding-top:6px;border-top:0.5px dashed currentColor;opacity:0.92;font-size:13px;line-height:1.45;color:inherit;">
                         <div style="font-size:10px;opacity:0.65;margin-bottom:3px;display:flex;align-items:center;gap:3px;color:inherit;">
@@ -651,6 +751,34 @@
             topHeaderDisplayHtml = `<span style="color:#07c160;font-size:14px;">对方正在输入中...</span>`;
         }
 
+        // 🌟 纯 SVG 切换键盘 / 录音模态，无字无Emoji
+        const isVoiceMode = (window._chatInputMode === 'voice');
+
+        const inputSwitchSvg = isVoiceMode ? `
+            <!-- 笔/键盘图标：切回文字 -->
+            <svg viewBox="0 0 24 24" style="width:23px;height:23px;fill:none;stroke:#555;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;">
+                <path d="M12 20h9"></path>
+                <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"></path>
+            </svg>
+        ` : `
+            <!-- 麦克风图标：切换为录音 -->
+            <svg viewBox="0 0 24 24" style="width:23px;height:23px;fill:none;stroke:#555;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                <line x1="12" y1="19" x2="12" y2="23"></line>
+                <line x1="8" y1="23" x2="16" y2="23"></line>
+            </svg>
+        `;
+
+        const inputCenterHtml = isVoiceMode ? `
+            <div id="btnVoiceRecordPress" style="flex:1;height:36px;border-radius:6px;background:#ffffff;box-shadow:inset 0 0 0 0.5px #dcdcdc;display:flex;align-items:center;justify-content:center;cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent;">
+                <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:#07c160;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;margin-right:6px;"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/></svg>
+                <span id="voiceRecordTipText" style="font-size:13.5px;font-weight:600;color:#333;">按住 说话</span>
+            </div>
+        ` : `
+            <textarea id="singleChatInput" rows="1" placeholder="发消息..." style="flex:1;padding:8px 12px;border-radius:6px;border:none;background:#ffffff;font-size:14px;resize:none;outline:none;font-family:inherit;box-shadow:inset 0 0 0 0.5px #dcdcdc;box-sizing:border-box;max-height:80px;"></textarea>
+        `;
+
         const html = `
         <div style="background:#ededed;display:flex;flex-direction:column;height:100%;min-height:100%;overflow:hidden;font-family:-apple-system,sans-serif;">
             <div class="wechat-top-header">
@@ -693,18 +821,25 @@
             <!-- 仿 QQ/群聊 双层输入区域 -->
             <div style="background:#f7f7f7;border-top:0.5px solid #dcdcdc;display:flex;flex-direction:column;padding:6px 10px 8px;flex-shrink:0;gap:6px;">
                 <div style="display:flex;align-items:center;gap:6px;">
-                    <textarea id="singleChatInput" rows="1" placeholder="发消息..." style="flex:1;padding:8px 12px;border-radius:6px;border:none;background:#ffffff;font-size:14px;resize:none;outline:none;font-family:inherit;box-shadow:inset 0 0 0 0.5px #dcdcdc;box-sizing:border-box;max-height:80px;"></textarea>
+                    <!-- 模式切换开关（纯 SVG：麦克风 / 笔图标） -->
+                    <button type="button" onclick="window.toggleChatInputMode()" style="border:none;background:transparent;width:34px;height:34px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;flex-shrink:0;">
+                        ${inputSwitchSvg}
+                    </button>
+
+                    ${inputCenterHtml}
                     
                     <button id="btnSingleRegenerateReply" onclick="window.confirmRetryLastAIReply('${npcId}')" title="重新生成上一条回复" style="border:0.5px solid #dcdcdc;background:#ffffff;color:#444;width:34px;height:34px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;-webkit-tap-highlight-color:transparent;">
                         <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;"><polyline points="1 4 1 10 7 10"></polyline><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path></svg>
                     </button>
 
+                    ${!isVoiceMode ? `
                     <button onclick="window.doSendSingleChat('${npcId}')" style="border:none;background:#07c160;color:#fff;padding:7px 14px;border-radius:5px;font-size:13.5px;font-weight:600;cursor:pointer;flex-shrink:0;">发送</button>
+                    ` : ''}
                 </div>
 
                 <div style="display:flex;align-items:center;justify-content:space-between;padding:0 4px;">
                     <div style="display:flex;align-items:center;gap:18px;">
-                        <button onclick="window.openVoiceInputModal('single','${npcId}')" title="发送语音" style="border:none;background:none;cursor:pointer;padding:0;display:flex;align-items:color:#555;">
+                        <button onclick="window.openVoiceInputModal('single','${npcId}')" title="语音参数面板" style="border:none;background:none;cursor:pointer;padding:0;display:flex;align-items:center;color:#555;">
                             <svg viewBox="0 0 24 24" style="width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
                         </button>
 
@@ -755,6 +890,7 @@
             }
         });
 
+        // 绑定键盘模式发送
         const input = document.getElementById('singleChatInput');
         if (input) {
             input.onkeydown = (e) => {
@@ -763,6 +899,28 @@
                     window.doSendSingleChat(npcId);
                 }
             };
+        }
+
+        // 绑定说话模式（按住/松开录音）
+        const voiceRecordBtn = document.getElementById('btnVoiceRecordPress');
+        if (voiceRecordBtn) {
+            const onRecordStart = (e) => {
+                e.preventDefault();
+                window.startRealVoiceRecord(npcId);
+                const tip = document.getElementById('voiceRecordTipText');
+                if (tip) tip.textContent = '松开 发送';
+            };
+            const onRecordEnd = (e) => {
+                e.preventDefault();
+                const tip = document.getElementById('voiceRecordTipText');
+                if (tip) tip.textContent = '按住 说话';
+                window.stopRealVoiceRecordAndSend(npcId);
+            };
+
+            voiceRecordBtn.addEventListener('mousedown', onRecordStart);
+            voiceRecordBtn.addEventListener('mouseup', onRecordEnd);
+            voiceRecordBtn.addEventListener('touchstart', onRecordStart, { passive: false });
+            voiceRecordBtn.addEventListener('touchend', onRecordEnd, { passive: false });
         }
     };
 
