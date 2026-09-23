@@ -78,7 +78,7 @@
                     <div class="desktop-page desktop-page-1" id="desktopPage1">
                         <!-- ⚠️防回归：预留空档，勿删，见 style.css .desktop-future-slot 注释 -->
                         <div class="desktop-future-slot"></div>
-                        <!-- 🌟 顶部 4 格宽专属复古星象塔罗大组件插槽 -->
+                        <!-- 顶部 4 格宽专属复古星象塔罗大组件插槽 -->
                         <div id="desktopTarotContainer"></div>
 
                         <!-- 第 1 页动态组件插槽（日历/待办） -->
@@ -97,7 +97,7 @@
                                 <div class="app-title-label">聊天中心</div>
                             </div>
 
-                            <!-- 🌟 独立记忆中枢：忆海 (Rememori) 替换原有朋友圈位置 -->
+                            <!-- 独立记忆中枢：忆海 (Rememori) 替换原有朋友圈位置 -->
                             <div class="app-slot" id="appSlotRememori" onclick="openPhoneApp('rememori')">
                                 <div class="app-icon-box" style="background: linear-gradient(135deg, #7048e8, #4c1d95);">
                                     <img src="assets/icons/app_rememori.png" alt="忆海" draggable="false" style="display:none;" onload="this.style.display='block';if(this.nextElementSibling)this.nextElementSibling.style.display='none';this.parentElement.style.background='none';" onerror="this.style.display='none';" />
@@ -171,7 +171,7 @@
                         <div class="desktop-future-slot desktop-future-slot--page2"></div>
                         <div class="desktop-widgets-slot" id="page2WidgetSlot"></div>
 
-                        <!-- 🌟 塔罗独立 App 专属卡位：精确读取 assets/icons/tarot.png -->
+                        <!-- 塔罗独立 App 专属卡位：精确读取 assets/icons/tarot.png -->
                         <div class="app-grid">
                             <div class="app-slot" id="appSlotTarot" onclick="openPhoneApp('tarot')">
                                 <div class="app-icon-box" style="background: #19141f;">
@@ -277,8 +277,10 @@
     <script src="js/10-native-bridge.js"></script>
     <script src="js/11-image-backup.js"></script>
     <script src="js/system/save-engine.js"></script>
-    <!-- 🔊 全新纯前端 TTS 语音统一中枢引擎 -->
+    <!-- 全新纯前端 TTS 语音统一中枢引擎 -->
     <script src="js/system/tts-engine.js"></script>
+    <!-- 🎙️ 离线语音识别 (ASR) whisper.wasm 中枢引擎 -->
+    <script src="js/system/asr-engine.js"></script>
     <script src="js/09-events-init.js"></script>
 
     <!-- 2. 硬件外壳系统与原生驱动 -->
@@ -296,12 +298,12 @@
     <script src="js/apps/theme/theme-bubble-ai.js"></script>
     <script src="js/apps/settings/settings-app.js"></script>
 
-    <!-- 💬 独立微信 App 拆分子模块矩阵 -->
+    <!-- 独立微信 App 拆分子模块矩阵 -->
     <script src="js/apps/chat/chat-common.js"></script>
     <script src="js/apps/chat/chat-profile.js"></script>
     <script src="js/apps/chat/chat-moments.js"></script>
     <script src="js/apps/chat/chat-prompt-engine.js"></script>
-    <!-- 🌟 去中心化群聊独立提示词与高级设定中心（保持模块化与依赖就位） -->
+    <!-- 去中心化群聊独立提示词与高级设定中心（保持模块化与依赖就位） -->
     <script src="js/apps/chat/chat-prompt-group.js"></script>
     <script src="js/apps/chat/chat-group-settings.js"></script>
     <script src="js/apps/chat/chat-group.js"></script>
@@ -315,7 +317,7 @@
     <script src="js/apps/chat/chat-app-panels.js"></script>
     <script src="js/apps/chat/chat-app-media.js"></script>
 
-    <!-- 🌟 冷启动异步加载守护：确保 IndexedDB 数据 100% 装入运行内存后再渲染界面，彻底终结延迟闪烁与丢记录 Bug -->
+    <!-- 冷启动异步加载守护：确保 IndexedDB 数据 100% 装入运行内存后再渲染界面，彻底终结延迟闪烁与丢记录 Bug -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             setTimeout(async function() {
