@@ -520,6 +520,7 @@
       }
 
       let result = null;
+      let transcribeErr = null;
       try {
         // 关键修复：传入 onSegmentCallback 而非 undefined，杜绝空指针
         result = await Promise.race([
@@ -528,6 +529,7 @@
         ]);
       } catch (err) {
         console.warn('[ASR Engine] transcribe 退出或捕获:', err);
+        transcribeErr = err;
       } finally {
         if (typeof unsubTranscribe === 'function') unsubTranscribe();
         if (typeof unsubSystemInfo === 'function') unsubSystemInfo();
@@ -555,6 +557,12 @@
         const busFull = busCapturedTexts.join('').trim();
         console.log('[ASR Engine] 由底层输出合成对白:', busFull);
         return busFull;
+      }
+
+      // 🌟 三层兜底全部落空时，如果推理过程确实报错了，就把真实错误抛出去，
+      // 不再默默返回空字符串，方便定位具体是哪一步失败
+      if (transcribeErr) {
+        throw transcribeErr;
       }
 
       return '';
