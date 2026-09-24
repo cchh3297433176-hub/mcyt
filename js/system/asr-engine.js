@@ -16,7 +16,7 @@
   const LEGACY_STORAGE_KEY_MODEL_BINARY = 'mcyt_asr_model_binary';
   const LEGACY_STORAGE_KEY_MODEL_META = 'mcyt_asr_model_meta';
 
-  // 多源 CDN 候选列表（防止单一 CDN 在移动端或弱网环境下阻断）
+  // 多源 CDN 候选列表
   const WASM_ESM_CDN_MIRRORS = [
     'https://cdn.jsdelivr.net/npm/@timur00kh/whisper.wasm@canary/dist/index.es.js',
     'https://unpkg.com/@timur00kh/whisper.wasm@canary/dist/index.es.js',
@@ -261,7 +261,7 @@
     }
 
     /**
-     * 动态加载 whisper-wasm 库（具备多镜像容灾）
+     * 动态加载 whisper-wasm 库
      */
     async _loadWhisperModule() {
       if (window.WhisperWasmService && window.ModelManager) {
@@ -424,8 +424,7 @@
         rawPcm = renderedBuffer.getChannelData(0);
       }
 
-      // 🌟 核心防静音与音量增益归一化（Gain Normalization）
-      // 避免手机麦克风音量偏低导致 Whisper VAD 误判为静音而返回空文本
+      // 核心防静音与音量增益归一化（Gain Normalization）
       if (rawPcm && rawPcm.length > 0) {
         let maxAmp = 0;
         for (let i = 0; i < rawPcm.length; i++) {
@@ -447,7 +446,7 @@
     }
 
     /**
-     * 语音转文字（核心识别调用）
+     * 语音转文字（核心识别调用，移动端单线程穿透与双轨自愈）
      */
     async transcribe(audioData, options = {}) {
       if (!this.config.enabled) {
@@ -473,23 +472,73 @@
       const language = options.language || this.config.language || 'zh';
       const translate = typeof options.translate === 'boolean' ? options.translate : this.config.translate;
 
-      let result;
-      if (typeof this.whisperInstance.transcribe === 'function') {
-        result = await this.whisperInstance.transcribe(pcm16k, undefined, {
-          language: language,
-          translate: translate
+      // 🌟 移动端安全加固：强制单线程 threads: 1，彻底消灭 SharedArrayBuffer 阻塞
+      const transcribeOptions = {
+        language: language,
+        translate: translate,
+        threads: 1
+      };
+
+      // 🌟 双轨输出捕获自愈：穿透监听底层 print 事件，实时收集识别出的对白
+      const rawCapturedTexts = [];
+      let unsubscribePrint = null;
+      let unsubscribeError = null;
+
+      if (this.whisperInstance && this.whisperInstance.bus) {
+        unsubscribePrint = this.whisperInstance.bus.on('transcribe', (e) => {
+          try {
+            const rawStr = typeof e.detail === 'string' ? e.detail : JSON.stringify(e.detail);
+            // 匹配形如 [00:00.000 --> 00:02.000] 内容 或纯文本
+            const cleanText = rawStr.replace(/\[\d{1,2}:\d{2}[.,]\d{1,3}\s*-->\s*\d{1,2}:\d{2}[.,]\d{1,3}\]/g, '').trim();
+            if (cleanText) {
+              rawCapturedTexts.push(cleanText);
+            }
+          } catch (_) {}
         });
-      } else {
-        throw new Error('whisperInstance 未提供 transcribe 方法');
+
+        unsubscribeError = this.whisperInstance.bus.on('system_info', (e) => {
+          // 部分 whisper 编译版本会直接将文本打到普通输出
+          if (typeof e.detail === 'string' && e.detail.includes('-->')) {
+            const cleanText = e.detail.replace(/\[\d{1,2}:\d{2}[.,]\d{1,3}\s*-->\s*\d{1,2}:\d{2}[.,]\d{1,3}\]/g, '').trim();
+            if (cleanText) rawCapturedTexts.push(cleanText);
+          }
+        });
       }
 
-      if (!result) return '';
-
-      if (typeof result === 'string') return result.trim();
-      if (Array.isArray(result.segments)) {
-        return result.segments.map((s) => s.text || '').join('').trim();
+      let result = null;
+      try {
+        if (typeof this.whisperInstance.transcribe === 'function') {
+          // 加入 20 秒超时赛跑，防止主线程推理挂死
+          result = await Promise.race([
+            this.whisperInstance.transcribe(pcm16k, undefined, transcribeOptions),
+            new Promise((_, reject) => setTimeout(() => reject(new Error('ASR 推理超时')), 20000))
+          ]);
+        } else {
+          throw new Error('whisperInstance 未提供 transcribe 方法');
+        }
+      } catch (runErr) {
+        console.warn('[ASR Engine] transcribe 原生 Promise 异常或结束:', runErr);
+      } finally {
+        if (typeof unsubscribePrint === 'function') unsubscribePrint();
+        if (typeof unsubscribeError === 'function') unsubscribeError();
       }
-      if (result.text) return result.text.trim();
+
+      // 1. 优先提取规范返回
+      if (result) {
+        if (typeof result === 'string' && result.trim()) return result.trim();
+        if (Array.isArray(result.segments) && result.segments.length > 0) {
+          const segText = result.segments.map((s) => s.text || '').join('').trim();
+          if (segText) return segText;
+        }
+        if (result.text && result.text.trim()) return result.text.trim();
+      }
+
+      // 2. 自愈降级：若原 Promise 返回空数组，但底层打印成功捕获到了文字，直接采用底层文本！
+      if (rawCapturedTexts.length > 0) {
+        const fallbackMerged = rawCapturedTexts.join('').trim();
+        console.log('[ASR Engine] 通过底层输出自愈还原识别文本:', fallbackMerged);
+        return fallbackMerged;
+      }
 
       return '';
     }
