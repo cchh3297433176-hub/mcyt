@@ -16,8 +16,12 @@
   const LEGACY_STORAGE_KEY_MODEL_BINARY = 'mcyt_asr_model_binary';
   const LEGACY_STORAGE_KEY_MODEL_META = 'mcyt_asr_model_meta';
 
-  // 默认 CDN 脚本地址
-  const DEFAULT_WASM_ESM_URL = 'https://cdn.jsdelivr.net/npm/@timur00kh/whisper.wasm@canary/dist/index.es.js';
+  // 多源 CDN 候选列表（防止单一 CDN 在国内或 WebView 阻断）
+  const WASM_ESM_CDN_MIRRORS = [
+    'https://cdn.jsdelivr.net/npm/@timur00kh/whisper.wasm@canary/dist/index.es.js',
+    'https://unpkg.com/@timur00kh/whisper.wasm@canary/dist/index.es.js',
+    'https://esm.sh/@timur00kh/whisper.wasm@canary'
+  ];
 
   class AsrEngine {
     constructor() {
@@ -33,7 +37,7 @@
         activeModelId: '',
         language: 'zh',
         translate: false,
-        wasmUrl: DEFAULT_WASM_ESM_URL
+        wasmUrl: WASM_ESM_CDN_MIRRORS[0]
       };
 
       this._initPromise = null;
@@ -101,11 +105,12 @@
             const migratedId = 'model_migrated_' + Date.now();
             const binaryKey = STORAGE_KEY_BINARY_PREFIX + migratedId;
             await window.localforage.setItem(binaryKey, oldBin);
+            const sizeNum = oldBin.byteLength || (oldBin.size) || 0;
             const migratedMeta = {
               id: migratedId,
               name: oldMeta.name || 'tiny-model.bin',
-              size: oldMeta.size || oldBin.byteLength,
-              sizeFormatted: oldMeta.sizeFormatted || ((oldBin.byteLength / 1024 / 1024).toFixed(2) + ' MB'),
+              size: oldMeta.size || sizeNum,
+              sizeFormatted: oldMeta.sizeFormatted || ((sizeNum / 1024 / 1024).toFixed(2) + ' MB'),
               binaryKey: binaryKey,
               createdAt: oldMeta.updatedAt || new Date().toISOString()
             };
@@ -256,7 +261,7 @@
     }
 
     /**
-     * 动态加载 whisper-wasm 库
+     * 动态加载 whisper-wasm 库（具备多镜像容灾）
      */
     async _loadWhisperModule() {
       if (window.WhisperWasmService && window.ModelManager) {
@@ -266,13 +271,27 @@
         };
       }
 
-      try {
-        const esmModule = await import(this.config.wasmUrl);
-        return esmModule;
-      } catch (err) {
-        console.error('[ASR Engine] 加载 whisper.wasm ESM 失败:', err);
-        throw new Error('未能加载 whisper.wasm 核心库，请检查网络或离线引用');
+      const urlsToTry = [this.config.wasmUrl, ...WASM_ESM_CDN_MIRRORS].filter((v, i, a) => a.indexOf(v) === i && !!v);
+      let lastErr = null;
+
+      for (const url of urlsToTry) {
+        try {
+          const esmModule = await import(/* webpackIgnore: true */ url);
+          if (esmModule && (esmModule.WhisperWasmService || esmModule.default)) {
+            const WhisperWasmService = esmModule.WhisperWasmService || esmModule.default?.WhisperWasmService || esmModule.default;
+            const ModelManager = esmModule.ModelManager || esmModule.default?.ModelManager;
+            this.config.wasmUrl = url;
+            this.saveConfig();
+            return { WhisperWasmService, ModelManager };
+          }
+        } catch (err) {
+          lastErr = err;
+          console.warn(`[ASR Engine] 尝试从 ${url} 加载失败，准备尝试备用镜像...`, err);
+        }
       }
+
+      console.error('[ASR Engine] 加载 whisper.wasm ESM 全部镜像源失败:', lastErr);
+      throw new Error('未能连通 whisper.wasm 推理核心库，请检查网络或离线文件依赖');
     }
 
     /**
@@ -305,16 +324,23 @@
           const { WhisperWasmService } = await this._loadWhisperModule();
 
           onProgress?.(50, '正在从本地载入离线模型...');
-          const modelBuffer = await window.localforage.getItem(activeMeta.binaryKey);
+          let modelBuffer = await window.localforage.getItem(activeMeta.binaryKey);
           if (!modelBuffer) {
             throw new Error('未找到当前模型的本地二进制数据');
           }
 
+          // 兼容可能被 localForage 序列化为 Blob 的情况
+          if (modelBuffer instanceof Blob) {
+            modelBuffer = await modelBuffer.arrayBuffer();
+          }
+
           onProgress?.(80, '正在初始化神经网络上下文...');
           const whisper = new WhisperWasmService({ logLevel: 1 });
-          const isWasmReady = await whisper.checkWasmSupport();
-          if (!isWasmReady) {
-            throw new Error('whisper.wasm 环境握手失败');
+          if (typeof whisper.checkWasmSupport === 'function') {
+            const isWasmReady = await whisper.checkWasmSupport();
+            if (!isWasmReady) {
+              throw new Error('whisper.wasm 环境握手失败');
+            }
           }
 
           const modelData = new Uint8Array(modelBuffer);
@@ -329,6 +355,7 @@
         } catch (err) {
           this.isLoading = false;
           this.isInitialized = false;
+          console.error('[ASR Engine] 初始化推理引擎失败:', err);
           throw err;
         } finally {
           this._initPromise = null;
@@ -369,7 +396,13 @@
         await this.audioContext.resume();
       }
 
-      const decodedBuffer = await this.audioContext.decodeAudioData(arrayBuffer.slice(0));
+      let decodedBuffer;
+      try {
+        decodedBuffer = await this.audioContext.decodeAudioData(arrayBuffer.slice(0));
+      } catch (decErr) {
+        console.error('[ASR Engine] decodeAudioData 解码音频失败:', decErr);
+        throw new Error('音频解码失败，请确认设备支持此音频格式');
+      }
 
       const TARGET_SAMPLE_RATE = 16000;
       if (decodedBuffer.sampleRate === TARGET_SAMPLE_RATE && decodedBuffer.numberOfChannels === 1) {
@@ -378,7 +411,7 @@
 
       const offlineCtx = new OfflineAudioContext(
         1,
-        Math.ceil(decodedBuffer.duration * TARGET_SAMPLE_RATE),
+        Math.max(1, Math.ceil(decodedBuffer.duration * TARGET_SAMPLE_RATE)),
         TARGET_SAMPLE_RATE
       );
 
@@ -413,17 +446,25 @@
       const language = options.language || this.config.language || 'zh';
       const translate = typeof options.translate === 'boolean' ? options.translate : this.config.translate;
 
-      const result = await this.whisperInstance.transcribe(pcm16k, undefined, {
-        language: language,
-        translate: translate
-      });
-
-      if (!result || !result.segments) {
-        return '';
+      let result;
+      if (typeof this.whisperInstance.transcribe === 'function') {
+        result = await this.whisperInstance.transcribe(pcm16k, undefined, {
+          language: language,
+          translate: translate
+        });
+      } else {
+        throw new Error('whisperInstance 未提供 transcribe 方法');
       }
 
-      const fullText = result.segments.map((s) => s.text).join('').trim();
-      return fullText;
+      if (!result) return '';
+
+      if (typeof result === 'string') return result.trim();
+      if (Array.isArray(result.segments)) {
+        return result.segments.map((s) => s.text || '').join('').trim();
+      }
+      if (result.text) return result.text.trim();
+
+      return '';
     }
   }
 
