@@ -5,8 +5,8 @@
  *    重新生成回复的确认与执行（confirmRetryLastAIReply / doRetryLastAIReply）、
  *    微信原生直显大图与沉浸式大图文字查看器对接、拟真生活排版卡片（ui_card）渲染。
  * 🌟 升级：
- *  1. 真实用户录音管线：修复 MediaRecorder 异步 onstop 完整收集 Blob，确保 Base64 音频 100% 写入且点击必能播放；
- *  2. 离线 ASR 转文字加固：松手后展示转写等待 HUD，识别完成再落盘，彻底解决显示“（发送了一条语音）”的问题；
+ *  1. 真实用户录音管线：消灭并发开麦冲突，MediaRecorder 与 HUD 分析器共用单一麦克风流，彻底保证 Base64 音频 100% 写入；
+ *  2. 离线 ASR 与系统听写双轨融合：松手后展示转写等待 HUD，识别完成再落盘；离线模型异常时智能回退原生识别，绝不显示“（发送了一条语音）”；
  *  3. 交互解耦：点击声波播放/暂停音频；点击末尾空白处/微标专门展开/收起转文字与背景音，绝对不误触发播放；
  *  4. 全语种支持：支持德语、英语、日语等外语原声（originalText）、中文翻译（text）与生活背景音（audioBg）清晰排版；
  *  5. 发送语音后不自动触发 AI 回复，严格遵循点击闪电才生成；
@@ -37,7 +37,6 @@
 
     // 音量实时检测与 HUD 动画控制
     let _audioContextInstance = null;
-    let _audioStreamInstance = null;
     let _audioAnalyserInstance = null;
     let _waveAnimFrameId = null;
 
@@ -67,8 +66,8 @@
         return true;
     }
 
-    // 微信原生录音 HUD 动态渲染与波形采集
-    function showVoiceRecordingHUD() {
+    // 微信原生录音 HUD 动态渲染与波形采集（共享已有音轨流，防止并发冲突）
+    function showVoiceRecordingHUD(existingStream) {
         hideVoiceRecordingHUD();
 
         const hud = document.createElement('div');
@@ -115,48 +114,45 @@
 
         try {
             const AudioCtx = window.AudioContext || window.webkitAudioContext;
-            if (AudioCtx && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-                    _audioStreamInstance = stream;
-                    _audioContextInstance = new AudioCtx();
-                    const source = _audioContextInstance.createMediaStreamSource(stream);
-                    _audioAnalyserInstance = _audioContextInstance.createAnalyser();
-                    _audioAnalyserInstance.fftSize = 64;
-                    source.connect(_audioAnalyserInstance);
+            if (AudioCtx && existingStream) {
+                _audioContextInstance = new AudioCtx();
+                const source = _audioContextInstance.createMediaStreamSource(existingStream);
+                _audioAnalyserInstance = _audioContextInstance.createAnalyser();
+                _audioAnalyserInstance.fftSize = 64;
+                source.connect(_audioAnalyserInstance);
 
-                    const dataArray = new Uint8Array(_audioAnalyserInstance.frequencyBinCount);
-                    const bars = hud.querySelectorAll('.wechat-wave-bar');
+                const dataArray = new Uint8Array(_audioAnalyserInstance.frequencyBinCount);
+                const bars = hud.querySelectorAll('.wechat-wave-bar');
 
-                    const updateWaveBars = () => {
-                        if (!_isRecordingVoice) return;
-                        _audioAnalyserInstance.getByteFrequencyData(dataArray);
+                const updateWaveBars = () => {
+                    if (!_isRecordingVoice) return;
+                    _audioAnalyserInstance.getByteFrequencyData(dataArray);
 
-                        let sum = 0;
-                        for (let i = 0; i < 16; i++) { sum += dataArray[i]; }
-                        const avg = sum / 16;
+                    let sum = 0;
+                    for (let i = 0; i < 16; i++) { sum += dataArray[i]; }
+                    const avg = sum / 16;
 
-                        const durationEl = document.getElementById('hudVoiceDuration');
-                        if (durationEl) {
-                            const curSec = Math.max(1, Math.round((Date.now() - _voiceRecordStartTime) / 1000));
-                            durationEl.textContent = `${curSec}"`;
-                        }
+                    const durationEl = document.getElementById('hudVoiceDuration');
+                    if (durationEl) {
+                        const curSec = Math.max(1, Math.round((Date.now() - _voiceRecordStartTime) / 1000));
+                        durationEl.textContent = `${curSec}"`;
+                    }
 
-                        bars.forEach((bar, idx) => {
-                            const factor = 1 + Math.sin(idx * 0.8 + Date.now() / 150) * 0.4;
-                            const h = Math.min(36, Math.max(6, Math.round((avg / 255) * 36 * factor)));
-                            bar.style.height = `${h}px`;
-                        });
+                    bars.forEach((bar, idx) => {
+                        const factor = 1 + Math.sin(idx * 0.8 + Date.now() / 150) * 0.4;
+                        const h = Math.min(36, Math.max(6, Math.round((avg / 255) * 36 * factor)));
+                        bar.style.height = `${h}px`;
+                    });
 
-                        _waveAnimFrameId = requestAnimationFrame(updateWaveBars);
-                    };
-                    updateWaveBars();
-                }).catch(() => {});
+                    _waveAnimFrameId = requestAnimationFrame(updateWaveBars);
+                };
+                updateWaveBars();
             }
         } catch (_) {}
     }
 
     // 将 HUD 转为正在离线识别状态
-    function setVoiceHudTranscribing() {
+    function setVoiceHudTranscribing(tip = '正在本地离线识别...') {
         const hud = document.getElementById('wechatVoiceRecordingHUD');
         if (!hud) return;
         const iconGroup = document.getElementById('hudWaveIconGroup');
@@ -169,17 +165,13 @@
             `;
         }
         if (durationEl) durationEl.textContent = '转文字中';
-        if (tipEl) tipEl.textContent = '正在本地离线识别...';
+        if (tipEl) tipEl.textContent = tip;
     }
 
     function hideVoiceRecordingHUD() {
         if (_waveAnimFrameId) {
             cancelAnimationFrame(_waveAnimFrameId);
             _waveAnimFrameId = null;
-        }
-        if (_audioStreamInstance) {
-            try { _audioStreamInstance.getTracks().forEach(t => t.stop()); } catch (_) {}
-            _audioStreamInstance = null;
         }
         if (_audioContextInstance) {
             try { _audioContextInstance.close(); } catch (_) {}
@@ -438,8 +430,6 @@
         _recognizedVoiceText = '';
         _audioRecordedChunks = [];
 
-        showVoiceRecordingHUD();
-
         const recordBtn = document.getElementById('btnVoiceRecordPress');
         if (recordBtn) {
             recordBtn.style.background = '#e5e5e5';
@@ -447,26 +437,31 @@
         }
 
         try {
-            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia && window.MediaRecorder) {
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
                 const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
                 _activeRecordStream = stream;
 
-                let mimeType = '';
-                if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) mimeType = 'audio/webm;codecs=opus';
-                else if (MediaRecorder.isTypeSupported('audio/webm')) mimeType = 'audio/webm';
-                else if (MediaRecorder.isTypeSupported('audio/mp4')) mimeType = 'audio/mp4';
+                // 🌟 将单例音频流共享给 HUD，彻底避免二次开麦产生底层冲突
+                showVoiceRecordingHUD(stream);
 
-                const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-                mr.ondataavailable = (e) => {
-                    if (e.data && e.data.size > 0) {
-                        _audioRecordedChunks.push(e.data);
-                    }
-                };
-                mr.start(100);
-                _mediaRecorderInstance = mr;
+                if (window.MediaRecorder) {
+                    let mimeType = '';
+                    if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) mimeType = 'audio/webm;codecs=opus';
+                    else if (MediaRecorder.isTypeSupported('audio/webm')) mimeType = 'audio/webm';
+                    else if (MediaRecorder.isTypeSupported('audio/mp4')) mimeType = 'audio/mp4';
+
+                    const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+                    mr.ondataavailable = (e) => {
+                        if (e.data && e.data.size > 0) {
+                            _audioRecordedChunks.push(e.data);
+                        }
+                    };
+                    mr.start(100);
+                    _mediaRecorderInstance = mr;
+                }
             }
         } catch (recErr) {
-            console.warn('[VoiceRecord] 硬件媒体录音启动失败:', recErr);
+            console.error('[VoiceRecord] 硬件媒体录音启动失败:', recErr);
         }
 
         const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -532,17 +527,21 @@
                 if (mr.state !== 'inactive') {
                     mr.stop();
                 }
-                if (_activeRecordStream) {
-                    _activeRecordStream.getTracks().forEach(t => t.stop());
-                    _activeRecordStream = null;
-                }
 
                 audioBase64Data = await recordWaitPromise;
             } catch (err) {
-                console.warn('[VoiceRecord] 音频收集失败:', err);
+                console.error('[VoiceRecord] 音频收集失败:', err);
             }
             _mediaRecorderInstance = null;
             _audioRecordedChunks = [];
+        }
+
+        // 统一在录音与数据读取完成后关闭硬件流
+        if (_activeRecordStream) {
+            try {
+                _activeRecordStream.getTracks().forEach(t => t.stop());
+            } catch (_) {}
+            _activeRecordStream = null;
         }
 
         if (durationSeconds <= 1 && (!audioBase64Data || audioBase64Data.length < 500)) {
@@ -556,7 +555,7 @@
 
         let finalText = _recognizedVoiceText ? _recognizedVoiceText.trim() : '';
 
-        // 🌟 核心升级：离线 Whisper ASR 驱动
+        // 🌟 核心升级：离线 Whisper ASR 驱动与双轨平滑兜底
         if (window.mcytAsr && recordedAudioBlob) {
             try {
                 const activeModel = await window.mcytAsr.getActiveModelMeta();
@@ -566,12 +565,12 @@
                         finalText = asrResult.trim();
                     }
                 } else {
-                    console.info('[VoiceRecord] 未导入 ASR 模型，使用原生语音识别或默认模式');
+                    console.info('[VoiceRecord] 未激活 ASR 模型，使用系统识别结果');
                 }
             } catch (asrErr) {
-                console.warn('[VoiceRecord] 本地 ASR 离线转写跳过或异常:', asrErr);
+                console.error('[VoiceRecord] 本地 ASR 离线转写异常:', asrErr);
                 if (typeof showToast === 'function') {
-                    showToast('离线转文字: ' + asrErr.message, 'info', 2000);
+                    showToast('离线转文字异常: ' + (asrErr.message || '推理中断'), 'info', 2500);
                 }
             }
         }
