@@ -16,7 +16,7 @@
   const LEGACY_STORAGE_KEY_MODEL_BINARY = 'mcyt_asr_model_binary';
   const LEGACY_STORAGE_KEY_MODEL_META = 'mcyt_asr_model_meta';
 
-  // 多源 CDN 候选列表（防止单一 CDN 在国内或 WebView 阻断）
+  // 多源 CDN 候选列表（防止单一 CDN 在移动端或弱网环境下阻断）
   const WASM_ESM_CDN_MIRRORS = [
     'https://cdn.jsdelivr.net/npm/@timur00kh/whisper.wasm@canary/dist/index.es.js',
     'https://unpkg.com/@timur00kh/whisper.wasm@canary/dist/index.es.js',
@@ -97,7 +97,7 @@
         let list = await window.localforage.getItem(STORAGE_KEY_MODELS_META_LIST);
         list = Array.isArray(list) ? list : [];
 
-        // 🌟 自动自愈：如果多模型列表为空，检查是否存在旧版单模型数据并迁移过来
+        // 自动自愈：如果多模型列表为空，检查是否存在旧版单模型数据并迁移过来
         if (list.length === 0) {
           const oldMeta = await window.localforage.getItem(LEGACY_STORAGE_KEY_MODEL_META);
           const oldBin = await window.localforage.getItem(LEGACY_STORAGE_KEY_MODEL_BINARY);
@@ -291,7 +291,7 @@
       }
 
       console.error('[ASR Engine] 加载 whisper.wasm ESM 全部镜像源失败:', lastErr);
-      throw new Error('未能连通 whisper.wasm 推理核心库，请检查网络或离线文件依赖');
+      throw new Error('未能连通 whisper.wasm 推理核心库，请检查网络或离线依赖');
     }
 
     /**
@@ -329,7 +329,6 @@
             throw new Error('未找到当前模型的本地二进制数据');
           }
 
-          // 兼容可能被 localForage 序列化为 Blob 的情况
           if (modelBuffer instanceof Blob) {
             modelBuffer = await modelBuffer.arrayBuffer();
           }
@@ -366,7 +365,7 @@
     }
 
     /**
-     * 将音频数据转换为 16kHz 单声道 Float32Array
+     * 将音频数据解码、重采样至 16kHz 单声道并进行音量增益归一化
      */
     async convertAudioTo16kPcm(audioSource) {
       let arrayBuffer;
@@ -405,23 +404,46 @@
       }
 
       const TARGET_SAMPLE_RATE = 16000;
+      let rawPcm = null;
+
       if (decodedBuffer.sampleRate === TARGET_SAMPLE_RATE && decodedBuffer.numberOfChannels === 1) {
-        return decodedBuffer.getChannelData(0);
+        rawPcm = decodedBuffer.getChannelData(0);
+      } else {
+        const offlineCtx = new OfflineAudioContext(
+          1,
+          Math.max(1, Math.ceil(decodedBuffer.duration * TARGET_SAMPLE_RATE)),
+          TARGET_SAMPLE_RATE
+        );
+
+        const source = offlineCtx.createBufferSource();
+        source.buffer = decodedBuffer;
+        source.connect(offlineCtx.destination);
+        source.start(0);
+
+        const renderedBuffer = await offlineCtx.startRendering();
+        rawPcm = renderedBuffer.getChannelData(0);
       }
 
-      const offlineCtx = new OfflineAudioContext(
-        1,
-        Math.max(1, Math.ceil(decodedBuffer.duration * TARGET_SAMPLE_RATE)),
-        TARGET_SAMPLE_RATE
-      );
+      // 🌟 核心防静音与音量增益归一化（Gain Normalization）
+      // 避免手机麦克风音量偏低导致 Whisper VAD 误判为静音而返回空文本
+      if (rawPcm && rawPcm.length > 0) {
+        let maxAmp = 0;
+        for (let i = 0; i < rawPcm.length; i++) {
+          const abs = Math.abs(rawPcm[i]);
+          if (abs > maxAmp) maxAmp = abs;
+        }
 
-      const source = offlineCtx.createBufferSource();
-      source.buffer = decodedBuffer;
-      source.connect(offlineCtx.destination);
-      source.start(0);
+        if (maxAmp > 0.005 && maxAmp < 0.7) {
+          const gain = Math.min(10.0, 0.85 / maxAmp);
+          const boostedPcm = new Float32Array(rawPcm.length);
+          for (let i = 0; i < rawPcm.length; i++) {
+            boostedPcm[i] = Math.max(-1.0, Math.min(1.0, rawPcm[i] * gain));
+          }
+          return boostedPcm;
+        }
+      }
 
-      const renderedBuffer = await offlineCtx.startRendering();
-      return renderedBuffer.getChannelData(0);
+      return rawPcm;
     }
 
     /**
@@ -441,6 +463,11 @@
         pcm16k = audioData;
       } else {
         pcm16k = await this.convertAudioTo16kPcm(audioData);
+      }
+
+      if (!pcm16k || pcm16k.length < 1600) {
+        console.warn('[ASR Engine] 音频数据过短，无法推理');
+        return '';
       }
 
       const language = options.language || this.config.language || 'zh';
