@@ -5,12 +5,12 @@
  *    重新生成回复的确认与执行（confirmRetryLastAIReply / doRetryLastAIReply）、
  *    微信原生直显大图与沉浸式大图文字查看器对接、拟真生活排版卡片（ui_card）渲染。
  * 🌟 升级：
- *  1. 真实用户录音管线：消灭并发开麦冲突，MediaRecorder 与 HUD 分析器共用单一麦克风流，彻底保证 Base64 音频 100% 写入；
- *  2. 离线 ASR 与系统听写双轨融合：松手后展示转写等待 HUD，识别完成再落盘；离线模型异常时智能回退原生识别，绝不显示“（发送了一条语音）”；
+ *  1. 彻底解决录音静音与空语音：消除前置双重开麦延迟，单次直接接管硬件流，杜绝松手竞态丢失；
+ *  2. 离线 ASR 与系统双轨听写：松手后展示转写等待 HUD，精准提取音频 Blob 喂给 whisper 推理，识别完成再落盘；
  *  3. 交互解耦：点击声波播放/暂停音频；点击末尾空白处/微标专门展开/收起转文字与背景音，绝对不误触发播放；
  *  4. 全语种支持：支持德语、英语、日语等外语原声（originalText）、中文翻译（text）与生活背景音（audioBg）清晰排版；
  *  5. 发送语音后不自动触发 AI 回复，严格遵循点击闪电才生成；
- *  6. 麦克风未收录到有效文字时轻量 Toast 提示，杜绝乱码传给 AI。
+ *  6. 麦克风未收录到有效音频时轻量拦截与 Toast 提示，杜绝生成空语音。
  */
 
 (function() {
@@ -20,8 +20,10 @@
     window._chatInputMode = window._chatInputMode || 'text';
     // 语音浮层开启状态
     window._voiceActionMenuOpen = false;
-    // 录音状态
+
+    // 录音状态控制与防抖锁
     let _isRecordingVoice = false;
+    let _stopRequestedWhileStarting = false;
     let _voiceRecordStartTime = 0;
     let _speechRecognitionInstance = null;
     let _recognizedVoiceText = '';
@@ -48,25 +50,7 @@
         return '8px';
     }
 
-    // 硬件麦克风权限安全申请门禁
-    async function ensureMicrophonePermission() {
-        if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                stream.getTracks().forEach(track => track.stop());
-                return true;
-            } catch (err) {
-                console.warn('[Microphone] 麦克风权限获取失败或被拒绝:', err);
-                if (typeof showToast === 'function') {
-                    showToast('请在系统或应用设置中允许麦克风权限', 'info', 2000);
-                }
-                return false;
-            }
-        }
-        return true;
-    }
-
-    // 微信原生录音 HUD 动态渲染与波形采集（共享已有音轨流，防止并发冲突）
+    // 微信原生录音 HUD 动态渲染与波形采集
     function showVoiceRecordingHUD(existingStream) {
         hideVoiceRecordingHUD();
 
@@ -152,7 +136,7 @@
     }
 
     // 将 HUD 转为正在离线识别状态
-    function setVoiceHudTranscribing(tip = '正在本地离线识别...') {
+    function setVoiceHudTranscribing(tip = '正在本地离线转文字...') {
         const hud = document.getElementById('wechatVoiceRecordingHUD');
         if (!hud) return;
         const iconGroup = document.getElementById('hudWaveIconGroup');
@@ -352,7 +336,7 @@
         }
 
         if (msg.from === 'player') {
-            if (typeof showToast === 'function') showToast('暂无录音文件', 'info', 1000);
+            if (typeof showToast === 'function') showToast('录音为空或损坏', 'info', 1000);
             return;
         }
 
@@ -408,27 +392,22 @@
     // 切换至打字/语音模式
     window.switchChatVoiceMode = async function(mode, npcId) {
         window._voiceActionMenuOpen = false;
-        if (mode === 'voice') {
-            const hasPerm = await ensureMicrophonePermission();
-            if (!hasPerm) return;
-            window._chatInputMode = 'voice';
-        } else {
-            window._chatInputMode = 'text';
-        }
+        window._chatInputMode = (mode === 'voice') ? 'voice' : 'text';
         window.renderSingleChatWindow(null, { keepScroll: true });
     };
 
-    // 真实录音与 ASR 本地离线语音识别核心
+    // 真实录音与 ASR 本地离线语音识别核心（零延迟单次硬件接管）
     window.startRealVoiceRecord = async function(npcId) {
         if (_isRecordingVoice) return;
 
-        const hasPerm = await ensureMicrophonePermission();
-        if (!hasPerm) return;
-
         _isRecordingVoice = true;
+        _stopRequestedWhileStarting = false;
         _voiceRecordStartTime = Date.now();
         _recognizedVoiceText = '';
         _audioRecordedChunks = [];
+
+        // 立即展示录音 HUD，给予用户即时视觉反馈
+        showVoiceRecordingHUD(null);
 
         const recordBtn = document.getElementById('btnVoiceRecordPress');
         if (recordBtn) {
@@ -437,33 +416,49 @@
         }
 
         try {
-            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-                _activeRecordStream = stream;
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                throw new Error('当前浏览器或 WebView 不支持麦克风录音');
+            }
 
-                // 🌟 将单例音频流共享给 HUD，彻底避免二次开麦产生底层冲突
-                showVoiceRecordingHUD(stream);
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-                if (window.MediaRecorder) {
-                    let mimeType = '';
-                    if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) mimeType = 'audio/webm;codecs=opus';
-                    else if (MediaRecorder.isTypeSupported('audio/webm')) mimeType = 'audio/webm';
-                    else if (MediaRecorder.isTypeSupported('audio/mp4')) mimeType = 'audio/mp4';
+            // 若在异步等待期间用户已松开手指，立即释放资源退出
+            if (!_isRecordingVoice || _stopRequestedWhileStarting) {
+                stream.getTracks().forEach(t => t.stop());
+                hideVoiceRecordingHUD();
+                return;
+            }
 
-                    const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
-                    mr.ondataavailable = (e) => {
-                        if (e.data && e.data.size > 0) {
-                            _audioRecordedChunks.push(e.data);
-                        }
-                    };
-                    mr.start(100);
-                    _mediaRecorderInstance = mr;
-                }
+            _activeRecordStream = stream;
+            // 共享流并启动 HUD 波形跳动
+            showVoiceRecordingHUD(stream);
+
+            if (window.MediaRecorder) {
+                let mimeType = '';
+                if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) mimeType = 'audio/webm;codecs=opus';
+                else if (MediaRecorder.isTypeSupported('audio/webm')) mimeType = 'audio/webm';
+                else if (MediaRecorder.isTypeSupported('audio/mp4')) mimeType = 'audio/mp4';
+
+                const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+                mr.ondataavailable = (e) => {
+                    if (e.data && e.data.size > 0) {
+                        _audioRecordedChunks.push(e.data);
+                    }
+                };
+                mr.start(100);
+                _mediaRecorderInstance = mr;
             }
         } catch (recErr) {
             console.error('[VoiceRecord] 硬件媒体录音启动失败:', recErr);
+            _isRecordingVoice = false;
+            hideVoiceRecordingHUD();
+            if (typeof showToast === 'function') {
+                showToast('请在手机或应用设置中允许麦克风权限', 'info', 2000);
+            }
+            return;
         }
 
+        // 辅助双轨：系统级 Web Speech 兜底侦听
         const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (SpeechRec) {
             try {
@@ -486,7 +481,10 @@
     };
 
     window.stopRealVoiceRecordAndSend = async function(npcId) {
-        if (!_isRecordingVoice) return;
+        if (!_isRecordingVoice) {
+            _stopRequestedWhileStarting = true;
+            return;
+        }
         _isRecordingVoice = false;
 
         const durationSeconds = Math.max(1, Math.min(60, Math.round((Date.now() - _voiceRecordStartTime) / 1000)));
@@ -536,7 +534,7 @@
             _audioRecordedChunks = [];
         }
 
-        // 统一在录音与数据读取完成后关闭硬件流
+        // 彻底释放硬件麦克风
         if (_activeRecordStream) {
             try {
                 _activeRecordStream.getTracks().forEach(t => t.stop());
@@ -544,33 +542,36 @@
             _activeRecordStream = null;
         }
 
-        if (durationSeconds <= 1 && (!audioBase64Data || audioBase64Data.length < 500)) {
+        // 🌟 防误触与空音频检测：若文件太小（小于 800 字节）或录音时长不足，立即拦截
+        if (durationSeconds <= 1 && (!audioBase64Data || audioBase64Data.length < 800)) {
             hideVoiceRecordingHUD();
-            if (typeof showToast === 'function') showToast('说话时间太短', 'info', 1200);
+            if (typeof showToast === 'function') showToast('说话时间太短或未收录到声音', 'info', 1500);
             return;
         }
 
         // 🌟 切换 HUD 状态为正在转文字中
-        setVoiceHudTranscribing();
+        setVoiceHudTranscribing('正在本地离线转文字...');
 
         let finalText = _recognizedVoiceText ? _recognizedVoiceText.trim() : '';
 
-        // 🌟 核心升级：离线 Whisper ASR 驱动与双轨平滑兜底
+        // 🌟 离线 Whisper ASR 驱动
         if (window.mcytAsr && recordedAudioBlob) {
             try {
+                console.log('[VoiceRecord] 准备执行离线 ASR 推理, 音频大小:', recordedAudioBlob.size);
                 const activeModel = await window.mcytAsr.getActiveModelMeta();
                 if (activeModel) {
                     const asrResult = await window.mcytAsr.transcribe(recordedAudioBlob);
+                    console.log('[VoiceRecord] 离线 ASR 识别结果:', asrResult);
                     if (asrResult && asrResult.trim()) {
                         finalText = asrResult.trim();
                     }
                 } else {
-                    console.info('[VoiceRecord] 未激活 ASR 模型，使用系统识别结果');
+                    console.warn('[VoiceRecord] 未找到已激活的本地 ASR 模型');
                 }
             } catch (asrErr) {
                 console.error('[VoiceRecord] 本地 ASR 离线转写异常:', asrErr);
                 if (typeof showToast === 'function') {
-                    showToast('离线转文字异常: ' + (asrErr.message || '推理中断'), 'info', 2500);
+                    showToast('ASR 转文字失败: ' + (asrErr.message || '推理异常'), 'info', 2500);
                 }
             }
         }
@@ -1292,13 +1293,25 @@
 
         const voiceRecordBtn = document.getElementById('btnVoiceRecordPress');
         if (voiceRecordBtn) {
+            let isTouchTriggered = false;
+
             const onRecordStart = async (e) => {
+                if (e.type === 'touchstart') {
+                    isTouchTriggered = true;
+                } else if (e.type === 'mousedown' && isTouchTriggered) {
+                    return; // 阻止移动端 touch 触发后的模拟 mousedown
+                }
                 e.preventDefault();
-                await window.startRealVoiceRecord(npcId);
                 const tip = document.getElementById('voiceRecordTipText');
                 if (tip) tip.textContent = '松开 发送';
+                await window.startRealVoiceRecord(npcId);
             };
+
             const onRecordEnd = (e) => {
+                if (e.type === 'mouseup' && isTouchTriggered) {
+                    isTouchTriggered = false;
+                    return;
+                }
                 e.preventDefault();
                 const tip = document.getElementById('voiceRecordTipText');
                 if (tip) tip.textContent = '按住 说话';
