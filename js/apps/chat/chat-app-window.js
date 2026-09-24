@@ -559,6 +559,8 @@
                 const activeModel = await window.mcytAsr.getActiveModelMeta();
                 if (!activeModel) {
                     console.warn('[VoiceRecord] 未找到已激活的本地 ASR 模型');
+                    // 🌟 临时诊断：不再只弹Toast，同时把原因写进文字，防止Toast看不到
+                    finalText = '[诊断]未找到已激活的本地ASR模型(activeModel为空)';
                     if (typeof showToast === 'function') {
                         showToast('未激活离线模型，已保留原生语音', 'info', 2000);
                     }
@@ -573,10 +575,14 @@
             } catch (asrErr) {
                 console.error('[VoiceRecord] 本地 ASR 离线推理报错:', asrErr);
                 // 🌟 将底层真实异常明确通过 Toast 暴露，绝不再静默掩盖
+                finalText = '[诊断]ASR抛出异常: ' + (asrErr && (asrErr.message || String(asrErr)));
                 if (typeof showToast === 'function') {
                     showToast('ASR: ' + (asrErr.message || '环境限制'), 'info', 3000);
                 }
             }
+        } else {
+            // 🌟 临时诊断：整个ASR分支被跳过时（说明卡在最外层判断），直接写进文字里
+            finalText = `[诊断]ASR分支未进入: window.mcytAsr是否存在=${!!window.mcytAsr} recordedAudioBlob是否存在=${!!recordedAudioBlob}`;
         }
 
         hideVoiceRecordingHUD();
