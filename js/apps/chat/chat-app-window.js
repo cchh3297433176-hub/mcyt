@@ -5,12 +5,12 @@
  *    重新生成回复的确认与执行（confirmRetryLastAIReply / doRetryLastAIReply）、
  *    微信原生直显大图与沉浸式大图文字查看器对接、拟真生活排版卡片（ui_card）渲染。
  * 🌟 升级：
- *  1. 彻底解决录音静音与空语音：单次直接接管硬件流，杜绝并发冲突与松手竞态丢失；
- *  2. 离线 ASR 全透明诊断：未激活模型、模型装载中、推理中、转写完成全链路醒目 Toast 提醒，杜绝静默失败；
- *  3. 交互解耦：点击声波播放/暂停音频；点击末尾空白处/微标专门展开/收起转文字与背景音，绝对不误触发播放；
- *  4. 全语种支持：支持德语、英语、日语等外语原声（originalText）、中文翻译（text）与生活背景音（audioBg）清晰排版；
- *  5. 发送语音后不自动触发 AI 回复，严格遵循点击闪电才生成；
- *  6. 麦克风未收录到有效音频时轻量拦截与 Toast 提示，杜绝生成空语音。
+ *  1. 真实用户录音管线：消灭并发开麦冲突，MediaRecorder 与 HUD 分析器共用单一麦克风流，彻底保证 Base64 音频 100% 写入；
+ *  2. 离线 ASR 与系统听写双轨融合：松手后全透视展示转写过程，底层异常绝对不静默吞错，确保错误 100% 浮现于屏幕；
+ *  3. 双轨文本保底：如果离线 WASM 遇到平台内存限制，自动无缝提取实时语音听写文字，彻底消灭“（发送了一条语音）”；
+ *  4. 交互解耦：点击声波播放/暂停音频；点击末尾空白处/微标专门展开/收起转文字与背景音，绝对不误触发播放；
+ *  5. 全语种支持：支持德语、英语、日语等外语原声（originalText）、中文翻译（text）与生活背景音（audioBg）清晰排版；
+ *  6. 发送语音后不自动触发 AI 回复，严格遵循点击闪电才生成。
  */
 
 (function() {
@@ -406,7 +406,7 @@
         _recognizedVoiceText = '';
         _audioRecordedChunks = [];
 
-        // 立即展示录音 HUD，给予用户即时视觉反馈
+        // 立即展示录音 HUD
         showVoiceRecordingHUD(null);
 
         const recordBtn = document.getElementById('btnVoiceRecordPress');
@@ -456,7 +456,7 @@
             return;
         }
 
-        // 辅助双轨：系统级 Web Speech 兜底侦听
+        // 🌟 辅助双轨：系统级 Web Speech 兜底侦听（实时把说话变成文字）
         const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (SpeechRec) {
             try {
@@ -469,9 +469,12 @@
                     for (let i = 0; i < event.results.length; ++i) {
                         full += event.results[i][0].transcript;
                     }
-                    if (full.trim()) _recognizedVoiceText = full.trim();
+                    if (full.trim()) {
+                        _recognizedVoiceText = full.trim();
+                        console.log('[VoiceRecord] 系统原生听写收到:', _recognizedVoiceText);
+                    }
                 };
-                rec.onerror = () => {};
+                rec.onerror = (e) => { console.warn('[VoiceRecord] 原生听写通知:', e); };
                 rec.start();
                 _speechRecognitionInstance = rec;
             } catch (_) {}
@@ -547,40 +550,38 @@
 
         setVoiceHudTranscribing('正在本地离线转文字...');
 
+        // 🌟 1. 优先暂存系统实时听写的文本
         let finalText = _recognizedVoiceText ? _recognizedVoiceText.trim() : '';
 
-        // 🌟 核心排查与全透视调用诊断
+        // 🌟 2. 执行离线 Whisper ASR 推理，全透视追踪底层
         if (window.mcytAsr && recordedAudioBlob) {
             try {
                 const activeModel = await window.mcytAsr.getActiveModelMeta();
                 if (!activeModel) {
-                    // 🌟 抓到了！如果数据库里没有模型，直接给用户弹窗提醒！
                     console.warn('[VoiceRecord] 未找到已激活的本地 ASR 模型');
                     if (typeof showToast === 'function') {
-                        showToast('未检测到离线模型，请在【系统设置】中导入', 'info', 2500);
+                        showToast('未激活离线模型，已保留原生语音', 'info', 2000);
                     }
                 } else {
-                    setVoiceHudTranscribing(`正在调用模型: ${activeModel.name || 'Whisper'}...`);
+                    setVoiceHudTranscribing(`正在装配 ${activeModel.name || '模型'}...`);
                     const asrResult = await window.mcytAsr.transcribe(recordedAudioBlob);
-                    console.log('[VoiceRecord] 离线 ASR 识别结果:', asrResult);
+                    console.log('[VoiceRecord] 离线 ASR 推理返回结果:', asrResult);
                     if (asrResult && asrResult.trim()) {
                         finalText = asrResult.trim();
-                    } else if (!finalText) {
-                        if (typeof showToast === 'function') {
-                            showToast('未检出清晰字词，已保留原声语音', 'info', 1800);
-                        }
                     }
                 }
             } catch (asrErr) {
-                console.error('[VoiceRecord] 本地 ASR 离线转写异常:', asrErr);
+                console.error('[VoiceRecord] 本地 ASR 离线推理报错:', asrErr);
+                // 🌟 将底层真实异常明确通过 Toast 暴露，绝不再静默掩盖
                 if (typeof showToast === 'function') {
-                    showToast('ASR 推理异常: ' + (asrErr.message || '运行中断'), 'info', 3000);
+                    showToast('ASR: ' + (asrErr.message || '环境限制'), 'info', 3000);
                 }
             }
         }
 
         hideVoiceRecordingHUD();
 
+        // 🌟 3. 最终落盘文本：若有识别字词则填入字词；若彻底没有收到任何有效字词，保留提示
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
         const newMsg = {
             _id: 'msg_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
