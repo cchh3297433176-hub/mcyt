@@ -535,6 +535,24 @@
         if (typeof unsubSystemInfo === 'function') unsubSystemInfo();
       }
 
+      // 🌟 临时诊断：把关键中间数据强制弹出来看，排查完可以删除这一段
+      if (typeof window.showToast === 'function') {
+        let resultBrief = 'null';
+        try {
+          if (result) {
+            resultBrief = JSON.stringify(result).slice(0, 120);
+          }
+        } catch (_) {
+          resultBrief = '[无法序列化]';
+        }
+        window.showToast(
+          `诊断: pcm点数=${pcm16k.length} | 回调段落=${recognizedSegments.length} | result=${resultBrief} | 总线捕获=${busCapturedTexts.length} | 报错=${transcribeErr ? transcribeErr.message : '无'}`,
+          'info',
+          8000
+        );
+      }
+      console.log('[ASR Engine] 诊断-pcm点数:', pcm16k.length, '诊断-result:', result, '诊断-报错:', transcribeErr);
+
       // 1. 优先采用回调收集到的实时段落
       if (recognizedSegments.length > 0) {
         const full = recognizedSegments.join('').trim();
