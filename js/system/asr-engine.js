@@ -1,7 +1,7 @@
 /**
  * js/system/asr-engine.js
  * 本地离线语音识别（ASR）中枢引擎
- * 基于 whisper.wasm 与 IndexedDB 构建，支持多模型本地库管理、自由切换与全离线运行
+ * 基于 whisper.wasm 与 IndexedDB 构建，支持多模型本地库管理、自动向下兼容、状态透明化与全离线运行
  */
 
 (function (window) {
@@ -11,6 +11,10 @@
   const STORAGE_KEY_MODELS_META_LIST = 'mcyt_asr_models_meta_list';
   const STORAGE_KEY_BINARY_PREFIX = 'mcyt_asr_model_bin_';
   const STORAGE_KEY_CONFIG = 'mcyt_asr_config';
+
+  // 历史单模型兼容 Key
+  const LEGACY_STORAGE_KEY_MODEL_BINARY = 'mcyt_asr_model_binary';
+  const LEGACY_STORAGE_KEY_MODEL_META = 'mcyt_asr_model_meta';
 
   // 默认 CDN 脚本地址
   const DEFAULT_WASM_ESM_URL = 'https://cdn.jsdelivr.net/npm/@timur00kh/whisper.wasm@canary/dist/index.es.js';
@@ -27,7 +31,7 @@
       this.config = {
         enabled: true,
         activeModelId: '',
-        language: 'zh', // 默认识别中文，传 'auto' 为自动检测
+        language: 'zh',
         translate: false,
         wasmUrl: DEFAULT_WASM_ESM_URL
       };
@@ -81,13 +85,38 @@
     }
 
     /**
-     * 获取已缓存的本地模型列表
+     * 获取已缓存的本地模型列表（具备旧版本自愈兼容）
      */
     async getModelsList() {
       try {
         if (!window.localforage) return [];
-        const list = await window.localforage.getItem(STORAGE_KEY_MODELS_META_LIST);
-        return Array.isArray(list) ? list : [];
+        let list = await window.localforage.getItem(STORAGE_KEY_MODELS_META_LIST);
+        list = Array.isArray(list) ? list : [];
+
+        // 🌟 自动自愈：如果多模型列表为空，检查是否存在旧版单模型数据并迁移过来
+        if (list.length === 0) {
+          const oldMeta = await window.localforage.getItem(LEGACY_STORAGE_KEY_MODEL_META);
+          const oldBin = await window.localforage.getItem(LEGACY_STORAGE_KEY_MODEL_BINARY);
+          if (oldMeta && oldBin) {
+            const migratedId = 'model_migrated_' + Date.now();
+            const binaryKey = STORAGE_KEY_BINARY_PREFIX + migratedId;
+            await window.localforage.setItem(binaryKey, oldBin);
+            const migratedMeta = {
+              id: migratedId,
+              name: oldMeta.name || 'tiny-model.bin',
+              size: oldMeta.size || oldBin.byteLength,
+              sizeFormatted: oldMeta.sizeFormatted || ((oldBin.byteLength / 1024 / 1024).toFixed(2) + ' MB'),
+              binaryKey: binaryKey,
+              createdAt: oldMeta.updatedAt || new Date().toISOString()
+            };
+            list.push(migratedMeta);
+            await window.localforage.setItem(STORAGE_KEY_MODELS_META_LIST, list);
+            this.config.activeModelId = migratedId;
+            await this.saveConfig();
+          }
+        }
+
+        return list;
       } catch (e) {
         console.error('[ASR Engine] 读取模型列表失败:', e);
         return [];
@@ -120,7 +149,6 @@
       this.config.activeModelId = modelId;
       await this.saveConfig();
 
-      // 重置实例以便重新载入
       this.isInitialized = false;
       this.whisperInstance = null;
       return target;
@@ -128,8 +156,6 @@
 
     /**
      * 导入用户提供的本地模型文件 (.bin)
-     * @param {File} file 用户从文件选择器选取的 .bin 文件
-     * @param {Function} onProgress 进度回调 (0 ~ 100, msg)
      */
     async importModelFromFile(file, onProgress) {
       if (!file) throw new Error('未提供有效的文件对象');
@@ -163,7 +189,6 @@
             const modelId = 'model_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100);
             const binaryKey = STORAGE_KEY_BINARY_PREFIX + modelId;
 
-            // 存储二进制文件数据
             await window.localforage.setItem(binaryKey, buffer);
 
             const meta = {
@@ -179,7 +204,6 @@
             list.push(meta);
             await window.localforage.setItem(STORAGE_KEY_MODELS_META_LIST, list);
 
-            // 默认激活最新导入的模型
             this.config.activeModelId = modelId;
             await this.saveConfig();
 
@@ -212,10 +236,8 @@
         const target = list.find(m => m.id === modelId);
         if (!target) return false;
 
-        // 移除二进制数据
         await window.localforage.removeItem(target.binaryKey);
 
-        // 从列表中移除
         const updatedList = list.filter(m => m.id !== modelId);
         await window.localforage.setItem(STORAGE_KEY_MODELS_META_LIST, updatedList);
 
@@ -249,7 +271,7 @@
         return esmModule;
       } catch (err) {
         console.error('[ASR Engine] 加载 whisper.wasm ESM 失败:', err);
-        throw new Error('未能成功加载 whisper.wasm 核心库，请检查网络或离线引用');
+        throw new Error('未能加载 whisper.wasm 核心库，请检查网络或离线引用');
       }
     }
 
@@ -276,19 +298,19 @@
 
           const activeMeta = await this.getActiveModelMeta();
           if (!activeMeta) {
-            throw new Error('本地尚未导入语音识别模型，请前往设置中心导入');
+            throw new Error('未导入语音模型，请先到“设置-离线语音”导入 .bin 文件');
           }
 
-          onProgress?.(15, '正在装载 whisper 核心库...');
+          onProgress?.(20, '正在装载 whisper 核心库...');
           const { WhisperWasmService } = await this._loadWhisperModule();
 
-          onProgress?.(40, '正在从本地提取离线模型...');
+          onProgress?.(50, '正在从本地载入离线模型...');
           const modelBuffer = await window.localforage.getItem(activeMeta.binaryKey);
           if (!modelBuffer) {
-            throw new Error('模型数据块不存在或已被清理');
+            throw new Error('未找到当前模型的本地二进制数据');
           }
 
-          onProgress?.(70, '正在初始化 WASM 神经网络上下文...');
+          onProgress?.(80, '正在初始化神经网络上下文...');
           const whisper = new WhisperWasmService({ logLevel: 1 });
           const isWasmReady = await whisper.checkWasmSupport();
           if (!isWasmReady) {
@@ -317,7 +339,7 @@
     }
 
     /**
-     * 将任意音频数据转换为 16kHz 单声道 Float32Array
+     * 将音频数据转换为 16kHz 单声道 Float32Array
      */
     async convertAudioTo16kPcm(audioSource) {
       let arrayBuffer;
@@ -371,8 +393,6 @@
 
     /**
      * 语音转文字（核心识别调用）
-     * @param {Blob|ArrayBuffer|String|Float32Array} audioData 语音数据
-     * @param {Object} options 临时识别参数
      */
     async transcribe(audioData, options = {}) {
       if (!this.config.enabled) {
@@ -407,12 +427,11 @@
     }
   }
 
-  // 挂载全局唯一单例
   window.mcytAsr = new AsrEngine();
 
-  // 启动预热
   window.addEventListener('DOMContentLoaded', () => {
     window.mcytAsr.loadConfig();
+    window.mcytAsr.getModelsList();
   });
 
 })(window);
