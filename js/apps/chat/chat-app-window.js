@@ -5,11 +5,12 @@
  *    重新生成回复的确认与执行（confirmRetryLastAIReply / doRetryLastAIReply）、
  *    微信原生直显大图与沉浸式大图文字查看器对接、拟真生活排版卡片（ui_card）渲染。
  * 🌟 升级：
- *  1. 真实用户录音管线：整合 whisper 本地离线 ASR 语音识别引擎，脱离谷歌服务与网络加速器；
- *  2. 交互解耦：点击声波播放/暂停音频；点击末尾空白处/微标专门展开/收起转文字与背景音，绝对不误触发播放；
- *  3. 全语种支持：支持德语、英语、日语等外语原声（originalText）、中文翻译（text）与生活背景音（audioBg）清晰排版；
- *  4. 发送语音后不自动触发 AI 回复，严格遵循点击闪电才生成；
- *  5. 麦克风未收录到有效文字时轻量 Toast 提示，杜绝乱码传给 AI。
+ *  1. 真实用户录音管线：修复 MediaRecorder 异步 onstop 完整收集 Blob，确保 Base64 音频 100% 写入且点击必能播放；
+ *  2. 离线 ASR 转文字加固：松手后展示转写等待 HUD，识别完成再落盘，彻底解决显示“（发送了一条语音）”的问题；
+ *  3. 交互解耦：点击声波播放/暂停音频；点击末尾空白处/微标专门展开/收起转文字与背景音，绝对不误触发播放；
+ *  4. 全语种支持：支持德语、英语、日语等外语原声（originalText）、中文翻译（text）与生活背景音（audioBg）清晰排版；
+ *  5. 发送语音后不自动触发 AI 回复，严格遵循点击闪电才生成；
+ *  6. 麦克风未收录到有效文字时轻量 Toast 提示，杜绝乱码传给 AI。
  */
 
 (function() {
@@ -85,8 +86,8 @@
                 @keyframes wechatHudFadeIn { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
                 @keyframes wechatHudFadeOut { from { opacity: 1; transform: scale(1); } to { opacity: 0; transform: scale(0.92); } }
             </style>
-            <div style="width: 156px; height: 156px; border-radius: 18px; background: rgba(22, 22, 22, 0.86); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 10px 30px rgba(0,0,0,0.35); border: 0.5px solid rgba(255,255,255,0.12); box-sizing: border-box; padding: 12px;">
-                <div style="display: flex; align-items: center; justify-content: center; gap: 14px; height: 60px; margin-bottom: 6px;">
+            <div id="hudBoxContent" style="width: 156px; height: 156px; border-radius: 18px; background: rgba(22, 22, 22, 0.86); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); display: flex; flex-direction: column; align-items: center; justify-content: center; box-shadow: 0 10px 30px rgba(0,0,0,0.35); border: 0.5px solid rgba(255,255,255,0.12); box-sizing: border-box; padding: 12px;">
+                <div id="hudWaveIconGroup" style="display: flex; align-items: center; justify-content: center; gap: 14px; height: 60px; margin-bottom: 6px;">
                     <div style="display: flex; align-items: center; justify-content: center; width: 40px; height: 40px; border-radius: 50%; background: rgba(7, 193, 96, 0.18);">
                         <svg viewBox="0 0 24 24" style="width: 24px; height: 24px; fill: none; stroke: #07c160; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round;">
                             <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
@@ -106,7 +107,7 @@
                 </div>
 
                 <div id="hudVoiceDuration" style="font-size: 15px; font-weight: 700; color: #ffffff; letter-spacing: 0.5px; margin-bottom: 4px;">1"</div>
-                <div style="font-size: 11.5px; color: #a0a0a0; font-weight: 500;">手指松开 发送</div>
+                <div id="hudVoiceSubTip" style="font-size: 11.5px; color: #a0a0a0; font-weight: 500;">手指松开 发送</div>
             </div>
         `;
 
@@ -152,6 +153,23 @@
                 }).catch(() => {});
             }
         } catch (_) {}
+    }
+
+    // 将 HUD 转为正在离线识别状态
+    function setVoiceHudTranscribing() {
+        const hud = document.getElementById('wechatVoiceRecordingHUD');
+        if (!hud) return;
+        const iconGroup = document.getElementById('hudWaveIconGroup');
+        const durationEl = document.getElementById('hudVoiceDuration');
+        const tipEl = document.getElementById('hudVoiceSubTip');
+
+        if (iconGroup) {
+            iconGroup.innerHTML = `
+                <div class="wechat-spin-ring" style="width:28px;height:28px;border-width:2.5px;border-color:#07c160;border-top-color:transparent;"></div>
+            `;
+        }
+        if (durationEl) durationEl.textContent = '转文字中';
+        if (tipEl) tipEl.textContent = '正在本地离线识别...';
     }
 
     function hideVoiceRecordingHUD() {
@@ -269,7 +287,7 @@
         `;
     }
 
-    // 全局统一语音播放中枢：专门播放/暂停音频，与展开文字彻底解耦
+    // 全局统一语音播放中枢
     window.playVoiceMessageDirect = function(msgId) {
         const curNpcId = window.G && window.G.currentChatNpc;
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
@@ -451,7 +469,6 @@
             console.warn('[VoiceRecord] 硬件媒体录音启动失败:', recErr);
         }
 
-        // 兜底辅助识别监听（若浏览器原生支持 Web Speech API，作为快速补充）
         const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (SpeechRec) {
             try {
@@ -478,7 +495,6 @@
         _isRecordingVoice = false;
 
         const durationSeconds = Math.max(1, Math.min(60, Math.round((Date.now() - _voiceRecordStartTime) / 1000)));
-        hideVoiceRecordingHUD();
 
         if (_speechRecognitionInstance) {
             try { _speechRecognitionInstance.stop(); } catch (_) {}
@@ -529,9 +545,18 @@
             _audioRecordedChunks = [];
         }
 
-        // 🌟 核心升级：优先使用 whisper.wasm 本地离线引擎转文字
+        if (durationSeconds <= 1 && (!audioBase64Data || audioBase64Data.length < 500)) {
+            hideVoiceRecordingHUD();
+            if (typeof showToast === 'function') showToast('说话时间太短', 'info', 1200);
+            return;
+        }
+
+        // 🌟 切换 HUD 状态为正在转文字中
+        setVoiceHudTranscribing();
+
         let finalText = _recognizedVoiceText ? _recognizedVoiceText.trim() : '';
 
+        // 🌟 核心升级：离线 Whisper ASR 驱动
         if (window.mcytAsr && recordedAudioBlob) {
             try {
                 const activeModel = await window.mcytAsr.getActiveModelMeta();
@@ -540,16 +565,19 @@
                     if (asrResult && asrResult.trim()) {
                         finalText = asrResult.trim();
                     }
+                } else {
+                    console.info('[VoiceRecord] 未导入 ASR 模型，使用原生语音识别或默认模式');
                 }
             } catch (asrErr) {
-                console.warn('[VoiceRecord] 本地 ASR 离线转写跳过或异常:', asrErr.message);
+                console.warn('[VoiceRecord] 本地 ASR 离线转写跳过或异常:', asrErr);
+                if (typeof showToast === 'function') {
+                    showToast('离线转文字: ' + asrErr.message, 'info', 2000);
+                }
             }
         }
 
-        if (!finalText && durationSeconds <= 1) {
-            if (typeof showToast === 'function') showToast('录音时间太短', 'info', 1200);
-            return;
-        }
+        // 关闭转写等待 HUD
+        hideVoiceRecordingHUD();
 
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
         const newMsg = {
@@ -876,7 +904,7 @@
                             </div>` : ''}
                             <div style="display:flex;align-items:center;justify-content:space-between;border-top:0.5px solid #f0f0f0;padding-top:6px;font-size:11px;color:#888;">
                                 <div style="display:flex;align-items:center;gap:4px;min-width:0;flex:1;">
-                                    <svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:none;stroke:#07c160;stroke-width:2;flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+                                    <svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:none;stroke:#07c160;stroke-width:2;flex-shrink:0;"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1 4-10z"/></svg>
                                     <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(pageSource)}</span>
                                 </div>
                                 <span style="color:#07c160;font-weight:600;margin-left:8px;flex-shrink:0;">打开 ›</span>
