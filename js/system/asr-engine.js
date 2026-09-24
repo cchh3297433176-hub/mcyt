@@ -367,7 +367,14 @@
           this.whisperInstance = null;
           this.loadedModelId = null;
           console.error('[ASR Engine] 初始化推理引擎失败:', err);
-          throw err;
+          // 🌟 临时诊断：把跨源隔离状态一并附加到报错信息里，排查完删掉这一段
+          const coi = (typeof self !== 'undefined' && 'crossOriginIsolated' in self) ? self.crossOriginIsolated : 'undefined';
+          const sabType = typeof SharedArrayBuffer;
+          const originalMsg = (err && err.message) ? err.message : String(err);
+          const diagErr = new Error(
+            `${originalMsg} [诊断:crossOriginIsolated=${coi}, SharedArrayBuffer=${sabType}]`
+          );
+          throw diagErr;
         } finally {
           this._initPromise = null;
         }
