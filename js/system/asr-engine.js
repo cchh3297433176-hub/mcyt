@@ -462,7 +462,7 @@
      */
     async transcribe(audioData, options = {}) {
       if (!this.config.enabled) {
-        return '';
+        return '[诊断]ASR未启用(config.enabled=false)';
       }
 
       await this.initEngine();
@@ -476,7 +476,7 @@
 
       if (!pcm16k || pcm16k.length < 1600) {
         console.warn('[ASR Engine] 音频过短');
-        return '';
+        return '[诊断]音频过短或解码异常,pcm长度=' + (pcm16k ? pcm16k.length : 'null/undefined');
       }
 
       const language = options.language || this.config.language || 'zh';
@@ -535,22 +535,6 @@
         if (typeof unsubSystemInfo === 'function') unsubSystemInfo();
       }
 
-      // 🌟 临时诊断：把关键中间数据强制弹出来看，排查完可以删除这一段
-      if (typeof window.showToast === 'function') {
-        let resultBrief = 'null';
-        try {
-          if (result) {
-            resultBrief = JSON.stringify(result).slice(0, 120);
-          }
-        } catch (_) {
-          resultBrief = '[无法序列化]';
-        }
-        window.showToast(
-          `诊断: pcm点数=${pcm16k.length} | 回调段落=${recognizedSegments.length} | result=${resultBrief} | 总线捕获=${busCapturedTexts.length} | 报错=${transcribeErr ? transcribeErr.message : '无'}`,
-          'info',
-          8000
-        );
-      }
       console.log('[ASR Engine] 诊断-pcm点数:', pcm16k.length, '诊断-result:', result, '诊断-报错:', transcribeErr);
 
       // 1. 优先采用回调收集到的实时段落
@@ -577,13 +561,16 @@
         return busFull;
       }
 
-      // 🌟 三层兜底全部落空时，如果推理过程确实报错了，就把真实错误抛出去，
-      // 不再默默返回空字符串，方便定位具体是哪一步失败
-      if (transcribeErr) {
-        throw transcribeErr;
+      // 🌟 三层兜底全部落空时，不再默默返回空字符串，
+      // 而是把诊断信息直接作为"识别结果"返回，这样不管弹窗/控制台能不能看到，
+      // 都会直接显示在语音消息的文字里，方便定位具体卡在哪一环（排查完这段要删掉）
+      let resultBrief = 'null';
+      try {
+        if (result) resultBrief = JSON.stringify(result).slice(0, 200);
+      } catch (_) {
+        resultBrief = '[无法序列化]';
       }
-
-      return '';
+      return `[诊断]pcm点数=${pcm16k.length} result=${resultBrief} 总线捕获=${busCapturedTexts.length} 报错=${transcribeErr ? (transcribeErr.message || String(transcribeErr)) : '无'}`;
     }
   }
 
