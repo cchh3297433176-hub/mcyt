@@ -6,7 +6,7 @@
  *    微信原生直显大图与沉浸式大图文字查看器对接、拟真生活排版卡片（ui_card）渲染。
  * 🌟 升级：
  *  1. 彻底解决录音静音与空语音：单次直接接管硬件流，杜绝并发冲突与松手竞态丢失；
- *  2. 离线 ASR 与系统双轨听写：接入带音量增益归一化的 Whisper 识别流，识别状态精准透明化；
+ *  2. 离线 ASR 全透明诊断：未激活模型、模型装载中、推理中、转写完成全链路醒目 Toast 提醒，杜绝静默失败；
  *  3. 交互解耦：点击声波播放/暂停音频；点击末尾空白处/微标专门展开/收起转文字与背景音，绝对不误触发播放；
  *  4. 全语种支持：支持德语、英语、日语等外语原声（originalText）、中文翻译（text）与生活背景音（audioBg）清晰排版；
  *  5. 发送语音后不自动触发 AI 回复，严格遵循点击闪电才生成；
@@ -417,12 +417,11 @@
 
         try {
             if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                throw new Error('当前浏览器或 WebView 不支持麦克风录音');
+                throw new Error('当前环境不支持麦克风录音');
             }
 
             const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-            // 若在异步等待期间用户已松开手指，立即释放资源退出
             if (!_isRecordingVoice || _stopRequestedWhileStarting) {
                 stream.getTracks().forEach(t => t.stop());
                 hideVoiceRecordingHUD();
@@ -430,7 +429,6 @@
             }
 
             _activeRecordStream = stream;
-            // 共享流并启动 HUD 波形跳动
             showVoiceRecordingHUD(stream);
 
             if (window.MediaRecorder) {
@@ -534,7 +532,6 @@
             _audioRecordedChunks = [];
         }
 
-        // 彻底释放硬件麦克风
         if (_activeRecordStream) {
             try {
                 _activeRecordStream.getTracks().forEach(t => t.stop());
@@ -542,46 +539,46 @@
             _activeRecordStream = null;
         }
 
-        // 防误触与空音频检测：若文件太小（小于 800 字节）或录音时长不足，立即拦截
         if (durationSeconds <= 1 && (!audioBase64Data || audioBase64Data.length < 800)) {
             hideVoiceRecordingHUD();
             if (typeof showToast === 'function') showToast('说话时间太短或未收录到声音', 'info', 1500);
             return;
         }
 
-        // 🌟 切换 HUD 状态为正在转文字中
         setVoiceHudTranscribing('正在本地离线转文字...');
 
         let finalText = _recognizedVoiceText ? _recognizedVoiceText.trim() : '';
 
-        // 🌟 离线 Whisper ASR 驱动与结果精确感知
+        // 🌟 核心排查与全透视调用诊断
         if (window.mcytAsr && recordedAudioBlob) {
             try {
-                console.log('[VoiceRecord] 准备执行离线 ASR 推理, 音频大小:', recordedAudioBlob.size);
                 const activeModel = await window.mcytAsr.getActiveModelMeta();
-                if (activeModel) {
+                if (!activeModel) {
+                    // 🌟 抓到了！如果数据库里没有模型，直接给用户弹窗提醒！
+                    console.warn('[VoiceRecord] 未找到已激活的本地 ASR 模型');
+                    if (typeof showToast === 'function') {
+                        showToast('未检测到离线模型，请在【系统设置】中导入', 'info', 2500);
+                    }
+                } else {
+                    setVoiceHudTranscribing(`正在调用模型: ${activeModel.name || 'Whisper'}...`);
                     const asrResult = await window.mcytAsr.transcribe(recordedAudioBlob);
                     console.log('[VoiceRecord] 离线 ASR 识别结果:', asrResult);
                     if (asrResult && asrResult.trim()) {
                         finalText = asrResult.trim();
                     } else if (!finalText) {
-                        // 模型返回空，且原生语音识别也没收到有效文本时给出明确提示
                         if (typeof showToast === 'function') {
-                            showToast('未识别出清晰字词，已保留原声语音', 'info', 1800);
+                            showToast('未检出清晰字词，已保留原声语音', 'info', 1800);
                         }
                     }
-                } else {
-                    console.warn('[VoiceRecord] 未找到已激活的本地 ASR 模型');
                 }
             } catch (asrErr) {
                 console.error('[VoiceRecord] 本地 ASR 离线转写异常:', asrErr);
                 if (typeof showToast === 'function') {
-                    showToast('ASR 转文字失败: ' + (asrErr.message || '推理异常'), 'info', 2500);
+                    showToast('ASR 推理异常: ' + (asrErr.message || '运行中断'), 'info', 3000);
                 }
             }
         }
 
-        // 关闭转写等待 HUD
         hideVoiceRecordingHUD();
 
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
@@ -646,7 +643,7 @@
                     <button type="button" id="refreshWechatBrowserBtn" title="刷新" style="border: none; background: none; width: 30px; height: 30px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #555;">
                         <svg viewBox="0 0 24 24" style="width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
                     </button>
-                    <button type="button" id="openExternalBrowserBtn" title="外部浏览器打开" style="border: none; background: none; width: 30px; height: 30px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: color: #07c160;">
+                    <button type="button" id="openExternalBrowserBtn" title="外部浏览器打开" style="border: none; background: none; width: 30px; height: 30px; border-radius: 4px; cursor: pointer; display: flex; align-items: center; justify-content: center; color: #07c160;">
                         <svg viewBox="0 0 24 24" style="width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
                     </button>
                 </div>
