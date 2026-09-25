@@ -6,8 +6,8 @@
  *    微信原生直显大图与沉浸式大图文字查看器对接、拟真生活排版卡片（ui_card）渲染。
  * 🌟 升级：
  *  1. 真实用户录音管线：消灭并发开麦冲突，MediaRecorder 与 HUD 分析器共用单一麦克风流，彻底保证 Base64 音频 100% 写入；
- *  2. 离线 ASR 与系统听写双轨融合：松手后全透视展示转写过程，底层异常绝对不静默吞错，确保错误 100% 浮现于屏幕；
- *  3. 双轨文本保底：如果离线 WASM 遇到平台内存限制，自动无缝提取实时语音听写文字，彻底消灭“（发送了一条语音）”；
+ *  2. 离线 ASR 与系统听写双轨融合：松手后全透视展示转写过程，底层异常不掩盖，UI 体验原生平滑；
+ *  3. 双轨文本保底：如果离线 WASM 遇到限制，自动无缝提取实时语音听写文字，彻底消灭“（发送了一条语音）”；
  *  4. 交互解耦：点击声波播放/暂停音频；点击末尾空白处/微标专门展开/收起转文字与背景音，绝对不误触发播放；
  *  5. 全语种支持：支持德语、英语、日语等外语原声（originalText）、中文翻译（text）与生活背景音（audioBg）清晰排版；
  *  6. 发送语音后不自动触发 AI 回复，严格遵循点击闪电才生成。
@@ -553,15 +553,13 @@
         // 🌟 1. 优先暂存系统实时听写的文本
         let finalText = _recognizedVoiceText ? _recognizedVoiceText.trim() : '';
 
-        // 🌟 2. 执行离线 Whisper ASR 推理，全透视追踪底层
+        // 🌟 2. 执行离线 Whisper ASR 推理，异常优雅处理
         if (window.mcytAsr && recordedAudioBlob) {
             try {
                 const activeModel = await window.mcytAsr.getActiveModelMeta();
                 if (!activeModel) {
                     console.warn('[VoiceRecord] 未找到已激活的本地 ASR 模型');
-                    // 🌟 临时诊断：不再只弹Toast，同时把原因写进文字，防止Toast看不到
-                    finalText = '[诊断]未找到已激活的本地ASR模型(activeModel为空)';
-                    if (typeof showToast === 'function') {
+                    if (!finalText && typeof showToast === 'function') {
                         showToast('未激活离线模型，已保留原生语音', 'info', 2000);
                     }
                 } else {
@@ -574,15 +572,10 @@
                 }
             } catch (asrErr) {
                 console.error('[VoiceRecord] 本地 ASR 离线推理报错:', asrErr);
-                // 🌟 将底层真实异常明确通过 Toast 暴露，绝不再静默掩盖
-                finalText = '[诊断]ASR抛出异常: ' + (asrErr && (asrErr.message || String(asrErr)));
                 if (typeof showToast === 'function') {
-                    showToast('ASR: ' + (asrErr.message || '环境限制'), 'info', 3000);
+                    showToast('ASR: ' + (asrErr.message || '识别异常'), 'info', 2500);
                 }
             }
-        } else {
-            // 🌟 临时诊断：整个ASR分支被跳过时（说明卡在最外层判断），直接写进文字里
-            finalText = `[诊断]ASR分支未进入: window.mcytAsr是否存在=${!!window.mcytAsr} recordedAudioBlob是否存在=${!!recordedAudioBlob}`;
         }
 
         hideVoiceRecordingHUD();
