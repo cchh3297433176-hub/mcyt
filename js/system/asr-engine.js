@@ -367,14 +367,7 @@
           this.whisperInstance = null;
           this.loadedModelId = null;
           console.error('[ASR Engine] 初始化推理引擎失败:', err);
-          // 🌟 临时诊断：把跨源隔离状态一并附加到报错信息里，排查完删掉这一段
-          const coi = (typeof self !== 'undefined' && 'crossOriginIsolated' in self) ? self.crossOriginIsolated : 'undefined';
-          const sabType = typeof SharedArrayBuffer;
-          const originalMsg = (err && err.message) ? err.message : String(err);
-          const diagErr = new Error(
-            `${originalMsg} [诊断:crossOriginIsolated=${coi}, SharedArrayBuffer=${sabType}]`
-          );
-          throw diagErr;
+          throw err;
         } finally {
           this._initPromise = null;
         }
@@ -469,7 +462,7 @@
      */
     async transcribe(audioData, options = {}) {
       if (!this.config.enabled) {
-        return '[诊断]ASR未启用(config.enabled=false)';
+        return '';
       }
 
       await this.initEngine();
@@ -483,7 +476,7 @@
 
       if (!pcm16k || pcm16k.length < 1600) {
         console.warn('[ASR Engine] 音频过短');
-        return '[诊断]音频过短或解码异常,pcm长度=' + (pcm16k ? pcm16k.length : 'null/undefined');
+        return '';
       }
 
       const language = options.language || this.config.language || 'zh';
@@ -529,7 +522,6 @@
       let result = null;
       let transcribeErr = null;
       try {
-        // 关键修复：传入 onSegmentCallback 而非 undefined，杜绝空指针
         result = await Promise.race([
           this.whisperInstance.transcribe(pcm16k, onSegmentCallback, transcribeOptions),
           new Promise((_, reject) => setTimeout(() => reject(new Error('推理超时，请尝试较短语音')), 25000))
@@ -541,8 +533,6 @@
         if (typeof unsubTranscribe === 'function') unsubTranscribe();
         if (typeof unsubSystemInfo === 'function') unsubSystemInfo();
       }
-
-      console.log('[ASR Engine] 诊断-pcm点数:', pcm16k.length, '诊断-result:', result, '诊断-报错:', transcribeErr);
 
       // 1. 优先采用回调收集到的实时段落
       if (recognizedSegments.length > 0) {
@@ -568,16 +558,7 @@
         return busFull;
       }
 
-      // 🌟 三层兜底全部落空时，不再默默返回空字符串，
-      // 而是把诊断信息直接作为"识别结果"返回，这样不管弹窗/控制台能不能看到，
-      // 都会直接显示在语音消息的文字里，方便定位具体卡在哪一环（排查完这段要删掉）
-      let resultBrief = 'null';
-      try {
-        if (result) resultBrief = JSON.stringify(result).slice(0, 200);
-      } catch (_) {
-        resultBrief = '[无法序列化]';
-      }
-      return `[诊断]pcm点数=${pcm16k.length} result=${resultBrief} 总线捕获=${busCapturedTexts.length} 报错=${transcribeErr ? (transcribeErr.message || String(transcribeErr)) : '无'}`;
+      return '';
     }
   }
 

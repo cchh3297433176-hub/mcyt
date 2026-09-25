@@ -1,13 +1,14 @@
 // js/system/error-monitor.js
 // 🐞 双模态悬浮球（运行排查日志 + AI 智能向导）
 // 特性：智能多气泡聊天分段、Markdown优雅解析自动换行、透明底皮肤无死板背景色、粉白系统弹窗
+// 🌟 升级：全方位系统错误雷达（支持主动上报通道、自动监听 console.error、Promise Rejection 与脚本异常）
 // ============================================================
 
 (function(window) {
     'use strict';
 
     const STORAGE_KEY_CONFIG = 'mc_yt_error_orb_config';
-    const MAX_LOGS = 50;
+    const MAX_LOGS = 60;
 
     const defaultConfig = {
         enabled: true,
@@ -59,37 +60,27 @@
     function formatAssistantText(rawText) {
         if (!rawText) return '';
         let str = String(rawText);
-        // 清洗无意义的 markdown 标题井号
         str = str.replace(/^#{1,6}\s*/gm, '');
-        // 清除残留的横线分割线
         str = str.replace(/^[-*_]{3,}\s*$/gm, '');
-        // 清除首尾多余换行与空白
         str = str.trim();
-        // 压缩多余的连续换行（避免出现大片虚空留白）
         str = str.replace(/\n{3,}/g, '\n\n');
-        // 转义 HTML
         str = escapeHtml(str);
-        // 恢复支持加粗 **text** -> <strong>text</strong>
         str = str.replace(/\*\*([^*]+)\*\*/g, '<strong style="color:var(--primary,#ff5c8a);font-weight:750;">$1</strong>');
-        // 换行替换为单换行符，且前后无多余空格
         str = str.replace(/\n/g, '<br>');
         return str;
     }
 
-    // 拆分长消息为多个自然分段气泡（过滤单独的分割线、纯符号或多余空行气泡）
+    // 拆分长消息为多个自然分段气泡
     function splitIntoBubbles(text) {
         if (!text) return [];
-        // 先滤除模型偶尔打印的 Markdown 分割线
         let cleaned = String(text).replace(/^[-*_]{3,}\s*$/gm, '');
         const rawParagraphs = cleaned.split(/\n{2,}/);
         const bubbles = [];
 
         rawParagraphs.forEach(p => {
             const trimmed = p.trim();
-            // 过滤空串以及纯标点分割线残留（如仅有 --- 或 ===）
             if (!trimmed || /^[-*=_]{2,}$/.test(trimmed)) return;
 
-            // 如果某一段依然非常长且包含 1. 2. 列表，进行二次优雅微拆
             if (trimmed.length > 180 && /\d+\.\s+/.test(trimmed)) {
                 const subParts = trimmed.split(/(?=\d+\.\s+)/);
                 subParts.forEach(sp => {
@@ -104,7 +95,7 @@
         return bubbles.length ? bubbles : (cleaned.trim() ? [cleaned.trim()] : []);
     }
 
-    // 渲染向导头像与多气泡复合结构（头像位于左侧，气泡紧凑排列在右侧下方，清除上下虚位）
+    // 渲染向导头像与多气泡复合结构
     function buildAssistantMessageBlockHTML(bubbles, extraNotice) {
         const bubblesList = Array.isArray(bubbles) ? bubbles : [bubbles];
         const validBubbles = bubblesList.filter(b => b && String(b).trim().length > 0);
@@ -144,14 +135,20 @@
         const time = getNowTimeStr();
         const stack = errorObj && errorObj.stack ? errorObj.stack : '';
         const item = {
-            id: 'err_' + Date.now(),
-            time, type,
+            id: 'err_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
+            time,
+            type: type || 'SystemError',
             message: String(message || '未知异常'),
-            source: source || 'inline',
+            source: source || 'system',
             line: lineno || 0,
             col: colno || 0,
             stack
         };
+
+        // 避免完全相同的高频错误刷屏
+        if (errorLogs.length > 0 && errorLogs[0].message === item.message && (Date.now() - parseInt(errorLogs[0].id.split('_')[1])) < 1000) {
+            return;
+        }
 
         errorLogs.unshift(item);
         if (errorLogs.length > MAX_LOGS) errorLogs.pop();
@@ -160,10 +157,56 @@
         shakeOrb();
     }
 
+    // 🌟 全局暴露的主动上报接口，供 ASR、TTS、网络、数据库等各模块显式调用
+    window.recordSystemError = function(moduleName, err, extraInfo) {
+        const type = moduleName ? `[${moduleName}]` : '[SystemModule]';
+        let msg = '';
+        let stack = '';
+
+        if (err instanceof Error) {
+            msg = err.message || String(err);
+            stack = err.stack || '';
+        } else if (typeof err === 'object') {
+            try { msg = JSON.stringify(err); } catch (_) { msg = String(err); }
+        } else {
+            msg = String(err || '未知模块错误');
+        }
+
+        if (extraInfo) {
+            msg += ` | 附加信息: ${typeof extraInfo === 'object' ? JSON.stringify(extraInfo) : String(extraInfo)}`;
+        }
+
+        recordError(type, msg, moduleName || 'custom', 0, 0, err instanceof Error ? err : { stack });
+    };
+
+    // 🌟 全局挂钩拦截 console.error，防止第三方库静默报错漏网
+    const _originalConsoleError = console.error;
+    console.error = function(...args) {
+        try {
+            const firstArg = args[0];
+            let errorMsg = '';
+            let errObj = null;
+
+            if (firstArg instanceof Error) {
+                errorMsg = firstArg.message;
+                errObj = firstArg;
+            } else {
+                errorMsg = args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ');
+            }
+
+            if (errorMsg && !errorMsg.includes('[Ignored]')) {
+                recordError('ConsoleError', errorMsg, 'console.error', 0, 0, errObj);
+            }
+        } catch (_) {}
+        _originalConsoleError.apply(console, args);
+    };
+
+    // 监听未处理的普通脚本异常
     window.addEventListener('error', function(event) {
         recordError('ScriptError', event.message, event.filename, event.lineno, event.colno, event.error);
     });
 
+    // 监听未处理的 Promise Rejection 异常
     window.addEventListener('unhandledrejection', function(event) {
         const reason = event.reason;
         const msg = (reason && (reason.message || reason.stack)) ? (reason.message || String(reason)) : 'Promise Rejection 未捕获异常';
@@ -322,7 +365,6 @@
             config.position = { x: snapX, y: snapY };
             saveConfig();
 
-            // 若非拖拽移动，则判定为点击打开窗口，并严格阻止事件冒泡与后续穿透
             if (!hasMoved) {
                 if (e) {
                     if (e.stopPropagation) e.stopPropagation();
@@ -378,7 +420,6 @@
             ? window.MCYT_ASSISTANT_AGENT.getGreeting()
             : '你好！我是你的手机系统智能向导。如果你对这部手机的任何按键、功能或独立 App 感到疑惑，随时问我，我可以直接为你解答或带路。';
 
-        // 渲染对话气泡序列（紧凑气泡，彻底清除多余空行与分割线）
         let bubblesHTML = buildAssistantMessageBlockHTML(splitIntoBubbles(greetingText));
 
         history.forEach(m => {
@@ -424,7 +465,6 @@
                         ${bubblesHTML}
                     </div>
 
-                    <!-- 输入框提示调整为“输入问题”，去除底部多余的重复关闭按钮 -->
                     <div style="display:flex;gap:6px;margin-top:8px;">
                         <input type="text" id="marukoInputText" placeholder="输入问题" style="flex:1;padding:7px 10px;border-radius:8px;border:1px solid #ffccd9;font-size:12px;outline:none;background:#ffffff;">
                         <button class="retro-pink-btn" id="marukoSendBtn" style="width:54px;height:32px;font-size:12px;color:#ad1457;font-weight:750;">发送</button>
@@ -460,11 +500,11 @@
         return errorLogs.map((item, idx) => `
             <div style="border:1px solid #ffd4e0;background:#fff8fa;border-radius:6px;padding:8px;margin-bottom:6px;font-size:11.5px;">
                 <div style="display:flex;justify-content:space-between;color:#ad1457;font-weight:750;border-bottom:1px dashed #ffd4e0;padding-bottom:3px;margin-bottom:4px;">
-                    <span>#${errorLogs.length - idx} [${item.type}]</span>
+                    <span>#${errorLogs.length - idx} ${escapeHtml(item.type)}</span>
                     <span style="color:#7a505f;font-weight:normal;">${item.time}</span>
                 </div>
                 <div style="color:#2e1a22;word-break:break-all;line-height:1.4;">${escapeHtml(item.message)}</div>
-                ${item.source ? `<div style="color:#888;font-size:10px;margin-top:3px;">${escapeHtml(item.source)}:${item.line}</div>` : ''}
+                ${item.source ? `<div style="color:#888;font-size:10px;margin-top:3px;">${escapeHtml(item.source)}${item.line ? ':' + item.line : ''}</div>` : ''}
             </div>
         `).join('');
     }
@@ -490,7 +530,6 @@
             if (!text) return;
             input.value = '';
 
-            // 用户气泡上屏（紧凑排版，去除首尾虚空）
             const safeUserText = escapeHtml(text).replace(/\n+/g, '<br>');
             dialogBox.innerHTML += `
                 <div style="display:flex;justify-content:flex-end;width:100%;">
@@ -508,7 +547,6 @@
                 sendBtn.disabled = false;
                 sendBtn.textContent = '发送';
 
-                // 拆分为多个自然气泡，过滤空隙与分割线，带上左侧头像结构连续展现
                 const subBubbles = splitIntoBubbles(reply);
                 const extraTip = goApp ? '✨ 正在为你跳转打开对应应用...' : '';
                 dialogBox.innerHTML += buildAssistantMessageBlockHTML(subBubbles, extraTip);
