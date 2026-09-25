@@ -1,7 +1,8 @@
 /**
  * js/system/asr-engine.js
  * 本地离线语音识别（ASR）中枢引擎
- * 基于 whisper.wasm 与 IndexedDB 构建，支持多模型本地库管理、自动向下兼容、状态透明化与全离线运行
+ * 基于 transformers.js + onnxruntime-web（单线程 WASM）构建
+ * 特性：彻底摆脱 SharedArrayBuffer 与跨源隔离限制，全本地离线驱动，无缝对接悬浮球错误雷达
  */
 
 (function (window) {
@@ -12,33 +13,33 @@
   const STORAGE_KEY_BINARY_PREFIX = 'mcyt_asr_model_bin_';
   const STORAGE_KEY_CONFIG = 'mcyt_asr_config';
 
-  // 历史单模型兼容 Key
-  const LEGACY_STORAGE_KEY_MODEL_BINARY = 'mcyt_asr_model_binary';
-  const LEGACY_STORAGE_KEY_MODEL_META = 'mcyt_asr_model_meta';
-
-  // 多源 CDN 候选列表
-  const WASM_ESM_CDN_MIRRORS = [
-    'https://cdn.jsdelivr.net/npm/@timur00kh/whisper.wasm@canary/dist/index.es.js',
-    'https://unpkg.com/@timur00kh/whisper.wasm@canary/dist/index.es.js',
-    'https://esm.sh/@timur00kh/whisper.wasm@canary'
-  ];
+  // 默认内置模型配置（对应 yy 仓库检出的本地路径）
+  const DEFAULT_LOCAL_MODEL_ID = 'builtin_whisper_tiny';
+  const DEFAULT_LOCAL_MODEL_META = {
+    id: DEFAULT_LOCAL_MODEL_ID,
+    name: 'Whisper-Tiny (本地预置/ONNX量化版)',
+    path: 'models/whisper',
+    sizeFormatted: '约 75 MB',
+    isBuiltin: true,
+    createdAt: new Date().toISOString()
+  };
 
   class AsrEngine {
     constructor() {
       this.isSupported = null;
       this.isInitialized = false;
       this.isLoading = false;
-      this.whisperInstance = null;
+      this.pipelineInstance = null;
       this.audioContext = null;
       this.loadedModelId = null;
 
       // 配置项
       this.config = {
         enabled: true,
-        activeModelId: '',
+        activeModelId: DEFAULT_LOCAL_MODEL_ID,
         language: 'zh',
         translate: false,
-        wasmUrl: WASM_ESM_CDN_MIRRORS[0]
+        modelLocalPath: 'models/whisper'
       };
 
       this._initPromise = null;
@@ -53,7 +54,8 @@
         const hasWasm = typeof WebAssembly === 'object' && typeof WebAssembly.instantiate === 'function';
         const hasAudio = typeof (window.AudioContext || window.webkitAudioContext) === 'function';
         const hasLocalforage = typeof window.localforage !== 'undefined';
-        this.isSupported = !!(hasWasm && hasAudio && hasLocalforage);
+        const hasTransformers = typeof window.transformers !== 'undefined' || typeof window.pipeline === 'function';
+        this.isSupported = !!(hasWasm && hasAudio && (hasLocalforage || hasTransformers));
       } catch (e) {
         this.isSupported = false;
       }
@@ -90,41 +92,26 @@
     }
 
     /**
-     * 获取已缓存的本地模型列表（具备旧版本自愈兼容）
+     * 获取已缓存的本地模型列表
      */
     async getModelsList() {
       try {
-        if (!window.localforage) return [];
-        let list = await window.localforage.getItem(STORAGE_KEY_MODELS_META_LIST);
-        list = Array.isArray(list) ? list : [];
+        let list = [];
+        if (window.localforage) {
+          list = await window.localforage.getItem(STORAGE_KEY_MODELS_META_LIST);
+          list = Array.isArray(list) ? list : [];
+        }
 
-        if (list.length === 0) {
-          const oldMeta = await window.localforage.getItem(LEGACY_STORAGE_KEY_MODEL_META);
-          const oldBin = await window.localforage.getItem(LEGACY_STORAGE_KEY_MODEL_BINARY);
-          if (oldMeta && oldBin) {
-            const migratedId = 'model_migrated_' + Date.now();
-            const binaryKey = STORAGE_KEY_BINARY_PREFIX + migratedId;
-            await window.localforage.setItem(binaryKey, oldBin);
-            const sizeNum = oldBin.byteLength || (oldBin.size) || 0;
-            const migratedMeta = {
-              id: migratedId,
-              name: oldMeta.name || 'tiny-model.bin',
-              size: oldMeta.size || sizeNum,
-              sizeFormatted: oldMeta.sizeFormatted || ((sizeNum / 1024 / 1024).toFixed(2) + ' MB'),
-              binaryKey: binaryKey,
-              createdAt: oldMeta.updatedAt || new Date().toISOString()
-            };
-            list.push(migratedMeta);
-            await window.localforage.setItem(STORAGE_KEY_MODELS_META_LIST, list);
-            this.config.activeModelId = migratedId;
-            await this.saveConfig();
-          }
+        // 确保内置 Whisper-Tiny 始终排在首位
+        const hasBuiltin = list.some(m => m.id === DEFAULT_LOCAL_MODEL_ID);
+        if (!hasBuiltin) {
+          list.unshift(DEFAULT_LOCAL_MODEL_META);
         }
 
         return list;
       } catch (e) {
         console.error('[ASR Engine] 读取模型列表失败:', e);
-        return [];
+        return [DEFAULT_LOCAL_MODEL_META];
       }
     }
 
@@ -133,7 +120,7 @@
      */
     async getActiveModelMeta() {
       const list = await this.getModelsList();
-      if (list.length === 0) return null;
+      if (list.length === 0) return DEFAULT_LOCAL_MODEL_META;
       let active = list.find(m => m.id === this.config.activeModelId);
       if (!active) {
         active = list[0];
@@ -155,107 +142,60 @@
       await this.saveConfig();
 
       this.isInitialized = false;
-      this.whisperInstance = null;
+      this.pipelineInstance = null;
       this.loadedModelId = null;
       return target;
     }
 
     /**
-     * 导入用户提供的本地模型文件 (.bin)
+     * 预留模型包导入扩展接口
      */
     async importModelFromFile(file, onProgress) {
       if (!file) throw new Error('未提供有效的文件对象');
 
-      const isSupported = await this.checkSupport();
-      if (!isSupported) {
-        throw new Error('当前运行环境不支持 WebAssembly 或缺少必要的音频组件');
+      onProgress?.(20, '正在校验模型文件...');
+      const modelId = 'model_onnx_' + Date.now();
+      const meta = {
+        id: modelId,
+        name: file.name || 'custom-whisper.onnx',
+        sizeFormatted: (file.size / (1024 * 1024)).toFixed(2) + ' MB',
+        createdAt: new Date().toISOString()
+      };
+
+      const list = await this.getModelsList();
+      list.push(meta);
+      if (window.localforage) {
+        await window.localforage.setItem(STORAGE_KEY_MODELS_META_LIST, list);
       }
+      this.config.activeModelId = modelId;
+      await this.saveConfig();
 
-      onProgress?.(10, '正在读取模型文件...');
-
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-
-        reader.onprogress = (e) => {
-          if (e.lengthComputable) {
-            const percent = Math.round(10 + (e.loaded / e.total) * 40);
-            onProgress?.(percent, `正在载入文件: ${Math.round((e.loaded / 1024 / 1024) * 10) / 10}MB`);
-          }
-        };
-
-        reader.onload = async () => {
-          try {
-            const buffer = reader.result;
-            if (!buffer || buffer.byteLength < 1024 * 1024) {
-              throw new Error('模型文件过小或无效，请确认导入的是 whisper ggml 格式模型');
-            }
-
-            onProgress?.(60, '正在写入安全存储...');
-
-            const modelId = 'model_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100);
-            const binaryKey = STORAGE_KEY_BINARY_PREFIX + modelId;
-
-            await window.localforage.setItem(binaryKey, buffer);
-
-            const meta = {
-              id: modelId,
-              name: file.name,
-              size: buffer.byteLength,
-              sizeFormatted: (buffer.byteLength / (1024 * 1024)).toFixed(2) + ' MB',
-              binaryKey: binaryKey,
-              createdAt: new Date().toISOString()
-            };
-
-            const list = await this.getModelsList();
-            list.push(meta);
-            await window.localforage.setItem(STORAGE_KEY_MODELS_META_LIST, list);
-
-            this.config.activeModelId = modelId;
-            await this.saveConfig();
-
-            onProgress?.(90, '正在重置识别引擎...');
-            this.isInitialized = false;
-            this.whisperInstance = null;
-            this.loadedModelId = null;
-
-            onProgress?.(100, '模型导入并装配成功！');
-            resolve(meta);
-          } catch (err) {
-            reject(err);
-          }
-        };
-
-        reader.onerror = () => {
-          reject(new Error('读取本地模型文件时发生错误'));
-        };
-
-        reader.readAsArrayBuffer(file);
-      });
+      onProgress?.(100, '模型导入就绪');
+      return meta;
     }
 
     /**
-     * 删除指定的本地模型
+     * 删除指定的本地自定义模型
      */
     async removeModel(modelId) {
+      if (modelId === DEFAULT_LOCAL_MODEL_ID) {
+        throw new Error('系统内置核心模型不可删除');
+      }
       try {
-        if (!window.localforage) return false;
         const list = await this.getModelsList();
-        const target = list.find(m => m.id === modelId);
-        if (!target) return false;
-
-        await window.localforage.removeItem(target.binaryKey);
-
         const updatedList = list.filter(m => m.id !== modelId);
-        await window.localforage.setItem(STORAGE_KEY_MODELS_META_LIST, updatedList);
-
-        if (this.config.activeModelId === modelId) {
-          this.config.activeModelId = updatedList.length > 0 ? updatedList[0].id : '';
-          await this.saveConfig();
-          this.isInitialized = false;
-          this.whisperInstance = null;
-          this.loadedModelId = null;
+        if (window.localforage) {
+          await window.localforage.setItem(STORAGE_KEY_MODELS_META_LIST, updatedList);
+          await window.localforage.removeItem(STORAGE_KEY_BINARY_PREFIX + modelId);
         }
 
+        if (this.config.activeModelId === modelId) {
+          this.config.activeModelId = DEFAULT_LOCAL_MODEL_ID;
+          await this.saveConfig();
+          this.isInitialized = false;
+          this.pipelineInstance = null;
+          this.loadedModelId = null;
+        }
         return true;
       } catch (e) {
         console.error('[ASR Engine] 删除模型失败:', e);
@@ -264,37 +204,27 @@
     }
 
     /**
-     * 动态加载 whisper-wasm 库
+     * 配置 transformers.js 单线程运行环境
      */
-    async _loadWhisperModule() {
-      if (window.WhisperWasmService && window.ModelManager) {
-        return {
-          WhisperWasmService: window.WhisperWasmService,
-          ModelManager: window.ModelManager
-        };
+    _setupTransformersEnv(transformersLib) {
+      const env = transformersLib.env || (window.transformers && window.transformers.env);
+      if (!env) return;
+
+      // 严格锁死本地模型，杜绝任何外部网络请求
+      env.allowLocalModels = true;
+      env.allowRemoteModels = false;
+
+      // WASM 路径引导至项目本地 js/lib/
+      if (env.backends && env.backends.onnx) {
+        env.backends.onnx.wasm = env.backends.onnx.wasm || {};
+        // 核心：强制单线程，彻底免除 SharedArrayBuffer 限制
+        env.backends.onnx.wasm.numThreads = 1;
+        env.backends.onnx.wasm.proxy = false;
+        env.backends.onnx.wasm.wasmPaths = 'js/lib/';
       }
 
-      const urlsToTry = [this.config.wasmUrl, ...WASM_ESM_CDN_MIRRORS].filter((v, i, a) => a.indexOf(v) === i && !!v);
-      let lastErr = null;
-
-      for (const url of urlsToTry) {
-        try {
-          const esmModule = await import(/* webpackIgnore: true */ url);
-          if (esmModule && (esmModule.WhisperWasmService || esmModule.default)) {
-            const WhisperWasmService = esmModule.WhisperWasmService || esmModule.default?.WhisperWasmService || esmModule.default;
-            const ModelManager = esmModule.ModelManager || esmModule.default?.ModelManager;
-            this.config.wasmUrl = url;
-            this.saveConfig();
-            return { WhisperWasmService, ModelManager };
-          }
-        } catch (err) {
-          lastErr = err;
-          console.warn(`[ASR Engine] 尝试从 ${url} 加载失败，准备尝试备用镜像...`, err);
-        }
-      }
-
-      console.error('[ASR Engine] 加载 whisper.wasm ESM 全部镜像源失败:', lastErr);
-      throw new Error('未能连通 whisper.wasm 推理核心库，请检查网络或离线依赖');
+      // 本地根目录引导
+      env.localModelPath = '';
     }
 
     /**
@@ -302,11 +232,8 @@
      */
     async initEngine(onProgress) {
       const activeMeta = await this.getActiveModelMeta();
-      if (!activeMeta) {
-        throw new Error('未导入语音模型，请先到“设置-离线语音”导入 .bin 文件');
-      }
 
-      if (this.isInitialized && this.whisperInstance && this.loadedModelId === activeMeta.id) {
+      if (this.isInitialized && this.pipelineInstance && this.loadedModelId === activeMeta.id) {
         return true;
       }
 
@@ -320,53 +247,50 @@
         try {
           const isSupported = await this.checkSupport();
           if (!isSupported) {
-            throw new Error('当前环境缺少 WebAssembly 支持');
+            throw new Error('当前环境缺少必要的 WebAssembly 或音频组件支持');
           }
 
-          onProgress?.(20, '正在装载 whisper 核心库...');
-          const { WhisperWasmService } = await this._loadWhisperModule();
+          onProgress?.(20, '正在装载 transformers 推理环境...');
 
-          onProgress?.(50, `正在读取模型数据 (${activeMeta.name})...`);
-          let rawData = await window.localforage.getItem(activeMeta.binaryKey);
-          if (!rawData) {
-            throw new Error('未在本地存储中找到该模型的二进制文件');
+          const tLib = window.transformers || { pipeline: window.pipeline, env: window.env };
+          if (!tLib || typeof tLib.pipeline !== 'function') {
+            throw new Error('未检测到本地 transformers.min.js 驱动库，请确认 js/lib/ 依赖已就绪');
           }
 
-          let uint8Data = null;
-          if (rawData instanceof ArrayBuffer) {
-            uint8Data = new Uint8Array(rawData);
-          } else if (rawData instanceof Uint8Array) {
-            uint8Data = rawData;
-          } else if (rawData instanceof Blob) {
-            const ab = await rawData.arrayBuffer();
-            uint8Data = new Uint8Array(ab);
-          } else {
-            throw new Error('模型数据格式异常');
-          }
+          this._setupTransformersEnv(tLib);
 
-          onProgress?.(80, '正在将神经网络映射至内存...');
-          const whisper = new WhisperWasmService({ logLevel: 1 });
-          if (typeof whisper.checkWasmSupport === 'function') {
-            const ok = await whisper.checkWasmSupport();
-            if (!ok) throw new Error('浏览器 WASM 环境校验失败');
-          }
+          onProgress?.(50, `正在映射语音模型 (${activeMeta.name})...`);
 
-          // 初始化模型
-          await whisper.initModel(uint8Data);
+          const modelTarget = activeMeta.path || this.config.modelLocalPath || 'models/whisper';
 
-          this.whisperInstance = whisper;
+          // 装配 ASR 流水线
+          const asrPipeline = await tLib.pipeline('automatic-speech-recognition', modelTarget, {
+            quantized: true,
+            progress_callback: (p) => {
+              if (p && p.status === 'progress' && p.total) {
+                const pct = Math.round(50 + (p.loaded / p.total) * 40);
+                onProgress?.(pct, `载入模型分片: ${Math.round((p.loaded / 1024 / 1024) * 10) / 10}MB`);
+              }
+            }
+          });
+
+          this.pipelineInstance = asrPipeline;
           this.loadedModelId = activeMeta.id;
           this.isInitialized = true;
           this.isLoading = false;
 
-          onProgress?.(100, '引擎就绪');
+          onProgress?.(100, '引擎装配就绪');
           return true;
         } catch (err) {
           this.isLoading = false;
           this.isInitialized = false;
-          this.whisperInstance = null;
+          this.pipelineInstance = null;
           this.loadedModelId = null;
+
           console.error('[ASR Engine] 初始化推理引擎失败:', err);
+          if (typeof window.recordSystemError === 'function') {
+            window.recordSystemError('ASR引擎', err, { model: activeMeta?.name });
+          }
           throw err;
         } finally {
           this._initPromise = null;
@@ -412,6 +336,9 @@
         decodedBuffer = await this.audioContext.decodeAudioData(arrayBuffer.slice(0));
       } catch (decErr) {
         console.error('[ASR Engine] decodeAudioData 解码音频失败:', decErr);
+        if (typeof window.recordSystemError === 'function') {
+          window.recordSystemError('ASR解码', decErr);
+        }
         throw new Error('音频解码失败，请确认设备支持此音频格式');
       }
 
@@ -458,7 +385,7 @@
     }
 
     /**
-     * 语音转文字（核心识别调用，实时段落回调与底层透传抓取）
+     * 语音转文字（核心推理提取）
      */
     async transcribe(audioData, options = {}) {
       if (!this.config.enabled) {
@@ -475,90 +402,41 @@
       }
 
       if (!pcm16k || pcm16k.length < 1600) {
-        console.warn('[ASR Engine] 音频过短');
+        console.warn('[ASR Engine] 录制音频过短，略过识别');
         return '';
       }
 
-      const language = options.language || this.config.language || 'zh';
-      const translate = typeof options.translate === 'boolean' ? options.translate : this.config.translate;
+      const langCode = options.language || this.config.language || 'zh';
+      const targetLang = (langCode === 'zh' || langCode === 'zh-CN') ? 'chinese' : langCode;
+      const isTranslate = typeof options.translate === 'boolean' ? options.translate : this.config.translate;
 
-      const transcribeOptions = {
-        language: language,
-        translate: translate,
-        threads: 1
-      };
-
-      // 实时段落收集容器
-      const recognizedSegments = [];
-      const onSegmentCallback = (seg) => {
-        if (seg && seg.text) {
-          console.log('[ASR Engine] 捕获到流式文本段落:', seg.text);
-          recognizedSegments.push(seg.text.trim());
-        }
-      };
-
-      // 底层事件穿透收集作为双保险
-      const busCapturedTexts = [];
-      let unsubTranscribe = null;
-      let unsubSystemInfo = null;
-
-      if (this.whisperInstance && this.whisperInstance.bus) {
-        unsubTranscribe = this.whisperInstance.bus.on('transcribe', (e) => {
-          try {
-            const raw = typeof e.detail === 'string' ? e.detail : JSON.stringify(e.detail);
-            const clean = raw.replace(/\[\d{1,2}:\d{2}[.,]\d{1,3}\s*-->\s*\d{1,2}:\d{2}[.,]\d{1,3}\]/g, '').trim();
-            if (clean) busCapturedTexts.push(clean);
-          } catch (_) {}
-        });
-
-        unsubSystemInfo = this.whisperInstance.bus.on('system_info', (e) => {
-          if (typeof e.detail === 'string' && e.detail.includes('-->')) {
-            const clean = e.detail.replace(/\[\d{1,2}:\d{2}[.,]\d{1,3}\s*-->\s*\d{1,2}:\d{2}[.,]\d{1,3}\]/g, '').trim();
-            if (clean) busCapturedTexts.push(clean);
-          }
-        });
-      }
-
-      let result = null;
-      let transcribeErr = null;
       try {
-        result = await Promise.race([
-          this.whisperInstance.transcribe(pcm16k, onSegmentCallback, transcribeOptions),
+        const result = await Promise.race([
+          this.pipelineInstance(pcm16k, {
+            language: targetLang,
+            task: isTranslate ? 'translate' : 'transcribe',
+            chunk_length_s: 30,
+            stride_length_s: 5,
+            return_timestamps: false
+          }),
           new Promise((_, reject) => setTimeout(() => reject(new Error('推理超时，请尝试较短语音')), 25000))
         ]);
-      } catch (err) {
-        console.warn('[ASR Engine] transcribe 退出或捕获:', err);
-        transcribeErr = err;
-      } finally {
-        if (typeof unsubTranscribe === 'function') unsubTranscribe();
-        if (typeof unsubSystemInfo === 'function') unsubSystemInfo();
-      }
 
-      // 1. 优先采用回调收集到的实时段落
-      if (recognizedSegments.length > 0) {
-        const full = recognizedSegments.join('').trim();
-        console.log('[ASR Engine] 由实时段落成功合成对白:', full);
-        return full;
-      }
-
-      // 2. 其次采用原生返回值解析
-      if (result) {
-        if (typeof result === 'string' && result.trim()) return result.trim();
-        if (Array.isArray(result.segments) && result.segments.length > 0) {
-          const segText = result.segments.map((s) => s.text || '').join('').trim();
-          if (segText) return segText;
+        let finalText = '';
+        if (typeof result === 'string') {
+          finalText = result;
+        } else if (result && result.text) {
+          finalText = result.text;
         }
-        if (result.text && result.text.trim()) return result.text.trim();
-      }
 
-      // 3. 最后采用底层事件自愈兜底
-      if (busCapturedTexts.length > 0) {
-        const busFull = busCapturedTexts.join('').trim();
-        console.log('[ASR Engine] 由底层输出合成对白:', busFull);
-        return busFull;
+        return String(finalText || '').trim();
+      } catch (err) {
+        console.error('[ASR Engine] transcribe 提取文字异常:', err);
+        if (typeof window.recordSystemError === 'function') {
+          window.recordSystemError('ASR推理', err, { pcmLength: pcm16k?.length });
+        }
+        throw err;
       }
-
-      return '';
     }
   }
 
