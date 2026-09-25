@@ -263,8 +263,9 @@
         })();
     </script>
 
-    <!-- 0. 存储引擎第三方库：localForage（IndexedDB 优先，自动降级 localStorage），必须在所有业务脚本之前加载 -->
+    <!-- 0. 存储引擎与本地核心算法库：localForage 与 本地离线 ONNX/ASR 库，必须在业务脚本前加载 -->
     <script src="js/lib/localforage.min.js"></script>
+    <script src="js/lib/transformers.min.js"></script>
 
     <!-- 1. 底层核心数据与网络 -->
     <script src="js/01-state-config.js"></script>
@@ -279,7 +280,7 @@
     <script src="js/system/save-engine.js"></script>
     <!-- 全新纯前端 TTS 语音统一中枢引擎 -->
     <script src="js/system/tts-engine.js"></script>
-    <!-- 🎙️ 离线语音识别 (ASR) whisper.wasm 中枢引擎 -->
+    <!-- 🎙️ 离线语音识别 (ASR) transformers.js + ONNX 中枢引擎 -->
     <script src="js/system/asr-engine.js"></script>
     <script src="js/09-events-init.js"></script>
 
