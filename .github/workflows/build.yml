@@ -47,6 +47,55 @@ jobs:
           rm -rf tarot/.git
           rm -rf image_repo/.git
 
+      - name: Setup Local Transformers & ONNX ASR Runtime
+        run: |
+          # 1. 准备本地 js/lib/ 核心运行库（单线程 WASM）
+          mkdir -p js/lib
+          echo "📥 正在配置本地离线 transformers.js 与单线程 onnxruntime WASM 核心..."
+          
+          # 下载 transformers.min.js（如果本地尚不存在）
+          if [ ! -f "js/lib/transformers.min.js" ]; then
+            curl -fsSL https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/transformers.min.js -o js/lib/transformers.min.js || \
+            curl -fsSL https://unpkg.com/@xenova/transformers@2.17.2/dist/transformers.min.js -o js/lib/transformers.min.js
+          fi
+
+          # 下载 onnxruntime 单线程 WASM 核心二进制
+          if [ ! -f "js/lib/ort-wasm-simd.wasm" ]; then
+            curl -fsSL https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/ort-wasm-simd.wasm -o js/lib/ort-wasm-simd.wasm || true
+          fi
+          if [ ! -f "js/lib/ort-wasm.wasm" ]; then
+            curl -fsSL https://cdn.jsdelivr.net/npm/@xenova/transformers@2.17.2/dist/ort-wasm.wasm -o js/lib/ort-wasm.wasm || true
+          fi
+
+          # 2. 准备本地离线 Whisper-Tiny ONNX 量化模型（放入 models/whisper/）
+          mkdir -p models/whisper/onnx
+          echo "📥 正在拉取全套 Whisper-Tiny ONNX 模型与分词配置..."
+
+          BASE_URL="https://hf-mirror.com/Xenova/whisper-tiny/resolve/main"
+          FALLBACK_URL="https://huggingface.co/Xenova/whisper-tiny/resolve/main"
+
+          download_model_file() {
+            local file=$1
+            local dest=$2
+            if [ ! -f "$dest" ]; then
+              echo "拉取: $file"
+              curl -fsSL "${BASE_URL}/${file}" -o "$dest" || \
+              curl -fsSL "${FALLBACK_URL}/${file}" -o "$dest" || \
+              echo "⚠️ 文件 $file 下载重试中..."
+            fi
+          }
+
+          download_model_file "config.json" "models/whisper/config.json"
+          download_model_file "generation_config.json" "models/whisper/generation_config.json"
+          download_model_file "tokenizer.json" "models/whisper/tokenizer.json"
+          download_model_file "tokenizer_config.json" "models/whisper/tokenizer_config.json"
+          download_model_file "onnx/encoder_model_quantized.onnx" "models/whisper/onnx/encoder_model_quantized.onnx"
+          download_model_file "onnx/decoder_model_merged_quantized.onnx" "models/whisper/onnx/decoder_model_merged_quantized.onnx"
+
+          echo "✅ ASR 核心与模型就位完成，models/whisper/ 体积清单："
+          ls -lh models/whisper/
+          ls -lh models/whisper/onnx/
+
       - name: Process & Sync Images
         run: |
           # 确保主工程 assets 目标目录就绪
@@ -104,9 +153,9 @@ jobs:
       - name: Create Android Project
         run: |
           mkdir -p proj/app/src/main/assets proj/app/src/main/res/values proj/app/src/main/res/xml proj/app/src/main/res/mipmap proj/app/src/main/java/com/mcyt/simulator
-          # ⚠️ 这里必须列出所有需要打进 WebView 资源目录的顶层文件/文件夹。
-          # 已将独立 App 目录 tarot 与 rememori 均打包进 assets 中。
-          cp -r index.html style.css js assets tarot rememori icon.png proj/app/src/main/assets/ 2>/dev/null || cp -r * proj/app/src/main/assets/
+          # ⚠️ 必须列出所有打进 WebView 资源目录的顶层文件/文件夹。
+          # 已将 models、tarot、rememori 均打包进 assets 中。
+          cp -r index.html style.css js assets models tarot rememori icon.png proj/app/src/main/assets/ 2>/dev/null || cp -r * proj/app/src/main/assets/
 
           if [ -f "icon.png" ]; then
             cp icon.png proj/app/src/main/res/mipmap/ic_launcher.png
@@ -222,7 +271,7 @@ jobs:
               <uses-feature android:name="android.hardware.camera" android:required="false" />
 
               <application
-                  android:label="Mcyt模拟器"
+                  android:label="主播掌机"
                   android:icon="@mipmap/ic_launcher"
                   android:theme="@style/Theme.FullScreen"
                   android:networkSecurityConfig="@xml/network_security_config"
@@ -426,7 +475,7 @@ jobs:
                   webView.setWebViewClient(new WebViewClient());
 
                   webView.setWebChromeClient(new WebChromeClient() {
-                      // 🌟 核心修复：放行网页请求硬件（麦克风、摄像头）权限
+                      // 放行网页请求硬件（麦克风、摄像头）权限
                       @Override
                       public void onPermissionRequest(final PermissionRequest request) {
                           runOnUiThread(() -> {
@@ -554,5 +603,5 @@ jobs:
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: McytSimulator-v${{ env.APP_VER }}
+          name: StreamerHandheld-v${{ env.APP_VER }}
           path: proj/app/build/outputs/apk/release/app-release.apk
