@@ -3,10 +3,10 @@
  * 同人文库 App（站点聚合导航与沉浸式 AO3 文学空间）
  * 
  * 核心设计：
- * 1. 站点聚合门户：进入首先呈现文库站点导航，首发收录 Archive of Our Own (AO3)。
- * 2. 纯正文学质感：彻底拔除全部花哨 Emoji，象牙白与学术暗红（#990000）经典排版。
- * 3. 唯一角色来源：100% 直连聊天通讯录自建联系人，真实人设注入。
- * 4. 界面去臃肿：大屏卡片式单选、顶部微胶囊生成提示、极简好友转发弹窗。
+ * 1. 消除双层包裹：不自建多余假顶栏，完全融入小手机视口，通栏自然舒展。
+ * 2. 独立纯净弹窗：彻底摒弃宿主粉框丑弹窗，自建白灰极简大方卡片浮层，拔除任何红黑位移伤眼滤镜。
+ * 3. 唯一角色来源：100% 直连通讯录自建联系人，深度去 AI 味小说创作。
+ * 4. 纯净文学排版：地毯式清除全部 Emoji，纯正象牙白与学术暗红质感。
  */
 
 (function () {
@@ -137,8 +137,35 @@
     }
 
     // ============================================================
-    // 2. 悬浮微胶囊指示器 (代替笨重遮挡)
+    // 2. 自建高级白灰纯净弹窗与状态胶囊（彻底抛弃旧粉框系统提示）
     // ============================================================
+    function openAo3CustomModal(htmlContent) {
+        let modalEl = document.getElementById('ao3GlobalCustomModal');
+        if (!modalEl) {
+            modalEl = document.createElement('div');
+            modalEl.id = 'ao3GlobalCustomModal';
+            modalEl.className = 'ao3-custom-modal-backdrop';
+            document.body.appendChild(modalEl);
+        }
+
+        modalEl.innerHTML = `
+            <div class="ao3-custom-modal-window">
+                ${htmlContent}
+            </div>
+        `;
+
+        requestAnimationFrame(() => modalEl.classList.add('visible'));
+    }
+
+    function closeAo3CustomModal() {
+        const modalEl = document.getElementById('ao3GlobalCustomModal');
+        if (modalEl) {
+            modalEl.classList.remove('visible');
+            setTimeout(() => { modalEl.innerHTML = ''; }, 200);
+        }
+    }
+    window.closeAo3CustomModal = closeAo3CustomModal;
+
     function showAo3GeneratingPill(text) {
         let pill = document.getElementById('ao3GeneratingPill');
         if (!pill) {
@@ -148,7 +175,7 @@
             document.body.appendChild(pill);
         }
         pill.innerHTML = `
-            <span class="ao3-pill-spinner"></span>
+            <span class="ao3-pill-dot"></span>
             <span class="ao3-pill-text">${escapeHtml(text || '正在构思推演...')}</span>
         `;
         pill.classList.add('visible');
@@ -160,7 +187,7 @@
     }
 
     // ============================================================
-    // 3. 主视图分发引擎
+    // 3. 视图分发引擎
     // ============================================================
     window.renderAo3App = function (containerEl) {
         ensureAo3DataIntegrity();
@@ -177,40 +204,17 @@
         }
     };
 
-    /**
-     * 优雅关闭 App 返回桌面
-     */
-    window.exitAo3ToDesktop = function () {
-        if (typeof window.closePhoneApp === 'function') {
-            window.closePhoneApp();
-        } else if (typeof window.closeModal === 'function') {
-            window.closeModal();
-        } else {
-            const body = document.getElementById('appModalBody');
-            if (body) body.innerHTML = '';
-        }
-    };
-
     // ============================================================
-    // 3.1 站点导航门户视图 (Portal View)
+    // 3.1 站点导航门户视图 (Portal View · 告别双层顶栏)
     // ============================================================
     function renderAo3PortalView(container) {
         const worksCount = (G.fanworks || []).length;
         container.innerHTML = `
             <div class="ao3-app-viewport">
-                <!-- 纯净顶栏：预留安全区，附带返回桌面按键 -->
-                <div class="ao3-portal-navbar">
-                    <div class="ao3-portal-nav-title">同人文库</div>
-                    <button class="ao3-nav-desktop-btn" onclick="window.exitAo3ToDesktop()">
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
-                        <span>桌面</span>
-                    </button>
-                </div>
-
                 <div class="ao3-portal-scroll-area">
                     <div class="ao3-portal-hero">
                         <div class="ao3-portal-hero-title">文学创作与同人站点</div>
-                        <div class="ao3-portal-hero-desc">探索由读者与创作者共同筑起的文字世界</div>
+                        <div class="ao3-portal-hero-desc">探索由创作者与读者共同筑起的文字世界</div>
                     </div>
 
                     <div class="ao3-portal-grid">
@@ -259,7 +263,7 @@
     }
 
     // ============================================================
-    // 3.2 AO3 文库主列表视图
+    // 3.2 AO3 文库主列表视图 (告别缩在里面的红黑小膏药)
     // ============================================================
     function renderAo3HomeView(container) {
         const works = [...(G.fanworks || [])].reverse();
@@ -271,7 +275,7 @@
         if (works.length === 0) {
             worksHtml = `
                 <div class="ao3-empty-slate">
-                    <svg viewBox="0 0 24 24" width="40" height="40" fill="none" stroke="#990000" stroke-width="1.2">
+                    <svg viewBox="0 0 24 24" width="38" height="38" fill="none" stroke="#990000" stroke-width="1.2">
                         <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
                         <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
                     </svg>
@@ -318,31 +322,31 @@
 
         container.innerHTML = `
             <div class="ao3-app-viewport">
-                <!-- AO3 顶栏：带返回导航页与笔名切换 -->
-                <div class="ao3-classic-navbar">
-                    <div class="ao3-nav-left-group">
-                        <button class="ao3-back-btn" onclick="G.ao3State.view='portal'; window.renderAo3App();">
-                            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 18l-6-6 6-6"/></svg>
-                            <span>站点</span>
+                <!-- 文学文献风格头部区域（通栏沉浸，非死板方块横幅） -->
+                <div class="ao3-site-header">
+                    <div class="ao3-site-header-nav">
+                        <button class="ao3-breadcrumb-btn" onclick="G.ao3State.view='portal'; window.renderAo3App();">
+                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 18l-6-6 6-6"/></svg>
+                            <span>站点导航</span>
                         </button>
-                        <div class="ao3-logo-group" onclick="G.ao3State.view='home'; window.renderAo3App();">
-                            <span class="ao3-logo-monogram">AO3</span>
-                            <div class="ao3-logo-text">
-                                <span class="ao3-main-title">Archive of Our Own</span>
-                            </div>
-                        </div>
-                    </div>
 
-                    <div class="ao3-nav-actions">
                         <div class="ao3-user-badge" onclick="window.openAo3IdentitySettings()">
                             <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                             <span>${escapeHtml(curUser)}</span>
                             <small>(${isMain ? '主号' : '小号'})</small>
                         </div>
                     </div>
+
+                    <div class="ao3-site-brand-row">
+                        <span class="ao3-logo-monogram">AO3</span>
+                        <div>
+                            <div class="ao3-brand-title">Archive of Our Own</div>
+                            <div class="ao3-brand-sub">纯乙女向与同人创作典藏库</div>
+                        </div>
+                    </div>
                 </div>
 
-                <!-- 次级工具栏 -->
+                <!-- 次级操作栏 -->
                 <div class="ao3-sub-toolbar">
                     <div class="ao3-filter-label">收录作品：<b>${works.length}</b> 篇</div>
                     <div style="display:flex;gap:8px;">
@@ -398,12 +402,12 @@
         container.innerHTML = `
             <div class="ao3-app-viewport">
                 <!-- 阅读器顶栏 -->
-                <div class="ao3-classic-navbar">
-                    <button class="ao3-back-btn" onclick="G.ao3State.view='home'; window.renderAo3App();">
+                <div class="ao3-reader-navbar">
+                    <button class="ao3-breadcrumb-btn" onclick="G.ao3State.view='home'; window.renderAo3App();">
                         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 18l-6-6 6-6"/></svg>
                         <span>目录</span>
                     </button>
-                    <div class="ao3-reader-top-tools">
+                    <div>
                         <button class="ao3-btn ao3-btn-sub" onclick="window.openShareAo3ToChatModal('${work._id}')">
                             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
                             <span>转发至聊天</span>
@@ -471,7 +475,7 @@
     }
 
     // ============================================================
-    // 4. 极简转发弹窗（去除啰嗦说教与闪电机制）
+    // 4. 极简转发弹窗（自建纯净浮层，无说教）
     // ============================================================
     window.openShareAo3ToChatModal = function (workId) {
         const work = (G.fanworks || []).find(w => w._id === workId);
@@ -479,7 +483,7 @@
 
         const liveCharacters = getLiveChatCharacters();
         if (liveCharacters.length === 0) {
-            if (typeof showToast === 'function') showToast('聊天通讯录中暂无好友，请先在聊天中添加好友', 'info');
+            if (typeof showToast === 'function') showToast('通讯录中暂无好友，请先在聊天中添加好友', 'info');
             return;
         }
 
@@ -496,17 +500,15 @@
             </div>
         `).join('');
 
-        if (typeof openModal === 'function') {
-            openModal(`
-                <div class="ao3-modal-title">转发至聊天</div>
-                <div class="ao3-contact-picker-scroll">
-                    ${charListHtml}
-                </div>
-                <div class="btn-row" style="margin-top:14px;">
-                    <button class="btn-secondary" onclick="closeModal()">取消</button>
-                </div>
-            `);
-        }
+        openAo3CustomModal(`
+            <div class="ao3-modal-title">转发至聊天</div>
+            <div class="ao3-contact-picker-scroll">
+                ${charListHtml}
+            </div>
+            <div class="ao3-modal-actions" style="margin-top:14px;">
+                <button class="ao3-btn ao3-btn-outline" style="width:100%;justify-content:center;" onclick="window.closeAo3CustomModal()">取消</button>
+            </div>
+        `);
     };
 
     window.confirmSendAo3ToContact = function (workId, contactId, contactName) {
@@ -542,14 +544,14 @@
             } catch (_) {}
         }
 
-        if (typeof closeModal === 'function') closeModal();
+        closeAo3CustomModal();
         if (typeof showToast === 'function') {
             showToast(`已将《${work.title}》分享给 ${contactName}`, 'success', 2000);
         }
     };
 
     // ============================================================
-    // 5. 开坑弹窗与人称单选大卡片（彻底优化 P2、P3 丑陋原貌）
+    // 5. 开坑弹窗（自建白灰纯净卡片，彻底消灭旧粉框）
     // ============================================================
     window._ao3SelectedPov = 'third';
 
@@ -562,63 +564,61 @@
 
         const liveCharacters = getLiveChatCharacters();
 
-        if (typeof openModal === 'function') {
-            openModal(`
-                <div class="ao3-modal-title">开坑新书</div>
-                <div class="ao3-modal-subhint">
-                    作者：<span class="ao3-author-highlight">${escapeHtml(curUser)}</span> ${isMain ? '（主播实名开坑）' : '（小号）'}
-                </div>
+        openAo3CustomModal(`
+            <div class="ao3-modal-title">开坑新书</div>
+            <div class="ao3-modal-subhint">
+                署名：<span class="ao3-author-highlight">${escapeHtml(curUser)}</span> ${isMain ? '（主播实名）' : '（小号）'}
+            </div>
 
-                <div class="ao3-form-group">
-                    <label class="ao3-form-label">作品标题</label>
-                    <input type="text" id="ao3NewTitle" class="ao3-form-input" placeholder="输入符合同人文质感的书名...">
-                </div>
+            <div class="ao3-form-group">
+                <label class="ao3-form-label">作品标题</label>
+                <input type="text" id="ao3NewTitle" class="ao3-form-input" placeholder="输入同人文书名...">
+            </div>
 
-                <div class="ao3-form-group">
-                    <label class="ao3-form-label">叙事人称</label>
-                    <div class="ao3-pov-selector" id="ao3PovSelectorWrap" onclick="window.openAo3PovSelectSheet()">
-                        <div class="ao3-pov-current-val" id="ao3PovDisplayVal">第三人称【她 / 主角名】</div>
-                        <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#888" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
-                    </div>
+            <div class="ao3-form-group">
+                <label class="ao3-form-label">叙事人称</label>
+                <div class="ao3-pov-selector" onclick="window.openAo3PovSelectSheet()">
+                    <div class="ao3-pov-current-val" id="ao3PovDisplayVal">第三人称【她 / 主角名】</div>
+                    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="#888" stroke-width="2"><path d="M6 9l6 6 6-6"/></svg>
                 </div>
+            </div>
 
-                <div class="ao3-form-group">
-                    <label class="ao3-form-label">登场角色 (来自通讯录好友)</label>
-                    <div id="ao3CharPickChips" class="ao3-chips-container">
-                        ${liveCharacters.length === 0 ? '<div class="ao3-chips-empty">通讯录暂无自建角色，请先在聊天中添加</div>' : liveCharacters.map(c => `
-                            <button type="button" class="ao3-chip-item" data-cname="${escapeHtml(c.name)}" onclick="this.classList.toggle('selected'); window.updateAo3PairingPreview();">
-                                <span>＋</span><span>${escapeHtml(c.name)}</span>
-                            </button>
-                        `).join('')}
-                    </div>
+            <div class="ao3-form-group">
+                <label class="ao3-form-label">登场角色 (来自通讯录好友)</label>
+                <div id="ao3CharPickChips" class="ao3-chips-container">
+                    ${liveCharacters.length === 0 ? '<div class="ao3-chips-empty">通讯录暂无自建角色，请先在聊天中添加</div>' : liveCharacters.map(c => `
+                        <button type="button" class="ao3-chip-item" data-cname="${escapeHtml(c.name)}" onclick="this.classList.toggle('selected'); window.updateAo3PairingPreview();">
+                            <span>＋</span><span>${escapeHtml(c.name)}</span>
+                        </button>
+                    `).join('')}
                 </div>
+            </div>
 
-                <div class="ao3-form-group">
-                    <label class="ao3-form-label">配对关系</label>
-                    <input type="text" id="ao3NewPairing" class="ao3-form-input" value="全员向 / 独宠女主" placeholder="如：角色A × 主角名">
-                </div>
+            <div class="ao3-form-group">
+                <label class="ao3-form-label">配对关系</label>
+                <input type="text" id="ao3NewPairing" class="ao3-form-input" value="全员向 / 独宠女主" placeholder="如：角色A × 主角名">
+            </div>
 
-                <div class="ao3-form-group">
-                    <label class="ao3-form-label">故事概要与灵感线索</label>
-                    <textarea id="ao3NewSummary" class="ao3-form-textarea" rows="3" placeholder="写写开篇契机、日常琐碎或互动情愫（AI 将执行去味指令，生成细腻正文）..."></textarea>
-                </div>
+            <div class="ao3-form-group">
+                <label class="ao3-form-label">故事概要与灵感线索</label>
+                <textarea id="ao3NewSummary" class="ao3-form-textarea" rows="3" placeholder="写写开篇契机、日常琐碎或互动情愫（AI 将执行去味指令，生成细腻正文）..."></textarea>
+            </div>
 
-                <div class="btn-row" style="margin-top:16px;">
-                    <button class="btn-secondary" onclick="closeModal()">取消</button>
-                    <button class="ao3-btn ao3-btn-red" style="padding:8px 18px;" id="btnConfirmGenAo3" onclick="window.executeCreateAo3Book()">生成第 1 章</button>
-                </div>
-            `);
-        }
+            <div class="ao3-modal-actions">
+                <button class="ao3-btn ao3-btn-sub" style="flex:1;justify-content:center;padding:9px;" onclick="window.closeAo3CustomModal()">取消</button>
+                <button class="ao3-btn ao3-btn-red" style="flex:1.4;justify-content:center;padding:9px;" id="btnConfirmGenAo3" onclick="window.executeCreateAo3Book()">生成第 1 章</button>
+            </div>
+        `);
     };
 
     /**
-     * P2 替代方案：优美现代的 POV 叙事人称卡片选择浮层
+     * POV 叙事人称卡片选择浮层
      */
     window.openAo3PovSelectSheet = function () {
         const povOptions = [
             { key: 'third', title: '第三人称【她 / 主角名】', desc: '经典文库视角，克制细腻，留白丰富' },
             { key: 'second', title: '第二人称【你】', desc: '沉浸交互视角，直击情感共鸣' },
-            { key: 'first', title: '第一人称【我】', desc: '女主第一视点，充满生活化自白与心境独白' }
+            { key: 'first', title: '第一人称【我】', desc: '女主第一视点，充满生活化心境自白' }
         ];
 
         let sheetEl = document.getElementById('ao3PovSheetOverlay');
@@ -699,7 +699,7 @@
         const playerInfo = getPlayerIdentity();
         const isMain = curUser.trim() === playerInfo.name.trim();
 
-        if (typeof closeModal === 'function') closeModal();
+        closeAo3CustomModal();
         showAo3GeneratingPill('正在构思小说第 1 章...');
 
         const writingPrompt = buildHumanizedWritingInstructions(pov, pairing, isMain);
@@ -968,19 +968,17 @@ ${isAuthorMe ? `小说作者正是主播「${playerInfo.name}」本人！读者�
 
     window.openWriteAo3CommentModal = function (workId) {
         const curUser = G.ao3User.username;
-        if (typeof openModal === 'function') {
-            openModal(`
-                <div class="ao3-modal-title">发表书评</div>
-                <div class="ao3-modal-subhint">署名：<span class="ao3-author-highlight">${escapeHtml(curUser)}</span></div>
-                <div class="ao3-form-group">
-                    <textarea id="myAo3CommentInput" class="ao3-form-textarea" rows="3" placeholder="写下你对本章节的感悟或随笔..."></textarea>
-                </div>
-                <div class="btn-row" style="margin-top:14px;">
-                    <button class="btn-secondary" onclick="closeModal()">取消</button>
-                    <button class="ao3-btn ao3-btn-red" onclick="window.confirmPostAo3Comment('${workId}')">发表评论</button>
-                </div>
-            `);
-        }
+        openAo3CustomModal(`
+            <div class="ao3-modal-title">发表书评</div>
+            <div class="ao3-modal-subhint">署名：<span class="ao3-author-highlight">${escapeHtml(curUser)}</span></div>
+            <div class="ao3-form-group">
+                <textarea id="myAo3CommentInput" class="ao3-form-textarea" rows="3" placeholder="写下你对本章节的感悟或随笔..."></textarea>
+            </div>
+            <div class="ao3-modal-actions">
+                <button class="ao3-btn ao3-btn-sub" style="flex:1;justify-content:center;" onclick="window.closeAo3CustomModal()">取消</button>
+                <button class="ao3-btn ao3-btn-red" style="flex:1;justify-content:center;" onclick="window.confirmPostAo3Comment('${workId}')">发表评论</button>
+            </div>
+        `);
     };
 
     window.confirmPostAo3Comment = function (workId) {
@@ -999,7 +997,7 @@ ${isAuthorMe ? `小说作者正是主播「${playerInfo.name}」本人！读者�
                 text,
                 time: '刚刚'
             });
-            if (typeof closeModal === 'function') closeModal();
+            closeAo3CustomModal();
             if (typeof showToast === 'function') showToast('评论发表成功', 'success');
             if (typeof autoSaveGame === 'function') autoSaveGame();
             window.renderAo3App();
@@ -1034,16 +1032,14 @@ ${isAuthorMe ? `小说作者正是主播「${playerInfo.name}」本人！读者�
         const work = (G.fanworks || []).find(w => w._id === workId);
         if (!work) return;
 
-        if (typeof openModal === 'function') {
-            openModal(`
-                <div class="ao3-modal-title">作品管理</div>
-                <div style="font-size:13px;color:#555;margin:8px 0 14px;">《${escapeHtml(work.title)}》</div>
-                <div class="btn-row" style="flex-direction:column;gap:8px;">
-                    <button class="btn-secondary" style="width:100%;color:#c62828;border-color:#ffcdd2;" onclick="window.confirmDeleteAo3Work('${workId}')">从文库中删除此书</button>
-                    <button class="btn-secondary" style="width:100%;" onclick="closeModal()">取消</button>
-                </div>
-            `);
-        }
+        openAo3CustomModal(`
+            <div class="ao3-modal-title">作品管理</div>
+            <div style="font-size:13px;color:#555;margin:8px 0 16px;">《${escapeHtml(work.title)}》</div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+                <button class="ao3-btn ao3-btn-outline" style="width:100%;color:#c62828;border-color:#ffcdd2;justify-content:center;padding:9px;" onclick="window.confirmDeleteAo3Work('${workId}')">从文库中删除此书</button>
+                <button class="ao3-btn ao3-btn-sub" style="width:100%;justify-content:center;padding:9px;" onclick="window.closeAo3CustomModal()">取消</button>
+            </div>
+        `);
     };
 
     window.confirmDeleteAo3Work = function (workId) {
@@ -1054,7 +1050,7 @@ ${isAuthorMe ? `小说作者正是主播「${playerInfo.name}」本人！读者�
                 G.ao3State.view = 'home';
                 G.ao3State.activeWorkId = null;
             }
-            if (typeof closeModal === 'function') closeModal();
+            closeAo3CustomModal();
             if (typeof showToast === 'function') showToast('作品已删除', 'success');
             if (typeof autoSaveGame === 'function') autoSaveGame();
             window.renderAo3App();
@@ -1066,38 +1062,36 @@ ${isAuthorMe ? `小说作者正是主播「${playerInfo.name}」本人！读者�
         const playerInfo = getPlayerIdentity();
         const isMain = curUser.trim() === playerInfo.name.trim();
 
-        if (typeof openModal === 'function') {
-            openModal(`
-                <div class="ao3-modal-title">身份与笔名切换</div>
-                <div class="ao3-form-group" style="margin-top:10px;">
-                    <label class="ao3-form-label">发文与评论笔名</label>
-                    <input type="text" id="ao3InputPenName" class="ao3-form-input" value="${escapeHtml(curUser)}">
-                </div>
-                <div style="font-size:12px;color:#666;line-height:1.6;margin:10px 0;">
-                    ${isMain 
-                        ? '<b>主播实名模式</b>：读者和同人文世界知晓作者是主播本人。' 
-                        : '<b>披皮小号模式</b>：以普通同好作者身份发文，不掉马。'}
-                </div>
-                <div class="btn-row">
-                    <button class="btn-secondary" onclick="document.getElementById('ao3InputPenName').value = '${escapeHtml(playerInfo.name)}';">还原主播名</button>
-                    <button class="ao3-btn ao3-btn-red" onclick="window.saveAo3Identity()">保存设置</button>
-                </div>
-            `);
-        }
+        openAo3CustomModal(`
+            <div class="ao3-modal-title">身份与笔名切换</div>
+            <div class="ao3-form-group" style="margin-top:12px;">
+                <label class="ao3-form-label">发文与评论笔名</label>
+                <input type="text" id="ao3InputPenName" class="ao3-form-input" value="${escapeHtml(curUser)}">
+            </div>
+            <div style="font-size:12px;color:#666;line-height:1.6;margin:10px 0;">
+                ${isMain 
+                    ? '<b>主播实名模式</b>：读者和同人文世界知晓作者是主播本人。' 
+                    : '<b>披皮小号模式</b>：以普通同好作者身份发文，不掉马。'}
+            </div>
+            <div class="ao3-modal-actions">
+                <button class="ao3-btn ao3-btn-sub" style="flex:1;justify-content:center;" onclick="document.getElementById('ao3InputPenName').value = '${escapeHtml(playerInfo.name)}';">还原主播名</button>
+                <button class="ao3-btn ao3-btn-red" style="flex:1;justify-content:center;" onclick="window.saveAo3Identity()">保存设置</button>
+            </div>
+        `);
     };
 
     window.saveAo3Identity = function () {
         const val = (document.getElementById('ao3InputPenName')?.value || '').trim();
         if (!val) return;
         G.ao3User.username = val;
-        if (typeof closeModal === 'function') closeModal();
+        closeAo3CustomModal();
         if (typeof showToast === 'function') showToast(`笔名已更新为「${val}」`, 'success');
         if (typeof autoSaveGame === 'function') autoSaveGame();
         window.renderAo3App();
     };
 
     // ============================================================
-    // 8. 样式注入（全面去拥挤、去 Emoji、大屏轻盈质感）
+    // 8. 样式注入（无红黑位移、无粉框、大屏白灰极简质感）
     // ============================================================
     function injectAo3Styles() {
         if (document.getElementById('ao3UnifiedStyles')) return;
@@ -1106,113 +1100,107 @@ ${isAuthorMe ? `小说作者正是主播「${playerInfo.name}」本人！读者�
         style.textContent = `
             .ao3-app-viewport {
                 display: flex; flex-direction: column; width: 100%; height: 100%;
-                background: #fbf9f4; color: #2a2a2a; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+                background: #fbf9f4; color: #222222; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
                 overflow: hidden; box-sizing: border-box;
             }
 
-            /* 站点门户导航 */
-            .ao3-portal-navbar {
-                display: flex; align-items: center; justify-content: space-between;
-                padding: 12px 16px; background: #ffffff; border-bottom: 1px solid #ede8de; flex-shrink: 0;
-            }
-            .ao3-portal-nav-title { font-size: 16px; font-weight: 700; color: #222; }
-            .ao3-nav-desktop-btn {
-                background: #f5f5f5; border: 1px solid #e0e0e0; border-radius: 14px;
-                padding: 4px 10px; font-size: 11.5px; color: #555; display: inline-flex;
-                align-items: center; gap: 4px; cursor: pointer;
-            }
+            /* 站点门户导航（无多余顶栏，直接铺满） */
             .ao3-portal-scroll-area {
-                flex: 1; overflow-y: auto; padding: 18px 16px; box-sizing: border-box;
+                flex: 1; overflow-y: auto; padding: 20px 16px; box-sizing: border-box;
             }
-            .ao3-portal-hero { margin-bottom: 18px; }
-            .ao3-portal-hero-title { font-size: 18px; font-weight: 800; color: #1e1e1e; }
-            .ao3-portal-hero-desc { font-size: 12px; color: #777; margin-top: 4px; }
+            .ao3-portal-hero { margin-bottom: 20px; }
+            .ao3-portal-hero-title { font-size: 20px; font-weight: 800; color: #1a1a1a; letter-spacing: -0.2px; }
+            .ao3-portal-hero-desc { font-size: 12.5px; color: #777; margin-top: 4px; }
 
             .ao3-portal-grid { display: flex; flex-direction: column; gap: 14px; }
             .ao3-portal-card {
-                background: #ffffff; border: 1px solid #e8e2d5; border-radius: 10px;
-                padding: 16px; cursor: pointer; transition: all 0.2s ease;
-                box-shadow: 0 2px 6px rgba(0,0,0,0.02);
+                background: #ffffff; border: 1px solid #e8e3d8; border-radius: 12px;
+                padding: 16px; cursor: pointer; transition: transform 0.12s ease, box-shadow 0.12s ease;
+                box-shadow: 0 1px 4px rgba(0,0,0,0.03);
             }
             .ao3-portal-card.active:active { transform: scale(0.99); }
-            .ao3-portal-card.disabled { opacity: 0.6; cursor: default; background: #fdfdfd; }
-            .ao3-portal-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+            .ao3-portal-card.disabled { opacity: 0.55; cursor: default; background: #fafafa; }
+            .ao3-portal-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
             .ao3-portal-badge {
-                font-size: 10px; background: #fff0f0; color: #990000; border: 1px solid #ffd8d8;
-                border-radius: 3px; padding: 1px 6px; font-weight: 600;
+                font-size: 10.5px; background: #fff2f2; color: #990000; border: 1px solid #ffcccc;
+                border-radius: 4px; padding: 1px 7px; font-weight: 600;
             }
             .ao3-portal-badge-muted {
-                font-size: 10px; background: #f5f5f5; color: #888; border-radius: 3px; padding: 1px 6px;
+                font-size: 10.5px; background: #f0f0f0; color: #888; border-radius: 4px; padding: 1px 7px;
             }
-            .ao3-portal-count { font-size: 11px; color: #888; }
+            .ao3-portal-count { font-size: 11.5px; color: #888; }
             .ao3-portal-logo-row { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
-            .ao3-portal-site-name { font-size: 15px; font-weight: 700; color: #111; }
-            .ao3-portal-site-sub { font-size: 11px; color: #777; }
-            .ao3-portal-card-desc { font-size: 12px; line-height: 1.5; color: #555; margin-bottom: 12px; }
+            .ao3-portal-site-name { font-size: 15.5px; font-weight: 700; color: #111; }
+            .ao3-portal-site-sub { font-size: 11.5px; color: #777; }
+            .ao3-portal-card-desc { font-size: 12px; line-height: 1.55; color: #555; margin-bottom: 12px; }
             .ao3-portal-enter-bar {
                 display: flex; align-items: center; justify-content: flex-end; gap: 4px;
                 font-size: 12px; font-weight: 600; color: #990000; border-top: 1px solid #f6f3ed; padding-top: 10px;
             }
 
-            /* AO3 顶栏与次级栏 */
-            .ao3-classic-navbar {
-                display: flex; align-items: center; justify-content: space-between;
-                padding: 10px 14px; background: #990000; color: #ffffff;
-                box-shadow: 0 1px 4px rgba(0,0,0,0.1); flex-shrink: 0;
+            /* AO3 头部文学区域（非死板方块横幅） */
+            .ao3-site-header {
+                background: #ffffff; border-bottom: 1px solid #ece5d8;
+                padding: 12px 16px; flex-shrink: 0;
             }
-            .ao3-nav-left-group { display: flex; align-items: center; gap: 10px; }
-            .ao3-back-btn {
-                background: none; border: none; color: #ffffff; display: inline-flex; align-items: center;
-                gap: 2px; font-size: 13px; font-weight: 600; cursor: pointer; padding: 2px 4px;
+            .ao3-site-header-nav {
+                display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
             }
-            .ao3-logo-group { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+            .ao3-breadcrumb-btn {
+                background: none; border: none; padding: 0; color: #666; font-size: 12.5px;
+                font-weight: 600; display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
+            }
+            .ao3-breadcrumb-btn:active { opacity: 0.7; }
+            .ao3-user-badge {
+                display: inline-flex; align-items: center; gap: 4px; background: #f6f2ea;
+                border: 1px solid #e5ded2; border-radius: 12px; padding: 3px 9px;
+                font-size: 11px; color: #555; cursor: pointer;
+            }
+            .ao3-site-brand-row { display: flex; align-items: center; gap: 10px; }
             .ao3-logo-monogram {
-                font-family: Georgia, serif; font-size: 18px; font-weight: 800;
-                background: #ffffff; color: #990000; border-radius: 4px; padding: 2px 6px;
+                font-family: Georgia, serif; font-size: 20px; font-weight: 800;
+                background: #990000; color: #ffffff; border-radius: 5px; padding: 2px 7px;
                 letter-spacing: -0.5px;
             }
             .ao3-logo-monogram-muted {
                 font-family: Georgia, serif; font-size: 18px; font-weight: 800;
                 background: #e0e0e0; color: #888; border-radius: 4px; padding: 2px 6px;
             }
-            .ao3-logo-text { display: flex; flex-direction: column; }
-            .ao3-main-title { font-size: 13px; font-weight: 700; letter-spacing: 0.2px; line-height: 1.2; }
+            .ao3-brand-title { font-size: 16px; font-weight: 800; color: #990000; letter-spacing: -0.2px; }
+            .ao3-brand-sub { font-size: 11px; color: #777; margin-top: 1px; }
 
-            .ao3-user-badge {
-                display: inline-flex; align-items: center; gap: 4px; background: rgba(255,255,255,0.18);
-                border: 0.5px solid rgba(255,255,255,0.3); border-radius: 12px; padding: 3px 9px;
-                font-size: 11px; cursor: pointer;
-            }
             .ao3-sub-toolbar {
                 display: flex; align-items: center; justify-content: space-between;
-                padding: 8px 14px; background: #f0e9dc; border-bottom: 1px solid #e0d6c4; flex-shrink: 0;
+                padding: 9px 16px; background: #f5efe4; border-bottom: 1px solid #e6ded0; flex-shrink: 0;
             }
             .ao3-filter-label { font-size: 12px; color: #555; }
 
+            /* 按钮通用规范（彻底拔除文字位移与阴影） */
             .ao3-btn {
                 border: none; outline: none; border-radius: 6px; padding: 6px 12px;
-                font-size: 12px; font-weight: 600; cursor: pointer; transition: all 0.15s ease;
-                display: inline-flex; align-items: center; gap: 4px;
+                font-size: 12px; font-weight: 600; cursor: pointer; transition: opacity 0.15s ease;
+                display: inline-flex; align-items: center; gap: 4px; text-shadow: none !important;
             }
+            .ao3-btn:active { opacity: 0.8; }
             .ao3-btn-red { background: #990000; color: #ffffff; }
             .ao3-btn-outline { background: #ffffff; color: #990000; border: 1px solid #990000; }
-            .ao3-btn-sub { padding: 4px 10px; font-size: 11.5px; border-radius: 4px; background: #ffffff; border: 1px solid #d4c8b6; color: #333; }
+            .ao3-btn-sub { padding: 4px 10px; font-size: 11.5px; border-radius: 5px; background: #ffffff; border: 1px solid #d4c8b6; color: #333; }
             .ao3-btn-sub.ao3-btn-red { background: #990000; color: #fff; border-color: #990000; }
 
-            /* 列表与卡片 */
+            /* 作品列表与卡片 */
             .ao3-works-scroll-list {
-                flex: 1; overflow-y: auto; padding: 12px 14px; display: flex; flex-direction: column; gap: 12px;
+                flex: 1; overflow-y: auto; padding: 12px 16px; display: flex; flex-direction: column; gap: 12px;
             }
             .ao3-work-card {
-                background: #ffffff; border: 1px solid #e5dcce; border-left: 4px solid #990000;
-                border-radius: 6px; padding: 12px 14px; box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+                background: #ffffff; border: 1px solid #e8e1d5; border-left: 4px solid #990000;
+                border-radius: 8px; padding: 13px 15px; box-shadow: 0 1px 3px rgba(0,0,0,0.02);
                 cursor: pointer; transition: transform 0.1s ease;
             }
             .ao3-work-card:active { transform: scale(0.995); }
             .ao3-work-title-line { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
-            .ao3-work-title { font-size: 15px; font-weight: 700; color: #990000; }
-            .ao3-badge-author { font-size: 10px; background: #fff0f0; color: #990000; border: 1px solid #ffcccc; border-radius: 3px; padding: 1px 4px; }
-            .ao3-work-byline { font-size: 11.5px; color: #666; margin: 3px 0 6px; }
+            .ao3-work-title { font-size: 15.5px; font-weight: 700; color: #990000; }
+            .ao3-badge-author { font-size: 10px; background: #fff0f0; color: #990000; border: 1px solid #ffcccc; border-radius: 3px; padding: 1px 5px; }
+            .ao3-work-byline { font-size: 11.5px; color: #666; margin: 4px 0 6px; }
             .ao3-author-link { color: #222; font-weight: 600; }
 
             .ao3-tags-wrap { display: flex; flex-wrap: wrap; gap: 4px; margin: 4px 0 8px; }
@@ -1220,16 +1208,16 @@ ${isAuthorMe ? `小说作者正是主播「${playerInfo.name}」本人！读者�
                 font-size: 10.5px; background: #f2eee6; color: #625340; border-radius: 3px; padding: 1px 6px;
             }
             .ao3-work-summary-box {
-                font-size: 12px; line-height: 1.55; color: #444; background: #faf8f3;
-                border-left: 2px solid #ddd; padding: 6px 10px; margin-bottom: 8px;
+                font-size: 12px; line-height: 1.55; color: #444; background: #faf7f0;
+                border-left: 2px solid #ddd3c3; padding: 7px 10px; margin-bottom: 8px; border-radius: 0 4px 4px 0;
             }
             .ao3-work-footer-meta {
                 display: flex; align-items: center; gap: 12px; font-size: 11px; color: #888;
                 border-top: 1px dashed #eee; padding-top: 6px;
             }
             .ao3-manage-btn {
-                margin-left: auto; background: none; border: 1px solid #ddd; border-radius: 3px;
-                padding: 2px 6px; font-size: 10px; color: #666; cursor: pointer;
+                margin-left: auto; background: none; border: 1px solid #ddd; border-radius: 4px;
+                padding: 2px 7px; font-size: 10.5px; color: #666; cursor: pointer;
             }
 
             /* 空状态 */
@@ -1237,25 +1225,29 @@ ${isAuthorMe ? `小说作者正是主播「${playerInfo.name}」本人！读者�
                 display: flex; flex-direction: column; align-items: center; justify-content: center;
                 padding: 48px 16px; text-align: center;
             }
-            .ao3-empty-title { font-weight: 700; font-size: 14px; color: #333; margin-top: 12px; }
+            .ao3-empty-title { font-weight: 700; font-size: 14.5px; color: #333; margin-top: 12px; }
             .ao3-empty-sub { font-size: 12px; color: #777; margin-top: 4px; }
             .ao3-empty-actions { display: flex; gap: 10px; margin-top: 18px; }
 
             /* 阅读视图 */
+            .ao3-reader-navbar {
+                display: flex; align-items: center; justify-content: space-between;
+                padding: 10px 16px; background: #ffffff; border-bottom: 1px solid #ece5d8; flex-shrink: 0;
+            }
             .ao3-reading-container {
-                flex: 1; overflow-y: auto; padding: 16px; background: #fdfbf7;
+                flex: 1; overflow-y: auto; padding: 18px 16px; background: #fdfbf7;
             }
             .ao3-work-header-meta-block {
                 border-bottom: 2px solid #990000; padding-bottom: 12px; margin-bottom: 14px;
             }
             .ao3-meta-tag-pre { font-size: 10px; font-weight: 700; color: #990000; letter-spacing: 0.8px; }
-            .ao3-read-h1 { font-size: 18px; font-weight: 800; color: #111; margin: 6px 0; }
+            .ao3-read-h1 { font-size: 19px; font-weight: 800; color: #111; margin: 6px 0; }
             .ao3-read-byline { font-size: 12px; color: #555; }
 
             .ao3-chapter-switch-bar {
                 display: flex; align-items: center; justify-content: space-between;
-                background: #f1ebdE; border: 1px solid #ded5c2; border-radius: 6px;
-                padding: 6px 10px; margin: 12px 0 16px;
+                background: #f3ece0; border: 1px solid #e1d7c4; border-radius: 6px;
+                padding: 6px 10px; margin: 14px 0 18px;
             }
             .ao3-step-btn {
                 background: #fff; border: 1px solid #ccc; border-radius: 4px;
@@ -1264,7 +1256,7 @@ ${isAuthorMe ? `小说作者正是主播「${playerInfo.name}」本人！读者�
             .ao3-step-btn:disabled { opacity: 0.4; cursor: not-allowed; }
             .ao3-chapter-indicator { font-size: 12px; font-weight: 600; color: #444; }
 
-            .ao3-chapter-title { font-size: 15px; font-weight: 700; color: #990000; margin-bottom: 12px; border-bottom: 1px dashed #dcd4c6; padding-bottom: 4px; }
+            .ao3-chapter-title { font-size: 15.5px; font-weight: 700; color: #990000; margin-bottom: 12px; border-bottom: 1px dashed #dcd4c6; padding-bottom: 4px; }
             .ao3-prose-body {
                 font-size: 14.5px; line-height: 2.0; color: #1e1e1e; white-space: pre-wrap;
                 word-break: break-word; letter-spacing: 0.2px; font-family: -apple-system, Georgia, serif;
@@ -1288,41 +1280,28 @@ ${isAuthorMe ? `小说作者正是主播「${playerInfo.name}」本人！读者�
             .ao3-review-time { font-size: 10px; color: #aaa; }
             .ao3-review-content { font-size: 12px; line-height: 1.5; color: #333; }
 
-            /* 转发选择器 (纯粹、清爽) */
-            .ao3-contact-picker-scroll {
-                max-height: 320px; overflow-y: auto; border: 1px solid #f0f0f0;
-                border-radius: 8px; padding: 4px; margin-top: 8px; background: #fafafa;
+            /* 自建纯净卡片模态窗 (彻底替代粉框 openModal) */
+            .ao3-custom-modal-backdrop {
+                position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 999999;
+                display: flex; align-items: center; justify-content: center; padding: 20px;
+                opacity: 0; pointer-events: none; transition: opacity 0.2s ease; box-sizing: border-box;
             }
-            .ao3-contact-pick-row {
-                display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px;
-                cursor: pointer; transition: background 0.15s; background: #ffffff; margin-bottom: 4px;
-                border: 1px solid #f0f0f0;
+            .ao3-custom-modal-backdrop.visible { opacity: 1; pointer-events: auto; }
+            .ao3-custom-modal-window {
+                width: 100%; max-width: 420px; background: #ffffff; border-radius: 14px;
+                box-shadow: 0 10px 30px rgba(0,0,0,0.18); padding: 20px; box-sizing: border-box;
+                transform: scale(0.96); transition: transform 0.2s cubic-bezier(0.1, 0.9, 0.2, 1);
             }
-            .ao3-contact-pick-row:active { background: #f5f5f5; }
-            .ao3-contact-avatar {
-                width: 38px; height: 38px; border-radius: 50%; overflow: hidden; background: #eee; flex-shrink: 0;
-            }
-            .ao3-contact-avatar img { width: 100%; height: 100%; object-fit: cover; }
-            .ao3-avatar-fallback {
-                width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
-                background: #990000; color: #fff; font-weight: 700; font-size: 14px;
-            }
-            .ao3-contact-info { flex: 1; min-width: 0; }
-            .ao3-contact-name { font-size: 13.5px; font-weight: 600; color: #222; }
-            .ao3-contact-persona { font-size: 11px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
-            .ao3-contact-send-btn {
-                background: #990000; color: #ffffff; border: none; border-radius: 4px;
-                padding: 4px 12px; font-size: 11.5px; font-weight: 600; pointer-events: none;
-            }
+            .ao3-custom-modal-backdrop.visible .ao3-custom-modal-window { transform: scale(1); }
 
-            /* 开坑表单（优化 P3 臃肿与留白） */
-            .ao3-modal-title { font-size: 15px; font-weight: 700; color: #111; margin-bottom: 2px; }
-            .ao3-modal-subhint { font-size: 11.5px; color: #777; margin-bottom: 12px; }
+            .ao3-modal-title { font-size: 16px; font-weight: 700; color: #1a1a1a; margin-bottom: 2px; }
+            .ao3-modal-subhint { font-size: 11.5px; color: #777; margin-bottom: 14px; }
             .ao3-author-highlight { color: #990000; font-weight: 700; }
+
             .ao3-form-group { margin-bottom: 12px; }
-            .ao3-form-label { display: block; font-size: 12px; font-weight: 600; color: #444; margin-bottom: 4px; }
+            .ao3-form-label { display: block; font-size: 12px; font-weight: 600; color: #444; margin-bottom: 5px; }
             .ao3-form-input, .ao3-form-textarea {
-                width: 100%; box-sizing: border-box; padding: 8px 10px; border-radius: 6px;
+                width: 100%; box-sizing: border-box; padding: 9px 11px; border-radius: 6px;
                 border: 1px solid #dcdcdc; background: #fff; font-size: 12.5px; color: #222; outline: none;
                 transition: border-color 0.15s;
             }
@@ -1347,10 +1326,38 @@ ${isAuthorMe ? `小说作者正是主播「${playerInfo.name}」本人！读者�
             .ao3-chip-item.selected {
                 background: #fcf1f2; border-color: #990000; color: #990000; font-weight: 600;
             }
+            .ao3-modal-actions { display: flex; gap: 10px; margin-top: 16px; }
 
-            /* P2 叙事人称卡片选择浮层 (Sheet Overlay) */
+            /* 转发选择器 */
+            .ao3-contact-picker-scroll {
+                max-height: 280px; overflow-y: auto; border: 1px solid #f0f0f0;
+                border-radius: 8px; padding: 4px; margin-top: 8px; background: #fafafa;
+            }
+            .ao3-contact-pick-row {
+                display: flex; align-items: center; gap: 10px; padding: 10px; border-radius: 8px;
+                cursor: pointer; transition: background 0.15s; background: #ffffff; margin-bottom: 4px;
+                border: 1px solid #f0f0f0;
+            }
+            .ao3-contact-pick-row:active { background: #f5f5f5; }
+            .ao3-contact-avatar {
+                width: 38px; height: 38px; border-radius: 50%; overflow: hidden; background: #eee; flex-shrink: 0;
+            }
+            .ao3-contact-avatar img { width: 100%; height: 100%; object-fit: cover; }
+            .ao3-avatar-fallback {
+                width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+                background: #990000; color: #fff; font-weight: 700; font-size: 14px;
+            }
+            .ao3-contact-info { flex: 1; min-width: 0; }
+            .ao3-contact-name { font-size: 13.5px; font-weight: 600; color: #222; }
+            .ao3-contact-persona { font-size: 11px; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+            .ao3-contact-send-btn {
+                background: #990000; color: #ffffff; border: none; border-radius: 4px;
+                padding: 4px 12px; font-size: 11.5px; font-weight: 600; pointer-events: none;
+            }
+
+            /* POV 单选浮层 */
             .ao3-sheet-overlay {
-                position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 999999;
+                position: fixed; inset: 0; background: rgba(0,0,0,0.45); z-index: 1000000;
                 display: flex; align-items: flex-end; justify-content: center;
                 opacity: 0; pointer-events: none; transition: opacity 0.2s ease;
             }
@@ -1384,21 +1391,21 @@ ${isAuthorMe ? `小说作者正是主播「${playerInfo.name}」本人！读者�
             }
             .ao3-sheet-option.selected .ao3-sheet-radio-dot { display: block; }
 
-            /* 悬浮微胶囊指示器 (Pill HUD) */
+            /* 悬浮微胶囊指示器（纯白微磨砂，告别黑底与红黑位移） */
             .ao3-generating-pill {
-                position: fixed; top: 14px; left: 50%; transform: translateX(-50%) translateY(-30px);
-                background: rgba(30, 30, 30, 0.88); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
-                color: #ffffff; border-radius: 20px; padding: 6px 14px; font-size: 11.5px;
-                display: flex; align-items: center; gap: 8px; z-index: 1000000;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.15); opacity: 0; pointer-events: none;
+                position: fixed; top: 16px; left: 50%; transform: translateX(-50%) translateY(-35px);
+                background: #ffffff; border: 1px solid #e0d8cc; color: #222222;
+                border-radius: 20px; padding: 6px 14px; font-size: 12px; font-weight: 500;
+                display: flex; align-items: center; gap: 8px; z-index: 1000001;
+                box-shadow: 0 4px 16px rgba(0,0,0,0.1); opacity: 0; pointer-events: none;
                 transition: all 0.25s cubic-bezier(0.1, 0.9, 0.2, 1);
             }
             .ao3-generating-pill.visible { transform: translateX(-50%) translateY(0); opacity: 1; }
-            .ao3-pill-spinner {
-                width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.3);
-                border-top-color: #ffffff; border-radius: 50%; animation: ao3Spin 0.7s linear infinite;
+            .ao3-pill-dot {
+                width: 7px; height: 7px; border-radius: 50%; background: #07c160;
+                animation: ao3Pulse 1.2s ease-in-out infinite alternate;
             }
-            @keyframes ao3Spin { to { transform: rotate(360deg); } }
+            @keyframes ao3Pulse { from { opacity: 0.4; transform: scale(0.9); } to { opacity: 1; transform: scale(1.15); } }
         `;
         document.head.appendChild(style);
     }
