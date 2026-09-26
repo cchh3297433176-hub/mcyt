@@ -3,10 +3,11 @@
  * 同人文库 App（站点聚合导航与沉浸式 AO3 文学空间）
  * 
  * 核心设计：
- * 1. 消除双层包裹：不自建多余假顶栏，完全融入小手机视口，通栏自然舒展。
- * 2. 独立纯净弹窗：彻底摒弃宿主粉框丑弹窗，自建白灰极简大方卡片浮层，拔除任何红黑位移伤眼滤镜。
- * 3. 唯一角色来源：100% 直连通讯录自建联系人，深度去 AI 味小说创作。
+ * 1. 强制覆盖原生丑粉框：彻底隐藏宿主粉红假顶栏，视口 100% 沉浸全屏，保留系统时间电量。
+ * 2. 站点聚合门户：进入首先呈现同人文库站点导航，首发收录 Archive of Our Own (AO3)。
+ * 3. 独立纯净弹窗：自建白灰极简大方卡片浮层，拔除任何红黑位移、重影与粉框。
  * 4. 纯净文学排版：地毯式清除全部 Emoji，纯正象牙白与学术暗红质感。
+ * 5. 唯一角色来源：100% 直连通讯录自建联系人，深度去 AI 味小说创作。
  */
 
 (function () {
@@ -137,7 +138,7 @@
     }
 
     // ============================================================
-    // 2. 自建高级白灰纯净弹窗与状态胶囊（彻底抛弃旧粉框系统提示）
+    // 2. 自建高级白灰纯净弹窗与状态胶囊
     // ============================================================
     function openAo3CustomModal(htmlContent) {
         let modalEl = document.getElementById('ao3GlobalCustomModal');
@@ -186,11 +187,31 @@
         if (pill) pill.classList.remove('visible');
     }
 
+    /**
+     * 退出 App 返回手机桌面，并复原宿主顶栏
+     */
+    window.exitAo3ToDesktop = function () {
+        document.body.classList.remove('ao3-active-fullscreen');
+        if (typeof window.closePhoneApp === 'function') {
+            window.closePhoneApp();
+        } else if (typeof window.closeModal === 'function') {
+            window.closeModal();
+        } else {
+            const body = document.getElementById('appModalBody');
+            if (body) body.innerHTML = '';
+            const modal = document.getElementById('appModal');
+            if (modal) modal.style.display = 'none';
+        }
+    };
+
     // ============================================================
     // 3. 视图分发引擎
     // ============================================================
     window.renderAo3App = function (containerEl) {
         ensureAo3DataIntegrity();
+        // 激活全局全屏沉浸标记，强制隐藏原生粉框
+        document.body.classList.add('ao3-active-fullscreen');
+
         const target = containerEl || document.getElementById('appModalBody');
         if (!target) return;
 
@@ -205,12 +226,22 @@
     };
 
     // ============================================================
-    // 3.1 站点导航门户视图 (Portal View · 告别双层顶栏)
+    // 3.1 站点导航门户视图 (Portal View)
     // ============================================================
     function renderAo3PortalView(container) {
         const worksCount = (G.fanworks || []).length;
         container.innerHTML = `
             <div class="ao3-app-viewport">
+                <!-- 顶层系统级导航栏（替代原生粉框） -->
+                <div class="ao3-top-unified-bar">
+                    <button class="ao3-back-nav-btn" onclick="window.exitAo3ToDesktop()">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 18l-6-6 6-6"/></svg>
+                        <span>桌面</span>
+                    </button>
+                    <div class="ao3-top-unified-title">同人文库</div>
+                    <div style="width:48px;"></div>
+                </div>
+
                 <div class="ao3-portal-scroll-area">
                     <div class="ao3-portal-hero">
                         <div class="ao3-portal-hero-title">文学创作与同人站点</div>
@@ -263,7 +294,7 @@
     }
 
     // ============================================================
-    // 3.2 AO3 文库主列表视图 (告别缩在里面的红黑小膏药)
+    // 3.2 AO3 文库主列表视图
     // ============================================================
     function renderAo3HomeView(container) {
         const works = [...(G.fanworks || [])].reverse();
@@ -322,31 +353,21 @@
 
         container.innerHTML = `
             <div class="ao3-app-viewport">
-                <!-- 文学文献风格头部区域（通栏沉浸，非死板方块横幅） -->
-                <div class="ao3-site-header">
-                    <div class="ao3-site-header-nav">
-                        <button class="ao3-breadcrumb-btn" onclick="G.ao3State.view='portal'; window.renderAo3App();">
-                            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 18l-6-6 6-6"/></svg>
-                            <span>站点导航</span>
-                        </button>
-
-                        <div class="ao3-user-badge" onclick="window.openAo3IdentitySettings()">
-                            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-                            <span>${escapeHtml(curUser)}</span>
-                            <small>(${isMain ? '主号' : '小号'})</small>
-                        </div>
-                    </div>
-
-                    <div class="ao3-site-brand-row">
-                        <span class="ao3-logo-monogram">AO3</span>
-                        <div>
-                            <div class="ao3-brand-title">Archive of Our Own</div>
-                            <div class="ao3-brand-sub">纯乙女向与同人创作典藏库</div>
-                        </div>
+                <!-- AO3 顶层沉浸导航栏 -->
+                <div class="ao3-top-unified-bar">
+                    <button class="ao3-back-nav-btn" onclick="G.ao3State.view='portal'; window.renderAo3App();">
+                        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 18l-6-6 6-6"/></svg>
+                        <span>站点导航</span>
+                    </button>
+                    <div class="ao3-top-unified-title">Archive of Our Own</div>
+                    <div class="ao3-user-badge" onclick="window.openAo3IdentitySettings()">
+                        <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                        <span>${escapeHtml(curUser)}</span>
+                        <small>(${isMain ? '主号' : '小号'})</small>
                     </div>
                 </div>
 
-                <!-- 次级操作栏 -->
+                <!-- 次级工具栏 -->
                 <div class="ao3-sub-toolbar">
                     <div class="ao3-filter-label">收录作品：<b>${works.length}</b> 篇</div>
                     <div style="display:flex;gap:8px;">
@@ -402,15 +423,16 @@
         container.innerHTML = `
             <div class="ao3-app-viewport">
                 <!-- 阅读器顶栏 -->
-                <div class="ao3-reader-navbar">
-                    <button class="ao3-breadcrumb-btn" onclick="G.ao3State.view='home'; window.renderAo3App();">
+                <div class="ao3-top-unified-bar">
+                    <button class="ao3-back-nav-btn" onclick="G.ao3State.view='home'; window.renderAo3App();">
                         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 18l-6-6 6-6"/></svg>
                         <span>目录</span>
                     </button>
+                    <div class="ao3-top-unified-title">${escapeHtml(work.title)}</div>
                     <div>
                         <button class="ao3-btn ao3-btn-sub" onclick="window.openShareAo3ToChatModal('${work._id}')">
                             <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
-                            <span>转发至聊天</span>
+                            <span>转发</span>
                         </button>
                     </div>
                 </div>
@@ -1091,20 +1113,55 @@ ${isAuthorMe ? `小说作者正是主播「${playerInfo.name}」本人！读者�
     };
 
     // ============================================================
-    // 8. 样式注入（无红黑位移、无粉框、大屏白灰极简质感）
+    // 8. 样式注入（强制隐藏原生粉框，沉浸铺满）
     // ============================================================
     function injectAo3Styles() {
         if (document.getElementById('ao3UnifiedStyles')) return;
         const style = document.createElement('style');
         style.id = 'ao3UnifiedStyles';
         style.textContent = `
+            /* 1. 核心关键：当 AO3 激活时，彻底强力隐藏宿主那个丑陋的粉红原生标题栏与粉红分割线！ */
+            body.ao3-active-fullscreen #appModalHeader,
+            body.ao3-active-fullscreen .app-modal-header,
+            body.ao3-active-fullscreen .phone-app-header {
+                display: none !important;
+                height: 0 !important;
+                padding: 0 !important;
+                border: none !important;
+            }
+            body.ao3-active-fullscreen #appModalBody,
+            body.ao3-active-fullscreen .app-modal-body {
+                height: 100% !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                overflow: hidden !important;
+            }
+
+            /* 2. 我们的视口容器：铺满整个屏幕，顶部适配安全区不挡电量时间 */
             .ao3-app-viewport {
                 display: flex; flex-direction: column; width: 100%; height: 100%;
                 background: #fbf9f4; color: #222222; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
                 overflow: hidden; box-sizing: border-box;
+                padding-top: max(10px, env(safe-area-inset-top, 10px));
             }
 
-            /* 站点门户导航（无多余顶栏，直接铺满） */
+            /* 3. 自建统一定制顶栏：替代原生粉框，高级白灰微质感 */
+            .ao3-top-unified-bar {
+                display: flex; align-items: center; justify-content: space-between;
+                padding: 10px 16px; background: #ffffff; border-bottom: 1px solid #ebe5d8;
+                flex-shrink: 0; min-height: 44px; box-sizing: border-box;
+            }
+            .ao3-top-unified-title {
+                font-size: 15px; font-weight: 700; color: #222; letter-spacing: -0.2px;
+                white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px;
+            }
+            .ao3-back-nav-btn {
+                background: none; border: none; padding: 0; color: #333333; font-size: 13.5px;
+                font-weight: 600; display: inline-flex; align-items: center; gap: 3px; cursor: pointer;
+            }
+            .ao3-back-nav-btn:active { opacity: 0.7; }
+
+            /* 站点门户导航 */
             .ao3-portal-scroll-area {
                 flex: 1; overflow-y: auto; padding: 20px 16px; box-sizing: border-box;
             }
@@ -1138,25 +1195,7 @@ ${isAuthorMe ? `小说作者正是主播「${playerInfo.name}」本人！读者�
                 font-size: 12px; font-weight: 600; color: #990000; border-top: 1px solid #f6f3ed; padding-top: 10px;
             }
 
-            /* AO3 头部文学区域（非死板方块横幅） */
-            .ao3-site-header {
-                background: #ffffff; border-bottom: 1px solid #ece5d8;
-                padding: 12px 16px; flex-shrink: 0;
-            }
-            .ao3-site-header-nav {
-                display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;
-            }
-            .ao3-breadcrumb-btn {
-                background: none; border: none; padding: 0; color: #666; font-size: 12.5px;
-                font-weight: 600; display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
-            }
-            .ao3-breadcrumb-btn:active { opacity: 0.7; }
-            .ao3-user-badge {
-                display: inline-flex; align-items: center; gap: 4px; background: #f6f2ea;
-                border: 1px solid #e5ded2; border-radius: 12px; padding: 3px 9px;
-                font-size: 11px; color: #555; cursor: pointer;
-            }
-            .ao3-site-brand-row { display: flex; align-items: center; gap: 10px; }
+            /* AO3 品牌标 */
             .ao3-logo-monogram {
                 font-family: Georgia, serif; font-size: 20px; font-weight: 800;
                 background: #990000; color: #ffffff; border-radius: 5px; padding: 2px 7px;
@@ -1166,8 +1205,12 @@ ${isAuthorMe ? `小说作者正是主播「${playerInfo.name}」本人！读者�
                 font-family: Georgia, serif; font-size: 18px; font-weight: 800;
                 background: #e0e0e0; color: #888; border-radius: 4px; padding: 2px 6px;
             }
-            .ao3-brand-title { font-size: 16px; font-weight: 800; color: #990000; letter-spacing: -0.2px; }
-            .ao3-brand-sub { font-size: 11px; color: #777; margin-top: 1px; }
+
+            .ao3-user-badge {
+                display: inline-flex; align-items: center; gap: 4px; background: #f6f2ea;
+                border: 1px solid #e5ded2; border-radius: 12px; padding: 3px 9px;
+                font-size: 11px; color: #555; cursor: pointer;
+            }
 
             .ao3-sub-toolbar {
                 display: flex; align-items: center; justify-content: space-between;
@@ -1175,7 +1218,7 @@ ${isAuthorMe ? `小说作者正是主播「${playerInfo.name}」本人！读者�
             }
             .ao3-filter-label { font-size: 12px; color: #555; }
 
-            /* 按钮通用规范（彻底拔除文字位移与阴影） */
+            /* 按钮无位移规范 */
             .ao3-btn {
                 border: none; outline: none; border-radius: 6px; padding: 6px 12px;
                 font-size: 12px; font-weight: 600; cursor: pointer; transition: opacity 0.15s ease;
@@ -1230,10 +1273,6 @@ ${isAuthorMe ? `小说作者正是主播「${playerInfo.name}」本人！读者�
             .ao3-empty-actions { display: flex; gap: 10px; margin-top: 18px; }
 
             /* 阅读视图 */
-            .ao3-reader-navbar {
-                display: flex; align-items: center; justify-content: space-between;
-                padding: 10px 16px; background: #ffffff; border-bottom: 1px solid #ece5d8; flex-shrink: 0;
-            }
             .ao3-reading-container {
                 flex: 1; overflow-y: auto; padding: 18px 16px; background: #fdfbf7;
             }
@@ -1280,7 +1319,7 @@ ${isAuthorMe ? `小说作者正是主播「${playerInfo.name}」本人！读者�
             .ao3-review-time { font-size: 10px; color: #aaa; }
             .ao3-review-content { font-size: 12px; line-height: 1.5; color: #333; }
 
-            /* 自建纯净卡片模态窗 (彻底替代粉框 openModal) */
+            /* 自建纯净卡片模态窗 */
             .ao3-custom-modal-backdrop {
                 position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 999999;
                 display: flex; align-items: center; justify-content: center; padding: 20px;
@@ -1391,7 +1430,7 @@ ${isAuthorMe ? `小说作者正是主播「${playerInfo.name}」本人！读者�
             }
             .ao3-sheet-option.selected .ao3-sheet-radio-dot { display: block; }
 
-            /* 悬浮微胶囊指示器（纯白微磨砂，告别黑底与红黑位移） */
+            /* 悬浮微胶囊指示器 */
             .ao3-generating-pill {
                 position: fixed; top: 16px; left: 50%; transform: translateX(-50%) translateY(-35px);
                 background: #ffffff; border: 1px solid #e0d8cc; color: #222222;
