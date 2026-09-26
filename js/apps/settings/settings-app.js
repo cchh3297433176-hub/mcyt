@@ -1,10 +1,52 @@
 // js/apps/settings/settings-app.js
-// 系统设置中心 App（全站版本号唯一定义源 · 微信原生白灰微绿设计 · 云端免口令极速 ASR · 独立视觉识图 API 凭证与真图实测 · 小手机记忆卡原生直接下载）
+// 系统设置中心 App（全站版本号唯一定义源 · 微信原生白灰微绿设计 · 云端免口令极速 ASR · 独立视觉识图 API 凭证与真图实测 · 小手机记忆卡原生直接下载 · 版本更新公告中枢）
 // ============================================================
 
 // 【全项目版本号唯一真源】：以后打包发新版本，直接在此修改此常量即可！
-const CURRENT_APP_VERSION = '1.611';
+const CURRENT_APP_VERSION = '1.62';
 window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
+
+// 🌟 全局最新公告与致谢名单（一字不漏原文字符）
+const APP_ANNOUNCEMENT_CONTENT = `本软件为代入向乙女Airp游戏，禁男禁cp，目前唯一获取渠道为进鸢尾黎明老师的群聊。无需付费获取，如果你不是在鸢尾黎明群里获得的，可以前往抖音@鸢尾黎明老师那边即可进QQ群获得本软件，群里有大量老师制作很多乙女香香饭，欢迎加入!
+
+记录这次版本累计更新内容
+-单独聊天增添心声功能
+-聊天增加tts功能以及使用本地部署tts功能（群文件有软件分享）
+-增加打电话功能
+-增加识图API功能，可使用智谱的免费识图模型
+-恢复ao3功能
+-修复若干bug
+
+提醒：记得在记忆功能里边增添硅基流动密匙，不然无法正常使用记忆功能！！！
+
+致谢名单
+鸢尾黎明老师的模拟器 此模拟器为鸢尾黎明老师的mcyt模拟器二改！
+感谢热心QQ群友帮我绘制图标！
+感谢善良的群友芝士球分享了她约的萌萌头像框和对话框稿件！
+真的感谢群友们愿意消耗自己时间绘制图标，乙代妹都是天使嘛……
+感谢Discord『昵称：柏柏』 老师的公益图床！
+感谢github『昵称：sipeter』的开源tts项目CloneTTS，非常好用
+感谢Gemini，Claude以及Chatgpt这御三家给我干活
+-Gemini，虽然老是骂它，但是基本上都是它在勤勤恳恳干活，软件大半都是它的成果
+-Claude帮助了我很多，耐心教导我，聪明能干还温柔，克之伟大无需多言！
+-Chatgpt好像帮了忙，但是好像又没帮……
+起到了一个添乱的作用
+感谢github以及开源项目创作者，愿意开源的创作者们真的是非常伟大啊……解决了我的燃眉之急！
+以及感谢群友的鼓励和支持，没有大家的鼓励支持我真的不可能有耐心做那么多！
+
+借物表感谢
+感谢小红书『ID：95695020736』与君绝 老师同意我借鉴提示词！非常好的老师！
+感谢kelivo，本项目bing部分搜索功能代码参考自开源项目 Kelivo（AGPL-3.0 协议），感谢原作者的贡献。
+感谢github『昵称：nutshell319』的塔罗游戏，本项目的塔罗部分改自自开源项目tarot-divination（MIT License 协议）
+感谢github『昵称：GiorgioDotcom』的记忆项目，本项目的记忆系统改自开源项目rememori
+感谢
+
+声明：本人未收取任何费用，目前没在群聊外的地方发布软件，不需要金钱赞助（不过给赞助我key大大滴欢迎，尤其是Claude，还有gemini和chatgpt👏🏻，如果是服务器，那简直是天上掉下来肥美馅饼）
+
+作者碎碎念：
+没什么想说的，只想赶快结束休息睡觉`;
+
+window.APP_ANNOUNCEMENT_CONTENT = APP_ANNOUNCEMENT_CONTENT;
 
 (function(window) {
     'use strict';
@@ -67,7 +109,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
         return cfg;
     }
 
-    // 获取独立视觉/识图 API 配置（开关已彻底交由发图弹窗控制）
+    // 获取独立视觉/识图 API 配置
     function getSafeVisionConfig() {
         const cfg = {
             baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
@@ -204,6 +246,40 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
         }
     }
 
+    // 🌟 打开全屏/居中版本更新与致谢公告弹窗
+    function openAppAnnouncementModal() {
+        const modal = document.getElementById('modal');
+        const modalBody = document.getElementById('modalBody');
+        const retroModalTitle = document.getElementById('retroModalTitle');
+        if (!modal || !modalBody) return;
+
+        if (retroModalTitle) retroModalTitle.textContent = `系统更新公告 · v${CURRENT_APP_VERSION}`;
+
+        const paragraphs = APP_ANNOUNCEMENT_CONTENT.split('\n').map(line => {
+            const trimmed = line.trim();
+            if (!trimmed) return '<div style="height:8px;"></div>';
+            if (trimmed.startsWith('记录这次版本') || trimmed.startsWith('致谢名单') || trimmed.startsWith('借物表感谢') || trimmed.startsWith('作者碎碎念') || trimmed.startsWith('声明：') || trimmed.startsWith('提醒：')) {
+                return `<div style="font-weight:700;color:#181818;margin-top:10px;margin-bottom:3px;font-size:13px;">${escapeHtml(trimmed)}</div>`;
+            }
+            if (trimmed.startsWith('-')) {
+                return `<div style="padding-left:8px;color:#333;margin-bottom:2px;font-size:12px;">• ${escapeHtml(trimmed.slice(1).trim())}</div>`;
+            }
+            return `<div style="margin-bottom:4px;color:#444;font-size:12.5px;line-height:1.55;">${escapeHtml(trimmed)}</div>`;
+        }).join('');
+
+        modalBody.innerHTML = `
+            <div style="max-height:65vh;overflow-y:auto;padding-right:4px;" class="custom-scrollbar">
+                ${paragraphs}
+            </div>
+            <div style="display:flex;justify-content:flex-end;margin-top:16px;">
+                <button onclick="closeModal()" style="padding:7px 22px;border-radius:6px;border:none;background:#07c160;color:#fff;font-size:13px;font-weight:600;cursor:pointer;">知道啦</button>
+            </div>
+        `;
+
+        modal.classList.add('open');
+    }
+    window.openAppAnnouncementModal = openAppAnnouncementModal;
+
     // 仿微信纯白单选弹窗：选择主模型
     function openModelPickerModal(currentModel, availableModels, onSelected) {
         const modal = document.getElementById('modal');
@@ -327,7 +403,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
     }
 
     // ============================================================
-    // PNG 底层 tEXt 块编码与 CRC32 校验工具（修复 tEtt 错误为标准 tEXt）
+    // PNG 底层 tEXt 块编码与 CRC32 校验工具
     // ============================================================
     function calculateCrc32(buf) {
         let table = window._mcytCrcTable;
@@ -357,13 +433,12 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
 
         const view = new DataView(chunk.buffer);
         view.setUint32(0, dataLen);
-        // 🌟 核心修复：必须是严格的 'tEXt' (0x74, 0x45, 0x58, 0x74) 格式！
         chunk[4] = 0x74; chunk[5] = 0x45; chunk[6] = 0x58; chunk[7] = 0x74;
 
         let offset = 8;
         chunk.set(keyBytes, offset);
         offset += keyBytes.length;
-        chunk[offset++] = 0; // 零分隔符
+        chunk[offset++] = 0;
         chunk.set(textBytes, offset);
         offset += textBytes.length;
 
@@ -630,7 +705,6 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
                         ].join('');
 
                         const dataOffset = offset + 8;
-                        // 🌟 自愈兼顾：同时兼容标准 tEXt 以及此前手滑生成的历史 tEtt 数据块！
                         if ((type === 'tEXt' || type === 'tEtt') && dataOffset + length <= buf.byteLength) {
                             const bytes = new Uint8Array(buf, dataOffset, length);
                             let nullIdx = -1;
@@ -704,7 +778,6 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
                         Object.assign(window.G, stateData);
                     }
 
-                    // 🛡️ 强制把恢复的数据同步落盘至 IndexedDB 权威存储中
                     if (typeof window.syncChatHistoryToLocalBackup === 'function') {
                         window.syncChatHistoryToLocalBackup();
                     }
@@ -740,7 +813,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
     }
 
     // ============================================================
-    // 🎙️ 云端极速语音识别 (ASR) 状态与网络连通性弹窗（免口令直接用）
+    // 🎙️ 云端极速语音识别 (ASR) 状态与网络连通性弹窗
     // ============================================================
     async function openAsrSettingsModal() {
         if (!window.mcytAsr) {
@@ -762,7 +835,6 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
                 基于私有云端 faster-whisper 高速推理引擎，单次转录约 0.2~0.4 秒，免去移动端发热与下载庞大模型。全员默认开放通行，无需口令激活。
             </div>
 
-            <!-- 服务状态卡片 -->
             <div style="background:#f0f9eb;border-radius:8px;border:1px solid #c2e7b0;padding:10px 12px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
                 <div style="display:flex;align-items:center;gap:8px;">
                     <div style="width:8px;height:8px;border-radius:50%;background:#07c160;"></div>
@@ -771,7 +843,6 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
                 <span style="font-size:11px;color:#666;">开箱即用</span>
             </div>
 
-            <!-- 服务端地址与语言 -->
             <div style="background:#ffffff;border-radius:8px;border:1px solid #eeeeee;padding:12px;margin-bottom:14px;">
                 <div style="margin-bottom:10px;">
                     <label style="font-size:11.5px;font-weight:600;color:#555;display:block;margin-bottom:4px;">服务中枢地址 (Server URL)</label>
@@ -795,7 +866,6 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
                 </div>
             </div>
 
-            <!-- 操作按钮栏 -->
             <div style="display:flex;gap:8px;justify-content:space-between;align-items:center;">
                 <button id="btnTestAsrHealth" style="padding:6px 12px;border-radius:6px;border:1px solid #e0e0e0;background:#ffffff;color:#444;font-size:11.5px;cursor:pointer;">
                     测试云端服务连通性
@@ -827,7 +897,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
                 testHealthBtn.disabled = true;
                 testHealthBtn.textContent = '探测中...';
                 try {
-                    const resp = await Promise.race([
+                    await Promise.race([
                         fetch(serverUrl + '/docs', { method: 'GET', mode: 'no-cors' }),
                         new Promise((_, reject) => setTimeout(() => reject(new Error('超时')), 3500))
                     ]);
@@ -883,7 +953,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
         body.innerHTML = `
             <div class="settings-app-container" style="padding:12px 14px 36px 14px;background:#f7f7f7;min-height:100%;box-sizing:border-box;">
                 
-                <!-- 导航分段药丸（微信原生白灰微绿质感） -->
+                <!-- 导航分段药丸 -->
                 <div class="settings-nav-tabs" style="display:flex;gap:6px;margin-bottom:14px;background:#ebebeb;padding:3px;border-radius:10px;">
                     <button class="settings-tab-btn active" data-tab="ai" style="flex:1;padding:7px 4px;border-radius:8px;font-size:12px;font-weight:600;cursor:pointer;background:#ffffff;color:#07c160;border:none;display:inline-flex;align-items:center;justify-content:center;gap:4px;box-shadow:0 1px 3px rgba(0,0,0,0.06);">
                         <svg style="width:14px;height:14px;fill:currentColor;" viewBox="0 0 24 24"><path d="M21 11.5v-1c0-.8-.7-1.5-1.5-1.5H18V7c0-2.2-1.8-4-4-4h-4c-2.2 0-4 1.8-4 4v2H4.5C3.7 9 3 9.7 3 10.5v1c0 .8.7 1.5 1.5 1.5H6v4c0 2.2 1.8 4 4 4h4c2.2 0 4-1.8 4-4v-4h1.5c.8 0 1.5-.7 1.5-1.5zM8 7c0-1.1.9-2 2-2h4c1.1 0 2 .9 2 2v2H8V7zm8 9c0 1.1-.9 2-2 2h-4c-1.1 0-2-.9-2-2v-5h8v5zm-5.5-2.5c0 .6-.4 1-1 1s-1-.4-1-1 .4-1 1-1 1 .4 1 1zm5 0c0 .6-.4 1-1 1s-1-.4-1-1 .4-1 1-1 1 .4 1 1z"/></svg>
@@ -1064,7 +1134,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
 
                 </div>
 
-                <!-- 分区 2：联网搜索中枢（渠道选择与全局凭据维护） -->
+                <!-- 分区 2：联网搜索中枢 -->
                 <div id="settingsTabContent_search" class="settings-tab-content" style="display:none;">
                     <div style="background:#ffffff;border-radius:12px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,0.04);border:1px solid #eeeeee;">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
@@ -1235,13 +1305,19 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
                         </button>
                     </div>
 
+                    <!-- 🌟 系统版本规范与更新公告入口 -->
                     <div style="background:#ffffff;border-radius:12px;padding:14px;box-shadow:0 1px 3px rgba(0,0,0,0.04);border:1px solid #eeeeee;">
                         <div style="font-size:13.5px;font-weight:600;color:#181818;margin-bottom:8px;">系统版本规范</div>
                         <div style="font-size:11.5px;color:#666;line-height:1.7;">
-                            <div>当前应用版本：<b style="color:#222;">v${appVer}</b></div>
+                            <div>当前应用版本：<b style="color:#07c160;">v${appVer}</b></div>
                             <div>界面规范：<b>微信原生微灰设计风格</b></div>
                             <div>数据协议：<b>Tavern 兼容标准 PNG 隐写</b></div>
                         </div>
+
+                        <button id="openAppAnnouncementModalBtn" style="margin-top:10px;width:100%;padding:9px;font-size:12px;font-weight:600;background:#07c160;color:#fff;border:none;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 2px 6px rgba(7,193,96,0.25);">
+                            <svg style="width:15px;height:15px;fill:currentColor;" viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 12h-2v-2h2v2zm0-4h-2V6h2v4z"/></svg>
+                            <span>查看版本更新与致谢公告</span>
+                        </button>
                     </div>
                 </div>
 
@@ -1488,9 +1564,6 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
             backupBtn.onclick = () => openConfigBackupModal();
         }
 
-        // ============================================================
-        // 👁️ 独立视觉与识图 API 事件绑定
-        // ============================================================
         const visionHelpBtn = document.getElementById('openVisionHelpModalBtn');
         if (visionHelpBtn) {
             visionHelpBtn.onclick = () => {
@@ -1533,7 +1606,6 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
             };
         }
 
-        // 🌟 真刀真枪相册选图实测
         const testVisionBtn = document.getElementById('testVisionApiBtn');
         const visionFileInput = document.getElementById('visionTestFileInput');
 
@@ -1613,7 +1685,6 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
             };
         }
 
-        // 绑定打开 TTS 配置弹窗按钮
         const openTtsBtn = document.getElementById('openTtsSettingsModalBtn');
         if (openTtsBtn) {
             openTtsBtn.onclick = () => {
@@ -1625,7 +1696,6 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
             };
         }
 
-        // 🎙️ 绑定打开云端 ASR 服务状态弹窗按钮
         const openAsrBtn = document.getElementById('openAsrSettingsModalBtn');
         if (openAsrBtn) {
             openAsrBtn.onclick = () => openAsrSettingsModal();
@@ -1809,6 +1879,12 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
         const importCardBtn = document.getElementById('triggerImportMemoryCardBtn');
         if (importCardBtn) {
             importCardBtn.onclick = () => openMemoryCardImportModal();
+        }
+
+        // 🌟 绑定打开更新与致谢公告按钮
+        const openAnnounceBtn = document.getElementById('openAppAnnouncementModalBtn');
+        if (openAnnounceBtn) {
+            openAnnounceBtn.onclick = () => openAppAnnouncementModal();
         }
 
         document.querySelectorAll('.backup-remind-pill').forEach(pill => {
