@@ -7,7 +7,8 @@
  *    专属好友独立联网搜索检索与权威网页卡片推送、以及好感度铁律动态结算机制；
  *    🌟 独立外挂视觉识图：尊重用户发图弹窗勾选，精准调用外部 Vision 接口为纯文本 AI 解析客观画面事实；
  *    🌟 极简优化：机器直接在末尾提供确定的时间事实（精准人名与24小时制锁定，杜绝早晚颠倒），节省 Token 与注意力；
- *    🌟 角色主动发送文字图片（[IMAGE_TEXT]）与拟真生活排版卡片（[UI_CARD]）无损解析与安全消毒。
+ *    🌟 角色主动发送文字图片（[IMAGE_TEXT]）与拟真生活排版卡片（[UI_CARD]）无损解析与安全消毒；
+ *    💖 角色内心想法（[HEART]心声独白[/HEART]）提取与持久化，绝对不污染正文气泡，与顶栏小爱心无缝联动。
  */
 
 (function() {
@@ -208,7 +209,7 @@
         return htmlStr.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
     }
 
-    // 🤖 单人私聊 AI 回复触发（多语种母语语音条、条数控制、好感度动态铁律、独立视觉识图、文字图片、拟真UI卡片）
+    // 🤖 单人私聊 AI 回复触发（多语种母语语音条、条数控制、好感度动态铁律、独立视觉识图、文字图片、拟真UI卡片、角色心声独白）
     window.triggerAIReplyForSingle = async function(npcId) {
         const npc = window.G.npcs ? window.G.npcs[npcId] : null;
         if (!npc) return;
@@ -237,7 +238,7 @@
         const history = window.getAccountChatHistory(npcId, curAcc.id) || [];
         const isBehindActive = !!(window.G._behindScreenActive && window.G._behindScreenActive[npcId]);
 
-        const chatCfg = npc.chatSettings || { minMsgs: 1, maxMsgs: 3, voiceFreq: 'rare' };
+        const chatCfg = npc.chatSettings || { minMsgs: 1, maxMsgs: 3, voiceFreq: 'rare', enableInnerVoice: true };
         const minMsgs = Math.max(1, parseInt(chatCfg.minMsgs) || 1);
         const maxMsgs = Math.max(minMsgs, parseInt(chatCfg.maxMsgs) || 3);
         const voiceFreq = chatCfg.voiceFreq || 'rare';
@@ -439,6 +440,21 @@
 
             let clean = (typeof stripThought === 'function') ? stripThought(raw.trim()) : raw.trim();
             clean = clean.replace(/[\(（](?:揉|叹|眨|看|摸|笑|低头|抬头|轻笑|撇嘴|皱眉|转身|歪头|小声|抱|握|拉|推|咬|红着脸|动作)[^\)）]*[\)）]/gi, '').trim();
+
+            // 💖 核心解析：提取并剥离 [HEART]...[/HEART] 角色内心独白
+            let extractedInnerVoice = '';
+            const heartMatch = clean.match(/\[HEART\]([\s\S]*?)\[\/HEART\]/i);
+            if (heartMatch) {
+                extractedInnerVoice = heartMatch[1].trim();
+                clean = clean.replace(/\[HEART\][\s\S]*?\[\/HEART\]/gi, '').trim();
+            }
+
+            // 若开启心声且成功提取，保存在 NPC 运行态中，供顶栏小爱心随时调取
+            if (extractedInnerVoice) {
+                npc.latestInnerVoice = extractedInnerVoice;
+                npc.latestInnerVoiceTime = getStandard24HourTime();
+                if (typeof window.syncCustomNpcsToLocalBackup === 'function') window.syncCustomNpcsToLocalBackup();
+            }
 
             let favorDelta = 0;
             const favorMatch = clean.match(/\[FAVOR:\s*([+\-]?\d+(?:\.\d+)?)\s*\]/i);
@@ -695,6 +711,9 @@
                 const item = finalEntities[i];
                 const time = getStandard24HourTime();
 
+                // 🌟 将心声独白安全挂载在当前回复的第一条气泡上，落盘存储
+                const voicePayload = (i === 0 && extractedInnerVoice) ? { innerVoice: extractedInnerVoice } : {};
+
                 if (item.type === 'moment_notice') {
                     window.pushChatMessageSafe(npcId, {
                         from: 'action',
@@ -703,7 +722,8 @@
                         author: item.author,
                         text: item.text,
                         time,
-                        timestamp: Date.now()
+                        timestamp: Date.now(),
+                        ...voicePayload
                     }, curAcc.id);
                 } else if (item.type === 'voice') {
                     window.pushChatMessageSafe(npcId, {
@@ -714,7 +734,8 @@
                         originalText: item.originalText || null,
                         text: item.text || '',
                         time,
-                        timestamp: Date.now()
+                        timestamp: Date.now(),
+                        ...voicePayload
                     }, curAcc.id);
                 } else if (item.type === 'image_flip') {
                     window.pushChatMessageSafe(npcId, {
@@ -723,7 +744,8 @@
                         imageDesc: item.imageDesc,
                         text: item.text,
                         time,
-                        timestamp: Date.now()
+                        timestamp: Date.now(),
+                        ...voicePayload
                     }, curAcc.id);
                 } else if (item.type === 'ui_card') {
                     window.pushChatMessageSafe(npcId, {
@@ -734,7 +756,8 @@
                         cardSummary: item.cardSummary,
                         text: item.text,
                         time,
-                        timestamp: Date.now()
+                        timestamp: Date.now(),
+                        ...voicePayload
                     }, curAcc.id);
                 } else if (item.type === 'sticker_entity') {
                     const resolved = (typeof window.resolveStickerImageUrl === 'function')
@@ -748,7 +771,8 @@
                             stickerDesc: resolved.desc,
                             text: `[表情: ${resolved.desc}]`,
                             time,
-                            timestamp: Date.now()
+                            timestamp: Date.now(),
+                            ...voicePayload
                         }, curAcc.id);
                     } else {
                         window.pushChatMessageSafe(npcId, {
@@ -756,7 +780,8 @@
                             type: 'text',
                             text: `[${item.desc || '表情'}]`,
                             time,
-                            timestamp: Date.now()
+                            timestamp: Date.now(),
+                            ...voicePayload
                         }, curAcc.id);
                     }
                 } else {
@@ -766,7 +791,8 @@
                         text: item.text || '',
                         originalText: item.originalText || null,
                         time,
-                        timestamp: Date.now()
+                        timestamp: Date.now(),
+                        ...voicePayload
                     }, curAcc.id);
                 }
 

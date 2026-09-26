@@ -1,13 +1,14 @@
 /**
  * js/apps/chat/chat-prompt-engine.js
  * 🧠 微信聊天活人感提示词架构引擎
- * 模块化装配：主体通用拟人核心 + 关系进阶状态机 + 异地恋模块 + 时差生理感知 + 双时间戳隔夜作息感知 + 动态母语双语与仿微信语音协议 + 真实语义表情包索引 + 动态发布协议 + 大小号双重身份认知与名片接纳状态机 + 🌟 Rememori 忆海向量长效记忆挂载 + 🔮 塔罗牌阵拟人认知与特色解读协议 + 🎭 {{user}} / {{y/n}} 动态宏变量替换 + 📸 文字图片发送协议 + 🧾 拟真生活排版卡片协议 + 📚 AO3同人文分享纯按需动态挂载
+ * 模块化装配：主体通用拟人核心 + 关系进阶状态机 + 异地恋模块 + 时差生理感知 + 双时间戳隔夜作息感知 + 动态母语双语与仿微信语音协议 + 真实语义表情包索引 + 动态发布协议 + 大小号双重身份认知与名片接纳状态机 + 🌟 Rememori 忆海向量长效记忆挂载 + 🔮 塔罗牌阵拟人认知与特色解读协议 + 🎭 {{user}} / {{y/n}} 动态宏变量替换 + 📸 文字图片发送协议 + 🧾 拟真生活排版卡片协议 + 📚 AO3同人文分享纯按需动态挂载 + 💖 角色第一人称内心心声纯按需动态挂载
  * 🌟 极简优化：
  * 1. 机器完成 100% 时间换算（严格锁定 24 小时制与早晚时段事实，大模型零计算、零推理消耗，彻底终结早晚颠倒 Bug）；
  * 2. 角色与玩家时差严格绑定角色具体姓名，严防大模型将“你/对方”张冠李戴；
  * 3. 极大精简提示词，节省大量 Token，杜绝分散大模型注意力；
  * 4. 动态自适应多国母语（西班牙语、日语、韩语、法语、德语、英语等），支持独立开关；
  * 5. 同人文提示词【绝对按需动态触发】：日常闲聊 0 冗余、0 出现，仅当上下文真切包含同人文卡片时才精准注入！
+ * 6. 💖 心声提示词【绝对按需动态触发】：仅在角色设置开启心声时注入，以角色第一人称内心独白（称呼对方为第三人称），字数控制在60~80字，关掉时 0 Token 零注入！
  */
 
 (function() {
@@ -395,6 +396,7 @@ ${isBilingualEnabled ? `
         const chatSettings = npc.chatSettings || {};
         const disableTimezone = !!chatSettings.disableTimezone;
         const disableBilingual = !!chatSettings.disableBilingual;
+        const enableInnerVoice = (chatSettings.enableInnerVoice !== undefined) ? !!chatSettings.enableInnerVoice : true;
 
         const isForeign = !nRegion.includes('中国');
         const isBilingualEnabled = isForeign && !disableBilingual;
@@ -467,6 +469,22 @@ ${isBilingualEnabled ? `
             assembledSysPrompt += getModule3Prompt();
         }
 
+        // 💖 核心升级：角色第一人称内心独白协议（仅在开启心声时动态注入！若关闭则绝对 0 提示词）
+        if (enableInnerVoice) {
+            assembledSysPrompt += `
+\n【💖 角色内心想法（真实独白 OS）输出协议】：
+- 你必须在回复的最末尾，独立输出一段你在打字回复对方时脑子里闪过的真实内心独白！
+- 标签格式为：[HEART]内心独白内容[/HEART]
+- ★【第一人称内心视角铁律】：必须是作为角色「${npc.name}」的“我”此刻心里的直接想法！称呼对方「${currentUserName}」时必须用【第三人称视角】（例如“他/她/名字”），绝不能搞成用户的视角或旁白视角！
+- 【示例参考】：
+  - 正确（角色内心看对方）：“我的天啊她真的这么想嘛？突然这么问我真的会接不上话……不过还挺可爱的”
+  - 正确（角色内心吐槽/害羞）：“红太狼也太能折腾了，不过看她这么高兴，我陪她多玩一会儿倒也无所谓”
+  - 严禁错误：严禁用对方第一人称（如“我看着眼前的他”），严禁写机械旁白！
+- ★【字数控制】：内心独白必须控制在【60字左右，绝对不超过80字】！精炼、鲜活、贴合你的人设性格！
+- [HEART] 必须放在所有 [MSG] 气泡的最后面，单独成行。
+`;
+        }
+
         // 🎯 核心注入：最高优先级的外部动态约束
         if (extraConstraint) {
             assembledSysPrompt += `\n${extraConstraint}\n`;
@@ -497,5 +515,5 @@ ${isBilingualEnabled ? `
         resolveRegionLanguage
     };
 
-    console.log('✅ ChatPromptEngine 微信活人感提示词架构引擎已就绪：同人文认知纯动态按需挂载，日常零干扰');
+    console.log('✅ ChatPromptEngine 微信活人感提示词架构引擎已就绪：同人文与心声按需动态挂载，日常零干扰');
 })();

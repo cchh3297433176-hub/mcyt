@@ -1,6 +1,6 @@
 /**
  * js/apps/chat/chat-card.js
- * 📇 微信名片与人设资料设置独立模块（精简 5 核心表情 · 相册级背景视口裁剪 · 表情长按删除 · Base64 导出版）
+ * 📇 微信名片与人设资料设置独立模块（精简 5 核心表情 · 相册级背景视口裁剪 · 表情长按删除 · Base64 导出版 · 增加心声独白开关）
  * 职责：
  * 1. 角色极简原生名片卡（保留必要信息，头像精准保活，支持原画/动图）
  * 2. 右上角「装扮中心」：
@@ -11,6 +11,7 @@
  *    - 支持本地/直链图片、GIF、短视频，点击已有项弹窗询问更换或删除；
  *    - 单配组方案独立导出/导入，角色卡打包导出无缝集成。
  * 3. 🌟 角色专属 TTS 语音音色配置（带独立开关与 CloneTTS 菜单拉取）
+ * 4. 🌟 角色心声（内心独白）独立开关控制
  */
 
 (function() {
@@ -1247,6 +1248,7 @@
                 voiceFreq: 'rare',
                 disableTimezone: false,
                 disableBilingual: false,
+                enableInnerVoice: true, // 🌟 默认开启心声
                 tts: { enabled: false, voice: '', speed: 1.0 }
             };
         }
@@ -1255,6 +1257,7 @@
         const voiceFreq = npc.chatSettings.voiceFreq || 'rare';
         const disableTimezone = !!npc.chatSettings.disableTimezone;
         const disableBilingual = !!npc.chatSettings.disableBilingual;
+        const enableInnerVoice = (npc.chatSettings.enableInnerVoice !== undefined) ? !!npc.chatSettings.enableInnerVoice : true;
         const curFavor = parseFloat(npc.favor !== undefined ? npc.favor : 50);
 
         const curTtsEnabled = !!(npc.chatSettings.tts && npc.chatSettings.tts.enabled);
@@ -1308,6 +1311,17 @@
                                 <button type="button" class="voice-freq-btn" data-val="voice_only" style="padding:5px 0;border-radius:5px;font-size:11.5px;cursor:pointer;border:1px solid ${voiceFreq === 'voice_only' ? '#07c160' : '#e0e0e0'};background:${voiceFreq === 'voice_only' ? '#f0f9eb' : '#fff'};color:${voiceFreq === 'voice_only' ? '#07c160' : '#444'};font-weight:${voiceFreq === 'voice_only' ? '600' : 'normal'};">全语音</button>
                             </div>
                             <input type="hidden" id="wcleanSetVoiceFreqVal" value="${voiceFreq}">
+                        </div>
+
+                        <!-- 🌟 角色内心心声独立开关 -->
+                        <div style="border-top:0.5px solid #eee;padding-top:8px;">
+                            <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-size:12px;color:#181818;">
+                                <div style="display:flex;flex-direction:column;">
+                                    <span style="font-weight:600;">开启角色内心想法（心声）</span>
+                                    <span style="font-size:10.5px;color:#888;">开启后在顶栏显示小心心，点击可偷看角色内心OS</span>
+                                </div>
+                                <input type="checkbox" id="wcleanSetEnableInnerVoice" ${enableInnerVoice ? 'checked' : ''} style="width:16px;height:16px;accent-color:#07c160;cursor:pointer;">
+                            </label>
                         </div>
 
                         <div style="border-top:0.5px solid #eee;padding-top:8px;">
@@ -1386,6 +1400,7 @@
 
                 const curDisableTimezone = !!document.getElementById('wcleanSetDisableTimezone')?.checked;
                 const curDisableBilingual = !!document.getElementById('wcleanSetDisableBilingual')?.checked;
+                const curEnableInnerVoice = !!document.getElementById('wcleanSetEnableInnerVoice')?.checked;
 
                 const ttsEnabled = !!document.getElementById('wcleanSetNpcTtsEnabled')?.checked;
                 const ttsVoice = document.getElementById('wcleanSetNpcTtsVoice')?.value.trim() || '';
@@ -1407,6 +1422,7 @@
                     voiceFreq: curVoiceFreq,
                     disableTimezone: curDisableTimezone,
                     disableBilingual: curDisableBilingual,
+                    enableInnerVoice: curEnableInnerVoice,
                     tts: { enabled: ttsEnabled, voice: ttsVoice, speed: ttsSpeed },
                     decor: existingDecor,
                     videoStage: existingStage
@@ -1665,6 +1681,7 @@
                 voiceFreq: 'rare',
                 disableTimezone: false,
                 disableBilingual: false,
+                enableInnerVoice: true,
                 tts: { enabled: false, voice: '', speed: 1.0 },
                 videoStage: {
                     activeProfileId: 'default',
@@ -1745,6 +1762,7 @@
                             voiceFreq: 'rare',
                             disableTimezone: false,
                             disableBilingual: false,
+                            enableInnerVoice: (profile.chatSettings && profile.chatSettings.enableInnerVoice !== undefined) ? !!profile.chatSettings.enableInnerVoice : true,
                             tts: (profile.chatSettings && profile.chatSettings.tts) || { enabled: false, voice: '', speed: 1.0 },
                             videoStage: importedVideoStage || {
                                 activeProfileId: 'default',

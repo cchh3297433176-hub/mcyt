@@ -5,7 +5,8 @@
  *    重新生成回复的确认与执行（confirmRetryLastAIReply / doRetryLastAIReply）、
  *    微信原生直显大图与沉浸式大图文字查看器对接、拟真生活排版卡片（ui_card）渲染、
  *    🌟 通话记录专属高质感卡片（call_record 彻底杜绝系统文字选中，长按秒级弹出引用与物理删除菜单）、
- *    🌟 AO3 同人文分享专属卡片（ao3_share_card 原生白灰微绿经典卡片，点击一键唤起 AO3 打开全文）。
+ *    🌟 AO3 同人文分享专属卡片（ao3_share_card 原生白灰微绿经典卡片，点击一键唤起 AO3 打开全文）、
+ *    💖 顶栏名字与Token右下角轻量白描矢量小爱心（点击弹出角色真实内心独白 OS，心声关闭时自动隐藏）。
  */
 
 (function() {
@@ -252,6 +253,79 @@
             </div>
         `;
     }
+
+    // 💖 核心弹窗：查看角色真实内心独白 OS
+    window.openNpcInnerVoiceModal = function(npcId) {
+        if (!window.G || !window.G.npcs) return;
+        const npc = window.G.npcs[npcId];
+        if (!npc) return;
+
+        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
+        const hist = (typeof window.getAccountChatHistory === 'function') ? window.getAccountChatHistory(npcId, curAcc.id) : [];
+
+        // 优先从历史消息里从后往前寻找最新的心声
+        let voiceText = '';
+        for (let i = hist.length - 1; i >= 0; i--) {
+            if (hist[i] && hist[i].innerVoice) {
+                voiceText = hist[i].innerVoice;
+                break;
+            }
+        }
+        if (!voiceText && npc.latestInnerVoice) {
+            voiceText = npc.latestInnerVoice;
+        }
+
+        const nameDisplay = (npc.remark && npc.remark.trim()) ? npc.remark.trim() : (npc.name || 'TA');
+
+        let mask = document.createElement('div');
+        mask.className = 'wechat-clean-modal-mask';
+        mask.innerHTML = `
+            <div class="wechat-clean-modal-card" style="max-width:320px;padding:20px 18px;position:relative;background:#ffffff;border-radius:14px;box-shadow:0 8px 32px rgba(0,0,0,0.14);box-sizing:border-box;">
+                <div style="display:flex;align-items:center;gap:7px;margin-bottom:12px;border-bottom:0.5px solid #f0f0f0;padding-bottom:10px;">
+                    <svg viewBox="0 0 24 24" style="width:18px;height:18px;fill:#fa5151;stroke:none;flex-shrink:0;">
+                        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                    </svg>
+                    <span style="font-size:14.5px;font-weight:600;color:#181818;">${escapeHtml(nameDisplay)} 的内心想法</span>
+                </div>
+
+                <div style="background:#fafafa;border:0.5px solid #eaeaea;border-radius:10px;padding:12px 14px;margin-bottom:16px;">
+                    ${voiceText ? `
+                        <div style="font-size:13.5px;color:#2c3e50;line-height:1.6;word-break:break-word;font-style:normal;">
+                            “${escapeHtml(voiceText)}”
+                        </div>
+                    ` : `
+                        <div style="font-size:12.5px;color:#999;text-align:center;padding:10px 0;">
+                            TA 此刻心里空空的，或者正在专心听你说话呢~
+                        </div>
+                    `}
+                </div>
+
+                <div style="display:flex;gap:8px;">
+                    ${voiceText ? `
+                        <button type="button" id="btnCopyInnerVoice" style="flex:1;border:none;background:#f2f2f2;color:#333;padding:8px;border-radius:6px;font-size:12.5px;font-weight:500;cursor:pointer;">复制</button>
+                    ` : ''}
+                    <button type="button" id="btnCloseInnerVoice" style="flex:1;border:none;background:#07c160;color:#fff;padding:8px;border-radius:6px;font-size:12.5px;font-weight:600;cursor:pointer;">知道啦</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(mask);
+
+        const close = () => { if (mask && mask.parentNode) mask.parentNode.removeChild(mask); };
+        mask.querySelector('#btnCloseInnerVoice').onclick = close;
+        const copyBtn = mask.querySelector('#btnCopyInnerVoice');
+        if (copyBtn) {
+            copyBtn.onclick = () => {
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(voiceText).then(() => {
+                        if (typeof showToast === 'function') showToast('已复制TA的内心想法', 'success', 1000);
+                        close();
+                    });
+                } else {
+                    if (typeof showToast === 'function') showToast('当前环境不支持剪贴板', 'info');
+                }
+            };
+        }
+    };
 
     window.playVoiceMessageDirect = function(msgId) {
         const curNpcId = window.G && window.G.currentChatNpc;
@@ -789,7 +863,7 @@
                     </div>
                 </div>`;
             } 
-            // 🌟 2. 核心新增：AO3 同人文分享专属卡片（纯净微信原生白灰微绿与经典暗红）
+            // 🌟 2. AO3 同人文分享专属卡片
             else if (msg.type === 'ao3_share_card') {
                 const wId = msg.workId || '';
                 const wTitle = msg.workTitle || '同人文作品';
@@ -1158,6 +1232,11 @@
             </div>
         ` : '';
 
+        // 💖 检查角色心声开关是否开启
+        const isInnerVoiceEnabled = (npc.chatSettings && npc.chatSettings.enableInnerVoice !== undefined)
+            ? !!npc.chatSettings.enableInnerVoice
+            : true;
+
         const html = `
         <div style="background:#ededed;display:flex;flex-direction:column;height:100%;min-height:100%;overflow:hidden;font-family:-apple-system,sans-serif;">
             <div class="wechat-top-header">
@@ -1165,12 +1244,23 @@
                     <button onclick="window.closeChat()" style="border:none;background:none;font-size:15px;color:#181818;cursor:pointer;padding:0;display:flex;align-items:center;gap:2px;font-weight:500;">
                         <span>‹</span> <span>微信</span>
                     </button>
-                    <div onclick="if(typeof window.openNpcProfileCardModal==='function')window.openNpcProfileCardModal('${npcId}')" style="cursor:pointer;font-weight:600;font-size:15px;color:#181818;margin-left:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
-                        ${topHeaderDisplayHtml}
+                    <div style="display:flex;align-items:flex-end;gap:4px;min-width:0;overflow:hidden;">
+                        <div onclick="if(typeof window.openNpcProfileCardModal==='function')window.openNpcProfileCardModal('${npcId}')" style="cursor:pointer;font-weight:600;font-size:15px;color:#181818;margin-left:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                            ${topHeaderDisplayHtml}
+                        </div>
+                        <div style="display:inline-flex;align-items:center;gap:3px;flex-shrink:0;">
+                            <span style="background:#e0e0e0;color:#666;font-size:10px;padding:1px 5px;border-radius:3px;font-weight:normal;white-space:nowrap;line-height:1.2;">
+                                ${tokenDisplay}t
+                            </span>
+                            ${isInnerVoiceEnabled ? `
+                                <button type="button" onclick="window.openNpcInnerVoiceModal('${npcId}')" title="偷看TA的内心想法" style="border:none;background:none;cursor:pointer;padding:0;display:inline-flex;align-items:center;justify-content:center;color:#fa5151;line-height:1;margin-bottom:1px;-webkit-tap-highlight-color:transparent;">
+                                    <svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:currentColor;stroke:none;transition:transform 0.15s ease;" onmousedown="this.style.transform='scale(0.85)'" onmouseup="this.style.transform='scale(1)'">
+                                        <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                                    </svg>
+                                </button>
+                            ` : ''}
+                        </div>
                     </div>
-                    <span style="background:#e0e0e0;color:#666;font-size:10px;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:normal;white-space:nowrap;">
-                        ${tokenDisplay}t
-                    </span>
                 </div>
                 <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
                     <button onclick="window.toggleBehindScreen('${npcId}')" style="border:0.5px solid ${isBehindActive ? '#07c160' : '#ccc'};background:${isBehindActive ? '#d4f5dd' : '#fff'};color:${isBehindActive ? '#07c160' : '#555'};width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="动作感知">
