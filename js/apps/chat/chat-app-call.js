@@ -1,19 +1,17 @@
 /**
  * js/apps/chat/chat-app-call.js
- * 📞 主播掌机 · 微信原生音视频实时通话独立中枢（抗噪防误触、2 秒极速响应与 TTS 序列锁防串音版）
+ * 📞 主播掌机 · 微信原生音视频实时通话独立中枢（抗噪滤波升级 · 视频通话全双工闭环 · 三模态视觉感知开关版）
  * 🛡️ 微信原生极简质感，消灭多余打字框与廉价元素，100% 纯粹全双工对讲体验。
  * 🌟 核心特性：
- *  1. 微信原生级视觉美学（纯语音居中波纹呼吸头像 / 视频画中画镜头 + 实时动态声波 HUD）；
- *  2. 2 秒自然静音停顿：说话停止 2 秒内无声，立刻提交并让 AI 回复；
- *  3. 智能抗噪降噪门槛（门限提升至 38 + 能量连续确认），过滤风扇杂音与碰桌噪声；
- *  4. 杂音幻觉过滤：转文字结果低于 2 字或纯象声词自动忽略，杜绝胡乱识别；
- *  5. 防误打断锁：AI 说话时提高打断门限，防止背景噪音误掐断 AI 发音；
- *  6. 🌟 异步 TTS 序列锁（ttsSequenceId）：彻底根除由于 TTS 合成慢导致新旧对白串音错乱的 Bug；
- *  7. 🌟 视频通话声波 HUD：为视频通话界面补充微信原生微绿平滑动态声波条与实时倾听状态；
- *  8. 首次视频隐私门禁（本地抽帧不存云端、支持下次不再提醒，权限被拒友好引导设置）；
- *  9. 视频通话支持实时从摄像头抽帧直连独立识图 API，无缝事实感知注入；
- *  10. 专属极速口语 Prompt（剥离联网/表情包，短平快日常口语，细腻生活背景音）；
- *  11. 通话结束全自动归档为第三人称具名客观记录（IndexedDB 永久保存，支持长按彻底删除）。
+ *  1. 深度抗噪滤波：人声门限提升至 50，连续 5 帧确认，0.8 秒最短有效出声门禁，压死环境风扇与杂音；
+ *  2. 接通首 1.5 秒噪声免疫锁：杜绝开麦瞬间环境音误掐断角色的主动问候；
+ *  3. 异步 TTS 序列锁（ttsSequenceId）：彻底根除由于 TTS 合成慢导致新旧对白串音错乱的 Bug；
+ *  4. 视频通话全链路修复：加入超时兜底，彻底解决无回复、无字幕与死锁问题；
+ *  5. 视觉三模态实时开关：支持【设置外挂视觉 API】/【主模型原生看图】/【关闭视觉】一键循环切换；
+ *  6. 视频/语音双轨动态声波 HUD：微信原生微绿平滑动态声波条与实时倾听状态；
+ *  7. 视频通话支持实时从摄像头抽帧直连独立识图 API 或直传多模态主模型；
+ *  8. 专属极速口语 Prompt（剥离联网/表情包，短平快日常口语，细腻生活背景音）；
+ *  9. 通话结束全自动归档为第三人称具名客观记录（IndexedDB 永久保存，支持长按彻底删除）。
  */
 
 (function() {
@@ -26,6 +24,7 @@
     let _globalCallTtsSequence = 0;
 
     const PRIVACY_STORAGE_KEY = 'mcyt_call_video_privacy_agreed';
+    const VISION_MODE_STORAGE_KEY = 'mcyt_call_vision_mode'; // 'external' | 'direct' | 'off'
 
     // 格式化秒数为 00:00
     function formatCallTimer(seconds) {
@@ -67,7 +66,7 @@
                 </p>
                 <ul style="margin:0 0 10px;padding-left:18px;color:#555;font-size:12px;">
                     <li>视频画面<b>仅在手机本地临时渲染</b>，掌机云端服务器绝不录制、绝不抓取或存储您的面容隐私；</li>
-                    <li>若您配置了视觉识图 AI，画面抽帧仅用于单次客观理解，解析后即刻销毁。</li>
+                    <li>若您配置了视觉识图，画面抽帧仅用于单次客观理解，解析后即刻销毁。</li>
                 </ul>
                 <div style="background:#f7f7f7;padding:8px 10px;border-radius:6px;border:0.5px solid #eee;margin-top:6px;">
                     <label style="display:flex;align-items:center;gap:8px;font-size:12px;color:#222;cursor:pointer;user-select:none;">
@@ -162,11 +161,15 @@
         // 初始化 Session 运行时状态并自增序列锁
         _globalCallTtsSequence++;
 
+        const currentVisionMode = localStorage.getItem(VISION_MODE_STORAGE_KEY) || 'external';
+
         window._activeCallSession = {
             npcId,
             mode,
             facingMode: currentFacing,
+            visionMode: currentVisionMode, // 'external' | 'direct' | 'off'
             startTime: Date.now(),
+            connectTimestamp: Date.now(), // 用于接通初始防抖锁
             durationSeconds: 0,
             timerInterval: null,
             stream: localStream,
@@ -201,13 +204,14 @@
         // 启动抗噪麦克风音量监听与 VAD 全双工通道
         startHardwareAudioVAD(localStream);
 
-        // 播报初始接通提示
+        // 播报初始接通提示（预留 600ms 缓冲，确保音频通道与 UI 挂载完毕）
         const targetName = getNpcFullName(npcId);
         setTimeout(() => {
+            if (!window._activeCallSession) return;
             appendCallSubtitle('system', '系统', `已接通与 ${targetName} 的${mode === 'video' ? '视频' : '语音'}电话`);
             // 角色主动打招呼
             triggerCallAIReply(true);
-        }, 400);
+        }, 600);
     }
 
     // 硬件级音量分析器 + MediaRecorder 真实录制 + 抗噪滤波 + 2 秒极速静音发射
@@ -220,7 +224,7 @@
             const source = ctx.createMediaStreamSource(stream);
             const analyser = ctx.createAnalyser();
             analyser.fftSize = 128;
-            analyser.smoothingTimeConstant = 0.4; // 平滑滤波
+            analyser.smoothingTimeConstant = 0.45; // 平滑滤波
             source.connect(analyser);
 
             window._activeCallSession.audioContext = ctx;
@@ -228,8 +232,8 @@
 
             const dataArray = new Uint8Array(analyser.frequencyBinCount);
             
-            // 基础人声触发门槛调高至 38（有效压制环境风扇与底噪）
-            const BASE_VOICE_THRESHOLD = 38;
+            // 🌟 强力抗噪：基础人声触发门槛调升至 50（有效压死所有背景风扇与底噪）
+            const BASE_VOICE_THRESHOLD = 50;
 
             const checkAudioLoop = () => {
                 if (!window._activeCallSession) return;
@@ -241,20 +245,27 @@
                 }
                 const avgVolume = sum / 24;
 
-                // 更新界面音波条动态（同时更新语音与视频界面中的声波条）
+                // 更新界面音波条动态
                 updateCallWaveBars(avgVolume);
 
-                // 如果 AI 正在说话，需要更响亮的人声才触发打断（防环境杂音误打断）
+                // 🌟 接通首 1.5 秒免疫锁：禁止开麦瞬间环境音误掐断角色的初次问候
+                const timeSinceConnect = Date.now() - window._activeCallSession.connectTimestamp;
+                if (timeSinceConnect < 1500) {
+                    window._activeCallSession.animFrameId = requestAnimationFrame(checkAudioLoop);
+                    return;
+                }
+
+                // 如果 AI 正在说话，需要更响亮明确的人声才触发打断（防环境杂音误打断）
                 const currentThreshold = window._activeCallSession.isAiReplying 
-                    ? (BASE_VOICE_THRESHOLD * 1.55) 
+                    ? (BASE_VOICE_THRESHOLD * 1.65) 
                     : BASE_VOICE_THRESHOLD;
 
                 if (avgVolume > currentThreshold) {
                     window._activeCallSession.consecutiveVoiceFrames++;
 
-                    // 必须连续 3 帧（约 100ms）超门槛才确认为真人出声，彻底过滤单点爆破杂音
-                    if (window._activeCallSession.consecutiveVoiceFrames >= 3) {
-                        // 🌟 用户出声确认：掐断正在说话的 AI 与所有旧 TTS
+                    // 🌟 必须连续 5 帧（约 170ms）超门槛才确认为真人出声，彻底过滤单点爆破杂音
+                    if (window._activeCallSession.consecutiveVoiceFrames >= 5) {
+                        // 用户出声确认：掐断正在说话的 AI 与旧 TTS
                         interruptAiReplyIfActive();
 
                         // 启动录制块收集
@@ -277,7 +288,7 @@
 
                     if (window._activeCallSession.isUserSpeaking) {
                         if (!window._activeCallSession.silenceTimer) {
-                            // 🌟 静音倒计时满 2 秒（2000ms），停顿更自然干脆
+                            // 🌟 静音倒计时满 2 秒（2000ms），停顿自然干脆
                             window._activeCallSession.silenceTimer = setTimeout(() => {
                                 handleUserFinishSpokenAudio();
                             }, 2000);
@@ -321,10 +332,10 @@
     // 校验文本是否属于背景杂音幻觉
     function isJunkNoiseText(text) {
         if (!text) return true;
-        const cleaned = text.trim().replace(/[，。！？,.!?~、 ]/g, '');
+        const cleaned = text.trim().replace(/[，。！？,.!?~、 \-_]/g, '');
         if (cleaned.length < 2) return true;
         // 典型 Whisper 杂音幻觉过滤
-        const JUNK_PATTERNS = ['呃', '啊', '嗯', '哦', '哎', '谢谢收看', '感谢观看', 'you', 'the', '字幕', 'Bye'];
+        const JUNK_PATTERNS = ['呃', '啊', '嗯', '哦', '哎', '谢谢收看', '感谢观看', 'you', 'the', '字幕', 'Bye', '不客气', '再见', 'hello'];
         if (JUNK_PATTERNS.includes(cleaned)) return true;
         return false;
     }
@@ -333,6 +344,8 @@
     async function handleUserFinishSpokenAudio() {
         const session = window._activeCallSession;
         if (!session) return;
+
+        const speakingDuration = Date.now() - session.speakingStartTime;
 
         session.isUserSpeaking = false;
         if (session.silenceTimer) {
@@ -359,8 +372,8 @@
             session.mediaRecorder = null;
         }
 
-        // 音频过小（少于 1 秒有效数据），判定为轻微杂音直接丢弃
-        if (!audioBlob || audioBlob.size < 1200) {
+        // 🌟 强力时长与体积门限：出声小于 0.8 秒或音频数据小于 2000 字节，判定为瞬时杂音直接丢弃
+        if (speakingDuration < 800 || !audioBlob || audioBlob.size < 2000) {
             setCallStatusText('通话连接稳定', '#07c160');
             return;
         }
@@ -390,20 +403,28 @@
         const playerName = getPlayerFullName();
         appendCallSubtitle('player', playerName, recognizedText);
 
-        // 如果是视频通话，抓取单帧画面
+        // 🌟 视频通话画面感知调度
         let visualInsight = '';
-        if (session.mode === 'video') {
+        let base64DirectImg = null;
+
+        if (session.mode === 'video' && session.visionMode !== 'off') {
             const base64Img = captureVideoFrameBase64();
             if (base64Img) {
-                visualInsight = await inspectVisualFrameAsync(base64Img);
+                if (session.visionMode === 'external') {
+                    // 模式 A：外挂独立视觉识图 API（带 3.5 秒极速超时保护，超时不卡死通话）
+                    visualInsight = await inspectVisualFrameAsync(base64Img);
+                } else if (session.visionMode === 'direct') {
+                    // 模式 B：主模型原生识图，直接暂存 Base64 供组装 messages
+                    base64DirectImg = base64Img;
+                }
             }
         }
 
         // 触发角色思考回答
-        triggerCallAIReply(false, recognizedText, visualInsight);
+        triggerCallAIReply(false, recognizedText, visualInsight, base64DirectImg);
     }
 
-    // 🌟 豆包式打断机制：用户出声瞬间掐断 AI 网络生成与旧 TTS 发音，并自增序列号
+    // 豆包式打断机制：用户出声瞬间掐断 AI 网络生成与旧 TTS 发音，并自增序列号
     function interruptAiReplyIfActive() {
         const session = window._activeCallSession;
         if (!session) return;
@@ -505,7 +526,6 @@
                 const videoEl = document.getElementById('wechatCallLocalVideo');
                 if (videoEl) {
                     videoEl.srcObject = session.stream;
-                    // 后置镜头不需要镜像反转，前置需要
                     videoEl.style.transform = (nextFacing === 'user') ? 'scaleX(-1)' : 'none';
                 }
 
@@ -523,6 +543,43 @@
         }
     }
 
+    // 🌟 视觉模式实时切换中枢
+    function toggleCallVisionMode() {
+        const session = window._activeCallSession;
+        if (!session || session.mode !== 'video') return;
+
+        const modes = ['external', 'direct', 'off'];
+        const currentIdx = modes.indexOf(session.visionMode);
+        const nextMode = modes[(currentIdx + 1) % modes.length];
+        session.visionMode = nextMode;
+        localStorage.setItem(VISION_MODE_STORAGE_KEY, nextMode);
+
+        updateVisionModeUI(nextMode);
+    }
+
+    function updateVisionModeUI(mode) {
+        const textEl = document.getElementById('callVisionModeText');
+        const iconWrap = document.getElementById('callVisionModeIconWrap');
+        if (!textEl || !iconWrap) return;
+
+        if (mode === 'external') {
+            textEl.textContent = '外挂识图';
+            iconWrap.style.color = '#07c160';
+            iconWrap.style.borderColor = '#07c160';
+            if (typeof showToast === 'function') showToast('视觉模式: 调用设置中的独立识图 API', 'info', 1500);
+        } else if (mode === 'direct') {
+            textEl.textContent = '原生看图';
+            iconWrap.style.color = '#38bdf8';
+            iconWrap.style.borderColor = '#38bdf8';
+            if (typeof showToast === 'function') showToast('视觉模式: 主模型多模态直接看图', 'info', 1500);
+        } else {
+            textEl.textContent = '不识图';
+            iconWrap.style.color = '#999999';
+            iconWrap.style.borderColor = '#666666';
+            if (typeof showToast === 'function') showToast('视觉模式: 已关闭画面识别（纯对讲）', 'info', 1500);
+        }
+    }
+
     // 渲染全屏通话 HUD 界面（微信原生极简黑灰毛玻璃）
     function renderCallOverlay(npcId, mode, stream) {
         document.getElementById('wechatCallOverlayModal')?.remove();
@@ -530,6 +587,7 @@
         const npc = window.G.npcs[npcId];
         const npcAvatar = npc.avatarUrl || npc.avatar || 'assets/icons/chat.png';
         const targetName = getNpcFullName(npcId);
+        const initialVisionMode = localStorage.getItem(VISION_MODE_STORAGE_KEY) || 'external';
 
         const overlay = document.createElement('div');
         overlay.id = 'wechatCallOverlayModal';
@@ -567,8 +625,8 @@
                         <div style="color: #ffffff; font-size: 16px; font-weight: 600; margin-top: 14px; letter-spacing: 0.3px;">${escapeHtml(targetName)}</div>
                         <div id="callAiStatusTextVideo" style="font-size: 12px; color: #07c160; margin-top: 6px;">通话连接稳定</div>
 
-                        <!-- 🌟 视频通话实时出声动态声波指示器（毛玻璃胶囊） -->
-                        <div id="callSpeakingWaveWrapVideo" style="display: flex; align-items: center; gap: 4px; height: 26px; margin-top: 12px; padding: 0 12px; border-radius: 14px; background: rgba(0,0,0,0.4); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); opacity: 0.35; transition: opacity 0.2s ease;">
+                        <!-- 视频通话实时出声动态声波指示器 -->
+                        <div id="callSpeakingWaveWrapVideo" style="display: flex; align-items: center; gap: 4px; height: 26px; margin-top: 12px; padding: 0 12px; border-radius: 14px; background: rgba(0,0,0,0.45); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); opacity: 0.35; transition: opacity 0.2s ease; border: 0.5px solid rgba(255,255,255,0.1);">
                             <span class="call-live-wave-bar" style="width: 3px; height: 4px; background: #07c160; border-radius: 2px; transition: height 0.08s ease;"></span>
                             <span class="call-live-wave-bar" style="width: 3px; height: 6px; background: #07c160; border-radius: 2px; transition: height 0.08s ease;"></span>
                             <span class="call-live-wave-bar" style="width: 3px; height: 8px; background: #07c160; border-radius: 2px; transition: height 0.08s ease;"></span>
@@ -603,27 +661,36 @@
                 <!-- 隐形画板：用于视频抽帧识图 -->
                 <canvas id="wechatCallSnapshotCanvas" style="display:none;"></canvas>
 
-                <!-- 底部磨砂流式字幕窗口（仅展示最近对白，前序平滑淡化，可手势翻看） -->
-                <div style="position: absolute; bottom: 10px; left: 18px; right: 18px; max-height: 155px; display: flex; flex-direction: column; z-index: 6;">
-                    <div id="wechatCallSubtitleArea" style="overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 10px 14px; background: rgba(20, 20, 20, 0.65); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-radius: 14px; border: 0.5px solid rgba(255,255,255,0.1); box-shadow: 0 4px 20px rgba(0,0,0,0.35);">
-                        <div style="text-align: center; color: rgba(255,255,255,0.4); font-size: 11px;">— 说话停顿 2 秒自动发送 · 随时开口可打断 —</div>
+                <!-- 底部磨砂流式字幕窗口（确保高 z-index 15，覆盖在视频之上） -->
+                <div style="position: absolute; bottom: 10px; left: 18px; right: 18px; max-height: 155px; display: flex; flex-direction: column; z-index: 15;">
+                    <div id="wechatCallSubtitleArea" style="overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 10px 14px; background: rgba(15, 15, 15, 0.72); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-radius: 14px; border: 0.5px solid rgba(255,255,255,0.12); box-shadow: 0 4px 20px rgba(0,0,0,0.45);">
+                        <div style="text-align: center; color: rgba(255,255,255,0.45); font-size: 11px;">— 说话停顿 2 秒自动发送 · 随时开口可打断 —</div>
                     </div>
                 </div>
             </div>
 
             <!-- 底部极简微信按键栏 -->
-            <div style="padding: 24px 20px 38px; display: flex; justify-content: center; align-items: center; position: relative; z-index: 10;">
+            <div style="padding: 24px 20px 38px; display: flex; justify-content: center; align-items: center; position: relative; z-index: 20;">
                 
                 <!-- 挂断红键（居中醒目） -->
                 <button type="button" id="btnCallHangup" title="挂断" style="border: none; background: #fa5151; color: #ffffff; width: 68px; height: 68px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 6px 20px rgba(250, 81, 81, 0.45); -webkit-tap-highlight-color: transparent;">
                     <svg viewBox="0 0 24 24" style="width: 30px; height: 30px; fill: currentColor;"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.996.996 0 0 1 0-1.41C3.28 8.84 7.42 7 12 7c4.58 0 8.72 1.84 11.71 4.67.39.39.39 1.02 0 1.41l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg>
                 </button>
 
-                <!-- 翻转镜头按键（仅在视频模式下显示在右侧） -->
+                <!-- 🌟 视频模式专属按键群：视觉模式切换 + 翻转镜头 -->
                 ${mode === 'video' ? `
-                <div style="position: absolute; right: 36px;">
-                    <button type="button" id="btnCallFlipCamera" title="翻转镜头" style="border: 1px solid rgba(255,255,255,0.25); background: rgba(255,255,255,0.12); backdrop-filter: blur(8px); color: #ffffff; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; -webkit-tap-highlight-color: transparent;">
-                        <svg viewBox="0 0 24 24" style="width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"><path d="M20 16v5h-5"/><path d="M4 8V3h5"/><path d="M4 14a8 8 0 0 0 14.54 3.46L20 21"/><path d="M20 10a8 8 0 0 0-14.54-3.46L4 3"/></svg>
+                <!-- 左侧：视觉模式切换胶囊 -->
+                <div style="position: absolute; left: 30px;">
+                    <button type="button" id="btnCallToggleVisionMode" title="切换视觉感知模式" style="border: 1px solid rgba(255,255,255,0.25); background: rgba(255,255,255,0.12); backdrop-filter: blur(8px); color: #ffffff; padding: 0 12px; height: 46px; border-radius: 23px; display: flex; align-items: center; gap: 6px; cursor: pointer; -webkit-tap-highlight-color: transparent;">
+                        <div id="callVisionModeIconWrap" style="width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid #07c160; color: #07c160; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: bold;">●</div>
+                        <span id="callVisionModeText" style="font-size: 11.5px; font-weight: 500; color: #ffffff;">外挂识图</span>
+                    </button>
+                </div>
+
+                <!-- 右侧：翻转镜头按键 -->
+                <div style="position: absolute; right: 30px;">
+                    <button type="button" id="btnCallFlipCamera" title="翻转镜头" style="border: 1px solid rgba(255,255,255,0.25); background: rgba(255,255,255,0.12); backdrop-filter: blur(8px); color: #ffffff; width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; -webkit-tap-highlight-color: transparent;">
+                        <svg viewBox="0 0 24 24" style="width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"><path d="M20 16v5h-5"/><path d="M4 8V3h5"/><path d="M4 14a8 8 0 0 0 14.54 3.46L20 21"/><path d="M20 10a8 8 0 0 0-14.54-3.46L4 3"/></svg>
                     </button>
                 </div>
                 ` : ''}
@@ -631,6 +698,11 @@
         `;
 
         document.body.appendChild(overlay);
+
+        // 初始化视觉按钮外观
+        if (mode === 'video') {
+            updateVisionModeUI(initialVisionMode);
+        }
 
         // 挂载本地视频流
         if (mode === 'video' && stream) {
@@ -649,6 +721,9 @@
             overlay.querySelector('#btnCallFlipCamera')?.addEventListener('click', () => {
                 flipCallCamera();
             });
+            overlay.querySelector('#btnCallToggleVisionMode')?.addEventListener('click', () => {
+                toggleCallVisionMode();
+            });
         }
     }
 
@@ -665,16 +740,27 @@
         return canvas.toDataURL('image/jpeg', 0.7);
     }
 
-    // 独立识图 API 调用（如有配置）
+    // 🌟 独立识图 API 调用（带 3.5 秒极速超时保护，超时不卡死通话）
     async function inspectVisualFrameAsync(base64Img) {
         try {
-            const rawCfg = localStorage.getItem('mcyt_vision_api_config');
-            if (!rawCfg) return '';
-            const cfg = JSON.parse(rawCfg);
-            if (!cfg.apiKey || !cfg.baseUrl) return '';
+            let cfg = null;
+            if (typeof window.getSafeVisionConfig === 'function') {
+                cfg = window.getSafeVisionConfig();
+            } else {
+                const rawCfg = localStorage.getItem('mcyt_vision_api_config');
+                if (rawCfg) cfg = JSON.parse(rawCfg);
+            }
+
+            if (!cfg || !cfg.apiKey || !cfg.baseUrl) {
+                return '';
+            }
+
+            const abortCtrl = new AbortController();
+            const timeoutId = setTimeout(() => abortCtrl.abort(), 3500);
 
             const res = await fetch(`${cfg.baseUrl.replace(/\/+$/, '')}/chat/completions`, {
                 method: 'POST',
+                signal: abortCtrl.signal,
                 headers: {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${cfg.apiKey}`
@@ -693,6 +779,8 @@
                     max_tokens: 60
                 })
             });
+
+            clearTimeout(timeoutId);
 
             if (!res.ok) return '';
             const data = await res.json();
@@ -717,12 +805,12 @@
         item.className = 'call-subtitle-item';
         item.style.cssText = `
             font-size: 13px; line-height: 1.45;
-            color: ${isSystem ? '#999' : (isPlayer ? '#a7f3d0' : '#ffffff')};
+            color: ${isSystem ? '#aaa' : (isPlayer ? '#a7f3d0' : '#ffffff')};
             word-break: break-word;
         `;
 
         if (isSystem) {
-            item.innerHTML = `<span style="font-size:11px;">[${time}] ${escapeHtml(text)}</span>`;
+            item.innerHTML = `<span style="font-size:11px;color:#888;">[${time}] ${escapeHtml(text)}</span>`;
         } else {
             item.innerHTML = `
                 <span style="font-weight:600;color:${isPlayer ? '#34d399' : '#38bdf8'};">${escapeHtml(name)}: </span>
@@ -744,8 +832,8 @@
         area.scrollTop = area.scrollHeight;
     }
 
-    // 触发角色极速电话回复（超轻量专属 Prompt，剥离联网/表情包）
-    async function triggerCallAIReply(isFirstGreeting = false, userSpoken = '', visualInsight = '') {
+    // 触发角色极速电话回复（超轻量专属 Prompt，支持多模态原生图文或外挂事实感知）
+    async function triggerCallAIReply(isFirstGreeting = false, userSpoken = '', visualInsight = '', base64DirectImg = null) {
         const session = window._activeCallSession;
         if (!session) return;
 
@@ -814,10 +902,20 @@
                 role: 'user',
                 content: `(电话刚接通，请你先开口向${playerName}自然打个招呼)`
             });
+        } else if (base64DirectImg) {
+            // 🌟 模式 B：主模型原生识图，直接向多模态主模型投递图片帧
+            messages.push({
+                role: 'user',
+                content: [
+                    { type: 'text', text: `[当前视频画面事实感知帧] ${playerName}对你说: ${userSpoken || '(正在听你说话)'}` },
+                    { type: 'image_url', image_url: { url: base64DirectImg } }
+                ]
+            });
         } else if (visualInsight) {
+            // 🌟 模式 A：外挂视觉 API 解析出的事实文字注入
             messages.push({
                 role: 'system',
-                content: `[当前视频画面事实感知: ${visualInsight}]`
+                content: `[当前摄像头画面客观事实: ${visualInsight}]`
             });
         }
 
@@ -864,7 +962,7 @@
         const session = window._activeCallSession;
         if (!session) return;
         
-        // 🌟 序列锁门禁：如果不是当前最新一轮生成，绝对不上屏不发音！
+        // 序列锁门禁：如果不是当前最新一轮生成，绝对不上屏不发音
         if (sequenceId !== undefined && sequenceId !== session.activeTtsSequenceId) {
             console.log('[CallAI] 拦截到陈旧回复，已就地丢弃防串音');
             return;
@@ -884,7 +982,6 @@
             // 剥离掉背景音括号，仅朗读对白
             const speakPureText = text.replace(/\(.*?\)|（.*?）/g, '').trim() || text;
             
-            // 异步 TTS 发音保护：传入当前 sequenceId，避免回调时串音
             window.ttsEngine.speak(speakPureText, npcVoiceCfg, () => {
                 if (window._activeCallSession && window._activeCallSession.activeTtsSequenceId === sequenceId) {
                     setCallStatusText('通话连接稳定', '#07c160');
@@ -1000,7 +1097,7 @@
         }
     };
 
-    // 🌟 全局提供：删除单条通话记录并撤回记忆通道
+    // 全局提供：删除单条通话记录并撤回记忆通道
     window.deleteCallRecordMessage = async function(msgId, npcId) {
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
         const hist = window.getAccountChatHistory(npcId, curAcc.id);
