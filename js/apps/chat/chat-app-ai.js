@@ -6,12 +6,19 @@
  *    带跨时段、隔夜双时间戳感知、塔罗牌解读感知、Rememori 证据链沉淀、
  *    专属好友独立联网搜索检索与权威网页卡片推送、以及好感度铁律动态结算机制；
  *    🌟 独立外挂视觉识图：尊重用户发图弹窗勾选，精准调用外部 Vision 接口为纯文本 AI 解析客观画面事实；
- *    🌟 极简优化：机器直接在末尾提供确定的时间事实，杜绝大模型计算，节省 Token 与注意力；
+ *    🌟 极简优化：机器直接在末尾提供确定的时间事实（精准人名与24小时制锁定，杜绝早晚颠倒），节省 Token 与注意力；
  *    🌟 角色主动发送文字图片（[IMAGE_TEXT]）与拟真生活排版卡片（[UI_CARD]）无损解析与安全消毒。
  */
 
 (function() {
     'use strict';
+
+    // 辅助工具：获取规范的 24 小时制 HH:mm 格式时间（绝不发生时制截断）
+    function getStandard24HourTime(date = new Date()) {
+        const h = date.getHours().toString().padStart(2, '0');
+        const m = date.getMinutes().toString().padStart(2, '0');
+        return `${h}:${m}`;
+    }
 
     // 独立视觉 / 识图 API 调用核心管道（OpenAI Vision 规范，兼容智谱 glm-4v-flash 等）
     async function callVisionAPI(imageUrl) {
@@ -247,7 +254,6 @@
             for (let i = history.length - 1; i >= Math.max(0, history.length - 6); i--) {
                 const item = history[i];
                 if (item && item.from === 'player' && (item.type === 'image' || item.imageUrl)) {
-                    // 若用户在发图时勾选了使用识图（useVision !== false），且尚未解析过
                     if (item.useVision !== false && !item.visionAnalyzed && (item.imageUrl || item.url)) {
                         const targetImgUrl = item.imageUrl || item.url;
                         try {
@@ -298,7 +304,6 @@
                 m.peekHandled = true;
                 return `[系统]: 对方撤回了一条消息`;
             }
-            // 🌟 多语种语音注入：母语原声 + 中文对照完整告知大模型
             if (m.type === 'voice') {
                 const bilingualShow = m.originalText ? `[母语原声: "${m.originalText}", 中文译: "${m.text}"]` : `"${m.text || ''}"`;
                 return `${speaker} [发了条语音，背景音: ${m.audioBg || '无'}]: ${bilingualShow}`;
@@ -356,7 +361,7 @@
             }
         }
 
-        // 🌟 针对全语种母语（德语/英语/日语/法语等）注入通用母语语音协议
+        // 🌟 针对全语种母语注入通用母语语音协议
         let styleConstraint = `【条数硬性约束】：本次回复必须分为 ${minMsgs} 到 ${maxMsgs} 个独立的 [MSG]...[/MSG] 消息气泡发送。\n`;
         
         styleConstraint += `【全语种拟真语音协议】：\n` +
@@ -381,7 +386,7 @@
             `格式必须独立成行，严禁嵌套在 [MSG] 内部：\n` +
             `[IMAGE_TEXT]100到150字以内的纯客观画面细节描绘，犹如用相机镜头拍下一张真实相片（写明光线、角度、静止物品、色调，纯静止画面，严禁动作神态描写）[/IMAGE_TEXT]\n`;
 
-        // 注入拟真生活排版卡片指令（若开启）
+        // 注入拟真生活排版卡片指令
         if (uiCardCfg && uiCardCfg.enabled) {
             styleConstraint += `【拟真生活排版卡片协议（已开启）】：\n` +
                 `偏好要求：${uiCardCfg.customPrompt || '在分享购物结账、便签、清单或收到小票时生成拟真卡片'}\n` +
@@ -413,11 +418,14 @@
                 userPrompt: recentDialogue ? `最近对话：\n${recentDialogue}${searchContextPrompt}\n\n回复：` : '打个招呼。'
             };
 
+        // 🛡️ 核心修复：带人名强绑定的确定时间事实，绝不允许大模型反转代词
         if (promptCtx.timeCtx) {
             const tc = promptCtx.timeCtx;
             const disableTz = !!(npc.chatSettings && npc.chatSettings.disableTimezone);
             if (!disableTz && tc.isCrossTimezone) {
-                promptCtx.userPrompt += `\n\n【当前时间事实】：你现在是【${tc.nDirect}】，对方现在是【${tc.pDirect}】。`;
+                promptCtx.userPrompt += `\n\n【当前客观时间事实】：角色「${npc.name}」所在地现在是【${tc.nDirect}】，聊天对象「${curAcc.name}」所在地现在是【${tc.pDirect}】。（严禁混淆颠倒双方时间事实！）`;
+            } else if (!disableTz) {
+                promptCtx.userPrompt += `\n\n【当前客观时间事实】：双方当前时间皆为【${tc.nDirect}】。`;
             }
         }
 
@@ -512,7 +520,7 @@
                             favor: npc.favor || 50,
                             avatar: npc.avatarUrl || 'assets/icons/chat.png',
                             reason: `我是 ${npc.name}，你刚才把名片推给我啦，来加上！`,
-                            time: new Date().toLocaleTimeString().slice(0, 5)
+                            time: getStandard24HourTime()
                         });
                     }
                 }
@@ -522,7 +530,7 @@
             const estOutputTokens = Math.round(clean.length * 1.35);
             if (typeof window.recordTokenHistoryEntry === 'function') {
                 window.recordTokenHistoryEntry({
-                    time: new Date().toLocaleTimeString().slice(0, 5),
+                    time: getStandard24HourTime(),
                     targetName: npc.remark || npc.name,
                     type: '私聊',
                     inTokens: estInputTokens,
@@ -683,7 +691,7 @@
 
             for (let i = 0; i < finalEntities.length; i++) {
                 const item = finalEntities[i];
-                const time = new Date().toLocaleTimeString().slice(0, 5);
+                const time = getStandard24HourTime();
 
                 if (item.type === 'moment_notice') {
                     window.pushChatMessageSafe(npcId, {
@@ -770,7 +778,7 @@
                 const topPage = searchResults[0];
                 if (topPage && topPage.url) {
                     await new Promise(r => setTimeout(r, 480));
-                    const time = new Date().toLocaleTimeString().slice(0, 5);
+                    const time = getStandard24HourTime();
                     const pageCardMsg = {
                         from: 'npc',
                         type: 'web_page',
@@ -793,7 +801,7 @@
                 window.pushChatMessageSafe(npcId, {
                     from: 'behind_screen',
                     text: behindText,
-                    time: new Date().toLocaleTimeString().slice(0, 5),
+                    time: getStandard24HourTime(),
                     timestamp: Date.now()
                 }, curAcc.id);
                 if (window.G.currentChatNpc === npcId && typeof renderSingleChatWindow === 'function') renderSingleChatWindow();

@@ -3,9 +3,10 @@
  * 🧠 微信聊天活人感提示词架构引擎
  * 模块化装配：主体通用拟人核心 + 关系进阶状态机 + 异地恋模块 + 时差生理感知 + 双时间戳隔夜作息感知 + 动态母语双语与仿微信语音协议 + 真实语义表情包索引 + 动态发布协议 + 大小号双重身份认知与名片接纳状态机 + 🌟 Rememori 忆海向量长效记忆挂载 + 🔮 塔罗牌阵拟人认知与特色解读协议 + 🎭 {{user}} / {{y/n}} 动态宏变量替换 + 📸 文字图片发送协议 + 🧾 拟真生活排版卡片协议
  * 🌟 极简优化：
- * 1. 机器完成 100% 时间换算（精确到分钟与早晚天色口语），大模型零计算、零推理消耗；
- * 2. 极大精简提示词，节省大量 Token，杜绝分散大模型注意力；
- * 3. 动态自适应多国母语（西班牙语、日语、韩语、法语、德语、英语等），支持独立开关。
+ * 1. 机器完成 100% 时间换算（严格锁定 24 小时制与早晚时段事实，大模型零计算、零推理消耗，彻底终结早晚颠倒 Bug）；
+ * 2. 角色与玩家时差严格绑定角色具体姓名，严防大模型将“你/对方”张冠李戴；
+ * 3. 极大精简提示词，节省大量 Token，杜绝分散大模型注意力；
+ * 4. 动态自适应多国母语（西班牙语、日语、韩语、法语、德语、英语等），支持独立开关。
  */
 
 (function() {
@@ -86,13 +87,15 @@
 
     /**
      * 利用原生 Intl 引擎直接将当地时间格式化为口语化的直接事实（AI 零计算）
+     * 🛡️ 核心加固：强制采用 en-GB + hourCycle: 'h23' 严格锁定 24 小时制数字，绝不允许 20:00 变成 08:00
      */
     function getZonedDirectTime(timeZoneId = 'Asia/Shanghai') {
         const now = new Date();
         try {
-            const formatter = new Intl.DateTimeFormat('zh-CN', {
+            const formatter = new Intl.DateTimeFormat('en-GB', {
                 timeZone: timeZoneId,
                 hour12: false,
+                hourCycle: 'h23',
                 hour: '2-digit',
                 minute: '2-digit'
             });
@@ -100,9 +103,11 @@
             const map = {};
             parts.forEach(p => { map[p.type] = p.value; });
 
-            const hour = parseInt(map.hour, 10) || 0;
+            const parsedH = parseInt(map.hour, 10);
             const minute = parseInt(map.minute, 10) || 0;
+            const hour = (isNaN(parsedH) || parsedH < 0 || parsedH > 23) ? now.getHours() : parsedH;
             const mStr = minute.toString().padStart(2, '0');
+            const hStr = hour.toString().padStart(2, '0');
 
             let period = '上午';
             let state = '正常活动';
@@ -130,14 +135,15 @@
                 state = '夜深准备休息';
             }
 
-            // 格式化为：下午 14:30
-            const directStr = `${period} ${hour.toString().padStart(2, '0')}:${mStr}`;
+            // 格式化为：晚上 20:30（明确带中文时段与24小时制时间）
+            const directStr = `${period} ${hStr}:${mStr}`;
 
             return { hour, minute, directStr, period, state };
         } catch (err) {
             const h = (now.getUTCHours() + 8) % 24;
             const m = now.getUTCMinutes().toString().padStart(2, '0');
-            return { hour: h, minute: 0, directStr: `${h}:${m}`, period: '日常', state: '正常' };
+            const period = (h >= 18 && h < 23) ? '晚上' : (h >= 12 && h < 18 ? '下午' : (h >= 5 && h < 12 ? '上午' : '深夜'));
+            return { hour: h, minute: now.getMinutes(), directStr: `${period} ${h.toString().padStart(2, '0')}:${m}`, period, state: '正常' };
         }
     }
 
@@ -167,6 +173,8 @@
             npcRegion,
             pDirect: pTime.directStr,
             pPeriod: pTime.period,
+            pState: pTime.state,
+            pHour: pTime.hour,
             nDirect: nTime.directStr,
             nPeriod: nTime.period,
             nState: nTime.state,
@@ -403,14 +411,15 @@ ${isBilingualEnabled ? `
         let assembledSysPrompt = `你正在微信上扮演角色「${npc.name}」。\n`;
         assembledSysPrompt += `【你的档案】：\n- 设定/性格：${processedPersona}\n- 常驻地区：${nRegion}\n- 当前好感度：${npc.favor || 50}/100\n- 恋爱关系状态：${isDating ? '已确立恋人关系（交往中）' : (npc.favor >= 80 ? '关系亲密/暧昧试探期' : '普通朋友')}\n\n`;
 
-        // 🕰️ 时差生理感知模块：极简直接事实输入（零计算消耗）
+        // 🕰️ 时差生理感知模块：明确指明角色姓名与用户姓名，彻底斩断代词颠倒
         if (!disableTimezone) {
             if (timeCtx.isCrossTimezone) {
-                assembledSysPrompt += `【当前客观时间事实（已由系统直接换算，无需自行计算）】：\n`;
-                assembledSysPrompt += `- 你的所在地（${nRegion}）当前时间：【${timeCtx.nDirect}】（状态：${timeCtx.nState}）\n`;
-                assembledSysPrompt += `- 对方所在地（${pRegion}）当前时间：【${timeCtx.pDirect}】\n\n`;
+                assembledSysPrompt += `【当前客观时间事实（已由系统精准核算，严禁颠倒双方时间事实）】：\n`;
+                assembledSysPrompt += `- 角色「${npc.name}」（即你自己，常驻：${nRegion}）当前时间是：【${timeCtx.nDirect}】（生理状态：${timeCtx.nState}）\n`;
+                assembledSysPrompt += `- 聊天对象「${currentUserName}」（常驻：${pRegion}）当前时间是：【${timeCtx.pDirect}】\n`;
+                assembledSysPrompt += `★【时差认知铁律】：严禁把「${currentUserName}」所在地区的时间与你自己的时间搞反！如果「${currentUserName}」那边是晚上，绝不能说成对方是上午！\n\n`;
             } else {
-                assembledSysPrompt += `【客观时间事实】：双方处于同一时区（当前时间：【${timeCtx.nDirect}】），作息步调完全一致。\n\n`;
+                assembledSysPrompt += `【客观时间事实】：双方处于同一时区（当前时间皆为：【${timeCtx.nDirect}】），作息步调完全一致。\n\n`;
             }
         } else {
             assembledSysPrompt += `【时差设置】：时差换算已关闭。你与对方处于相同作息节奏，无任何时差阻碍。\n\n`;
@@ -474,5 +483,5 @@ ${isBilingualEnabled ? `
         resolveRegionLanguage
     };
 
-    console.log('✅ ChatPromptEngine 微信活人感提示词架构引擎已升级：极简直接事实输入，AI 零计算消耗');
+    console.log('✅ ChatPromptEngine 微信活人感提示词架构引擎已升级：极简直接事实输入，AI 零计算消耗，时钟锁死 24 小时制');
 })();
