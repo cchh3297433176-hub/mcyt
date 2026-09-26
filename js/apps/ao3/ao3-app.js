@@ -3,19 +3,73 @@
  * 同人文库 App（站点聚合导航与沉浸式 AO3 文学空间）
  * 
  * 核心设计：
- * 1. 强制覆盖原生丑粉框：彻底隐藏宿主粉红假顶栏与全局粉红 AI loading 框，仅留顶部纯净微胶囊。
- * 2. 站点聚合门户：进入首先呈现同人文库站点导航，首发收录 Archive of Our Own (AO3)。
- * 3. 聊天联动直通：转发消息确立为玩家自身发言（from: 'player'），支持从微信单聊卡片一键平滑跳转直达小说阅读。
- * 4. 纯净文学排版：地毯式清除全部 Emoji，纯正象牙白与学术暗红质感。
- * 5. 唯一角色来源：100% 直连通讯录自建联系人，深度去 AI 味小说创作。
+ * 1. 海量数据持久化：100% 接入数十 GB 的 IndexedDB（localforage key: mcyt_fanworks），退后台与杀进程永不丢失！
+ * 2. 彻底歼灭粉色丑框：内置毫秒级 DOM 侦听雷达，凡是包含“AI 正在全力创作生成中”的弹窗露头即秒杀。
+ * 3. 强制覆盖原生丑粉框：彻底隐藏宿主粉红假顶栏，视口 100% 沉浸全屏，保留系统时间电量。
+ * 4. 站点聚合门户：进入首先呈现同人文库站点导航，首发收录 Archive of Our Own (AO3)。
+ * 5. 聊天双向直通：转发消息确立为玩家自身发言（from: 'player'），支持从微信单聊卡片一键平滑跳转直达小说阅读。
+ * 6. 纯净文学排版：地毯式清除全部 Emoji，纯正象牙白与学术暗红质感。
+ * 7. 唯一角色来源：100% 直连通讯录自建联系人，深度去 AI 味小说创作。
  */
 
 (function () {
     'use strict';
 
+    const AO3_STORAGE_KEY = 'mcyt_fanworks';
+    let _isAo3StorageLoaded = false;
+
     // ============================================================
-    // 0. 数据完整性与自建联系人池保障
+    // 0. IndexedDB (localForage) 海量持久化与冷启动数据门禁
     // ============================================================
+
+    /**
+     * 从数十 GB 的 IndexedDB 异步装载文库全部数据
+     */
+    async function loadAo3FanworksFromStorageAsync() {
+        if (!window.G) window.G = {};
+        try {
+            let loadedWorks = null;
+            if (window.localforage) {
+                loadedWorks = await window.localforage.getItem(AO3_STORAGE_KEY);
+            }
+            if (!loadedWorks) {
+                const rawLocal = localStorage.getItem(AO3_STORAGE_KEY);
+                if (rawLocal) loadedWorks = JSON.parse(rawLocal);
+            }
+
+            if (Array.isArray(loadedWorks) && loadedWorks.length > 0) {
+                G.fanworks = loadedWorks;
+            } else if (!G.fanworks) {
+                G.fanworks = [];
+            }
+            _isAo3StorageLoaded = true;
+        } catch (err) {
+            console.warn('[AO3 Storage] IndexedDB 装载异常，使用运行态兜底:', err);
+            if (!G.fanworks) G.fanworks = [];
+            _isAo3StorageLoaded = true;
+        }
+    }
+
+    /**
+     * 强力保存文库至数十 GB 的 IndexedDB 磁盘中
+     */
+    async function saveAo3FanworksToStorageAsync() {
+        if (!window.G || !G.fanworks) return;
+        try {
+            if (window.localforage) {
+                await window.localforage.setItem(AO3_STORAGE_KEY, G.fanworks);
+            }
+            // 兜底小副本当作冷备份（如果未超过配额）
+            try {
+                localStorage.setItem(AO3_STORAGE_KEY, JSON.stringify(G.fanworks));
+            } catch (_) {}
+
+            if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+        } catch (err) {
+            console.error('[AO3 Storage] IndexedDB 保存失败:', err);
+        }
+    }
+
     function ensureAo3DataIntegrity() {
         if (!window.G) window.G = {};
         if (!G.fanworks) G.fanworks = [];
@@ -138,14 +192,39 @@
     }
 
     // ============================================================
-    // 2. 自建高级白灰纯净弹窗与状态胶囊（彻底删除粉红丑框）
+    // 2. 粉色丑框毫秒级狙击雷达 + 自建白灰极简弹窗与微胶囊
     // ============================================================
-    function suppressLegacyPinkLoadingModal() {
-        const legacyModals = document.querySelectorAll('#aiLoadingModal, .ai-loading-modal, #loadingModal, .loading-modal');
-        legacyModals.forEach(m => {
-            m.style.setProperty('display', 'none', 'important');
-            m.style.setProperty('opacity', '0', 'important');
-            m.style.setProperty('pointer-events', 'none', 'important');
+
+    /**
+     * 实时拦截并从 DOM 中彻底连根拔起那个粉色弹窗
+     */
+    function killPinkLoadingModalImmediately() {
+        // 1. 针对已知类名和 ID
+        const targets = document.querySelectorAll('#aiLoadingModal, .ai-loading-modal, #loadingModal, .loading-modal, .sweet-alert');
+        targets.forEach(el => {
+            el.style.setProperty('display', 'none', 'important');
+            el.remove();
+        });
+
+        // 2. 针对包含该文案的任意元素
+        document.querySelectorAll('div, p, span').forEach(el => {
+            if (el.textContent && el.textContent.includes('AI 正在全力创作生成中')) {
+                const box = el.closest('[id*="modal"], [class*="modal"], [style*="position: fixed"]') || el;
+                box.style.setProperty('display', 'none', 'important');
+                box.remove();
+            }
+        });
+    }
+
+    // 启动全局 MutationObserver 监控雷达
+    const pinkModalKillerObserver = new MutationObserver(() => {
+        killPinkLoadingModalImmediately();
+    });
+    if (document.body) {
+        pinkModalKillerObserver.observe(document.body, { childList: true, subtree: true });
+    } else {
+        document.addEventListener('DOMContentLoaded', () => {
+            pinkModalKillerObserver.observe(document.body, { childList: true, subtree: true });
         });
     }
 
@@ -177,7 +256,7 @@
     window.closeAo3CustomModal = closeAo3CustomModal;
 
     function showAo3GeneratingPill(text) {
-        suppressLegacyPinkLoadingModal();
+        killPinkLoadingModalImmediately();
         let pill = document.getElementById('ao3GeneratingPill');
         if (!pill) {
             pill = document.createElement('div');
@@ -195,7 +274,7 @@
     function hideAo3GeneratingPill() {
         const pill = document.getElementById('ao3GeneratingPill');
         if (pill) pill.classList.remove('visible');
-        suppressLegacyPinkLoadingModal();
+        killPinkLoadingModalImmediately();
     }
 
     /**
@@ -232,10 +311,16 @@
     // ============================================================
     // 3. 视图分发引擎
     // ============================================================
-    window.renderAo3App = function (containerEl) {
+    window.renderAo3App = async function (containerEl) {
         ensureAo3DataIntegrity();
+
+        // 冷启动优先从 IndexedDB 捞出数据，杜绝渲染空状态
+        if (!_isAo3StorageLoaded) {
+            await loadAo3FanworksFromStorageAsync();
+        }
+
         document.body.classList.add('ao3-active-fullscreen');
-        suppressLegacyPinkLoadingModal();
+        killPinkLoadingModalImmediately();
 
         const target = containerEl || document.getElementById('appModalBody');
         if (!target) return;
@@ -555,7 +640,6 @@
         const curChapter = (work.chapters && work.chapters[curIdx]) ? work.chapters[curIdx] : { content: '' };
         const textSnippet = (curChapter.content || '').slice(0, 260) + '...';
 
-        // 🌟 核心修正：from 必须为 'player'，才能正确展示为玩家自己发送的消息气泡！
         const shareMsg = {
             _id: 'msg_ao3_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
             from: 'player',
@@ -719,7 +803,7 @@
     };
 
     // ============================================================
-    // 6. 执行生成第 1 章 (微胶囊状态条)
+    // 6. 执行生成第 1 章 (微胶囊状态条 + 写入海量 IndexedDB)
     // ============================================================
     window.executeCreateAo3Book = async function () {
         const title = (document.getElementById('ao3NewTitle')?.value || '').trim();
@@ -791,7 +875,8 @@ CP/关系：${pairing}
                 };
 
                 G.fanworks.unshift(newWork);
-                if (typeof autoSaveGame === 'function') autoSaveGame();
+                // 🌟 核心保活：强制写回数十 GB 的 IndexedDB！
+                await saveAo3FanworksToStorageAsync();
 
                 hideAo3GeneratingPill();
                 if (typeof showToast === 'function') showToast(`《${title}》已收录至文库`, 'success', 2000);
@@ -806,7 +891,7 @@ CP/关系：${pairing}
     };
 
     // ============================================================
-    // 7. 催粉开坑、续写与书评 AI
+    // 7. 催粉开坑、续写与书评 AI (全部写回 IndexedDB)
     // ============================================================
     window.triggerFanAo3Creation = async function () {
         const liveChars = getLiveChatCharacters();
@@ -869,7 +954,8 @@ ${writingPrompt}
                 };
 
                 G.fanworks.unshift(newWork);
-                if (typeof autoSaveGame === 'function') autoSaveGame();
+                // 🌟 核心保活：强制写回数十 GB 的 IndexedDB！
+                await saveAo3FanworksToStorageAsync();
 
                 hideAo3GeneratingPill();
                 if (typeof showToast === 'function') showToast(`读者上传了新作《${title}》`, 'success', 2000);
@@ -932,7 +1018,7 @@ ${writingPrompt}
                 work.activeChapterIdx = work.chapters.length - 1;
                 work.kudos = (work.kudos || 0) + Math.floor(Math.random() * 25 + 5);
 
-                if (typeof autoSaveGame === 'function') autoSaveGame();
+                await saveAo3FanworksToStorageAsync();
                 hideAo3GeneratingPill();
                 if (typeof showToast === 'function') showToast(`第 ${nextNum} 章已发布更新`, 'success', 2000);
                 window.renderAo3App();
@@ -996,7 +1082,7 @@ ${isAuthorMe ? `小说作者正是主播「${playerInfo.name}」本人！读者�
                     });
                 }
 
-                if (typeof autoSaveGame === 'function') autoSaveGame();
+                await saveAo3FanworksToStorageAsync();
                 hideAo3GeneratingPill();
                 if (typeof showToast === 'function') showToast('读者书评已更新', 'success', 1500);
                 window.renderAo3App();
@@ -1022,7 +1108,7 @@ ${isAuthorMe ? `小说作者正是主播「${playerInfo.name}」本人！读者�
         `);
     };
 
-    window.confirmPostAo3Comment = function (workId) {
+    window.confirmPostAo3Comment = async function (workId) {
         const text = (document.getElementById('myAo3CommentInput')?.value || '').trim();
         if (!text) {
             if (typeof showToast === 'function') showToast('评论不能为空', 'error');
@@ -1040,7 +1126,7 @@ ${isAuthorMe ? `小说作者正是主播「${playerInfo.name}」本人！读者�
             });
             closeAo3CustomModal();
             if (typeof showToast === 'function') showToast('评论发表成功', 'success');
-            if (typeof autoSaveGame === 'function') autoSaveGame();
+            await saveAo3FanworksToStorageAsync();
             window.renderAo3App();
         }
     };
@@ -1059,12 +1145,12 @@ ${isAuthorMe ? `小说作者正是主播「${playerInfo.name}」本人！读者�
         }
     };
 
-    window.giveAo3Kudos = function (workId) {
+    window.giveAo3Kudos = async function (workId) {
         const work = (G.fanworks || []).find(w => w._id === workId);
         if (work) {
             work.kudos = (work.kudos || 0) + 1;
             if (typeof showToast === 'function') showToast('已投递 Kudos', 'success', 1000);
-            if (typeof autoSaveGame === 'function') autoSaveGame();
+            await saveAo3FanworksToStorageAsync();
             window.renderAo3App();
         }
     };
@@ -1083,7 +1169,7 @@ ${isAuthorMe ? `小说作者正是主播「${playerInfo.name}」本人！读者�
         `);
     };
 
-    window.confirmDeleteAo3Work = function (workId) {
+    window.confirmDeleteAo3Work = async function (workId) {
         if (confirm('确定要删除这部作品吗？操作无法撤回。')) {
             const idx = (G.fanworks || []).findIndex(w => w._id === workId);
             if (idx !== -1) G.fanworks.splice(idx, 1);
@@ -1093,7 +1179,7 @@ ${isAuthorMe ? `小说作者正是主播「${playerInfo.name}」本人！读者�
             }
             closeAo3CustomModal();
             if (typeof showToast === 'function') showToast('作品已删除', 'success');
-            if (typeof autoSaveGame === 'function') autoSaveGame();
+            await saveAo3FanworksToStorageAsync();
             window.renderAo3App();
         }
     };
@@ -1132,14 +1218,14 @@ ${isAuthorMe ? `小说作者正是主播「${playerInfo.name}」本人！读者�
     };
 
     // ============================================================
-    // 8. 样式注入（强力干掉粉色原生假顶栏与粉红丑框）
+    // 8. 样式注入（无粉框、无红黑位移、大屏通透质感）
     // ============================================================
     function injectAo3Styles() {
         if (document.getElementById('ao3UnifiedStyles')) return;
         const style = document.createElement('style');
         style.id = 'ao3UnifiedStyles';
         style.textContent = `
-            /* 1. 彻底干掉旧系统里的粉红生成框与 Emoji 遮罩 */
+            /* 1. 强力歼灭全局粉红 AI loading 框 */
             #aiLoadingModal, .ai-loading-modal, #loadingModal, .loading-modal, .sweet-alert, [id*="loadingModal"] {
                 display: none !important;
                 opacity: 0 !important;
