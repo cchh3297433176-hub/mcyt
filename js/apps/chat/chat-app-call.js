@@ -1,18 +1,16 @@
 /**
  * js/apps/chat/chat-app-call.js
- * 📞 主播掌机 · 微信原生音视频实时通话独立中枢（抗噪滤波升级 · 视频通话全双工闭环 · 三模态视觉感知开关版）
+ * 📞 主播掌机 · 微信原生音视频实时通话独立中枢（二次元/Live舞台升级 · 手势触控调位 · 表情智能识别 · 极简隐私按键版）
  * 🛡️ 微信原生极简质感，消灭多余打字框与廉价元素，100% 纯粹全双工对讲体验。
- * 🌟 核心特性：
- *  1. 深度抗噪滤波：人声门限提升至 50，连续 5 帧确认，0.8 秒最短有效出声门禁，压死环境风扇与杂音；
- *  2. 接通首 1.5 秒噪声免疫锁：杜绝开麦瞬间环境音误掐断角色的主动问候；
- *  3. 异步 TTS 序列锁（ttsSequenceId）：彻底根除由于 TTS 合成慢导致新旧对白串音错乱的 Bug；
- *  4. 视频通话全链路修复：音视频流轨道分离，彻底解决 MediaRecorder 报错导致的无回复、无字幕与死锁；
- *  5. 细粒度状态反馈：区分“正在听你说/正在转文字/正在感知视频画面/正在思考回复中/对方正在讲话”；
- *  6. 视觉三模态实时开关：支持【设置外挂视觉 API】/【主模型原生看图】/【关闭视觉】一键循环切换；
- *  7. 视频/语音双轨动态声波 HUD：微信原生微绿平滑动态声波条与实时倾听状态；
- *  8. 视频通话支持实时从摄像头抽帧直连独立识图 API 或直传多模态主模型；
- *  9. 专属极速口语 Prompt（剥离联网/表情包，短平快日常口语，细腻生活背景音）；
- *  10. 通话结束全自动归档为第三人称具名客观记录（IndexedDB 永久保存，支持长按彻底删除）。
+ * 🌟 核心升级：
+ *  1. 彻底消灭丑陋大黑条：改为极窄高透明原生悬浮微胶囊，视界完全通透；
+ *  2. 自定义舞台背景与立绘差分：支持图片、GIF 动图与视频，随角色回复智能识别表情切换；
+ *  3. 手势触控舞台编辑模式：单指拖拽平移、角标拖拉平滑缩放，位置配组方案独立记忆；
+ *  4. 极简白描双隐私按键：自拍画中画一键显隐 + 摄像头流一键静默，附带 3 秒白字自淡化 Toast；
+ *  5. 完整抗噪滤波与全双工闭环：50 人声门限、170ms 连续确认、0.8 秒出声门限、1.5 秒接通免疫；
+ *  6. 异步 TTS 序列锁（ttsSequenceId）：彻底根除由于网络延迟导致的旧对白重叠错位；
+ *  7. 三模态视觉感知自由切换（外挂视觉 API / 主模型原生看图 / 纯对讲）；
+ *  8. 第三人称具名客观记录自动落盘 IndexedDB，支持长按彻底物理抹除防记忆污染。
  */
 
 (function() {
@@ -27,7 +25,7 @@
     const PRIVACY_STORAGE_KEY = 'mcyt_call_video_privacy_agreed';
     const VISION_MODE_STORAGE_KEY = 'mcyt_call_vision_mode'; // 'external' | 'direct' | 'off'
 
-    // 安全 HTML 转义辅助函数（跨模块兜底保障）
+    // 安全 HTML 转义辅助函数
     function escapeHtml(str) {
         if (typeof window.escapeHtml === 'function') return window.escapeHtml(str);
         if (str === null || str === undefined) return '';
@@ -46,7 +44,7 @@
         return `${m}:${s}`;
     }
 
-    // 辅助：获取角色全名
+    // 获取角色全名
     function getNpcFullName(npcId) {
         if (!window.G || !window.G.npcs) return '好友';
         const n = window.G.npcs[npcId];
@@ -54,10 +52,25 @@
         return n.remark ? `${n.remark}(${n.name})` : (n.name || '好友');
     }
 
-    // 辅助：获取玩家全名
+    // 获取玩家全名
     function getPlayerFullName() {
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '我' };
         return curAcc.name || '我';
+    }
+
+    // 🌟 3 秒淡化极简白小字轻提示
+    function showCallHudTip(text) {
+        const tipEl = document.getElementById('wechatCallHudNoticeTip');
+        if (!tipEl) return;
+        tipEl.textContent = text;
+        tipEl.style.opacity = '1';
+        tipEl.style.transform = 'translate(-50%, 0)';
+
+        if (window._callHudTipTimer) clearTimeout(window._callHudTipTimer);
+        window._callHudTipTimer = setTimeout(() => {
+            tipEl.style.opacity = '0';
+            tipEl.style.transform = 'translate(-50%, 8px)';
+        }, 3000);
     }
 
     // 检查首次使用视频电话隐私协议
@@ -124,6 +137,18 @@
         }
     }
 
+    // 🌟 获取角色生效的视频舞台方案配置
+    function getNpcActiveStageProfile(npcId) {
+        if (!window.G || !window.G.npcs) return null;
+        const npc = window.G.npcs[npcId];
+        if (!npc || !npc.chatSettings || !npc.chatSettings.videoStage) return null;
+        const vs = npc.chatSettings.videoStage;
+        if (!Array.isArray(vs.profiles) || vs.profiles.length === 0) return null;
+        const prof = vs.profiles.find(p => p.id === vs.activeProfileId) || vs.profiles[0];
+        if (!prof.position) prof.position = { x: 0, y: 0, scale: 1.0 };
+        return prof;
+    }
+
     // 主入口：发起通话
     window.startWechatCall = function(npcId, mode = 'voice') {
         if (window._activeCallSession) {
@@ -171,7 +196,6 @@
             return;
         }
 
-        // 初始化 Session 运行时状态并自增序列锁
         _globalCallTtsSequence++;
 
         const currentVisionMode = localStorage.getItem(VISION_MODE_STORAGE_KEY) || 'external';
@@ -180,16 +204,21 @@
             npcId,
             mode,
             facingMode: currentFacing,
-            visionMode: currentVisionMode, // 'external' | 'direct' | 'off'
+            visionMode: currentVisionMode,
             startTime: Date.now(),
-            connectTimestamp: Date.now(), // 用于接通初始防抖锁
+            connectTimestamp: Date.now(),
             durationSeconds: 0,
             timerInterval: null,
             stream: localStream,
-            transcript: [], // [{ role: 'player'|'npc'|'system', name: '', text: '', time: '' }]
+            transcript: [],
             isAiReplying: false,
             currentAbortController: null,
             activeTtsSequenceId: _globalCallTtsSequence,
+            // 🌟 视频通话隐私与手势编辑状态
+            isPipWindowVisible: true,    // 右上角自拍画中画显隐
+            isCameraMuted: false,       // 摄像头视频流静默状态
+            isAdjustingStage: false,    // 是否处于手势微调模式
+            currentExpression: 'default', // 当前呈现的表情差分
             // 真实音频采集与 VAD 音量检测
             audioContext: null,
             audioAnalyser: null,
@@ -198,7 +227,7 @@
             recordedChunks: [],
             isUserSpeaking: false,
             speakingStartTime: 0,
-            consecutiveVoiceFrames: 0, // 连续语音帧滤波计数
+            consecutiveVoiceFrames: 0,
             silenceTimer: null
         };
 
@@ -217,17 +246,16 @@
         // 启动抗噪麦克风音量监听与 VAD 全双工通道
         startHardwareAudioVAD(localStream);
 
-        // 播报初始接通提示（预留 600ms 缓冲，确保音频通道与 UI 挂载完毕）
+        // 播报初始接通提示并打招呼
         const targetName = getNpcFullName(npcId);
         setTimeout(() => {
             if (!window._activeCallSession) return;
-            appendCallSubtitle('system', '系统', `已接通与 ${targetName} 的${mode === 'video' ? '视频' : '语音'}电话`);
-            // 角色主动打招呼
+            appendCallSubtitle('system', '系统', `已接通与 ${targetName} 的${mode === 'video' ? '视频' : '语音'}通话`);
             triggerCallAIReply(true);
         }, 600);
     }
 
-    // 硬件级音量分析器 + MediaRecorder 真实录制 + 抗噪滤波 + 2 秒极速静音发射
+    // 硬件级音量分析器 + MediaRecorder 真实录制 + 抗噪滤波
     function startHardwareAudioVAD(stream) {
         try {
             const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -238,7 +266,6 @@
                 ctx.resume().catch(() => {});
             }
 
-            // 🌟 纯音频流接入 AudioContext，防止复合媒体流在 WebKit 下产生流同步异常
             const audioTracks = stream.getAudioTracks();
             if (!audioTracks || audioTracks.length === 0) return;
             const audioStream = new MediaStream(audioTracks);
@@ -246,15 +273,13 @@
             const source = ctx.createMediaStreamSource(audioStream);
             const analyser = ctx.createAnalyser();
             analyser.fftSize = 128;
-            analyser.smoothingTimeConstant = 0.45; // 平滑滤波
+            analyser.smoothingTimeConstant = 0.45;
             source.connect(analyser);
 
             window._activeCallSession.audioContext = ctx;
             window._activeCallSession.audioAnalyser = analyser;
 
             const dataArray = new Uint8Array(analyser.frequencyBinCount);
-            
-            // 🌟 强力抗噪：基础人声触发门槛调升至 50（有效压死所有背景风扇与底噪）
             const BASE_VOICE_THRESHOLD = 50;
 
             const checkAudioLoop = () => {
@@ -267,17 +292,14 @@
                 }
                 const avgVolume = sum / 24;
 
-                // 更新界面音波条动态
                 updateCallWaveBars(avgVolume);
 
-                // 🌟 接通首 1.5 秒免疫锁：禁止开麦瞬间环境音误掐断角色的初次问候
                 const timeSinceConnect = Date.now() - window._activeCallSession.connectTimestamp;
                 if (timeSinceConnect < 1500) {
                     window._activeCallSession.animFrameId = requestAnimationFrame(checkAudioLoop);
                     return;
                 }
 
-                // 如果 AI 正在说话，需要更响亮明确的人声才触发打断（防环境杂音误打断）
                 const currentThreshold = window._activeCallSession.isAiReplying 
                     ? (BASE_VOICE_THRESHOLD * 1.65) 
                     : BASE_VOICE_THRESHOLD;
@@ -285,12 +307,9 @@
                 if (avgVolume > currentThreshold) {
                     window._activeCallSession.consecutiveVoiceFrames++;
 
-                    // 🌟 必须连续 5 帧（约 170ms）超门槛才确认为真人出声，彻底过滤单点爆破杂音
                     if (window._activeCallSession.consecutiveVoiceFrames >= 5) {
-                        // 用户出声确认：掐断正在说话的 AI 与旧 TTS
                         interruptAiReplyIfActive();
 
-                        // 启动录制块收集
                         if (!window._activeCallSession.isUserSpeaking) {
                             window._activeCallSession.isUserSpeaking = true;
                             window._activeCallSession.speakingStartTime = Date.now();
@@ -298,19 +317,16 @@
                             startSessionMediaRecorder(stream);
                         }
 
-                        // 重置 2 秒静音定时器
                         if (window._activeCallSession.silenceTimer) {
                             clearTimeout(window._activeCallSession.silenceTimer);
                             window._activeCallSession.silenceTimer = null;
                         }
                     }
                 } else {
-                    // 音量回落
                     window._activeCallSession.consecutiveVoiceFrames = 0;
 
                     if (window._activeCallSession.isUserSpeaking) {
                         if (!window._activeCallSession.silenceTimer) {
-                            // 🌟 静音倒计时满 2 秒（2000ms），停顿自然干脆
                             window._activeCallSession.silenceTimer = setTimeout(() => {
                                 handleUserFinishSpokenAudio();
                             }, 2000);
@@ -327,20 +343,14 @@
         }
     }
 
-    // 启动 MediaRecorder 片段采集（🌟 轨道解耦，彻底修复视频通话下音频录制报错的严重 Bug）
+    // 启动 MediaRecorder 片段采集（纯音频轨分离）
     function startSessionMediaRecorder(stream) {
         if (!window.MediaRecorder || !window._activeCallSession) return;
         window._activeCallSession.recordedChunks = [];
 
         try {
-            // 🌟 核心修复：必须从当前流中分离出纯音频轨（AudioTrack）！
-            // 视频通话中 stream 同时包含音频轨与视频轨。若将含视频轨的流直接传递给仅支持音频 mimeType 的 MediaRecorder，
-            // 浏览器会直接抛出 NotSupportedError 异常，导致录音组件静默崩溃、音频 Blob 永远为空、ASR 无法触发、无法上字幕、无法触发 AI！
             const audioTracks = stream.getAudioTracks();
-            if (!audioTracks || audioTracks.length === 0) {
-                console.warn('[WechatCall] 流中没有可用的音频轨');
-                return;
-            }
+            if (!audioTracks || audioTracks.length === 0) return;
             const audioOnlyStream = new MediaStream(audioTracks);
 
             let mimeType = '';
@@ -361,18 +371,16 @@
         }
     }
 
-    // 校验文本是否属于背景杂音幻觉
     function isJunkNoiseText(text) {
         if (!text) return true;
         const cleaned = text.trim().replace(/[，。！？,.!?~、 \-_]/g, '');
         if (cleaned.length < 2) return true;
-        // 典型 Whisper 杂音幻觉过滤
         const JUNK_PATTERNS = ['呃', '啊', '嗯', '哦', '哎', '谢谢收看', '感谢观看', 'you', 'the', '字幕', 'Bye', '不客气', '再见', 'hello'];
         if (JUNK_PATTERNS.includes(cleaned)) return true;
         return false;
     }
 
-    // 用户停止说话满 2 秒，提交音频转文字并触发 AI
+    // 用户停止说话满 2 秒，转文字并触发思考
     async function handleUserFinishSpokenAudio() {
         const session = window._activeCallSession;
         if (!session) return;
@@ -404,13 +412,11 @@
             session.mediaRecorder = null;
         }
 
-        // 🌟 强力时长与体积门限：出声小于 0.8 秒或音频数据小于 2000 字节，判定为瞬时杂音直接丢弃
         if (speakingDuration < 800 || !audioBlob || audioBlob.size < 2000) {
             setCallStatusText('通话连接稳定', '#07c160');
             return;
         }
 
-        // 调用私有云端 faster-whisper ASR，显示明确状态
         setCallStatusText('正在转文字中...', '#07c160');
 
         let recognizedText = '';
@@ -425,9 +431,7 @@
             }
         }
 
-        // 杂音幻觉过滤
         if (!recognizedText || isJunkNoiseText(recognizedText)) {
-            console.log('[WechatCall] 过滤环境底噪或幻觉识别:', recognizedText);
             setCallStatusText('通话连接稳定', '#07c160');
             return;
         }
@@ -435,50 +439,40 @@
         const playerName = getPlayerFullName();
         appendCallSubtitle('player', playerName, recognizedText);
 
-        // 🌟 视频通话画面感知调度
+        // 视频通话视觉感知调度（若摄像头被静默，则不捕获画面）
         let visualInsight = '';
         let base64DirectImg = null;
 
-        if (session.mode === 'video' && session.visionMode !== 'off') {
+        if (session.mode === 'video' && session.visionMode !== 'off' && !session.isCameraMuted) {
             setCallStatusText('正在感知视频画面...', '#38bdf8');
             const base64Img = captureVideoFrameBase64();
             if (base64Img) {
                 if (session.visionMode === 'external') {
-                    // 模式 A：外挂独立视觉识图 API（带 3.5 秒极速超时保护，超时不卡死通话）
                     visualInsight = await inspectVisualFrameAsync(base64Img);
-                    if (visualInsight) {
-                        console.log('[WechatCall] 外挂识图获取到画面描述:', visualInsight);
-                    }
                 } else if (session.visionMode === 'direct') {
-                    // 模式 B：主模型原生识图，直接暂存 Base64 供组装 messages
                     base64DirectImg = base64Img;
                 }
             }
         }
 
-        // 触发角色思考回答
         triggerCallAIReply(false, recognizedText, visualInsight, base64DirectImg);
     }
 
-    // 豆包式打断机制：用户出声瞬间掐断 AI 网络生成与旧 TTS 发音，并自增序列号
     function interruptAiReplyIfActive() {
         const session = window._activeCallSession;
         if (!session) return;
 
-        // 序列号自增，废弃之前任何未完成的 TTS 异步操作
         _globalCallTtsSequence++;
         session.activeTtsSequenceId = _globalCallTtsSequence;
 
         if (session.isAiReplying) {
             session.isAiReplying = false;
 
-            // 1. 中止 fetch 请求
             if (session.currentAbortController) {
                 try { session.currentAbortController.abort(); } catch (_) {}
                 session.currentAbortController = null;
             }
 
-            // 2. 中止 TTS 播放发音
             if (window.ttsEngine && typeof window.ttsEngine.stop === 'function') {
                 window.ttsEngine.stop();
             } else if (window.speechSynthesis) {
@@ -489,7 +483,6 @@
         }
     }
 
-    // 动态波形指示器
     function updateCallWaveBars(volume) {
         const bars = document.querySelectorAll('.call-live-wave-bar');
         if (bars.length === 0) return;
@@ -503,32 +496,20 @@
 
     function setUserSpeakingHUDStatus(isSpeaking) {
         const indicatorVoice = document.getElementById('callSpeakingWaveWrap');
-        if (indicatorVoice) {
-            indicatorVoice.style.opacity = isSpeaking ? '1' : '0.2';
-        }
+        if (indicatorVoice) indicatorVoice.style.opacity = isSpeaking ? '1' : '0.2';
         const indicatorVideo = document.getElementById('callSpeakingWaveWrapVideo');
-        if (indicatorVideo) {
-            indicatorVideo.style.opacity = isSpeaking ? '1' : '0.35';
-        }
-        if (isSpeaking) {
-            setCallStatusText('正在听你说...', '#38bdf8');
-        }
+        if (indicatorVideo) indicatorVideo.style.opacity = isSpeaking ? '1' : '0.35';
+        if (isSpeaking) setCallStatusText('正在听你说...', '#38bdf8');
     }
 
     function setCallStatusText(text, color = '#07c160') {
         const statusEl = document.getElementById('callAiStatusText');
-        if (statusEl) {
-            statusEl.textContent = text;
-            statusEl.style.color = color;
-        }
+        if (statusEl) { statusEl.textContent = text; statusEl.style.color = color; }
         const statusVideoEl = document.getElementById('callAiStatusTextVideo');
-        if (statusVideoEl) {
-            statusVideoEl.textContent = text;
-            statusVideoEl.style.color = color;
-        }
+        if (statusVideoEl) { statusVideoEl.textContent = text; statusVideoEl.style.color = color; }
     }
 
-    // 翻转前后摄像头核心实现
+    // 翻转前后摄像头
     async function flipCallCamera() {
         const session = window._activeCallSession;
         if (!session || session.mode !== 'video') return;
@@ -566,13 +547,11 @@
                     videoEl.play().catch(() => {});
                 }
 
-                if (typeof showToast === 'function') {
-                    showToast(nextFacing === 'user' ? '已切至前置镜头' : '已切至后置镜头', 'info', 1000);
-                }
+                showCallHudTip(nextFacing === 'user' ? '已切至前置镜头' : '已切至后置镜头');
             }
         } catch (err) {
             console.warn('[WechatCall] 翻转镜头失败:', err);
-            if (typeof showToast === 'function') showToast('无法切换镜头', 'warning', 1200);
+            showCallHudTip('无法切换镜头');
         } finally {
             setTimeout(() => {
                 if (flipBtn) flipBtn.style.transform = 'none';
@@ -580,7 +559,7 @@
         }
     }
 
-    // 🌟 视觉模式实时切换中枢
+    // 视觉感知模式循环切换
     function toggleCallVisionMode() {
         const session = window._activeCallSession;
         if (!session || session.mode !== 'video') return;
@@ -603,33 +582,250 @@
             textEl.textContent = '外挂识图';
             iconWrap.style.color = '#07c160';
             iconWrap.style.borderColor = '#07c160';
-            let hasCfg = false;
-            try {
-                const rawCfg = localStorage.getItem('mcyt_vision_api_config');
-                if (rawCfg) {
-                    const parsed = JSON.parse(rawCfg);
-                    if (parsed.apiKey && parsed.baseUrl) hasCfg = true;
-                }
-            } catch (_) {}
-            if (!hasCfg && typeof showToast === 'function') {
-                showToast('已切至外挂识图（需在设置中配置识图 API）', 'warning', 2000);
-            } else if (typeof showToast === 'function') {
-                showToast('视觉模式: 调用设置中的独立识图 API', 'info', 1500);
-            }
+            showCallHudTip('视觉感知: 外挂独立识图 API');
         } else if (mode === 'direct') {
             textEl.textContent = '原生看图';
             iconWrap.style.color = '#38bdf8';
             iconWrap.style.borderColor = '#38bdf8';
-            if (typeof showToast === 'function') showToast('视觉模式: 主模型多模态直接看图', 'info', 1500);
+            showCallHudTip('视觉感知: 主模型多模态看图');
         } else {
             textEl.textContent = '不识图';
             iconWrap.style.color = '#999999';
             iconWrap.style.borderColor = '#666666';
-            if (typeof showToast === 'function') showToast('视觉模式: 已关闭画面识别（纯对讲）', 'info', 1500);
+            showCallHudTip('视觉感知: 已关闭（纯语言通话）');
         }
     }
 
-    // 渲染全屏通话 HUD 界面（微信原生极简黑灰毛玻璃）
+    // 🌟 画中画自拍视窗显隐切换
+    function toggleCallPipWindow() {
+        const session = window._activeCallSession;
+        if (!session || session.mode !== 'video') return;
+
+        session.isPipWindowVisible = !session.isPipWindowVisible;
+        const pipBox = document.getElementById('wechatCallPipContainer');
+        const btnPip = document.getElementById('btnCallTogglePip');
+
+        if (pipBox) {
+            pipBox.style.display = session.isPipWindowVisible ? 'block' : 'none';
+        }
+        if (btnPip) {
+            btnPip.style.opacity = session.isPipWindowVisible ? '1' : '0.45';
+        }
+
+        showCallHudTip(session.isPipWindowVisible ? '自拍视窗已开启' : '自拍视窗已隐藏');
+    }
+
+    // 🌟 摄像头视频流静默切换
+    function toggleCallCameraMute() {
+        const session = window._activeCallSession;
+        if (!session || session.mode !== 'video' || !session.stream) return;
+
+        session.isCameraMuted = !session.isCameraMuted;
+        const videoTracks = session.stream.getVideoTracks();
+        videoTracks.forEach(t => { t.enabled = !session.isCameraMuted; });
+
+        const btnMute = document.getElementById('btnCallToggleCameraMute');
+        const muteSvg = document.getElementById('svgCameraMuteStatus');
+
+        if (btnMute) {
+            btnMute.style.background = session.isCameraMuted ? 'rgba(250,81,81,0.3)' : 'rgba(255,255,255,0.12)';
+            btnMute.style.borderColor = session.isCameraMuted ? '#fa5151' : 'rgba(255,255,255,0.25)';
+        }
+        if (muteSvg) {
+            muteSvg.style.color = session.isCameraMuted ? '#fa5151' : '#ffffff';
+        }
+
+        const pipVideo = document.getElementById('wechatCallLocalVideo');
+        if (pipVideo) {
+            pipVideo.style.opacity = session.isCameraMuted ? '0.15' : '1';
+        }
+
+        showCallHudTip(session.isCameraMuted ? '摄像头已关闭，画面已静默' : '摄像头已恢复');
+    }
+
+    // 🌟 表情智能识别转换引擎（基于文本情绪特征自动驱动差分立绘）
+    function detectEmotionFromText(text) {
+        if (!text) return 'default';
+        const t = text.toLowerCase();
+
+        if (/害羞|脸红|唔|讨厌|笨蛋|心跳|喜欢你|爱死你|么么|mua|别看我/i.test(t)) return 'shy';
+        if (/哈哈|嘻嘻|开心|高兴|太棒了|好呀|笑|真好|太好玩/i.test(t)) return 'smile';
+        if (/生气|可恶|气死|愤怒|闭嘴|哼|揍你|烦死|找打/i.test(t)) return 'angry';
+        if (/难过|伤心|呜呜|哭|心疼|对不起|抱歉|委屈|失落|叹气/i.test(t)) return 'sad';
+        if (/为什么|怎么会|思考|我想想|原来如此|难道|如果|琢磨/i.test(t)) return 'think';
+        if (/才不是|才没有|哼，谁管你|才不稀罕|别误会|傲娇/i.test(t)) return 'tsundere';
+        if (/什么？！|哇！|真的吗|天哪|震惊|不可思议|呀！/i.test(t)) return 'surprised';
+
+        return 'default';
+    }
+
+    // 更新舞台立绘表情渲染
+    function updateLiveSpriteExpression(exprId) {
+        const session = window._activeCallSession;
+        if (!session || session.mode !== 'video') return;
+
+        const prof = getNpcActiveStageProfile(session.npcId);
+        if (!prof || !prof.sprites) return;
+
+        session.currentExpression = exprId;
+        const spriteWrap = document.getElementById('wechatCallSpriteDisplayWrap');
+        if (!spriteWrap) return;
+
+        // 若当前表情无对应差分，则优雅回退至 default 表情
+        const targetSrc = prof.sprites[exprId] || prof.sprites['default'] || '';
+        if (!targetSrc) return;
+
+        const isVideo = targetSrc.startsWith('data:video') || targetSrc.endsWith('.mp4') || targetSrc.endsWith('.webm');
+        
+        spriteWrap.style.transition = 'opacity 0.22s ease';
+        spriteWrap.style.opacity = '0.35';
+
+        setTimeout(() => {
+            if (isVideo) {
+                spriteWrap.innerHTML = `<video src="${targetSrc}" muted loop autoplay playsinline style="width:100%;height:100%;object-fit:contain;pointer-events:none;"></video>`;
+            } else {
+                spriteWrap.innerHTML = `<img src="${targetSrc}" style="width:100%;height:100%;object-fit:contain;pointer-events:none;" onerror="this.src='assets/icons/chat.png';">`;
+            }
+            spriteWrap.style.opacity = '1';
+        }, 150);
+    }
+
+    // 🌟 手势触控舞台编辑模式（单指拖拽平移，角标触控缩放，方案独立持久化）
+    function toggleStageAdjustMode() {
+        const session = window._activeCallSession;
+        if (!session || session.mode !== 'video') return;
+
+        session.isAdjustingStage = !session.isAdjustingStage;
+        const box = document.getElementById('wechatCallSpriteTransformBox');
+        const handle = document.getElementById('wechatCallResizeHandle');
+        const btnAdjust = document.getElementById('btnCallToggleAdjustStage');
+
+        if (!box) return;
+
+        if (session.isAdjustingStage) {
+            box.style.border = '1.5px dashed #07c160';
+            box.style.background = 'rgba(7, 193, 96, 0.08)';
+            if (handle) handle.style.display = 'block';
+            if (btnAdjust) {
+                btnAdjust.style.background = '#07c160';
+                btnAdjust.style.borderColor = '#07c160';
+            }
+            showCallHudTip('已进入手势调整：单指拖拽位移，右下角手柄缩放');
+        } else {
+            box.style.border = 'none';
+            box.style.background = 'transparent';
+            if (handle) handle.style.display = 'none';
+            if (btnAdjust) {
+                btnAdjust.style.background = 'rgba(255,255,255,0.12)';
+                btnAdjust.style.borderColor = 'rgba(255,255,255,0.25)';
+            }
+            // 保存当前位置
+            saveStageProfileTransform();
+            showCallHudTip('舞台位置与缩放已保存');
+        }
+    }
+
+    // 绑定触摸手势事件
+    function initTouchGestureControls(box, handle, prof) {
+        if (!box || !prof) return;
+
+        let startX = 0, startY = 0;
+        let initPosX = prof.position.x || 0;
+        let initPosY = prof.position.y || 0;
+        let isDragging = false;
+
+        box.addEventListener('touchstart', (e) => {
+            const session = window._activeCallSession;
+            if (!session || !session.isAdjustingStage) return;
+            if (e.target === handle) return; // 避开缩放手柄
+
+            const touch = e.touches[0];
+            startX = touch.clientX;
+            startY = touch.clientY;
+            initPosX = prof.position.x || 0;
+            initPosY = prof.position.y || 0;
+            isDragging = true;
+            e.stopPropagation();
+        }, { passive: false });
+
+        window.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            const touch = e.touches[0];
+            const dx = touch.clientX - startX;
+            const dy = touch.clientY - startY;
+
+            prof.position.x = initPosX + dx;
+            prof.position.y = initPosY + dy;
+
+            applySpriteTransform(box, prof.position);
+            e.preventDefault();
+        }, { passive: false });
+
+        window.addEventListener('touchend', () => {
+            if (isDragging) {
+                isDragging = false;
+                saveStageProfileTransform();
+            }
+        });
+
+        // 🌟 右下角触控缩放手柄
+        if (handle) {
+            let resizeStartX = 0;
+            let initScale = prof.position.scale || 1.0;
+            let isResizing = false;
+
+            handle.addEventListener('touchstart', (e) => {
+                const session = window._activeCallSession;
+                if (!session || !session.isAdjustingStage) return;
+
+                const touch = e.touches[0];
+                resizeStartX = touch.clientX;
+                initScale = prof.position.scale || 1.0;
+                isResizing = true;
+                e.stopPropagation();
+            }, { passive: false });
+
+            window.addEventListener('touchmove', (e) => {
+                if (!isResizing) return;
+                const touch = e.touches[0];
+                const dx = touch.clientX - resizeStartX;
+                const newScale = Math.min(2.5, Math.max(0.4, initScale + (dx / 200)));
+
+                prof.position.scale = parseFloat(newScale.toFixed(2));
+                applySpriteTransform(box, prof.position);
+                e.preventDefault();
+            }, { passive: false });
+
+            window.addEventListener('touchend', () => {
+                if (isResizing) {
+                    isResizing = false;
+                    saveStageProfileTransform();
+                }
+            });
+        }
+    }
+
+    function applySpriteTransform(el, pos) {
+        if (!el || !pos) return;
+        el.style.transform = `translate(${pos.x}px, ${pos.y}px) scale(${pos.scale})`;
+    }
+
+    // 将位置与缩放保存至当前方案并持久化
+    function saveStageProfileTransform() {
+        const session = window._activeCallSession;
+        if (!session) return;
+        const npc = window.G && window.G.npcs ? window.G.npcs[session.npcId] : null;
+        if (!npc) return;
+
+        if (typeof window.syncCustomNpcsToLocalBackup === 'function') {
+            window.syncCustomNpcsToLocalBackup();
+        }
+        if (typeof window.autoSaveGame === 'function') {
+            window.autoSaveGame();
+        }
+    }
+
+    // 渲染全屏通话界面（消灭大黑条，悬浮超薄微胶囊，自适应舞台立绘）
     function renderCallOverlay(npcId, mode, stream) {
         document.getElementById('wechatCallOverlayModal')?.remove();
 
@@ -638,11 +834,16 @@
         const targetName = getNpcFullName(npcId);
         const initialVisionMode = localStorage.getItem(VISION_MODE_STORAGE_KEY) || 'external';
 
+        // 获取视频舞台方案
+        const stageProf = getNpcActiveStageProfile(npcId);
+        const hasCustomBg = !!(stageProf && stageProf.backgroundUrl);
+        const hasCustomSprite = !!(stageProf && stageProf.sprites && Object.keys(stageProf.sprites).length > 0);
+
         const overlay = document.createElement('div');
         overlay.id = 'wechatCallOverlayModal';
         overlay.style.cssText = `
             position: fixed; inset: 0; z-index: 100009;
-            background: #111111; display: flex; flex-direction: column;
+            background: #0d0f12; display: flex; flex-direction: column;
             overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             user-select: none; -webkit-user-select: none;
             animation: wechatCallFadeIn 0.22s cubic-bezier(0.1, 0.9, 0.2, 1);
@@ -650,32 +851,57 @@
 
         overlay.innerHTML = `
             <style>
-                @keyframes wechatCallFadeIn { from { opacity: 0; transform: scale(1.02); } to { opacity: 1; transform: scale(1); } }
+                @keyframes wechatCallFadeIn { from { opacity: 0; transform: scale(1.01); } to { opacity: 1; transform: scale(1); } }
                 @keyframes wechatCallWave { 0% { transform: scale(0.96); opacity: 0.7; } 50% { transform: scale(1.12); opacity: 0.15; } 100% { transform: scale(0.96); opacity: 0.7; } }
                 .call-subtitle-item { transition: opacity 0.25s ease, transform 0.25s ease; }
                 .call-subtitle-item.faded { opacity: 0.28 !important; }
             </style>
 
-            <!-- 顶部原生状态排版 -->
-            <div style="padding: 30px 20px 10px; display: flex; justify-content: space-between; align-items: center; z-index: 10; color: #ffffff;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #07c160;"></span>
-                    <span style="font-size: 13.5px; font-weight: 500; letter-spacing: 0.3px; color: #e5e5e5;">${mode === 'video' ? '视频通话中' : '语音通话中'}</span>
-                </div>
-                <div id="wechatCallTimerText" style="font-size: 14.5px; font-weight: 600; font-variant-numeric: tabular-nums; color: #ffffff; letter-spacing: 0.5px;">00:00</div>
+            <!-- 🌟 顶部原生极窄悬浮微胶囊（彻底消灭大黑条，完全透光无阻挡） -->
+            <div style="position: absolute; top: 16px; left: 16px; z-index: 25; display: flex; align-items: center; gap: 8px; padding: 4px 10px; border-radius: 20px; background: rgba(0,0,0,0.38); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 0.5px solid rgba(255,255,255,0.12); box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #07c160;"></span>
+                <span style="font-size: 11.5px; font-weight: 500; color: #f0f0f0; letter-spacing: 0.2px;">${mode === 'video' ? '视频通话' : '语音通话'}</span>
+                <span style="color: rgba(255,255,255,0.25); font-size: 10px;">|</span>
+                <span id="wechatCallTimerText" style="font-size: 11.5px; font-weight: 600; font-variant-numeric: tabular-nums; color: #ffffff;">00:00</span>
             </div>
 
             <!-- 主舞台视觉呈现 -->
             <div style="flex: 1; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden;">
                 ${mode === 'video' ? `
-                    <!-- 视频背景舞台 -->
-                    <div style="position: absolute; inset: 0; background: radial-gradient(circle at center, #1f2937 0%, #0b0f19 100%); display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                        <img src="${npcAvatar}" style="width: 86px; height: 86px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.2); object-fit: cover; box-shadow: 0 10px 30px rgba(0,0,0,0.6);">
-                        <div style="color: #ffffff; font-size: 16px; font-weight: 600; margin-top: 14px; letter-spacing: 0.3px;">${escapeHtml(targetName)}</div>
-                        <div id="callAiStatusTextVideo" style="font-size: 12px; color: #07c160; margin-top: 6px;">通话连接稳定</div>
+                    <!-- 🌟 视频通话背景舞台（支持自定义图片/视频或原生深灰光晕） -->
+                    <div id="wechatCallStageBgContainer" style="position: absolute; inset: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; z-index: 1;">
+                        ${hasCustomBg ? `
+                            ${stageProf.bgType === 'video' ? `
+                                <video src="${stageProf.backgroundUrl}" muted loop autoplay playsinline style="width: 100%; height: 100%; object-fit: cover; pointer-events: none;"></video>
+                            ` : `
+                                <img src="${stageProf.backgroundUrl}" style="width: 100%; height: 100%; object-fit: cover; pointer-events: none;">
+                            `}
+                        ` : `
+                            <div style="width: 100%; height: 100%; background: radial-gradient(circle at center, #1e2638 0%, #0a0d14 100%);"></div>
+                        `}
+                    </div>
 
-                        <!-- 视频通话实时出声动态声波指示器 -->
-                        <div id="callSpeakingWaveWrapVideo" style="display: flex; align-items: center; gap: 4px; height: 26px; margin-top: 12px; padding: 0 12px; border-radius: 14px; background: rgba(0,0,0,0.45); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); opacity: 0.35; transition: opacity 0.2s ease; border: 0.5px solid rgba(255,255,255,0.1);">
+                    <!-- 🌟 角色立绘展示舞台（触控拖拽容器 + 表情差分） -->
+                    ${hasCustomSprite ? `
+                        <div id="wechatCallSpriteTransformBox" style="position: absolute; width: 280px; height: 380px; z-index: 4; display: flex; align-items: center; justify-content: center; transform-origin: center center; cursor: move; touch-action: none; transition: transform 0.05s linear;">
+                            <div id="wechatCallSpriteDisplayWrap" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;">
+                                <!-- 差分立绘将动态灌入 -->
+                            </div>
+                            <!-- 缩放控制触控把手 -->
+                            <div id="wechatCallResizeHandle" style="display: none; position: absolute; right: -8px; bottom: -8px; width: 22px; height: 22px; border-radius: 50%; background: #07c160; border: 2px solid #ffffff; box-shadow: 0 2px 8px rgba(0,0,0,0.5); cursor: nwse-resize; touch-action: none;"></div>
+                        </div>
+                    ` : `
+                        <!-- 未配置立绘时，呈现原生微光大头像 -->
+                        <div style="position: relative; z-index: 4; display: flex; flex-direction: column; align-items: center;">
+                            <img src="${npcAvatar}" style="width: 90px; height: 90px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.25); object-fit: cover; box-shadow: 0 10px 30px rgba(0,0,0,0.6);">
+                            <div style="color: #ffffff; font-size: 16px; font-weight: 600; margin-top: 14px;">${escapeHtml(targetName)}</div>
+                        </div>
+                    `}
+
+                    <!-- 状态与动态声波胶囊（居中悬浮） -->
+                    <div style="position: absolute; top: 56px; z-index: 6; display: flex; flex-direction: column; align-items: center;">
+                        <div id="callAiStatusTextVideo" style="font-size: 11px; color: #07c160; background: rgba(0,0,0,0.3); padding: 2px 10px; border-radius: 10px; backdrop-filter: blur(8px);">通话连接稳定</div>
+                        <div id="callSpeakingWaveWrapVideo" style="display: flex; align-items: center; gap: 4px; height: 22px; margin-top: 6px; padding: 0 10px; border-radius: 12px; background: rgba(0,0,0,0.35); backdrop-filter: blur(8px); opacity: 0.35; transition: opacity 0.2s ease; border: 0.5px solid rgba(255,255,255,0.08);">
                             <span class="call-live-wave-bar" style="width: 3px; height: 4px; background: #07c160; border-radius: 2px; transition: height 0.08s ease;"></span>
                             <span class="call-live-wave-bar" style="width: 3px; height: 6px; background: #07c160; border-radius: 2px; transition: height 0.08s ease;"></span>
                             <span class="call-live-wave-bar" style="width: 3px; height: 8px; background: #07c160; border-radius: 2px; transition: height 0.08s ease;"></span>
@@ -684,20 +910,19 @@
                         </div>
                     </div>
 
-                    <!-- 本地画中画视窗（右上角微信质感圆角框） -->
-                    <div style="position: absolute; top: 14px; right: 16px; width: 106px; height: 152px; border-radius: 12px; overflow: hidden; border: 1.5px solid rgba(255,255,255,0.3); box-shadow: 0 8px 24px rgba(0,0,0,0.5); z-index: 5; background: #000000;">
+                    <!-- 🌟 本地画中画视窗（右上角微信圆角自拍浮窗，支持独立隐藏） -->
+                    <div id="wechatCallPipContainer" style="position: absolute; top: 14px; right: 14px; width: 94px; height: 136px; border-radius: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,0.25); box-shadow: 0 8px 24px rgba(0,0,0,0.6); z-index: 10; background: #000000; transition: all 0.2s ease;">
                         <video id="wechatCallLocalVideo" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1);"></video>
                     </div>
                 ` : `
-                    <!-- 纯语音微信质感居中波纹头像 -->
-                    <div style="position: relative; display: flex; flex-direction: column; align-items: center;">
-                        <div style="position: absolute; width: 145px; height: 145px; border-radius: 50%; background: rgba(7, 193, 96, 0.18); animation: wechatCallWave 3.2s infinite ease-in-out;"></div>
-                        <img src="${npcAvatar}" style="position: relative; width: 110px; height: 110px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.85); object-fit: cover; box-shadow: 0 12px 35px rgba(0,0,0,0.65);">
-                        <div style="color: #ffffff; font-size: 18px; font-weight: 600; margin-top: 16px; letter-spacing: 0.4px;">${escapeHtml(targetName)}</div>
-                        <div id="callAiStatusText" style="font-size: 12.5px; color: #07c160; margin-top: 6px;">通话连接稳定</div>
+                    <!-- 纯语音通话原生波纹头像 -->
+                    <div style="position: relative; display: flex; flex-direction: column; align-items: center; z-index: 5;">
+                        <div style="position: absolute; width: 140px; height: 140px; border-radius: 50%; background: rgba(7, 193, 96, 0.18); animation: wechatCallWave 3.2s infinite ease-in-out;"></div>
+                        <img src="${npcAvatar}" style="position: relative; width: 106px; height: 106px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.85); object-fit: cover; box-shadow: 0 12px 35px rgba(0,0,0,0.65);">
+                        <div style="color: #ffffff; font-size: 18px; font-weight: 600; margin-top: 16px;">${escapeHtml(targetName)}</div>
+                        <div id="callAiStatusText" style="font-size: 12px; color: #07c160; margin-top: 6px;">通话连接稳定</div>
 
-                        <!-- 实时出声动态声波指示器 -->
-                        <div id="callSpeakingWaveWrap" style="display: flex; align-items: center; gap: 4px; height: 30px; margin-top: 14px; opacity: 0.2; transition: opacity 0.2s ease;">
+                        <div id="callSpeakingWaveWrap" style="display: flex; align-items: center; gap: 4px; height: 28px; margin-top: 14px; opacity: 0.2; transition: opacity 0.2s ease;">
                             <span class="call-live-wave-bar" style="width: 3px; height: 4px; background: #07c160; border-radius: 2px; transition: height 0.08s ease;"></span>
                             <span class="call-live-wave-bar" style="width: 3px; height: 6px; background: #07c160; border-radius: 2px; transition: height 0.08s ease;"></span>
                             <span class="call-live-wave-bar" style="width: 3px; height: 8px; background: #07c160; border-radius: 2px; transition: height 0.08s ease;"></span>
@@ -707,58 +932,86 @@
                     </div>
                 `}
 
-                <!-- 隐形画板：用于视频抽帧识图 -->
                 <canvas id="wechatCallSnapshotCanvas" style="display:none;"></canvas>
 
-                <!-- 底部磨砂流式字幕窗口（确保高 z-index 15，覆盖在视频之上） -->
-                <div style="position: absolute; bottom: 10px; left: 18px; right: 18px; max-height: 155px; display: flex; flex-direction: column; z-index: 15;">
-                    <div id="wechatCallSubtitleArea" style="overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 10px 14px; background: rgba(15, 15, 15, 0.72); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-radius: 14px; border: 0.5px solid rgba(255,255,255,0.12); box-shadow: 0 4px 20px rgba(0,0,0,0.45);">
-                        <div style="text-align: center; color: rgba(255,255,255,0.45); font-size: 11px;">— 说话停顿 2 秒自动发送 · 随时开口可打断 —</div>
+                <!-- 🌟 底部磨砂流式字幕窗口 -->
+                <div style="position: absolute; bottom: 8px; left: 16px; right: 16px; max-height: 140px; display: flex; flex-direction: column; z-index: 15;">
+                    <div id="wechatCallSubtitleArea" style="overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 8px 12px; background: rgba(10, 12, 16, 0.65); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-radius: 12px; border: 0.5px solid rgba(255,255,255,0.1); box-shadow: 0 4px 18px rgba(0,0,0,0.4);">
+                        <div style="text-align: center; color: rgba(255,255,255,0.4); font-size: 10.5px;">— 停顿 2 秒自动发送 · 随时开口可打断 —</div>
                     </div>
+                </div>
+
+                <!-- 🌟 3 秒淡化极简白小字通知浮层 -->
+                <div id="wechatCallHudNoticeTip" style="position: absolute; bottom: 156px; left: 50%; transform: translate(-50%, 8px); background: rgba(20, 20, 20, 0.78); backdrop-filter: blur(10px); color: #ffffff; font-size: 11.5px; padding: 5px 14px; border-radius: 16px; border: 0.5px solid rgba(255,255,255,0.15); pointer-events: none; opacity: 0; transition: opacity 0.3s ease, transform 0.3s ease; z-index: 30; white-space: nowrap;">
+                    提示
                 </div>
             </div>
 
-            <!-- 底部极简微信按键栏 -->
-            <div style="padding: 24px 20px 38px; display: flex; justify-content: center; align-items: center; position: relative; z-index: 20;">
+            <!-- 底部按键中枢 -->
+            <div style="padding: 16px 20px 32px; display: flex; justify-content: center; align-items: center; position: relative; z-index: 20;">
                 
-                <!-- 挂断红键（居中醒目） -->
-                <button type="button" id="btnCallHangup" title="挂断" style="border: none; background: #fa5151; color: #ffffff; width: 68px; height: 68px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 6px 20px rgba(250, 81, 81, 0.45); -webkit-tap-highlight-color: transparent;">
-                    <svg viewBox="0 0 24 24" style="width: 30px; height: 30px; fill: currentColor;"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.996.996 0 0 1 0-1.41C3.28 8.84 7.42 7 12 7c4.58 0 8.72 1.84 11.71 4.67.39.39.39 1.02 0 1.41l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg>
+                <!-- 挂断红键（居中） -->
+                <button type="button" id="btnCallHangup" title="挂断" style="border: none; background: #fa5151; color: #ffffff; width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 6px 20px rgba(250, 81, 81, 0.45); -webkit-tap-highlight-color: transparent;">
+                    <svg viewBox="0 0 24 24" style="width: 28px; height: 28px; fill: currentColor;"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.996.996 0 0 1 0-1.41C3.28 8.84 7.42 7 12 7c4.58 0 8.72 1.84 11.71 4.67.39.39.39 1.02 0 1.41l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg>
                 </button>
 
-                <!-- 🌟 视频模式专属按键群：视觉模式切换 + 翻转镜头 -->
                 ${mode === 'video' ? `
-                <!-- 左侧：视觉模式切换胶囊 -->
-                <div style="position: absolute; left: 30px;">
-                    <button type="button" id="btnCallToggleVisionMode" title="切换视觉感知模式" style="border: 1px solid rgba(255,255,255,0.25); background: rgba(255,255,255,0.12); backdrop-filter: blur(8px); color: #ffffff; padding: 0 12px; height: 46px; border-radius: 23px; display: flex; align-items: center; gap: 6px; cursor: pointer; -webkit-tap-highlight-color: transparent;">
-                        <div id="callVisionModeIconWrap" style="width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid #07c160; color: #07c160; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: bold;">●</div>
-                        <span id="callVisionModeText" style="font-size: 11.5px; font-weight: 500; color: #ffffff;">外挂识图</span>
-                    </button>
-                </div>
+                    <!-- 🌟 视频模式左侧按键群：视觉模式胶囊 + 显隐自拍画中画 + 摄像头静默 -->
+                    <div style="position: absolute; left: 16px; display: flex; align-items: center; gap: 8px;">
+                        <!-- 视觉模式切换胶囊 -->
+                        <button type="button" id="btnCallToggleVisionMode" title="切换视觉模式" style="border: 1px solid rgba(255,255,255,0.22); background: rgba(255,255,255,0.1); backdrop-filter: blur(8px); color: #ffffff; padding: 0 10px; height: 42px; border-radius: 21px; display: flex; align-items: center; gap: 5px; cursor: pointer; -webkit-tap-highlight-color: transparent;">
+                            <div id="callVisionModeIconWrap" style="width: 12px; height: 12px; border-radius: 50%; border: 1.5px solid #07c160; color: #07c160; display: flex; align-items: center; justify-content: center; font-size: 8px; font-weight: bold;">●</div>
+                            <span id="callVisionModeText" style="font-size: 11px; font-weight: 500; color: #ffffff;">外挂识图</span>
+                        </button>
 
-                <!-- 右侧：翻转镜头按键 -->
-                <div style="position: absolute; right: 30px;">
-                    <button type="button" id="btnCallFlipCamera" title="翻转镜头" style="border: 1px solid rgba(255,255,255,0.25); background: rgba(255,255,255,0.12); backdrop-filter: blur(8px); color: #ffffff; width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; -webkit-tap-highlight-color: transparent;">
-                        <svg viewBox="0 0 24 24" style="width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"><path d="M20 16v5h-5"/><path d="M4 8V3h5"/><path d="M4 14a8 8 0 0 0 14.54 3.46L20 21"/><path d="M20 10a8 8 0 0 0-14.54-3.46L4 3"/></svg>
-                    </button>
-                </div>
+                        <!-- 🌟 纯图标：显隐自拍画中画（小窗口图标） -->
+                        <button type="button" id="btnCallTogglePip" title="自拍窗口显隐" style="border: 1px solid rgba(255,255,255,0.22); background: rgba(255,255,255,0.1); backdrop-filter: blur(8px); color: #ffffff; width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; -webkit-tap-highlight-color: transparent;">
+                            <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"><rect x="2" y="3" width="20" height="14" rx="2"/><rect x="12" y="9" width="8" height="6" rx="1"/></svg>
+                        </button>
+
+                        <!-- 🌟 纯图标：静默摄像头视频流（摄像头图标） -->
+                        <button type="button" id="btnCallToggleCameraMute" title="摄像头画面静默" style="border: 1px solid rgba(255,255,255,0.22); background: rgba(255,255,255,0.1); backdrop-filter: blur(8px); color: #ffffff; width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; -webkit-tap-highlight-color: transparent;">
+                            <svg id="svgCameraMuteStatus" viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+                        </button>
+                    </div>
+
+                    <!-- 🌟 视频模式右侧按键群：手势舞台微调 + 翻转镜头 -->
+                    <div style="position: absolute; right: 16px; display: flex; align-items: center; gap: 8px;">
+                        <!-- 纯图标：手势调位开关（十字移动手势图标） -->
+                        <button type="button" id="btnCallToggleAdjustStage" title="手势触控调位" style="border: 1px solid rgba(255,255,255,0.22); background: rgba(255,255,255,0.1); backdrop-filter: blur(8px); color: #ffffff; width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; -webkit-tap-highlight-color: transparent;">
+                            <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"><polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/></svg>
+                        </button>
+
+                        <!-- 纯图标：前后摄像头翻转 -->
+                        <button type="button" id="btnCallFlipCamera" title="翻转镜头" style="border: 1px solid rgba(255,255,255,0.22); background: rgba(255,255,255,0.1); backdrop-filter: blur(8px); color: #ffffff; width: 42px; height: 42px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; -webkit-tap-highlight-color: transparent;">
+                            <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"><path d="M20 16v5h-5"/><path d="M4 8V3h5"/><path d="M4 14a8 8 0 0 0 14.54 3.46L20 21"/><path d="M20 10a8 8 0 0 0-14.54-3.46L4 3"/></svg>
+                        </button>
+                    </div>
                 ` : ''}
             </div>
         `;
 
         document.body.appendChild(overlay);
 
-        // 初始化视觉按钮外观
         if (mode === 'video') {
             updateVisionModeUI(initialVisionMode);
-        }
 
-        // 挂载本地视频流并显式播放
-        if (mode === 'video' && stream) {
-            const videoEl = document.getElementById('wechatCallLocalVideo');
-            if (videoEl) {
-                videoEl.srcObject = stream;
-                videoEl.play().catch(e => console.warn('[WechatCall] 本地视频播放提示:', e));
+            // 挂载本地视频
+            if (stream) {
+                const videoEl = document.getElementById('wechatCallLocalVideo');
+                if (videoEl) {
+                    videoEl.srcObject = stream;
+                    videoEl.play().catch(() => {});
+                }
+            }
+
+            // 初始化舞台立绘与触控手势
+            if (hasCustomSprite && stageProf) {
+                const box = document.getElementById('wechatCallSpriteTransformBox');
+                const handle = document.getElementById('wechatCallResizeHandle');
+                applySpriteTransform(box, stageProf.position);
+                initTouchGestureControls(box, handle, stageProf);
+                updateLiveSpriteExpression('default');
             }
         }
 
@@ -774,10 +1027,19 @@
             overlay.querySelector('#btnCallToggleVisionMode')?.addEventListener('click', () => {
                 toggleCallVisionMode();
             });
+            overlay.querySelector('#btnCallTogglePip')?.addEventListener('click', () => {
+                toggleCallPipWindow();
+            });
+            overlay.querySelector('#btnCallToggleCameraMute')?.addEventListener('click', () => {
+                toggleCallCameraMute();
+            });
+            overlay.querySelector('#btnCallToggleAdjustStage')?.addEventListener('click', () => {
+                toggleStageAdjustMode();
+            });
         }
     }
 
-    // 抓取当前本地摄像头单帧
+    // 抓取摄像头单帧 Base64
     function captureVideoFrameBase64() {
         const video = document.getElementById('wechatCallLocalVideo');
         const canvas = document.getElementById('wechatCallSnapshotCanvas');
@@ -798,7 +1060,7 @@
         }
     }
 
-    // 🌟 独立识图 API 调用（带 3.5 秒极速超时保护，超时不卡死通话）
+    // 独立识图 API 调用
     async function inspectVisualFrameAsync(base64Img) {
         try {
             let cfg = null;
@@ -809,9 +1071,7 @@
                 if (rawCfg) cfg = JSON.parse(rawCfg);
             }
 
-            if (!cfg || !cfg.apiKey || !cfg.baseUrl) {
-                return '';
-            }
+            if (!cfg || !cfg.apiKey || !cfg.baseUrl) return '';
 
             const abortCtrl = new AbortController();
             const timeoutId = setTimeout(() => abortCtrl.abort(), 3500);
@@ -829,7 +1089,7 @@
                         {
                             role: 'user',
                             content: [
-                                { type: 'text', text: '请用一句极其简短的话（20字以内）客观描述画面中人物的动作、表情或镜头环境（如：用户正对着镜头笑、室内光线昏暗）：' },
+                                { type: 'text', text: '请用一句极其简短的话（20字以内）客观描述画面中人物的动作、表情或镜头环境：' },
                                 { type: 'image_url', image_url: { url: base64Img } }
                             ]
                         }
@@ -839,7 +1099,6 @@
             });
 
             clearTimeout(timeoutId);
-
             if (!res.ok) return '';
             const data = await res.json();
             return data?.choices?.[0]?.message?.content?.trim() || '';
@@ -848,7 +1107,7 @@
         }
     }
 
-    // 流式追加字幕并管理淡化状态
+    // 追加字幕
     function appendCallSubtitle(role, name, text) {
         const area = document.getElementById('wechatCallSubtitleArea');
         if (!area || !window._activeCallSession) return;
@@ -862,7 +1121,7 @@
         const item = document.createElement('div');
         item.className = 'call-subtitle-item';
         item.style.cssText = `
-            font-size: 13px; line-height: 1.45;
+            font-size: 12.5px; line-height: 1.45;
             color: ${isSystem ? '#aaa' : (isPlayer ? '#a7f3d0' : '#ffffff')};
             word-break: break-word;
         `;
@@ -878,29 +1137,24 @@
 
         area.appendChild(item);
 
-        // 管理淡化：仅保持最新的 2~3 条高亮，更早的消息淡化
         const allItems = area.querySelectorAll('.call-subtitle-item');
         if (allItems.length > 2) {
             for (let i = 0; i < allItems.length - 2; i++) {
                 allItems[i].classList.add('faded');
             }
         }
-
-        // 平滑滚动到底部
         area.scrollTop = area.scrollHeight;
     }
 
-    // 触发角色极速电话回复（超轻量专属 Prompt，支持多模态原生图文或外挂事实感知）
+    // 触发角色思考回复
     async function triggerCallAIReply(isFirstGreeting = false, userSpoken = '', visualInsight = '', base64DirectImg = null) {
         const session = window._activeCallSession;
         if (!session) return;
 
-        // 🌟 新一轮生成开启：自增序列锁并终止前置未完成的请求
         _globalCallTtsSequence++;
         const currentSequenceId = _globalCallTtsSequence;
         session.activeTtsSequenceId = currentSequenceId;
 
-        // 停止之前的 TTS 播放与发音
         if (window.ttsEngine && typeof window.ttsEngine.stop === 'function') {
             window.ttsEngine.stop();
         } else if (window.speechSynthesis) {
@@ -911,7 +1165,6 @@
         const abortCtrl = new AbortController();
         session.currentAbortController = abortCtrl;
 
-        // 明确状态：正在思考回复中
         setCallStatusText('正在思考回复中...', '#07c160');
 
         const npcId = session.npcId;
@@ -919,7 +1172,6 @@
         const npcName = getNpcFullName(npcId);
         const playerName = getPlayerFullName();
 
-        // 提取 AI 配置
         let aiConfig = null;
         try {
             aiConfig = JSON.parse(localStorage.getItem('mc_yt_ai_config') || '{}');
@@ -934,20 +1186,17 @@
             return;
         }
 
-        // 极速通话 Prompt 构造
         const systemPrompt = `【当前处于微信${session.mode === 'video' ? '视频通话' : '语音电话'}连线中】
 你正在扮演【${npc.name}】（人设：${npc.persona || '好友'}），正与【${playerName}】进行实时通话。
 
 【严苛通话回复规则】：
-1. 像真实打电话一样对话！单次回复必须短平快，字数严格控制在 1~3 句话（不超过 50 字）；
-2. 绝对禁止生成长篇大论，绝对禁止输出 Markdown 复杂排版、表格、代码块；
-3. 绝对不要发送表情包代码，不需要联网检索事实；
-4. 允许在句首或句尾自然带出括号式的电话环境背景音描写，如 "(微风吹拂的沙沙声)"、"(电话那头隐约传来翻书声)"；
-5. 必须保持角色的语气性格口吻。`;
+1. 像真实打电话一样对话！单次回复短平快，字数严格控制在 1~3 句话（不超过 50 字）；
+2. 绝对禁止长篇大论，严禁 Markdown 排版与表格；
+3. 允许自然带出括号背景音如 "(轻笑一声)"、"(微风沙沙声)"；
+4. 保持性格口吻。`;
 
         const messages = [{ role: 'system', content: systemPrompt }];
 
-        // 注入最近 6 轮通话上下文
         const recent = session.transcript.filter(t => t.role !== 'system').slice(-6);
         recent.forEach(r => {
             messages.push({
@@ -962,7 +1211,6 @@
                 content: `(电话刚接通，请你先开口向${playerName}自然打个招呼)`
             });
         } else if (base64DirectImg) {
-            // 🌟 模式 B：主模型原生识图，直接向多模态主模型投递图片帧
             messages.push({
                 role: 'user',
                 content: [
@@ -971,7 +1219,6 @@
                 ]
             });
         } else if (visualInsight) {
-            // 🌟 模式 A：外挂视觉 API 解析出的事实文字注入
             messages.push({
                 role: 'system',
                 content: `[当前摄像头画面客观事实: ${visualInsight}]`
@@ -997,48 +1244,42 @@
                 })
             });
 
-            if (abortCtrl.signal.aborted || session.activeTtsSequenceId !== currentSequenceId) {
-                console.log('[CallAI] 回复已过期或被中止，废弃网络返回');
-                return;
-            }
+            if (abortCtrl.signal.aborted || session.activeTtsSequenceId !== currentSequenceId) return;
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const data = await resp.json();
             const replyText = data?.choices?.[0]?.message?.content?.trim() || '喂？信号好像有点卡住了，能听到吗？';
 
             finishAiReply(npcId, npcName, replyText, currentSequenceId);
         } catch (err) {
-            if (err.name === 'AbortError' || session.activeTtsSequenceId !== currentSequenceId) {
-                console.log('[CallAI] 回复已被用户打断或序列已失效');
-                return;
-            }
+            if (err.name === 'AbortError' || session.activeTtsSequenceId !== currentSequenceId) return;
             console.warn('[CallAI] 通话回复出错:', err);
             finishAiReply(npcId, npcName, isFirstGreeting ? `喂，${playerName}？能听到我说话吗？` : '嗯嗯，我在听呢！', currentSequenceId);
         }
     }
 
-    // 完成角色回复：上字幕 + 播放 TTS（带 sequenceId 校验）
+    // 完成角色回复：智能切换立绘表情 + 上字幕 + TTS
     function finishAiReply(npcId, npcName, text, sequenceId) {
         const session = window._activeCallSession;
         if (!session) return;
         
-        // 序列锁门禁：如果不是当前最新一轮生成，绝对不上屏不发音
-        if (sequenceId !== undefined && sequenceId !== session.activeTtsSequenceId) {
-            console.log('[CallAI] 拦截到陈旧回复，已就地丢弃防串音');
-            return;
-        }
+        if (sequenceId !== undefined && sequenceId !== session.activeTtsSequenceId) return;
 
         session.isAiReplying = false;
 
+        // 🌟 智能表情识别驱动立绘变化
+        if (session.mode === 'video') {
+            const emotion = detectEmotionFromText(text);
+            updateLiveSpriteExpression(emotion);
+        }
+
         appendCallSubtitle('npc', npcName, text);
 
-        // TTS 发音朗读
         const npc = window.G.npcs[npcId];
         const npcVoiceCfg = (npc && npc.chatSettings && npc.chatSettings.tts) || {};
         const isTtsEnabled = !!(npcVoiceCfg.enabled || (window.ttsEngine && window.ttsEngine.getConfig && window.ttsEngine.getConfig().enabled));
 
         if (isTtsEnabled && window.ttsEngine) {
             setCallStatusText('对方正在讲话...', '#07c160');
-            // 剥离掉背景音括号，仅朗读对白
             const speakPureText = text.replace(/\(.*?\)|（.*?）/g, '').trim() || text;
             
             window.ttsEngine.speak(speakPureText, npcVoiceCfg, () => {
@@ -1051,12 +1292,11 @@
         }
     }
 
-    // 挂断通话并做第三人称具名沉淀归档
+    // 挂断通话并沉淀归档
     window.endWechatCall = async function() {
         const session = window._activeCallSession;
         if (!session) return;
 
-        // 自增序列并物理掐断
         _globalCallTtsSequence++;
 
         clearInterval(session.timerInterval);
@@ -1072,7 +1312,6 @@
             session.audioContext = null;
         }
 
-        // 中断任何网络请求与播放
         if (session.currentAbortController) {
             try { session.currentAbortController.abort(); } catch (_) {}
         }
@@ -1082,11 +1321,8 @@
             try { window.speechSynthesis.cancel(); } catch (_) {}
         }
 
-        // 停止媒体流硬件
         if (session.stream) {
-            try {
-                session.stream.getTracks().forEach(t => t.stop());
-            } catch (_) {}
+            try { session.stream.getTracks().forEach(t => t.stop()); } catch (_) {}
         }
 
         const durationSec = session.durationSeconds;
@@ -1096,7 +1332,6 @@
         const targetName = getNpcFullName(npcId);
         const playerName = getPlayerFullName();
 
-        // 移除 HUD
         const overlay = document.getElementById('wechatCallOverlayModal');
         if (overlay) {
             overlay.style.transition = 'opacity 0.2s ease';
@@ -1104,7 +1339,6 @@
             setTimeout(() => overlay.remove(), 200);
         }
 
-        // 整理第三人称客观纪要
         const validMsgs = session.transcript.filter(t => t.role !== 'system');
         let recordBody = '';
 
@@ -1118,7 +1352,6 @@
         const time = new Date().toLocaleTimeString().slice(0, 5);
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
 
-        // 构造一条通话结束系统消息卡片（支持长按删除与防记忆污染）
         const callEndMessage = {
             _id: 'call_rec_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
             from: 'action',
@@ -1138,7 +1371,6 @@
             hist.push(callEndMessage);
         }
 
-        // 同步落盘
         if (typeof window.syncChatHistoryToLocalBackup === 'function') {
             await window.syncChatHistoryToLocalBackup();
         }
@@ -1152,13 +1384,12 @@
             showToast(`${modeLabel}已结束，记录已沉淀`, 'info', 1500);
         }
 
-        // 刷新聊天窗口
         if (typeof renderSingleChatWindow === 'function') {
             renderSingleChatWindow();
         }
     };
 
-    // 全局提供：删除单条通话记录并撤回记忆通道
+    // 删除单条通话记录
     window.deleteCallRecordMessage = async function(msgId, npcId) {
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
         const hist = window.getAccountChatHistory(npcId, curAcc.id);

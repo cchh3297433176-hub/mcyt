@@ -1,14 +1,14 @@
 /**
  * js/apps/chat/chat-card.js
- * 📇 微信名片与人设资料设置独立模块
+ * 📇 微信名片与人设资料设置独立模块（视频舞台立绘与多差分配组支持版）
  * 职责：
- * 1. 角色极简原生名片卡（仅保留必要信息，头像精准保活）
- * 2. 右上角「装扮中心」：支持【我的装扮】与【对方装扮】双轨分流
- * 3. 头像框缩略图折叠栏试穿预览（点击试穿，再次点击卸下）
- * 4. 彻底消除杂乱 emoji，保持原生微信极简白灰微绿
- * 5. 🌟 角色专属 TTS 语音音色配置：
- *    - 增加独立【启用角色专属 TTS 发音】开关（默认关闭，不强迫使用）；
- *    - 支持一键拉取并点选 CloneTTS 音色与语速精调。
+ * 1. 角色极简原生名片卡（保留必要信息，头像精准保活，支持原画/动图）
+ * 2. 右上角「装扮中心」：
+ *    - 【我的装扮】与【对方装扮】头像、头像框与气泡样式双轨分流
+ *    - 🌟【视频舞台与立绘设置】：支持背景与多表情差分立绘管理，多套配组方案命名、切换、独立导入导出
+ *    - 兼容本地与直链图片/GIF动图/视频，点击已导入项弹窗询问更换
+ * 3. 🌟 导出人设卡时连同所有视频配组与立绘差分无缝打包嵌入
+ * 4. 🌟 角色专属 TTS 语音音色配置（带独立开关与 CloneTTS 菜单拉取）
  */
 
 (function() {
@@ -37,6 +37,59 @@
         return (typeof window.getStoredDecorBubbles === 'function')
             ? window.getStoredDecorBubbles()
             : [{ id: 'bubble_default', name: '原生微信白灰微绿', type: 'css' }];
+    }
+
+    // 安全 HTML 转义
+    function escapeHtml(str) {
+        if (typeof window.escapeHtml === 'function') return window.escapeHtml(str);
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
+
+    // 🌟 获取角色视频舞台预设方案
+    function ensureNpcVideoStageProfiles(npc) {
+        if (!npc.chatSettings) npc.chatSettings = {};
+        if (!npc.chatSettings.videoStage) {
+            npc.chatSettings.videoStage = {
+                activeProfileId: 'default',
+                profiles: [
+                    {
+                        id: 'default',
+                        name: '默认形象',
+                        backgroundUrl: '',
+                        bgType: 'image',
+                        sprites: {
+                            default: ''
+                        },
+                        customExpressions: [],
+                        position: { x: 0, y: 0, scale: 1.0 },
+                        bgPosition: { x: 0, y: 0, scale: 1.0 }
+                    }
+                ]
+            };
+        }
+        const vs = npc.chatSettings.videoStage;
+        if (!Array.isArray(vs.profiles) || vs.profiles.length === 0) {
+            vs.profiles = [
+                {
+                    id: 'default',
+                    name: '默认形象',
+                    backgroundUrl: '',
+                    bgType: 'image',
+                    sprites: { default: '' },
+                    customExpressions: [],
+                    position: { x: 0, y: 0, scale: 1.0 },
+                    bgPosition: { x: 0, y: 0, scale: 1.0 }
+                }
+            ];
+            vs.activeProfileId = 'default';
+        }
+        return vs;
     }
 
     // 📇 极简微信名片卡
@@ -78,7 +131,7 @@
         mask.innerHTML = `
             <div class="wechat-clean-modal-card" style="max-width:320px;padding:20px 18px;position:relative;background:#ffffff;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.12);box-sizing:border-box;">
                 <div style="position:absolute;top:14px;right:14px;display:flex;align-items:center;gap:6px;">
-                    <button type="button" id="btnNpcCardDecor" title="装扮设置" style="border:none;background:none;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;color:#07c160;">
+                    <button type="button" id="btnNpcCardDecor" title="装扮中心（头像框、气泡与视频立绘）" style="border:none;background:none;width:28px;height:28px;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;color:#07c160;">
                         <svg viewBox="0 0 24 24" style="width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;">
                             <path d="M20.38 3.46L16 2a4 4 0 0 1-8 0L3.62 3.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23z"></path>
                         </svg>
@@ -146,7 +199,7 @@
     }
     window.openNpcProfileCardModal = openNpcProfileCardModal;
 
-    // 🎨 装扮弹窗
+    // 🎨 装扮弹窗（包含：基础装扮 与 视频舞台立绘分区）
     function openNpcDecorModal(npcId) {
         if (!window.G || !window.G.npcs) return;
         const npc = window.G.npcs[npcId];
@@ -155,6 +208,8 @@
         if (!npc.chatSettings) npc.chatSettings = {};
         if (!npc.chatSettings.decor) npc.chatSettings.decor = {};
 
+        // 顶层主 Tab：'decor'（头像与气泡）| 'videoStage'（视频立绘与舞台）
+        let activeMainTab = 'videoStage';
         let activeDecorTarget = 'npc';
 
         const frames = getStoredFramesList();
@@ -171,6 +226,9 @@
         const userAvatar = (typeof window.getPlayerAvatarSafe === 'function') ? window.getPlayerAvatarSafe() : 'assets/icons/chat.png';
         const npcAvatar = npc.avatarUrl || npc.avatar || 'assets/icons/chat.png';
 
+        // 视频舞台配置数据
+        const videoStageData = ensureNpcVideoStageProfiles(npc);
+
         let mask = document.createElement('div');
         mask.className = 'wechat-clean-modal-mask';
 
@@ -185,136 +243,437 @@
             const curFrameUrl = (curFrameObj && curFrameObj.url) ? curFrameObj.url : '';
             const curFrameScale = (curFrameObj && curFrameObj.scale) ? curFrameObj.scale : 1.18;
 
+            // 获取当前选中的视频配组
+            let activeProf = videoStageData.profiles.find(p => p.id === videoStageData.activeProfileId);
+            if (!activeProf) {
+                activeProf = videoStageData.profiles[0];
+                videoStageData.activeProfileId = activeProf.id;
+            }
+
+            // 预设表情与自定义表情列表
+            const defaultExprs = [
+                { id: 'default', label: '默认' },
+                { id: 'smile', label: '微笑' },
+                { id: 'shy', label: '害羞' },
+                { id: 'angry', label: '生气' },
+                { id: 'sad', label: '难过' },
+                { id: 'think', label: '思考' },
+                { id: 'tsundere', label: '傲娇' },
+                { id: 'surprised', label: '惊讶' }
+            ];
+            const allExprs = [...defaultExprs];
+            if (Array.isArray(activeProf.customExpressions)) {
+                activeProf.customExpressions.forEach(c => {
+                    if (!allExprs.find(e => e.id === c.id)) {
+                        allExprs.push(c);
+                    }
+                });
+            }
+
             mask.innerHTML = `
-                <div class="wechat-clean-modal-card" style="max-width:340px;padding:16px;position:relative;background:#ffffff;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.14);box-sizing:border-box;max-height:88vh;display:flex;flex-direction:column;">
-                    <div style="font-size:14.5px;font-weight:600;color:#181818;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
-                        <span>装扮设置</span>
+                <div class="wechat-clean-modal-card" style="max-width:350px;width:92%;padding:16px;position:relative;background:#ffffff;border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.14);box-sizing:border-box;max-height:90vh;display:flex;flex-direction:column;">
+                    <div style="font-size:14.5px;font-weight:600;color:#181818;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center;">
+                        <span>装扮中心 · ${escapeHtml(npc.name || 'NPC')}</span>
                         <button type="button" id="btnDecorModalX" style="border:none;background:#f2f2f2;border-radius:50%;width:22px;height:22px;color:#777;cursor:pointer;font-size:12px;">✕</button>
                     </div>
 
+                    <!-- 顶部主分区切换 -->
                     <div style="display:flex;background:#f2f2f2;border-radius:8px;padding:2px;margin-bottom:12px;">
-                        <button type="button" id="tabTargetNpc" style="flex:1;padding:6px 0;border-radius:6px;border:none;font-size:12px;font-weight:600;cursor:pointer;background:${!isUser ? '#ffffff' : 'transparent'};color:${!isUser ? '#07c160' : '#666'};">
-                            角色「${escapeHtml(npc.name || 'NPC')}」
+                        <button type="button" id="tabMainVideoStage" style="flex:1;padding:7px 0;border-radius:6px;border:none;font-size:12px;font-weight:600;cursor:pointer;background:${activeMainTab === 'videoStage' ? '#ffffff' : 'transparent'};color:${activeMainTab === 'videoStage' ? '#07c160' : '#666'};">
+                            视频立绘与舞台
                         </button>
-                        <button type="button" id="tabTargetUser" style="flex:1;padding:6px 0;border-radius:6px;border:none;font-size:12px;font-weight:600;cursor:pointer;background:${isUser ? '#ffffff' : 'transparent'};color:${isUser ? '#07c160' : '#666'};">
-                            我方（用户自身）
+                        <button type="button" id="tabMainBasicDecor" style="flex:1;padding:7px 0;border-radius:6px;border:none;font-size:12px;font-weight:600;cursor:pointer;background:${activeMainTab === 'decor' ? '#ffffff' : 'transparent'};color:${activeMainTab === 'decor' ? '#07c160' : '#666'};">
+                            头像框与气泡
                         </button>
                     </div>
 
                     <div style="flex:1;overflow-y:auto;display:flex;flex-direction:column;gap:12px;padding-right:2px;">
-                        <div style="background:#f7f7f7;border-radius:8px;padding:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;">
-                            <div style="position:relative;width:54px;height:54px;">
-                                <img src="${curAvatar}" style="width:100%;height:100%;object-fit:cover;border-radius:${getShapeBorderRadius(curShape)};display:block;" onerror="this.src='assets/icons/chat.png';" />
-                                ${curFrameUrl ? `<img src="${curFrameUrl}" style="position:absolute;top:50%;left:50%;transform:translate(-50%, -50%) scale(${curFrameScale});width:100%;height:100%;pointer-events:none;" />` : ''}
-                            </div>
-                            <span style="font-size:11px;color:#777;margin-top:6px;">${curFrameUrl ? (curFrameObj.name || '已选框') : '未穿戴头像框'}</span>
-                        </div>
-
-                        <div>
-                            <div style="font-size:12px;font-weight:600;color:#444;margin-bottom:6px;">头像形状：</div>
-                            <div style="display:flex;gap:6px;">
-                                ${!isUser ? `<button type="button" class="opt-shape-btn" data-val="inherit" style="flex:1;padding:6px 0;font-size:11px;border-radius:6px;border:1px solid ${npcShape === 'inherit' ? '#07c160' : '#e0e0e0'};background:${npcShape === 'inherit' ? '#e8f7ed' : '#fff'};color:${npcShape === 'inherit' ? '#07c160' : '#444'};cursor:pointer;">跟随全局</button>` : ''}
-                                <button type="button" class="opt-shape-btn" data-val="circle" style="flex:1;padding:6px 0;font-size:11px;border-radius:6px;border:1px solid ${(isUser ? userShape : npcShape) === 'circle' ? '#07c160' : '#e0e0e0'};background:${(isUser ? userShape : npcShape) === 'circle' ? '#e8f7ed' : '#fff'};color:${(isUser ? userShape : npcShape) === 'circle' ? '#07c160' : '#444'};cursor:pointer;">正圆</button>
-                                <button type="button" class="opt-shape-btn" data-val="squircle" style="flex:1;padding:6px 0;font-size:11px;border-radius:6px;border:1px solid ${(isUser ? userShape : npcShape) === 'squircle' ? '#07c160' : '#e0e0e0'};background:${(isUser ? userShape : npcShape) === 'squircle' ? '#e8f7ed' : '#fff'};color:${(isUser ? userShape : npcShape) === 'squircle' ? '#07c160' : '#444'};cursor:pointer;">圆角方</button>
-                                <button type="button" class="opt-shape-btn" data-val="square" style="flex:1;padding:6px 0;font-size:11px;border-radius:6px;border:1px solid ${(isUser ? userShape : npcShape) === 'square' ? '#07c160' : '#e0e0e0'};background:${(isUser ? userShape : npcShape) === 'square' ? '#e8f7ed' : '#fff'};color:${(isUser ? userShape : npcShape) === 'square' ? '#07c160' : '#444'};cursor:pointer;">直角方</button>
-                            </div>
-                        </div>
-
-                        <div>
-                            <div onclick="window.toggleCardDecorFramesCollapse()" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;margin-bottom:6px;">
-                                <span style="font-size:12px;font-weight:600;color:#444;">头像框（点击试穿，再次点击脱下）：</span>
-                                <span id="cardDecorFramesArrow" style="font-size:11px;color:#07c160;font-weight:bold;">▼ 收起</span>
-                            </div>
-
-                            <div id="cardDecorFramesGrid" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(64px, 1fr));gap:8px;">
-                                ${!isUser ? `
-                                    <div class="opt-frame-card" data-val="inherit" style="background:${npcFrameId === 'inherit' ? '#e8f7ed' : '#f9f9f9'};border:1px solid ${npcFrameId === 'inherit' ? '#07c160' : '#eee'};border-radius:8px;padding:6px 2px;display:flex;flex-direction:column;align-items:center;cursor:pointer;">
-                                        <div style="width:36px;height:36px;border-radius:50%;background:#eee;display:flex;align-items:center;justify-content:center;font-size:10px;color:#777;margin-bottom:4px;">默认</div>
-                                        <span style="font-size:10px;color:#333;">跟随全局</span>
-                                    </div>
-                                ` : ''}
-
-                                ${frames.map(f => {
-                                    const isSelected = (isUser ? userFrameId : npcFrameId) === f.id;
-                                    const sVal = f.scale || 1.18;
-                                    return `
-                                        <div class="opt-frame-card" data-val="${f.id}" style="position:relative;background:${isSelected ? '#e8f7ed' : '#f9f9f9'};border:1px solid ${isSelected ? '#07c160' : '#eee'};border-radius:8px;padding:6px 2px;display:flex;flex-direction:column;align-items:center;cursor:pointer;">
-                                            <div style="position:relative;width:36px;height:36px;margin-bottom:4px;">
-                                                <img src="${curAvatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;" onerror="this.src='assets/icons/chat.png';" />
-                                                ${f.url ? `<img src="${f.url}" style="position:absolute;top:50%;left:50%;transform:translate(-50%, -50%) scale(${sVal});width:100%;height:100%;pointer-events:none;" />` : ''}
-                                            </div>
-                                            <span style="font-size:10px;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:56px;text-align:center;">${escapeHtml(f.name)}</span>
+                        ${activeMainTab === 'videoStage' ? `
+                            <!-- 🌟 视频立绘与舞台分区 -->
+                            <div style="display:flex;flex-direction:column;gap:12px;">
+                                <!-- 配组方案控制条 -->
+                                <div style="background:#f8f9fa;border-radius:8px;padding:10px;border:0.5px solid #eee;">
+                                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                                        <div style="font-size:12px;font-weight:600;color:#333;">当前舞台方案：</div>
+                                        <div style="display:flex;gap:4px;">
+                                            <button type="button" id="btnExportCurrentProfile" title="导出当前方案" style="border:1px solid #dcdcdc;background:#fff;border-radius:4px;padding:2px 6px;font-size:11px;color:#555;cursor:pointer;">导出</button>
+                                            <button type="button" id="btnImportProfileDirect" title="导入方案" style="border:1px solid #dcdcdc;background:#fff;border-radius:4px;padding:2px 6px;font-size:11px;color:#555;cursor:pointer;">导入</button>
+                                            <button type="button" id="btnAddNewStageProfile" title="新建配组" style="border:none;background:#07c160;color:#fff;border-radius:4px;padding:2px 7px;font-size:11px;cursor:pointer;font-weight:600;">+ 新建</button>
                                         </div>
-                                    `;
-                                }).join('')}
-                            </div>
-                        </div>
+                                    </div>
+                                    <div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;" class="custom-scrollbar">
+                                        ${videoStageData.profiles.map(p => {
+                                            const isPActive = (p.id === videoStageData.activeProfileId);
+                                            return `
+                                                <button type="button" class="btn-switch-stage-profile" data-pid="${p.id}" style="padding:4px 10px;border-radius:6px;font-size:11px;white-space:nowrap;cursor:pointer;border:1px solid ${isPActive ? '#07c160' : '#ddd'};background:${isPActive ? '#e8f7ed' : '#fff'};color:${isPActive ? '#07c160' : '#444'};font-weight:${isPActive ? '600' : 'normal'};">
+                                                    ${escapeHtml(p.name)}
+                                                </button>
+                                            `;
+                                        }).join('')}
+                                    </div>
+                                    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px;padding-top:6px;border-top:0.5px dashed #eee;">
+                                        <div style="font-size:11px;color:#888;">重命名：</div>
+                                        <div style="display:flex;gap:6px;flex:1;max-width:180px;">
+                                            <input type="text" id="inputStageProfileName" value="${escapeHtml(activeProf.name)}" class="wechat-clean-input" style="font-size:11px;padding:3px 6px;height:24px;">
+                                            <button type="button" id="btnRenameProfile" style="border:none;background:#07c160;color:#fff;border-radius:4px;padding:0 8px;font-size:10.5px;cursor:pointer;">改名</button>
+                                        </div>
+                                        ${videoStageData.profiles.length > 1 ? `
+                                            <button type="button" id="btnDeleteCurrentProfile" style="border:none;background:none;color:#fa5151;font-size:11px;cursor:pointer;padding:0 4px;">删除</button>
+                                        ` : ''}
+                                    </div>
+                                </div>
 
-                        <div>
-                            <div style="font-size:12px;font-weight:600;color:#444;margin-bottom:6px;">气泡样式：</div>
-                            <div style="display:flex;flex-direction:column;gap:6px;">
-                                ${!isUser ? `
-                                    <button type="button" class="opt-bubble-btn" data-val="inherit" style="padding:7px 10px;font-size:11.5px;border-radius:6px;border:1px solid ${npcBubbleId === 'inherit' ? '#07c160' : '#e0e0e0'};background:${npcBubbleId === 'inherit' ? '#e8f7ed' : '#fff'};color:${npcBubbleId === 'inherit' ? '#07c160' : '#444'};cursor:pointer;text-align:left;display:flex;justify-content:space-between;">
-                                        <span>跟随全局装扮</span>
-                                        ${npcBubbleId === 'inherit' ? '<span style="color:#07c160;font-weight:bold;">✓</span>' : ''}
-                                    </button>
-                                ` : ''}
-                                ${bubbles.map(b => {
-                                    const isBSelected = (isUser ? userBubbleId : npcBubbleId) === b.id;
-                                    return `
-                                        <button type="button" class="opt-bubble-btn" data-val="${b.id}" style="padding:7px 10px;font-size:11.5px;border-radius:6px;border:1px solid ${isBSelected ? '#07c160' : '#e0e0e0'};background:${isBSelected ? '#e8f7ed' : '#fff'};color:${isBSelected ? '#07c160' : '#444'};cursor:pointer;text-align:left;display:flex;justify-content:space-between;">
-                                            <span>${escapeHtml(b.name)}</span>
-                                            ${isBSelected ? '<span style="color:#07c160;font-weight:bold;">✓</span>' : ''}
-                                        </button>
-                                    `;
-                                }).join('')}
+                                <!-- 舞台背景图管理 -->
+                                <div style="background:#f8f9fa;border-radius:8px;padding:10px;border:0.5px solid #eee;">
+                                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                                        <div style="font-size:12px;font-weight:600;color:#333;">视频背景（支持图片/GIF/视频）：</div>
+                                        <button type="button" id="btnUploadStageBgUrl" style="border:1px solid #07c160;background:#f0faf4;color:#07c160;border-radius:4px;padding:2px 8px;font-size:11px;cursor:pointer;">直链导入</button>
+                                    </div>
+                                    <div style="display:flex;align-items:center;gap:12px;">
+                                        <div id="btnStageBgPreviewBox" style="width:72px;height:72px;border-radius:8px;background:#e5e7eb;overflow:hidden;cursor:pointer;position:relative;display:flex;align-items:center;justify-content:center;border:1px dashed #bbb;" title="点击导入或更换背景">
+                                            ${activeProf.backgroundUrl ? `
+                                                ${activeProf.bgType === 'video' ? `
+                                                    <video src="${activeProf.backgroundUrl}" muted loop autoplay playsinline style="width:100%;height:100%;object-fit:cover;pointer-events:none;"></video>
+                                                ` : `
+                                                    <img src="${activeProf.backgroundUrl}" style="width:100%;height:100%;object-fit:cover;pointer-events:none;" onerror="this.src='assets/icons/chat.png';">
+                                                `}
+                                                <div style="position:absolute;inset:0;background:rgba(0,0,0,0.3);color:#fff;font-size:10px;display:flex;align-items:center;justify-content:center;opacity:0;transition:opacity 0.2s;" onmouseenter="this.style.opacity='1'" onmouseleave="this.style.opacity='0'">换图</div>
+                                            ` : `
+                                                <span style="font-size:11px;color:#888;">+ 导入</span>
+                                            `}
+                                        </div>
+                                        <div style="flex:1;font-size:11.5px;color:#666;line-height:1.5;">
+                                            <div>${activeProf.backgroundUrl ? '<span style="color:#07c160;font-weight:600;">● 已设置自定义背景</span>' : '当前使用默认黑灰舞台背景'}</div>
+                                            <div style="color:#999;font-size:10.5px;margin-top:2px;">点击方框可从本地相册选取，再次点击可弹窗更换或删除。</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 角色多表情差分立绘管理 -->
+                                <div style="background:#f8f9fa;border-radius:8px;padding:10px;border:0.5px solid #eee;">
+                                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
+                                        <div style="font-size:12px;font-weight:600;color:#333;">表情差分立绘（透明PNG/GIF/视频）：</div>
+                                        <button type="button" id="btnAddCustomExpression" style="border:none;background:#07c160;color:#fff;border-radius:4px;padding:2px 7px;font-size:11px;cursor:pointer;font-weight:600;">+ 新表情</button>
+                                    </div>
+                                    <div style="font-size:10.5px;color:#888;margin-bottom:8px;">同一方案下所有表情统一手势位置，通话中根据对话情绪自动切换：</div>
+                                    
+                                    <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:8px;">
+                                        ${allExprs.map(e => {
+                                            const spriteUrl = activeProf.sprites && activeProf.sprites[e.id];
+                                            const isVideo = spriteUrl && (spriteUrl.startsWith('data:video') || spriteUrl.endsWith('.mp4') || spriteUrl.endsWith('.webm'));
+                                            return `
+                                                <div class="sprite-slot-card" data-eid="${e.id}" data-label="${escapeHtml(e.label)}" style="display:flex;flex-direction:column;align-items:center;background:#fff;border:1px solid ${spriteUrl ? '#07c160' : '#e0e0e0'};border-radius:8px;padding:6px 4px;cursor:pointer;position:relative;">
+                                                    <div style="width:48px;height:56px;background:#f3f4f6;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;position:relative;">
+                                                        ${spriteUrl ? `
+                                                            ${isVideo ? `
+                                                                <video src="${spriteUrl}" muted loop autoplay playsinline style="width:100%;height:100%;object-fit:contain;pointer-events:none;"></video>
+                                                            ` : `
+                                                                <img src="${spriteUrl}" style="width:100%;height:100%;object-fit:contain;pointer-events:none;" onerror="this.src='assets/icons/chat.png';">
+                                                            `}
+                                                        ` : `
+                                                            <span style="font-size:16px;color:#bbb;">+</span>
+                                                        `}
+                                                    </div>
+                                                    <span style="font-size:10.5px;color:#333;margin-top:4px;font-weight:500;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;">${escapeHtml(e.label)}</span>
+                                                </div>
+                                            `;
+                                        }).join('')}
+                                    </div>
+                                </div>
                             </div>
-                        </div>
+                        ` : `
+                            <!-- 基础头像框与气泡样式分区 -->
+                            <div style="display:flex;background:#f2f2f2;border-radius:8px;padding:2px;margin-bottom:4px;">
+                                <button type="button" id="tabTargetNpc" style="flex:1;padding:6px 0;border-radius:6px;border:none;font-size:12px;font-weight:600;cursor:pointer;background:${!isUser ? '#ffffff' : 'transparent'};color:${!isUser ? '#07c160' : '#666'};">
+                                    角色「${escapeHtml(npc.name || 'NPC')}」
+                                </button>
+                                <button type="button" id="tabTargetUser" style="flex:1;padding:6px 0;border-radius:6px;border:none;font-size:12px;font-weight:600;cursor:pointer;background:${isUser ? '#ffffff' : 'transparent'};color:${isUser ? '#07c160' : '#666'};">
+                                    我方（用户自身）
+                                </button>
+                            </div>
+
+                            <div style="background:#f7f7f7;border-radius:8px;padding:12px;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                                <div style="position:relative;width:54px;height:54px;">
+                                    <img src="${curAvatar}" style="width:100%;height:100%;object-fit:cover;border-radius:${getShapeBorderRadius(curShape)};display:block;" onerror="this.src='assets/icons/chat.png';" />
+                                    ${curFrameUrl ? `<img src="${curFrameUrl}" style="position:absolute;top:50%;left:50%;transform:translate(-50%, -50%) scale(${curFrameScale});width:100%;height:100%;pointer-events:none;" />` : ''}
+                                </div>
+                                <span style="font-size:11px;color:#777;margin-top:6px;">${curFrameUrl ? (curFrameObj.name || '已选框') : '未穿戴头像框'}</span>
+                            </div>
+
+                            <div>
+                                <div style="font-size:12px;font-weight:600;color:#444;margin-bottom:6px;">头像形状：</div>
+                                <div style="display:flex;gap:6px;">
+                                    ${!isUser ? `<button type="button" class="opt-shape-btn" data-val="inherit" style="flex:1;padding:6px 0;font-size:11px;border-radius:6px;border:1px solid ${npcShape === 'inherit' ? '#07c160' : '#e0e0e0'};background:${npcShape === 'inherit' ? '#e8f7ed' : '#fff'};color:${npcShape === 'inherit' ? '#07c160' : '#444'};cursor:pointer;">跟随全局</button>` : ''}
+                                    <button type="button" class="opt-shape-btn" data-val="circle" style="flex:1;padding:6px 0;font-size:11px;border-radius:6px;border:1px solid ${(isUser ? userShape : npcShape) === 'circle' ? '#07c160' : '#e0e0e0'};background:${(isUser ? userShape : npcShape) === 'circle' ? '#e8f7ed' : '#fff'};color:${(isUser ? userShape : npcShape) === 'circle' ? '#07c160' : '#444'};cursor:pointer;">正圆</button>
+                                    <button type="button" class="opt-shape-btn" data-val="squircle" style="flex:1;padding:6px 0;font-size:11px;border-radius:6px;border:1px solid ${(isUser ? userShape : npcShape) === 'squircle' ? '#07c160' : '#e0e0e0'};background:${(isUser ? userShape : npcShape) === 'squircle' ? '#e8f7ed' : '#fff'};color:${(isUser ? userShape : npcShape) === 'squircle' ? '#07c160' : '#444'};cursor:pointer;">圆角方</button>
+                                    <button type="button" class="opt-shape-btn" data-val="square" style="flex:1;padding:6px 0;font-size:11px;border-radius:6px;border:1px solid ${(isUser ? userShape : npcShape) === 'square' ? '#07c160' : '#e0e0e0'};background:${(isUser ? userShape : npcShape) === 'square' ? '#e8f7ed' : '#fff'};color:${(isUser ? userShape : npcShape) === 'square' ? '#07c160' : '#444'};cursor:pointer;">直角方</button>
+                                </div>
+                            </div>
+
+                            <div>
+                                <div onclick="window.toggleCardDecorFramesCollapse()" style="display:flex;justify-content:space-between;align-items:center;cursor:pointer;margin-bottom:6px;">
+                                    <span style="font-size:12px;font-weight:600;color:#444;">头像框（点击试穿，再次脱下）：</span>
+                                    <span id="cardDecorFramesArrow" style="font-size:11px;color:#07c160;font-weight:bold;">▼ 收起</span>
+                                </div>
+
+                                <div id="cardDecorFramesGrid" style="display:grid;grid-template-columns:repeat(auto-fill, minmax(64px, 1fr));gap:8px;">
+                                    ${!isUser ? `
+                                        <div class="opt-frame-card" data-val="inherit" style="background:${npcFrameId === 'inherit' ? '#e8f7ed' : '#f9f9f9'};border:1px solid ${npcFrameId === 'inherit' ? '#07c160' : '#eee'};border-radius:8px;padding:6px 2px;display:flex;flex-direction:column;align-items:center;cursor:pointer;">
+                                            <div style="width:36px;height:36px;border-radius:50%;background:#eee;display:flex;align-items:center;justify-content:center;font-size:10px;color:#777;margin-bottom:4px;">默认</div>
+                                            <span style="font-size:10px;color:#333;">跟随全局</span>
+                                        </div>
+                                    ` : ''}
+
+                                    ${frames.map(f => {
+                                        const isSelected = (isUser ? userFrameId : npcFrameId) === f.id;
+                                        const sVal = f.scale || 1.18;
+                                        return `
+                                            <div class="opt-frame-card" data-val="${f.id}" style="position:relative;background:${isSelected ? '#e8f7ed' : '#f9f9f9'};border:1px solid ${isSelected ? '#07c160' : '#eee'};border-radius:8px;padding:6px 2px;display:flex;flex-direction:column;align-items:center;cursor:pointer;">
+                                                <div style="position:relative;width:36px;height:36px;margin-bottom:4px;">
+                                                    <img src="${curAvatar}" style="width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;" onerror="this.src='assets/icons/chat.png';" />
+                                                    ${f.url ? `<img src="${f.url}" style="position:absolute;top:50%;left:50%;transform:translate(-50%, -50%) scale(${sVal});width:100%;height:100%;pointer-events:none;" />` : ''}
+                                                </div>
+                                                <span style="font-size:10px;color:#333;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:56px;text-align:center;">${escapeHtml(f.name)}</span>
+                                            </div>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
+
+                            <div>
+                                <div style="font-size:12px;font-weight:600;color:#444;margin-bottom:6px;">气泡样式：</div>
+                                <div style="display:flex;flex-direction:column;gap:6px;">
+                                    ${!isUser ? `
+                                        <button type="button" class="opt-bubble-btn" data-val="inherit" style="padding:7px 10px;font-size:11.5px;border-radius:6px;border:1px solid ${npcBubbleId === 'inherit' ? '#07c160' : '#e0e0e0'};background:${npcBubbleId === 'inherit' ? '#e8f7ed' : '#fff'};color:${npcBubbleId === 'inherit' ? '#07c160' : '#444'};cursor:pointer;text-align:left;display:flex;justify-content:space-between;">
+                                            <span>跟随全局装扮</span>
+                                            ${npcBubbleId === 'inherit' ? '<span style="color:#07c160;font-weight:bold;">✓</span>' : ''}
+                                        </button>
+                                    ` : ''}
+                                    ${bubbles.map(b => {
+                                        const isBSelected = (isUser ? userBubbleId : npcBubbleId) === b.id;
+                                        return `
+                                            <button type="button" class="opt-bubble-btn" data-val="${b.id}" style="padding:7px 10px;font-size:11.5px;border-radius:6px;border:1px solid ${isBSelected ? '#07c160' : '#e0e0e0'};background:${isBSelected ? '#e8f7ed' : '#fff'};color:${isBSelected ? '#07c160' : '#444'};cursor:pointer;text-align:left;display:flex;justify-content:space-between;">
+                                                <span>${escapeHtml(b.name)}</span>
+                                                ${isBSelected ? '<span style="color:#07c160;font-weight:bold;">✓</span>' : ''}
+                                            </button>
+                                        `;
+                                    }).join('')}
+                                </div>
+                            </div>
+                        `}
                     </div>
 
                     <div style="display:flex;gap:8px;margin-top:12px;">
-                        <button type="button" id="btnSaveDecorChoice" style="flex:1;padding:8px;background:#07c160;border:none;border-radius:6px;color:#fff;font-size:12.5px;font-weight:600;cursor:pointer;">保存装扮</button>
+                        <button type="button" id="btnSaveDecorChoice" style="flex:1;padding:8px;background:#07c160;border:none;border-radius:6px;color:#fff;font-size:12.5px;font-weight:600;cursor:pointer;">保存装扮配置</button>
                         <button type="button" id="btnCancelDecorChoice" style="flex:1;padding:8px;background:#f2f2f2;border:none;border-radius:6px;color:#555;font-size:12.5px;cursor:pointer;">返回名片</button>
                     </div>
                 </div>
             `;
 
-            mask.querySelector('#tabTargetNpc').onclick = () => { activeDecorTarget = 'npc'; renderDecorModalInner(); };
-            mask.querySelector('#tabTargetUser').onclick = () => { activeDecorTarget = 'user'; renderDecorModalInner(); };
-
-            mask.querySelectorAll('.opt-shape-btn').forEach(btn => {
-                btn.onclick = () => {
-                    const val = btn.getAttribute('data-val');
-                    if (isUser) userShape = val;
-                    else npcShape = val;
-                    renderDecorModalInner();
-                };
+            // 选项卡切换事件
+            mask.querySelector('#tabMainVideoStage')?.addEventListener('click', () => {
+                activeMainTab = 'videoStage';
+                renderDecorModalInner();
+            });
+            mask.querySelector('#tabMainBasicDecor')?.addEventListener('click', () => {
+                activeMainTab = 'decor';
+                renderDecorModalInner();
             });
 
-            mask.querySelectorAll('.opt-frame-card').forEach(card => {
-                card.onclick = () => {
-                    const val = card.getAttribute('data-val');
-                    if (isUser) {
-                        userFrameId = (userFrameId === val) ? 'frame_none' : val;
-                    } else {
-                        npcFrameId = (npcFrameId === val) ? 'frame_none' : val;
+            // 基础装扮事件
+            if (activeMainTab === 'decor') {
+                mask.querySelector('#tabTargetNpc')?.addEventListener('click', () => { activeDecorTarget = 'npc'; renderDecorModalInner(); });
+                mask.querySelector('#tabTargetUser')?.addEventListener('click', () => { activeDecorTarget = 'user'; renderDecorModalInner(); });
+
+                mask.querySelectorAll('.opt-shape-btn').forEach(btn => {
+                    btn.onclick = () => {
+                        const val = btn.getAttribute('data-val');
+                        if (isUser) userShape = val;
+                        else npcShape = val;
+                        renderDecorModalInner();
+                    };
+                });
+
+                mask.querySelectorAll('.opt-frame-card').forEach(card => {
+                    card.onclick = () => {
+                        const val = card.getAttribute('data-val');
+                        if (isUser) {
+                            userFrameId = (userFrameId === val) ? 'frame_none' : val;
+                        } else {
+                            npcFrameId = (npcFrameId === val) ? 'frame_none' : val;
+                        }
+                        renderDecorModalInner();
+                    };
+                });
+
+                mask.querySelectorAll('.opt-bubble-btn').forEach(btn => {
+                    btn.onclick = () => {
+                        const val = btn.getAttribute('data-val');
+                        if (isUser) userBubbleId = val;
+                        else npcBubbleId = val;
+                        renderDecorModalInner();
+                    };
+                });
+            } else {
+                // 🌟 视频舞台配组事件绑定
+                // 切换方案
+                mask.querySelectorAll('.btn-switch-stage-profile').forEach(btn => {
+                    btn.onclick = () => {
+                        videoStageData.activeProfileId = btn.getAttribute('data-pid');
+                        renderDecorModalInner();
+                    };
+                });
+
+                // 新建配组
+                mask.querySelector('#btnAddNewStageProfile')?.addEventListener('click', () => {
+                    const newId = 'prof_' + Date.now();
+                    const newIndex = videoStageData.profiles.length + 1;
+                    videoStageData.profiles.push({
+                        id: newId,
+                        name: `方案${newIndex}`,
+                        backgroundUrl: '',
+                        bgType: 'image',
+                        sprites: { default: '' },
+                        customExpressions: [],
+                        position: { x: 0, y: 0, scale: 1.0 },
+                        bgPosition: { x: 0, y: 0, scale: 1.0 }
+                    });
+                    videoStageData.activeProfileId = newId;
+                    renderDecorModalInner();
+                });
+
+                // 重命名方案
+                mask.querySelector('#btnRenameProfile')?.addEventListener('click', () => {
+                    const newName = mask.querySelector('#inputStageProfileName')?.value.trim();
+                    if (newName && activeProf) {
+                        activeProf.name = newName;
+                        if (typeof showToast === 'function') showToast('方案名称已更新', 'success', 1000);
+                        renderDecorModalInner();
                     }
-                    renderDecorModalInner();
-                };
-            });
+                });
 
-            mask.querySelectorAll('.opt-bubble-btn').forEach(btn => {
-                btn.onclick = () => {
-                    const val = btn.getAttribute('data-val');
-                    if (isUser) userBubbleId = val;
-                    else npcBubbleId = val;
-                    renderDecorModalInner();
-                };
-            });
+                // 删除当前方案
+                mask.querySelector('#btnDeleteCurrentProfile')?.addEventListener('click', () => {
+                    if (videoStageData.profiles.length <= 1) return;
+                    if (confirm(`确定要删除方案「${activeProf.name}」吗？`)) {
+                        videoStageData.profiles = videoStageData.profiles.filter(p => p.id !== activeProf.id);
+                        videoStageData.activeProfileId = videoStageData.profiles[0].id;
+                        renderDecorModalInner();
+                    }
+                });
+
+                // 导出当前独立方案 JSON
+                mask.querySelector('#btnExportCurrentProfile')?.addEventListener('click', () => {
+                    exportSingleStageProfile(activeProf, npc.name || 'NPC');
+                });
+
+                // 导入单个方案 JSON
+                mask.querySelector('#btnImportProfileDirect')?.addEventListener('click', () => {
+                    importSingleStageProfile((imported) => {
+                        const newId = 'prof_' + Date.now();
+                        imported.id = newId;
+                        videoStageData.profiles.push(imported);
+                        videoStageData.activeProfileId = newId;
+                        if (typeof showToast === 'function') showToast(`已导入方案「${imported.name}」`, 'success', 1200);
+                        renderDecorModalInner();
+                    });
+                });
+
+                // 背景图点击（导入或弹窗更换）
+                mask.querySelector('#btnStageBgPreviewBox')?.addEventListener('click', () => {
+                    if (activeProf.backgroundUrl) {
+                        // 弹窗询问更换
+                        showMediaReplaceDialog('背景', (action) => {
+                            if (action === 'replace') {
+                                pickLocalMediaFile((mediaData, mediaType) => {
+                                    activeProf.backgroundUrl = mediaData;
+                                    activeProf.bgType = mediaType;
+                                    renderDecorModalInner();
+                                });
+                            } else if (action === 'delete') {
+                                activeProf.backgroundUrl = '';
+                                activeProf.bgType = 'image';
+                                renderDecorModalInner();
+                            }
+                        });
+                    } else {
+                        // 直接挑选
+                        pickLocalMediaFile((mediaData, mediaType) => {
+                            activeProf.backgroundUrl = mediaData;
+                            activeProf.bgType = mediaType;
+                            renderDecorModalInner();
+                        });
+                    }
+                });
+
+                // 背景直链输入
+                mask.querySelector('#btnUploadStageBgUrl')?.addEventListener('click', () => {
+                    promptMediaUrl('背景直链', activeProf.backgroundUrl || '', (url) => {
+                        activeProf.backgroundUrl = url;
+                        activeProf.bgType = (url.endsWith('.mp4') || url.endsWith('.webm')) ? 'video' : 'image';
+                        renderDecorModalInner();
+                    });
+                });
+
+                // 点击立绘表情卡槽
+                mask.querySelectorAll('.sprite-slot-card').forEach(card => {
+                    card.onclick = () => {
+                        const exprId = card.getAttribute('data-eid');
+                        const exprLabel = card.getAttribute('data-label');
+                        if (!activeProf.sprites) activeProf.sprites = {};
+
+                        const curSprite = activeProf.sprites[exprId];
+                        if (curSprite) {
+                            showMediaReplaceDialog(`「${exprLabel}」立绘`, (action) => {
+                                if (action === 'replace') {
+                                    pickLocalMediaFile((mediaData) => {
+                                        activeProf.sprites[exprId] = mediaData;
+                                        renderDecorModalInner();
+                                    });
+                                } else if (action === 'url') {
+                                    promptMediaUrl(`「${exprLabel}」立绘直链`, curSprite, (url) => {
+                                        activeProf.sprites[exprId] = url;
+                                        renderDecorModalInner();
+                                    });
+                                } else if (action === 'delete') {
+                                    delete activeProf.sprites[exprId];
+                                    renderDecorModalInner();
+                                }
+                            }, true);
+                        } else {
+                            // 未导入过，弹出选择本地文件或直链
+                            showMediaPickDialog(`导入「${exprLabel}」立绘`, (mediaData) => {
+                                activeProf.sprites[exprId] = mediaData;
+                                renderDecorModalInner();
+                            });
+                        }
+                    };
+                });
+
+                // 添加自定义表情
+                mask.querySelector('#btnAddCustomExpression')?.addEventListener('click', () => {
+                    if (typeof window.openWechatCleanModal === 'function') {
+                        window.openWechatCleanModal('添加自定义表情槽', `
+                            <div style="text-align:left;">
+                                <div style="font-size:12px;color:#666;margin-bottom:6px;">请输入表情名称（如：黑化、呆滞、wink）：</div>
+                                <input type="text" id="wcleanNewExprName" class="wechat-clean-input" placeholder="表情名称..." maxlength="10">
+                            </div>
+                        `, () => {
+                            const name = document.getElementById('wcleanNewExprName')?.value.trim();
+                            if (!name) return;
+                            const eid = 'expr_' + Date.now();
+                            if (!Array.isArray(activeProf.customExpressions)) activeProf.customExpressions = [];
+                            activeProf.customExpressions.push({ id: eid, label: name });
+                            renderDecorModalInner();
+                        });
+                    }
+                });
+            }
 
             mask.querySelector('#btnDecorModalX').onclick = () => { mask.remove(); openNpcProfileCardModal(npcId); };
             mask.querySelector('#btnCancelDecorChoice').onclick = () => { mask.remove(); openNpcProfileCardModal(npcId); };
 
+            // 保存装扮配置
             mask.querySelector('#btnSaveDecorChoice').onclick = () => {
                 localStorage.setItem('mcyt_active_avatar_shape', userShape);
                 localStorage.setItem('mcyt_active_decor_frame', userFrameId);
@@ -326,9 +685,11 @@
                     bubbleId: npcBubbleId === 'inherit' ? null : npcBubbleId
                 };
 
+                npc.chatSettings.videoStage = videoStageData;
+
                 if (typeof window.syncCustomNpcsToLocalBackup === 'function') window.syncCustomNpcsToLocalBackup();
                 if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
-                if (typeof showToast === 'function') showToast('装扮配置已保存');
+                if (typeof showToast === 'function') showToast('装扮与舞台立绘已保存', 'success', 1200);
 
                 mask.remove();
                 openNpcProfileCardModal(npcId);
@@ -351,6 +712,153 @@
         document.body.appendChild(mask);
     }
     window.openNpcDecorModal = openNpcDecorModal;
+
+    // 辅助：从本地选取图片/动图/视频（解除任何格式死锁，GIF 与 MP4 全面支持）
+    function pickLocalMediaFile(onSuccess) {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*,video/mp4,video/webm,.gif';
+        input.style.display = 'none';
+        document.body.appendChild(input);
+
+        input.onchange = (e) => {
+            const file = e.target.files && e.target.files[0];
+            input.remove();
+            if (!file) return;
+
+            const isVideo = file.type.startsWith('video/');
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                const res = evt.target.result;
+                onSuccess(res, isVideo ? 'video' : 'image');
+            };
+            reader.readAsDataURL(file);
+        };
+
+        input.click();
+    }
+
+    // 辅助：弹窗输入直链
+    function promptMediaUrl(title, defaultVal, onSuccess) {
+        if (typeof window.openWechatCleanModal === 'function') {
+            window.openWechatCleanModal(`导入${title}`, `
+                <div style="text-align:left;">
+                    <div style="font-size:12px;color:#666;margin-bottom:6px;">支持输入图片、GIF 动图或短视频 URL 直链：</div>
+                    <input type="text" id="wcleanPromptMediaInput" value="${escapeHtml(defaultVal)}" class="wechat-clean-input" placeholder="https://...">
+                </div>
+            `, () => {
+                const val = document.getElementById('wcleanPromptMediaInput')?.value.trim();
+                if (val) onSuccess(val);
+            });
+        }
+    }
+
+    // 辅助：点击已有项弹窗询问更换
+    function showMediaReplaceDialog(label, onAction, allowUrl = false) {
+        let mask = document.createElement('div');
+        mask.className = 'wechat-action-sheet-mask';
+        mask.innerHTML = `
+            <div class="wechat-action-sheet-box">
+                <div style="padding:12px 16px;text-align:center;font-size:13px;color:#888;border-bottom:0.5px solid #eee;">
+                    当前已导入${label}，请选择操作
+                </div>
+                <div class="wechat-action-item" id="actSheetReplaceLocal" style="color:#07c160;font-weight:600;">从相册重新选择更换</div>
+                ${allowUrl ? `<div class="wechat-action-item" id="actSheetReplaceUrl">填入直链更换</div>` : ''}
+                <div class="wechat-action-item" id="actSheetDelete" style="color:#fa5151;">清除当前${label}</div>
+                <div class="wechat-action-cancel" id="actSheetCancel">取消</div>
+            </div>
+        `;
+        document.body.appendChild(mask);
+        const close = () => mask.remove();
+
+        mask.querySelector('#actSheetReplaceLocal').onclick = () => { close(); onAction('replace'); };
+        if (allowUrl) {
+            mask.querySelector('#actSheetReplaceUrl').onclick = () => { close(); onAction('url'); };
+        }
+        mask.querySelector('#actSheetDelete').onclick = () => { close(); onAction('delete'); };
+        mask.querySelector('#actSheetCancel').onclick = close;
+    }
+
+    // 辅助：首次导入方式选择弹窗（本地/直链）
+    function showMediaPickDialog(title, onSuccess) {
+        let mask = document.createElement('div');
+        mask.className = 'wechat-action-sheet-mask';
+        mask.innerHTML = `
+            <div class="wechat-action-sheet-box">
+                <div style="padding:12px 16px;text-align:center;font-size:13px;color:#888;border-bottom:0.5px solid #eee;">
+                    ${escapeHtml(title)}
+                </div>
+                <div class="wechat-action-item" id="actPickLocal" style="color:#07c160;font-weight:600;">从手机相册导入（图片/GIF/视频）</div>
+                <div class="wechat-action-item" id="actPickUrl">输入网络图床直链</div>
+                <div class="wechat-action-cancel" id="actPickCancel">取消</div>
+            </div>
+        `;
+        document.body.appendChild(mask);
+        const close = () => mask.remove();
+
+        mask.querySelector('#actPickLocal').onclick = () => {
+            close();
+            pickLocalMediaFile((mediaData) => {
+                onSuccess(mediaData);
+            });
+        };
+        mask.querySelector('#actPickUrl').onclick = () => {
+            close();
+            promptMediaUrl('立绘直链', '', (url) => {
+                onSuccess(url);
+            });
+        };
+        mask.querySelector('#actPickCancel').onclick = close;
+    }
+
+    // 🌟 单方案独立 JSON 导出
+    function exportSingleStageProfile(profile, charName) {
+        try {
+            const dataStr = JSON.stringify(profile, null, 2);
+            const blob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `${charName}_${profile.name}_舞台方案.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            if (typeof showToast === 'function') showToast('舞台方案已导出', 'success', 1000);
+        } catch (e) {
+            console.error('[ExportProfile] 导出失败:', e);
+            if (typeof showToast === 'function') showToast('导出失败', 'error');
+        }
+    }
+
+    // 🌟 单方案独立 JSON 导入
+    function importSingleStageProfile(onSuccess) {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = '.json,application/json';
+        input.style.display = 'none';
+        document.body.appendChild(input);
+
+        input.onchange = (e) => {
+            const file = e.target.files && e.target.files[0];
+            input.remove();
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                try {
+                    const parsed = JSON.parse(evt.target.result);
+                    if (!parsed || typeof parsed !== 'object') throw new Error('无效的方案配置');
+                    if (!parsed.sprites) parsed.sprites = {};
+                    if (!parsed.name) parsed.name = '导入方案';
+                    onSuccess(parsed);
+                } catch (err) {
+                    if (typeof showToast === 'function') showToast('无法识别的方案文件', 'error');
+                }
+            };
+            reader.readAsText(file);
+        };
+
+        input.click();
+    }
 
     // ⚙️ 角色资料设置弹窗（含专属 TTS 开关与一键选择音色菜单）
     function openNpcSettingsModal(npcId) {
@@ -382,7 +890,7 @@
         const disableBilingual = !!npc.chatSettings.disableBilingual;
         const curFavor = parseFloat(npc.favor !== undefined ? npc.favor : 50);
 
-        // 🌟 读取角色独立 TTS 配置（默认关闭）
+        // 读取角色独立 TTS 配置（默认关闭）
         const curTtsEnabled = !!(npc.chatSettings.tts && npc.chatSettings.tts.enabled);
         const curTtsVoice = (npc.chatSettings.tts && npc.chatSettings.tts.voice) || '';
         const curTtsSpeed = (npc.chatSettings.tts && npc.chatSettings.tts.speed) || 1.0;
@@ -436,7 +944,7 @@
                             <input type="hidden" id="wcleanSetVoiceFreqVal" value="${voiceFreq}">
                         </div>
 
-                        <!-- 🌟 角色专属 TTS 语音音色设置（带开启开关，默认关闭） -->
+                        <!-- 角色专属 TTS 语音音色设置 -->
                         <div style="border-top:0.5px solid #eee;padding-top:8px;">
                             <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-size:12px;color:#181818;margin-bottom:6px;">
                                 <div style="display:flex;flex-direction:column;">
@@ -490,7 +998,7 @@
                     <div style="border-top:0.5px solid #f0f0f0;padding-top:10px;margin-top:4px;">
                         <button type="button" id="btnExportTavernPngCard" style="width:100%;border:1px solid #dcdcdc;background:#ffffff;color:#181818;padding:8px 10px;border-radius:6px;font-size:12.5px;font-weight:500;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
                             <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:#07c160;stroke-width:2;"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
-                            <span>导出人设卡</span>
+                            <span>导出人设卡（包含视频立绘舞台）</span>
                         </button>
                     </div>
                 </div>
@@ -514,7 +1022,6 @@
                 const curDisableTimezone = !!document.getElementById('wcleanSetDisableTimezone')?.checked;
                 const curDisableBilingual = !!document.getElementById('wcleanSetDisableBilingual')?.checked;
 
-                // 🌟 保存专属 TTS 设置（包含明确开关）
                 const ttsEnabled = !!document.getElementById('wcleanSetNpcTtsEnabled')?.checked;
                 const ttsVoice = document.getElementById('wcleanSetNpcTtsVoice')?.value.trim() || '';
                 const ttsSpeed = parseFloat(document.getElementById('wcleanSetNpcTtsSpeed')?.value) || 1.0;
@@ -527,6 +1034,8 @@
                 npc.favor = favorVal;
 
                 const existingDecor = (npc.chatSettings && npc.chatSettings.decor) || {};
+                const existingStage = (npc.chatSettings && npc.chatSettings.videoStage) || null;
+
                 npc.chatSettings = {
                     minMsgs: curMin,
                     maxMsgs: finalMax,
@@ -534,7 +1043,8 @@
                     disableTimezone: curDisableTimezone,
                     disableBilingual: curDisableBilingual,
                     tts: { enabled: ttsEnabled, voice: ttsVoice, speed: ttsSpeed },
-                    decor: existingDecor
+                    decor: existingDecor,
+                    videoStage: existingStage
                 };
 
                 if (npc.favor < 60 && npc.relationshipStage === 'dating') {
@@ -600,7 +1110,6 @@
                     };
                 });
 
-                // 🌟 TTS 开关点击联动折叠展开设置项
                 const ttsCheck = document.getElementById('wcleanSetNpcTtsEnabled');
                 const ttsWrap = document.getElementById('wcleanNpcTtsFieldsWrap');
                 if (ttsCheck && ttsWrap) {
@@ -609,7 +1118,6 @@
                     };
                 }
 
-                // 绑定一键点选 CloneTTS 音色
                 const btnPickVoice = document.getElementById('btnPickTtsVoiceDirect');
                 const voiceInput = document.getElementById('wcleanSetNpcTtsVoice');
                 if (btnPickVoice && voiceInput && window.ttsEngine) {
@@ -655,6 +1163,7 @@
     }
     window.openNpcSettingsModal = openNpcSettingsModal;
 
+    // 🌟 导出人设卡（自动包含视频舞台配组与立绘差分）
     function promptExportFilename(npc) {
         const defaultName = (npc.remark && npc.remark.trim()) ? npc.remark.trim() : (npc.name || 'NPC');
         if (typeof openWechatCleanModal === 'function') {
@@ -666,7 +1175,9 @@
             `, async () => {
                 const fname = document.getElementById('wcleanExportCardFilename')?.value.trim() || `${defaultName}_人设卡`;
                 if (typeof window.exportTavernCharacterPng === 'function') {
-                    if (typeof showToast === 'function') showToast('正在生成角色卡...', 'info', 1000);
+                    if (typeof showToast === 'function') showToast('正在生成角色卡（含舞台立绘）...', 'info', 1000);
+                    // 确保打包前完整性
+                    ensureNpcVideoStageProfiles(npc);
                     await window.exportTavernCharacterPng(npc, fname);
                 } else {
                     if (typeof showToast === 'function') showToast('导出引擎未装载', 'error');
@@ -686,7 +1197,7 @@
             <div class="wechat-action-sheet-box">
                 <label class="wechat-action-item" style="display:block;cursor:pointer;">
                     <span>从相册选择新头像</span>
-                    <input type="file" id="localNpcAvatarInput" accept="image/*" style="display:none;">
+                    <input type="file" id="localNpcAvatarInput" accept="image/*,.gif" style="display:none;">
                 </label>
                 <div class="wechat-action-item" onclick="window._randomNpcAvatar('${npcId}')">随机头像池挑选</div>
                 <div class="wechat-action-cancel" onclick="this.closest('.wechat-action-sheet-mask').remove()">取消</div>
@@ -702,12 +1213,16 @@
                     const reader = new FileReader();
                     reader.onload = async (evt) => {
                         const rawData = evt.target.result;
-                        const compressed = (typeof window.compressAvatarDataUrl === 'function')
-                            ? await window.compressAvatarDataUrl(rawData, 128, 0.82)
-                            : rawData;
+                        // 若是 GIF 则保持动图原画不压缩
+                        const isGif = file.type === 'image/gif' || rawData.startsWith('data:image/gif');
+                        const finalData = isGif ? rawData : (
+                            (typeof window.compressAvatarDataUrl === 'function')
+                                ? await window.compressAvatarDataUrl(rawData, 128, 0.82)
+                                : rawData
+                        );
 
-                        npc.avatarUrl = compressed;
-                        npc.avatar = compressed;
+                        npc.avatarUrl = finalData;
+                        npc.avatar = finalData;
                         if (typeof window.syncCustomNpcsToLocalBackup === 'function') window.syncCustomNpcsToLocalBackup();
                         if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
                         document.querySelector('.wechat-action-sheet-mask')?.remove();
@@ -788,7 +1303,20 @@
                 voiceFreq: 'rare',
                 disableTimezone: false,
                 disableBilingual: false,
-                tts: { enabled: false, voice: '', speed: 1.0 }
+                tts: { enabled: false, voice: '', speed: 1.0 },
+                videoStage: {
+                    activeProfileId: 'default',
+                    profiles: [{
+                        id: 'default',
+                        name: '默认形象',
+                        backgroundUrl: '',
+                        bgType: 'image',
+                        sprites: { default: '' },
+                        customExpressions: [],
+                        position: { x: 0, y: 0, scale: 1.0 },
+                        bgPosition: { x: 0, y: 0, scale: 1.0 }
+                    }]
+                }
             }
         };
 
@@ -800,6 +1328,7 @@
     }
     window.addContactFromCard = addContactFromCard;
 
+    // 🌟 导入角色卡（自动还原内置的视频舞台方案与立绘差分）
     function openImportCharacterCardModal(onSuccess = null) {
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
@@ -822,6 +1351,9 @@
                 if (!profile || !profile.name) {
                     throw new Error('角色卡未能成功识别');
                 }
+
+                // 还原可能存在的视频舞台数据
+                const importedVideoStage = (profile.chatSettings && profile.chatSettings.videoStage) || profile.videoStage || null;
 
                 if (typeof onSuccess === 'function') {
                     onSuccess(profile);
@@ -852,7 +1384,20 @@
                             voiceFreq: 'rare',
                             disableTimezone: false,
                             disableBilingual: false,
-                            tts: { enabled: false, voice: '', speed: 1.0 }
+                            tts: (profile.chatSettings && profile.chatSettings.tts) || { enabled: false, voice: '', speed: 1.0 },
+                            videoStage: importedVideoStage || {
+                                activeProfileId: 'default',
+                                profiles: [{
+                                    id: 'default',
+                                    name: '默认形象',
+                                    backgroundUrl: '',
+                                    bgType: 'image',
+                                    sprites: { default: '' },
+                                    customExpressions: [],
+                                    position: { x: 0, y: 0, scale: 1.0 },
+                                    bgPosition: { x: 0, y: 0, scale: 1.0 }
+                                }]
+                            }
                         }
                     };
 
