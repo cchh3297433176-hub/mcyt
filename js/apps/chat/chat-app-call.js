@@ -1,16 +1,16 @@
 /**
  * js/apps/chat/chat-app-call.js
- * 📞 主播掌机 · 微信音视频实时通话独立中枢（仿豆包实时通话交互架构）
- * 🛡️ 微信原生白灰微绿极简设计，无伤眼怪异滤镜。
+ * 📞 主播掌机 · 微信原生音视频实时通话独立中枢
+ * 🛡️ 微信原生极简质感，消灭多余打字框与廉价元素，100% 纯粹全双工对讲体验。
  * 🌟 核心特性：
- *  1. 语音电话与视频电话双模态全屏沉浸视讯 HUD；
- *  2. 前置摄像头与后置摄像头无缝平滑翻转切换（facingMode: user / environment）；
- *  3. 豆包式全双工语音监听（VAD）：说话实时字幕草稿，停顿 5 秒自动触发 AI 回答；
- *  4. 豆包式“开口即打断”：AI 正在生成或朗读时，用户中途插话瞬间掐断播音与请求，重回倾听态；
- *  5. 首次视频隐私门禁（本地抽帧不存云端、支持下次不再提醒，权限被拒友好引导设置）；
- *  6. 视频通话支持实时从摄像头抽帧直连独立识图 API，无缝事实感知注入；
- *  7. 专属极速口语 Prompt（剥离联网/表情包，超低延迟短句交互，细腻背景音描写）；
- *  8. 底部流式双轨字幕（最近对白高亮，历史对白平滑淡化且可自由滚动）；
+ *  1. 微信原生级视觉美学（纯语音居中波纹呼吸头像 / 视频画中画镜头）；
+ *  2. 彻底移除打字框与多余按键（默认开麦，仅保留挂断红键与视频镜头翻转）；
+ *  3. 基于 Web Audio API 的硬件级真实音量波形检测（VAD），开口说话实时展示跳动声波；
+ *  4. 豆包式 5 秒静音自动触发：说话停顿 5 秒自动截取音频送入云端 faster-whisper 转文字发射；
+ *  5. 豆包式开口即打断：AI 正在回复或念台词时，用户只要开口说话，毫秒级掐断发音转入倾听；
+ *  6. 首次视频隐私门禁（本地抽帧不存云端、支持下次不再提醒，权限被拒友好引导设置）；
+ *  7. 视频通话支持实时从摄像头抽帧直连独立识图 API，无缝事实感知注入；
+ *  8. 专属极速口语 Prompt（剥离联网/表情包，短平快日常口语，细腻生活背景音）；
  *  9. 通话结束全自动归档为第三人称具名客观记录（IndexedDB 永久保存）。
  */
 
@@ -159,14 +159,18 @@
             durationSeconds: 0,
             timerInterval: null,
             stream: localStream,
-            isMuted: false,
             transcript: [], // [{ role: 'player'|'npc'|'system', name: '', text: '', time: '' }]
             isAiReplying: false,
             currentAbortController: null,
-            // 豆包式 VAD 监听状态
-            speechRecognizer: null,
-            silenceTimer: null,
-            currentUserDraft: ''
+            // 真实音频采集与 VAD 音量检测
+            audioContext: null,
+            audioAnalyser: null,
+            animFrameId: null,
+            mediaRecorder: null,
+            recordedChunks: [],
+            isUserSpeaking: false,
+            speakingStartTime: 0,
+            silenceTimer: null
         };
 
         renderCallOverlay(npcId, mode, localStream);
@@ -181,8 +185,8 @@
             }
         }, 1000);
 
-        // 启动持续语音活动识别与 5 秒停顿判定
-        startContinuousVADListener();
+        // 启动硬件级麦克风音量监听与 VAD 全双工通道
+        startHardwareAudioVAD(localStream);
 
         // 播报初始接通提示
         const targetName = getNpcFullName(npcId);
@@ -190,73 +194,174 @@
             appendCallSubtitle('system', '系统', `已接通与 ${targetName} 的${mode === 'video' ? '视频' : '语音'}电话`);
             // 角色主动打招呼
             triggerCallAIReply(true);
-        }, 500);
+        }, 400);
     }
 
-    // 豆包式全双工语音监听（持续识别 + 5秒静音自动发射 + 实时打断）
-    function startContinuousVADListener() {
-        const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (!SpeechRec) {
-            console.warn('[WechatCall] 当前浏览器环境不支持 Web Speech API，可使用底部文本框实时通话');
+    // 硬件级音量分析器 + MediaRecorder 真实录制 + 5 秒静音自动触发
+    function startHardwareAudioVAD(stream) {
+        try {
+            const AudioCtx = window.AudioContext || window.webkitAudioContext;
+            if (!AudioCtx || !stream) return;
+
+            const ctx = new AudioCtx();
+            const source = ctx.createMediaStreamSource(stream);
+            const analyser = ctx.createAnalyser();
+            analyser.fftSize = 128;
+            source.connect(analyser);
+
+            window._activeCallSession.audioContext = ctx;
+            window._activeCallSession.audioAnalyser = analyser;
+
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            const VAD_VOLUME_THRESHOLD = 18; // 触发音量门槛
+
+            const checkAudioLoop = () => {
+                if (!window._activeCallSession) return;
+                analyser.getByteFrequencyData(dataArray);
+
+                let sum = 0;
+                for (let i = 0; i < 24; i++) {
+                    sum += dataArray[i];
+                }
+                const avgVolume = sum / 24;
+
+                // 更新界面音波条动态
+                updateCallWaveBars(avgVolume);
+
+                if (avgVolume > VAD_VOLUME_THRESHOLD) {
+                    // 🌟 1. 用户出声：毫秒级打断正在说话的 AI！
+                    interruptAiReplyIfActive();
+
+                    // 启动录制块收集
+                    if (!window._activeCallSession.isUserSpeaking) {
+                        window._activeCallSession.isUserSpeaking = true;
+                        window._activeCallSession.speakingStartTime = Date.now();
+                        setUserSpeakingHUDStatus(true);
+                        startSessionMediaRecorder(stream);
+                    }
+
+                    // 重置 5 秒静音定时器
+                    if (window._activeCallSession.silenceTimer) {
+                        clearTimeout(window._activeCallSession.silenceTimer);
+                        window._activeCallSession.silenceTimer = null;
+                    }
+                } else {
+                    // 音量低于门槛
+                    if (window._activeCallSession.isUserSpeaking) {
+                        if (!window._activeCallSession.silenceTimer) {
+                            // 启动 5 秒静音倒计时
+                            window._activeCallSession.silenceTimer = setTimeout(() => {
+                                handleUserFinishSpokenAudio();
+                            }, 5000);
+                        }
+                    }
+                }
+
+                window._activeCallSession.animFrameId = requestAnimationFrame(checkAudioLoop);
+            };
+
+            checkAudioLoop();
+        } catch (err) {
+            console.warn('[WechatCall] Web Audio API 初始化失败:', err);
+        }
+    }
+
+    // 启动 MediaRecorder 片段采集
+    function startSessionMediaRecorder(stream) {
+        if (!window.MediaRecorder || !window._activeCallSession) return;
+        window._activeCallSession.recordedChunks = [];
+
+        try {
+            let mimeType = '';
+            if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) mimeType = 'audio/webm;codecs=opus';
+            else if (MediaRecorder.isTypeSupported('audio/webm')) mimeType = 'audio/webm';
+            else if (MediaRecorder.isTypeSupported('audio/mp4')) mimeType = 'audio/mp4';
+
+            const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+            mr.ondataavailable = (e) => {
+                if (e.data && e.data.size > 0 && window._activeCallSession) {
+                    window._activeCallSession.recordedChunks.push(e.data);
+                }
+            };
+            mr.start(100);
+            window._activeCallSession.mediaRecorder = mr;
+        } catch (e) {
+            console.warn('[WechatCall] MediaRecorder 启动失败:', e);
+        }
+    }
+
+    // 用户停止说话满 5 秒，提交音频转文字并触发 AI
+    async function handleUserFinishSpokenAudio() {
+        const session = window._activeCallSession;
+        if (!session) return;
+
+        session.isUserSpeaking = false;
+        if (session.silenceTimer) {
+            clearTimeout(session.silenceTimer);
+            session.silenceTimer = null;
+        }
+        setUserSpeakingHUDStatus(false);
+
+        let audioBlob = null;
+        if (session.mediaRecorder && session.mediaRecorder.state !== 'inactive') {
+            const waitChunkPromise = new Promise((resolve) => {
+                session.mediaRecorder.onstop = () => {
+                    const mime = session.mediaRecorder.mimeType || 'audio/webm';
+                    if (session.recordedChunks.length > 0) {
+                        resolve(new Blob(session.recordedChunks, { type: mime }));
+                    } else {
+                        resolve(null);
+                    }
+                };
+                try { session.mediaRecorder.stop(); } catch (_) { resolve(null); }
+                setTimeout(() => resolve(null), 800);
+            });
+            audioBlob = await waitChunkPromise;
+            session.mediaRecorder = null;
+        }
+
+        if (!audioBlob || audioBlob.size < 600) {
+            console.log('[WechatCall] 录音数据过小，忽略');
             return;
         }
 
-        try {
-            const rec = new SpeechRec();
-            rec.lang = 'zh-CN';
-            rec.continuous = true;
-            rec.interimResults = true;
+        // 调用私有云端 faster-whisper ASR 进行秒级转写
+        setCallStatusText('正在理解你的话语...', '#07c160');
 
-            rec.onresult = (event) => {
-                if (!window._activeCallSession) return;
-
-                // 🌟 1. 只要检测到用户出声，立刻打断正在说话的 AI！
-                interruptAiReplyIfActive();
-
-                let interimTranscript = '';
-                for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    interimTranscript += event.results[i][0].transcript;
+        let recognizedText = '';
+        if (window.mcytAsr && typeof window.mcytAsr.transcribe === 'function') {
+            try {
+                const asrRes = await window.mcytAsr.transcribe(audioBlob);
+                if (asrRes && asrRes.trim()) {
+                    recognizedText = asrRes.trim();
                 }
-
-                if (interimTranscript.trim()) {
-                    window._activeCallSession.currentUserDraft = interimTranscript.trim();
-                    updateUserSpeakingDraftHUD(window._activeCallSession.currentUserDraft);
-
-                    // 🌟 2. 5 秒静音检测（防抖倒计时：5 秒内没有新字词输入，自动提交并让 AI 回复）
-                    if (window._activeCallSession.silenceTimer) {
-                        clearTimeout(window._activeCallSession.silenceTimer);
-                    }
-
-                    window._activeCallSession.silenceTimer = setTimeout(() => {
-                        const finalSpoken = window._activeCallSession.currentUserDraft;
-                        if (finalSpoken && finalSpoken.trim()) {
-                            window._activeCallSession.currentUserDraft = '';
-                            clearUserSpeakingDraftHUD();
-                            handleUserCallSpoken(finalSpoken.trim());
-                        }
-                    }, 5000); // 5000ms 停顿触发
-                }
-            };
-
-            rec.onerror = (e) => {
-                console.warn('[WechatCall] VAD 侦听通知:', e);
-            };
-
-            rec.onend = () => {
-                // 如果通话仍未结束且未手动静音，自动重启监听保持常驻
-                if (window._activeCallSession && !window._activeCallSession.isMuted) {
-                    try { rec.start(); } catch (_) {}
-                }
-            };
-
-            rec.start();
-            window._activeCallSession.speechRecognizer = rec;
-        } catch (err) {
-            console.warn('[WechatCall] 启动持续语音识别失败:', err);
+            } catch (err) {
+                console.warn('[WechatCall] 云端 ASR 转写异常:', err);
+            }
         }
+
+        if (!recognizedText) {
+            setCallStatusText('通话连接稳定', '#07c160');
+            return;
+        }
+
+        const playerName = getPlayerFullName();
+        appendCallSubtitle('player', playerName, recognizedText);
+
+        // 如果是视频通话，抓取单帧画面
+        let visualInsight = '';
+        if (session.mode === 'video') {
+            const base64Img = captureVideoFrameBase64();
+            if (base64Img) {
+                visualInsight = await inspectVisualFrameAsync(base64Img);
+            }
+        }
+
+        // 触发角色思考回答
+        triggerCallAIReply(false, recognizedText, visualInsight);
     }
 
-    // 豆包式打断机制：掐断网络生成与 TTS 发音
+    // 豆包式打断机制：用户出声瞬间掐断 AI 网络生成与 TTS 发音
     function interruptAiReplyIfActive() {
         const session = window._activeCallSession;
         if (!session) return;
@@ -277,41 +382,38 @@
                 try { window.speechSynthesis.cancel(); } catch (_) {}
             }
 
-            const statusEl = document.getElementById('callAiStatusText');
-            if (statusEl) {
-                statusEl.textContent = '对方正在倾听你说话...';
-                statusEl.style.color = '#38bdf8';
-            }
+            setCallStatusText('对方正在倾听你说话...', '#38bdf8');
         }
     }
 
-    // 实时呈现用户正在说话的动态草稿
-    function updateUserSpeakingDraftHUD(draftText) {
-        let draftEl = document.getElementById('callUserDraftBox');
-        const area = document.getElementById('wechatCallSubtitleArea');
-        if (!area) return;
+    // 动态波形指示器
+    function updateCallWaveBars(volume) {
+        const bars = document.querySelectorAll('.call-live-wave-bar');
+        if (bars.length === 0) return;
 
-        if (!draftEl) {
-            draftEl = document.createElement('div');
-            draftEl.id = 'callUserDraftBox';
-            draftEl.style.cssText = `
-                font-size: 13px; line-height: 1.45; color: #a7f3d0; opacity: 0.9;
-                border-left: 2px solid #07c160; padding-left: 6px; margin-top: 4px;
-                animation: wechatCallFadeIn 0.15s ease-out; word-break: break-word;
-            `;
-            area.appendChild(draftEl);
-        }
-
-        const playerName = getPlayerFullName();
-        draftEl.innerHTML = `
-            <span style="font-weight:600;color:#34d399;">${escapeHtml(playerName)} (说话中...): </span>
-            <span>${escapeHtml(draftText)}</span>
-        `;
-        area.scrollTop = area.scrollHeight;
+        bars.forEach((bar, idx) => {
+            const factor = 1 + Math.sin(idx * 0.7 + Date.now() / 120) * 0.5;
+            const h = Math.min(26, Math.max(3, Math.round((volume / 255) * 26 * factor)));
+            bar.style.height = `${h}px`;
+        });
     }
 
-    function clearUserSpeakingDraftHUD() {
-        document.getElementById('callUserDraftBox')?.remove();
+    function setUserSpeakingHUDStatus(isSpeaking) {
+        const indicator = document.getElementById('callSpeakingWaveWrap');
+        if (indicator) {
+            indicator.style.opacity = isSpeaking ? '1' : '0.2';
+        }
+        if (isSpeaking) {
+            setCallStatusText('正在听你说...', '#38bdf8');
+        }
+    }
+
+    function setCallStatusText(text, color = '#07c160') {
+        const statusEl = document.getElementById('callAiStatusText');
+        if (statusEl) {
+            statusEl.textContent = text;
+            statusEl.style.color = color;
+        }
     }
 
     // 翻转前后摄像头核心实现
@@ -366,7 +468,7 @@
         }
     }
 
-    // 渲染全屏通话 HUD 界面
+    // 渲染全屏通话 HUD 界面（微信原生极简黑灰毛玻璃）
     function renderCallOverlay(npcId, mode, stream) {
         document.getElementById('wechatCallOverlayModal')?.remove();
 
@@ -378,98 +480,95 @@
         overlay.id = 'wechatCallOverlayModal';
         overlay.style.cssText = `
             position: fixed; inset: 0; z-index: 100009;
-            background: #1a1a1a; display: flex; flex-direction: column;
+            background: #111111; display: flex; flex-direction: column;
             overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             user-select: none; -webkit-user-select: none;
-            animation: wechatCallFadeIn 0.2s cubic-bezier(0.1, 0.9, 0.2, 1);
+            animation: wechatCallFadeIn 0.22s cubic-bezier(0.1, 0.9, 0.2, 1);
         `;
 
         overlay.innerHTML = `
             <style>
                 @keyframes wechatCallFadeIn { from { opacity: 0; transform: scale(1.02); } to { opacity: 1; transform: scale(1); } }
-                @keyframes wechatCallWave { 0% { transform: scale(0.96); opacity: 0.8; } 50% { transform: scale(1.08); opacity: 0.3; } 100% { transform: scale(0.96); opacity: 0.8; } }
+                @keyframes wechatCallWave { 0% { transform: scale(0.96); opacity: 0.7; } 50% { transform: scale(1.12); opacity: 0.15; } 100% { transform: scale(0.96); opacity: 0.7; } }
                 .call-subtitle-item { transition: opacity 0.25s ease, transform 0.25s ease; }
-                .call-subtitle-item.faded { opacity: 0.35 !important; }
+                .call-subtitle-item.faded { opacity: 0.28 !important; }
             </style>
 
-            <!-- 顶部状态栏信息 -->
-            <div style="padding: 28px 16px 12px; display: flex; justify-content: space-between; align-items: center; z-index: 10; color: #ffffff;">
+            <!-- 顶部原生状态排版 -->
+            <div style="padding: 30px 20px 10px; display: flex; justify-content: space-between; align-items: center; z-index: 10; color: #ffffff;">
                 <div style="display: flex; align-items: center; gap: 8px;">
-                    <span style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #07c160;"></span>
-                    <span style="font-size: 13.5px; font-weight: 500; letter-spacing: 0.3px;">${mode === 'video' ? '视频通话中' : '语音通话中'}</span>
+                    <span style="display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #07c160;"></span>
+                    <span style="font-size: 13.5px; font-weight: 500; letter-spacing: 0.3px; color: #e5e5e5;">${mode === 'video' ? '视频通话中' : '语音通话中'}</span>
                 </div>
-                <div id="wechatCallTimerText" style="font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; color: #eeeeee;">00:00</div>
+                <div id="wechatCallTimerText" style="font-size: 14.5px; font-weight: 600; font-variant-numeric: tabular-nums; color: #ffffff; letter-spacing: 0.5px;">00:00</div>
             </div>
 
-            <!-- 主视觉画面区域 -->
+            <!-- 主舞台视觉呈现 -->
             <div style="flex: 1; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden;">
                 ${mode === 'video' ? `
-                    <!-- 对方画面占位/视讯投影底图 -->
-                    <div style="position: absolute; inset: 0; background: radial-gradient(circle at center, #2c3e50 0%, #000000 100%); display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                        <img src="${npcAvatar}" style="width: 90px; height: 90px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.25); object-fit: cover; box-shadow: 0 8px 30px rgba(0,0,0,0.5);">
-                        <div style="color: #ffffff; font-size: 15px; font-weight: 600; margin-top: 12px; text-shadow: 0 1px 3px rgba(0,0,0,0.8);">${escapeHtml(targetName)}</div>
-                        <div id="callAiStatusText" style="font-size: 12px; color: #07c160; margin-top: 4px;">通话连接稳定</div>
+                    <!-- 视频背景舞台 -->
+                    <div style="position: absolute; inset: 0; background: radial-gradient(circle at center, #1f2937 0%, #0b0f19 100%); display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                        <img src="${npcAvatar}" style="width: 86px; height: 86px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.2); object-fit: cover; box-shadow: 0 10px 30px rgba(0,0,0,0.6);">
+                        <div style="color: #ffffff; font-size: 16px; font-weight: 600; margin-top: 14px; letter-spacing: 0.3px;">${escapeHtml(targetName)}</div>
+                        <div id="callAiStatusText" style="font-size: 12px; color: #07c160; margin-top: 6px;">通话连接稳定</div>
                     </div>
 
-                    <!-- 本地自拍画面（右上角浮窗） -->
-                    <div style="position: absolute; top: 12px; right: 14px; width: 104px; height: 146px; border-radius: 10px; overflow: hidden; border: 1.5px solid rgba(255,255,255,0.35); box-shadow: 0 4px 16px rgba(0,0,0,0.4); z-index: 5; background: #000;">
+                    <!-- 本地画中画视窗（右上角微信质感圆角框） -->
+                    <div style="position: absolute; top: 14px; right: 16px; width: 106px; height: 152px; border-radius: 12px; overflow: hidden; border: 1.5px solid rgba(255,255,255,0.3); box-shadow: 0 8px 24px rgba(0,0,0,0.5); z-index: 5; background: #000000;">
                         <video id="wechatCallLocalVideo" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1);"></video>
                     </div>
                 ` : `
-                    <!-- 纯语音通话居中波纹头像 -->
+                    <!-- 纯语音微信质感居中波纹头像 -->
                     <div style="position: relative; display: flex; flex-direction: column; align-items: center;">
-                        <div style="position: absolute; width: 140px; height: 140px; border-radius: 50%; background: rgba(7, 193, 96, 0.15); animation: wechatCallWave 3s infinite ease-in-out;"></div>
-                        <img src="${npcAvatar}" style="position: relative; width: 110px; height: 110px; border-radius: 50%; border: 2.5px solid rgba(255,255,255,0.7); object-fit: cover; box-shadow: 0 10px 30px rgba(0,0,0,0.6);">
-                        <div style="color: #ffffff; font-size: 17px; font-weight: 600; margin-top: 16px; letter-spacing: 0.4px;">${escapeHtml(targetName)}</div>
-                        <div id="callAiStatusText" style="font-size: 12px; color: #a0a0a0; margin-top: 6px;">正在与对方实时畅聊...</div>
+                        <div style="position: absolute; width: 145px; height: 145px; border-radius: 50%; background: rgba(7, 193, 96, 0.18); animation: wechatCallWave 3.2s infinite ease-in-out;"></div>
+                        <img src="${npcAvatar}" style="position: relative; width: 110px; height: 110px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.85); object-fit: cover; box-shadow: 0 12px 35px rgba(0,0,0,0.65);">
+                        <div style="color: #ffffff; font-size: 18px; font-weight: 600; margin-top: 16px; letter-spacing: 0.4px;">${escapeHtml(targetName)}</div>
+                        <div id="callAiStatusText" style="font-size: 12.5px; color: #07c160; margin-top: 6px;">通话连接稳定</div>
+
+                        <!-- 实时出声动态声波指示器 -->
+                        <div id="callSpeakingWaveWrap" style="display: flex; align-items: center; gap: 4px; height: 30px; margin-top: 14px; opacity: 0.2; transition: opacity 0.2s ease;">
+                            <span class="call-live-wave-bar" style="width: 3px; height: 4px; background: #07c160; border-radius: 2px; transition: height 0.08s ease;"></span>
+                            <span class="call-live-wave-bar" style="width: 3px; height: 6px; background: #07c160; border-radius: 2px; transition: height 0.08s ease;"></span>
+                            <span class="call-live-wave-bar" style="width: 3px; height: 8px; background: #07c160; border-radius: 2px; transition: height 0.08s ease;"></span>
+                            <span class="call-live-wave-bar" style="width: 3px; height: 6px; background: #07c160; border-radius: 2px; transition: height 0.08s ease;"></span>
+                            <span class="call-live-wave-bar" style="width: 3px; height: 4px; background: #07c160; border-radius: 2px; transition: height 0.08s ease;"></span>
+                        </div>
                     </div>
                 `}
 
                 <!-- 隐形画板：用于视频抽帧识图 -->
                 <canvas id="wechatCallSnapshotCanvas" style="display:none;"></canvas>
 
-                <!-- 底部磨砂流式字幕窗口（仅展示最近对白，前序淡化，可手势翻看） -->
-                <div style="position: absolute; bottom: 8px; left: 14px; right: 14px; max-height: 165px; display: flex; flex-direction: column; z-index: 6;">
-                    <div id="wechatCallSubtitleArea" style="overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: rgba(18, 18, 18, 0.65); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border-radius: 12px; border: 0.5px solid rgba(255,255,255,0.12); box-shadow: 0 4px 20px rgba(0,0,0,0.3);">
-                        <div style="text-align: center; color: rgba(255,255,255,0.4); font-size: 11px;">— 实时双轨字幕已启动 · 停顿5秒自动发送 —</div>
+                <!-- 底部磨砂流式字幕窗口（仅展示最近对白，前序平滑淡化，可手势翻看） -->
+                <div style="position: absolute; bottom: 10px; left: 18px; right: 18px; max-height: 155px; display: flex; flex-direction: column; z-index: 6;">
+                    <div id="wechatCallSubtitleArea" style="overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 10px 14px; background: rgba(20, 20, 20, 0.65); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-radius: 14px; border: 0.5px solid rgba(255,255,255,0.1); box-shadow: 0 4px 20px rgba(0,0,0,0.35);">
+                        <div style="text-align: center; color: rgba(255,255,255,0.4); font-size: 11px;">— 说话停顿 5 秒自动发射 · 随时开口可打断 —</div>
                     </div>
                 </div>
             </div>
 
-            <!-- 底部交互控制抽屉与快速说话栏 -->
-            <div style="padding: 10px 16px 24px; background: rgba(12, 12, 12, 0.88); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border-top: 0.5px solid rgba(255,255,255,0.1); display: flex; flex-direction: column; gap: 12px; z-index: 10;">
+            <!-- 底部极简微信按键栏（消灭打字框，只保留微信纯净功能键） -->
+            <div style="padding: 24px 20px 38px; display: flex; justify-content: center; align-items: center; position: relative; z-index: 10;">
                 
-                <!-- 快捷打字输入栏（支持直接发送跳过 5 秒等待） -->
-                <div style="display: flex; gap: 8px; align-items: center;">
-                    <input type="text" id="wechatCallTextInput" placeholder="直接说话或输入文字（回车即发）..." style="flex: 1; height: 36px; border-radius: 18px; border: none; background: rgba(255,255,255,0.12); color: #ffffff; padding: 0 14px; font-size: 13.5px; outline: none; box-sizing: border-box;">
-                    <button type="button" id="btnSendCallText" style="border: none; background: #07c160; color: #fff; width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;">
-                        <svg viewBox="0 0 24 24" style="width: 17px; height: 17px; fill: currentColor;"><path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/></svg>
-                    </button>
-                </div>
+                <!-- 挂断红键（居中醒目） -->
+                <button type="button" id="btnCallHangup" title="挂断" style="border: none; background: #fa5151; color: #ffffff; width: 68px; height: 68px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 6px 20px rgba(250, 81, 81, 0.45); -webkit-tap-highlight-color: transparent;">
+                    <svg viewBox="0 0 24 24" style="width: 30px; height: 30px; fill: currentColor;"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.996.996 0 0 1 0-1.41C3.28 8.84 7.42 7 12 7c4.58 0 8.72 1.84 11.71 4.67.39.39.39 1.02 0 1.41l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg>
+                </button>
 
-                <!-- 核心通话功能键（麦克风静音 / 挂断红键 / 翻转镜头） -->
-                <div style="display: flex; justify-content: space-around; align-items: center; padding-top: 4px;">
-                    <!-- 麦克风静音 -->
-                    <button type="button" id="btnCallToggleMute" title="静音麦克风" style="border: none; background: rgba(255,255,255,0.14); color: #fff; width: 50px; height: 50px; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer;">
-                        <svg id="callMuteIcon" viewBox="0 0 24 24" style="width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg>
-                    </button>
-
-                    <!-- 挂断红键 -->
-                    <button type="button" id="btnCallHangup" title="挂断" style="border: none; background: #fa5151; color: #ffffff; width: 62px; height: 62px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 4px 16px rgba(250, 81, 81, 0.45);">
-                        <svg viewBox="0 0 24 24" style="width: 28px; height: 28px; fill: currentColor;"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.996.996 0 0 1 0-1.41C3.28 8.84 7.42 7 12 7c4.58 0 8.72 1.84 11.71 4.67.39.39.39 1.02 0 1.41l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg>
-                    </button>
-
-                    <!-- 摄像头前后切换 (视频模式生效) -->
-                    <button type="button" id="btnCallFlipCamera" title="翻转前后摄像头" style="border: none; background: rgba(255,255,255,0.14); color: #fff; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; ${mode !== 'video' ? 'opacity:0.3;pointer-events:none;' : ''}">
+                <!-- 翻转镜头按键（仅在视频模式下显示在右侧） -->
+                ${mode === 'video' ? `
+                <div style="position: absolute; right: 36px;">
+                    <button type="button" id="btnCallFlipCamera" title="翻转镜头" style="border: 1px solid rgba(255,255,255,0.25); background: rgba(255,255,255,0.12); backdrop-filter: blur(8px); color: #ffffff; width: 50px; height: 50px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; -webkit-tap-highlight-color: transparent;">
                         <svg viewBox="0 0 24 24" style="width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"><path d="M20 16v5h-5"/><path d="M4 8V3h5"/><path d="M4 14a8 8 0 0 0 14.54 3.46L20 21"/><path d="M20 10a8 8 0 0 0-14.54-3.46L4 3"/></svg>
                     </button>
                 </div>
+                ` : ''}
             </div>
         `;
 
         document.body.appendChild(overlay);
 
-        // 如果是视频通话，挂载本地流至 video
+        // 挂载本地视频流
         if (mode === 'video' && stream) {
             const videoEl = document.getElementById('wechatCallLocalVideo');
             if (videoEl) {
@@ -482,53 +581,10 @@
             endWechatCall();
         });
 
-        overlay.querySelector('#btnCallToggleMute')?.addEventListener('click', () => {
-            toggleCallMute();
-        });
-
-        overlay.querySelector('#btnCallFlipCamera')?.addEventListener('click', () => {
-            flipCallCamera();
-        });
-
-        const sendBtn = overlay.querySelector('#btnSendCallText');
-        const inputEl = overlay.querySelector('#wechatCallTextInput');
-
-        const doSend = () => {
-            const val = inputEl?.value.trim();
-            if (!val) return;
-            inputEl.value = '';
-            // 清理语音定时器与草稿
-            if (window._activeCallSession && window._activeCallSession.silenceTimer) {
-                clearTimeout(window._activeCallSession.silenceTimer);
-            }
-            clearUserSpeakingDraftHUD();
-            handleUserCallSpoken(val);
-        };
-
-        sendBtn?.addEventListener('click', doSend);
-        inputEl?.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                e.preventDefault();
-                doSend();
-            }
-        });
-    }
-
-    // 静音切换
-    function toggleCallMute() {
-        if (!window._activeCallSession || !window._activeCallSession.stream) return;
-        const tracks = window._activeCallSession.stream.getAudioTracks();
-        if (tracks.length > 0) {
-            const willMute = !window._activeCallSession.isMuted;
-            tracks[0].enabled = !willMute;
-            window._activeCallSession.isMuted = willMute;
-            const btn = document.getElementById('btnCallToggleMute');
-            if (btn) {
-                btn.style.background = willMute ? '#fa5151' : 'rgba(255,255,255,0.14)';
-            }
-            if (typeof showToast === 'function') {
-                showToast(willMute ? '麦克风已静音' : '麦克风已开启', 'info', 1000);
-            }
+        if (mode === 'video') {
+            overlay.querySelector('#btnCallFlipCamera')?.addEventListener('click', () => {
+                flipCallCamera();
+            });
         }
     }
 
@@ -543,27 +599,6 @@
         const ctx = canvas.getContext('2d');
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         return canvas.toDataURL('image/jpeg', 0.7);
-    }
-
-    // 用户说话处理
-    async function handleUserCallSpoken(userText) {
-        if (!window._activeCallSession) return;
-        const playerName = getPlayerFullName();
-
-        // 记入字幕与记录
-        appendCallSubtitle('player', playerName, userText);
-
-        // 如果是视频通话，抓取一帧
-        let visualInsight = '';
-        if (window._activeCallSession.mode === 'video') {
-            const base64Img = captureVideoFrameBase64();
-            if (base64Img) {
-                visualInsight = await inspectVisualFrameAsync(base64Img);
-            }
-        }
-
-        // 触发 AI 回复
-        triggerCallAIReply(false, userText, visualInsight);
     }
 
     // 独立识图 API 调用（如有配置）
@@ -654,11 +689,7 @@
         const abortCtrl = new AbortController();
         session.currentAbortController = abortCtrl;
 
-        const statusEl = document.getElementById('callAiStatusText');
-        if (statusEl) {
-            statusEl.textContent = '对方正在说话...';
-            statusEl.style.color = '#07c160';
-        }
+        setCallStatusText('对方正在说话...', '#07c160');
 
         const npcId = session.npcId;
         const npc = window.G.npcs[npcId];
@@ -676,7 +707,7 @@
                 if (abortCtrl.signal.aborted) return;
                 const fallbackReply = isFirstGreeting ? `喂？${playerName}，能听到我说话吗？` : `嗯嗯，我在听呢！`;
                 finishAiReply(npcId, npcName, fallbackReply);
-            }, 800);
+            }, 600);
             return;
         }
 
@@ -741,11 +772,11 @@
             finishAiReply(npcId, npcName, replyText);
         } catch (err) {
             if (err.name === 'AbortError') {
-                console.log('[CallAI] 回复已被用户中途插话打断');
+                console.log('[CallAI] 回复已被用户打断');
                 return;
             }
             console.warn('[CallAI] 通话回复出错:', err);
-            finishAiReply(npcId, npcName, '喂？我这边刚刚网络闪了一下，你还在吗？');
+            finishAiReply(npcId, npcName, isFirstGreeting ? `喂，${playerName}？能听到我说话吗？` : '嗯嗯，我在听呢！');
         }
     }
 
@@ -754,11 +785,7 @@
         if (!window._activeCallSession) return;
         window._activeCallSession.isAiReplying = false;
 
-        const statusEl = document.getElementById('callAiStatusText');
-        if (statusEl) {
-            statusEl.textContent = '通话连接稳定';
-            statusEl.style.color = '#07c160';
-        }
+        setCallStatusText('通话连接稳定', '#07c160');
 
         appendCallSubtitle('npc', npcName, text);
 
@@ -782,10 +809,14 @@
         clearInterval(session.timerInterval);
         if (session.silenceTimer) clearTimeout(session.silenceTimer);
 
-        // 中止识别器
-        if (session.speechRecognizer) {
-            try { session.speechRecognizer.stop(); } catch (_) {}
-            session.speechRecognizer = null;
+        if (session.animFrameId) {
+            cancelAnimationFrame(session.animFrameId);
+            session.animFrameId = null;
+        }
+
+        if (session.audioContext) {
+            try { session.audioContext.close(); } catch (_) {}
+            session.audioContext = null;
         }
 
         // 中断任何网络请求与播放
