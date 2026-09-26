@@ -1,5 +1,5 @@
 // js/09-events-init.js
-// 事件绑定与全新微信简约风三页滑动公告系统（v1.611 完整收录李敏原话与作者心声）
+// 事件绑定与全新微信简约风三页滑动公告系统（v1.62 完整收录李敏原话、累计更新清单与最新作者碎碎念）
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
     // 开始游戏按钮
@@ -231,10 +231,10 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 // ============================================================
-// 📢 全新三页滑动公告系统（微信极简白灰微绿设计 · 严格保留李敏原话与作者碎碎念）
+// 📢 全新三页滑动公告系统（微信极简白灰微绿设计 · 严格保留李敏原话与作者心声）
 // ============================================================
 function checkAndShowVersionNoticeModal(forceOpen = false) {
-    const ver = window.CURRENT_APP_VERSION || '1.611';
+    const ver = window.CURRENT_APP_VERSION || '1.62';
     const dismissedVersion = localStorage.getItem('mcyt_dismissed_notice_ver');
 
     if (forceOpen || dismissedVersion !== ver) {
@@ -256,9 +256,9 @@ function openVersionNoticeModal(version) {
     <div class="notice-slider-wrap" style="overflow:hidden;position:relative;width:100%;border-radius:8px;">
         <div class="notice-slider-track" id="noticeSliderTrack" style="display:flex;width:300%;transition:transform 0.3s cubic-bezier(0.25, 1, 0.5, 1);">
             
-            <!-- 第 1 页：版本更新与定位 -->
+            <!-- 第 1 页：定位与版本累计更新内容 -->
             <div class="notice-slide-page" style="flex:0 0 33.3333%;width:33.3333%;box-sizing:border-box;padding-right:2px;">
-                <div class="notice-card-box" style="height:210px;overflow-y:auto;padding:12px;background:#f7f7f7;border-radius:8px;border:1px solid #eeeeee;box-sizing:border-box;font-size:13px;color:#222222;line-height:1.7;">
+                <div class="notice-card-box" style="height:220px;overflow-y:auto;padding:12px;background:#f7f7f7;border-radius:8px;border:1px solid #eeeeee;box-sizing:border-box;font-size:13px;color:#222222;line-height:1.65;">
                     <div style="background:#ffffff;padding:10px 12px;border-radius:6px;border:1px solid #eeeeee;margin-bottom:10px;">
                         <p style="margin:0 0 6px;color:#222222;font-weight:600;">本软件为代入向乙女Airp游戏，禁男禁cp，目前唯一获取渠道为进鸢尾黎明老师的群聊。</p>
                         <p style="margin:0;color:#07c160;font-size:12px;line-height:1.6;">
@@ -266,38 +266,43 @@ function openVersionNoticeModal(version) {
                         </p>
                     </div>
 
-                    <div style="font-weight:700;color:#222222;margin-bottom:6px;">超级无敌大更新</div>
-                    <p style="margin:0 0 8px;color:#444444;">
-                        因为功能过于繁多，但是塞在一个小区域，看起来实在是不太美观，于是我更改了UI变为了小手机！
-                    </p>
-                    <p style="margin:0 0 8px;color:#444444;">
-                        更新的内容实在太多，所以懒得做介绍了，请自行探索，有不会问的可以问问萌萌的悬浮球助手哦
-                    </p>
-                    <p style="margin:0;color:#888888;font-size:12px;">
-                        现在大部分功能还没有做好，只做了聊天功能，现在只是测试期，bug多多（喂——）
-                    </p>
+                    <div style="font-weight:700;color:#222222;margin-bottom:6px;font-size:13px;">记录这次版本累计更新内容</div>
+                    <div style="color:#444444;font-size:12px;line-height:1.6;margin-bottom:10px;padding-left:4px;">
+                        - 单独聊天增添心声功能<br>
+                        - 聊天增加tts功能以及使用本地部署tts功能（群文件有软件分享）<br>
+                        - 增加打电话功能<br>
+                        - 增加识图API功能，可使用智谱的免费识图模型<br>
+                        - 恢复ao3功能<br>
+                        - 修复若干bug
+                    </div>
+
+                    <div style="background:#fffbe6;border:1px solid #ffe58f;padding:7px 10px;border-radius:6px;color:#d46b08;font-size:11.5px;font-weight:600;line-height:1.5;">
+                        提醒：记得在记忆功能里边增添硅基流动密匙，不然无法正常使用记忆功能！！！
+                    </div>
                 </div>
             </div>
 
             <!-- 第 2 页：致谢名单 -->
             <div class="notice-slide-page" style="flex:0 0 33.3333%;width:33.3333%;box-sizing:border-box;padding:0 2px;">
-                <div class="notice-card-box" style="height:210px;overflow-y:auto;padding:12px;background:#f7f7f7;border-radius:8px;border:1px solid #eeeeee;box-sizing:border-box;font-size:12.5px;color:#222222;line-height:1.7;">
+                <div class="notice-card-box" style="height:220px;overflow-y:auto;padding:12px;background:#f7f7f7;border-radius:8px;border:1px solid #eeeeee;box-sizing:border-box;font-size:12.5px;color:#222222;line-height:1.65;">
                     <div style="font-weight:700;color:#07c160;margin-bottom:8px;font-size:13px;">致谢名单</div>
                     
                     <p style="margin:0 0 6px;"><b>鸢尾黎明老师的模拟器</b> 此模拟器为鸢尾黎明老师的mcyt模拟器二改！</p>
-                    <p style="margin:0 0 6px;"><b>感谢热心QQ群友帮我绘制图标！</b><br><span style="color:#666666;">真的感谢群友们愿意消耗自己时间绘制图标，乙代妹都是天使嘛……</span></p>
-                    <p style="margin:0 0 8px;"><b>感谢Discord『昵称：柏柏』 老师的公益图床！</b></p>
+                    <p style="margin:0 0 6px;"><b>感谢热心QQ群友帮我绘制图标！</b></p>
+                    <p style="margin:0 0 6px;"><b>感谢善良的群友芝士球分享了她约的萌萌头像框和对话框稿件！</b><br><span style="color:#666666;">真的感谢群友们愿意消耗自己时间绘制图标，乙代妹都是天使嘛……</span></p>
+                    <p style="margin:0 0 6px;"><b>感谢Discord『昵称：柏柏』 老师的公益图床！</b></p>
+                    <p style="margin:0 0 8px;"><b>感谢github『昵称：sipeter』的开源tts项目CloneTTS，非常好用</b></p>
                     
                     <div style="background:#ffffff;border:1px solid #eeeeee;padding:8px 10px;border-radius:6px;margin-bottom:8px;line-height:1.6;">
                         <div style="font-weight:600;margin-bottom:4px;color:#222222;">感谢Gemini，Claude以及Chatgpt这御三家给我干活</div>
                         <div style="color:#555555;font-size:12px;">
                             - Gemini，虽然老是骂它，但是基本上都是它在勤勤恳恳干活，软件大半都是它的成果<br>
                             - Claude帮助了我很多，耐心教导我，聪明能干还温柔，克之伟大无需多言！<br>
-                            - Chatgpt好像帮了忙，但是好像又没帮……起到了一个添乱的作用
+                            - Chatgpt好像帮了忙，但是好像又没帮……<br>
+                            起到了一个添乱的作用
                         </div>
                     </div>
 
-                    <p style="margin:0 0 6px;"><b>感谢小丸子帮忙干活</b>——我不会告诉你们小丸子是谁的（）</p>
                     <p style="margin:0 0 6px;"><b>感谢github以及开源项目创作者</b>，愿意开源的创作者们真的是非常伟大啊……解决了我的燃眉之急！</p>
                     <p style="margin:0;color:#07c160;font-weight:600;">以及感谢群友的鼓励和支持，没有大家的鼓励支持我真的不可能有耐心做那么多！</p>
                 </div>
@@ -305,16 +310,16 @@ function openVersionNoticeModal(version) {
 
             <!-- 第 3 页：借物表感谢与声明 -->
             <div class="notice-slide-page" style="flex:0 0 33.3333%;width:33.3333%;box-sizing:border-box;padding-left:2px;">
-                <div class="notice-card-box" style="height:210px;overflow-y:auto;padding:12px;background:#f7f7f7;border-radius:8px;border:1px solid #eeeeee;box-sizing:border-box;font-size:12.5px;color:#222222;line-height:1.7;">
+                <div class="notice-card-box" style="height:220px;overflow-y:auto;padding:12px;background:#f7f7f7;border-radius:8px;border:1px solid #eeeeee;box-sizing:border-box;font-size:12.5px;color:#222222;line-height:1.65;">
                     <div style="font-weight:700;color:#07c160;margin-bottom:8px;font-size:13px;">借物表感谢</div>
                     
                     <p style="margin:0 0 6px;">感谢小红书『ID：95695020736』<b>与君绝</b> 老师同意我借鉴提示词！非常好的老师！</p>
                     <p style="margin:0 0 6px;">感谢 <b>kelivo</b>，本项目bing部分搜索功能代码参考自开源项目 Kelivo（AGPL-3.0 协议），感谢原作者的贡献。</p>
-                    <p style="margin:0 0 6px;">感谢 github『昵称：nutshell319』的<b>塔罗游戏</b>，本项目的塔罗部分改自开源项目 tarot-divination（MIT License 协议）</p>
-                    <p style="margin:0 0 10px;">感谢 github『昵称：GiorgioDotcom』的<b>记忆项目</b>，本项目的记忆系统改自开源项目 rememori</p>
+                    <p style="margin:0 0 6px;">感谢 github『昵称：nutshell319』的<b>塔罗游戏</b>，本项目的塔罗部分改自自开源项目tarot-divination（MIT License 协议）</p>
+                    <p style="margin:0 0 8px;">感谢 github『昵称：GiorgioDotcom』的<b>记忆项目</b>，本项目的记忆系统改自开源项目rememori<br>感谢</p>
 
                     <div style="background:#ffffff;border-left:3px solid #07c160;padding:8px 10px;border-radius:4px;font-size:12px;color:#333333;line-height:1.6;">
-                        <b>声明：</b>本人未收取任何费用，目前没在群聊外的地方发布软件，不需要金钱赞助（不过给赞助我key大大滴欢迎，尤其是Claude，还有gemini和chatgpt👏🏻）
+                        <b>声明：</b>本人未收取任何费用，目前没在群聊外的地方发布软件，不需要金钱赞助（不过给赞助我key大大滴欢迎，尤其是Claude，还有gemini和chatgpt👏🏻，如果是服务器，那简直是天上掉下来肥美馅饼）
                     </div>
                 </div>
             </div>
@@ -324,21 +329,18 @@ function openVersionNoticeModal(version) {
 
     <!-- 三点指示器 -->
     <div class="notice-dots-wrap" style="display:flex;justify-content:center;align-items:center;gap:6px;margin:8px 0;">
-        <div class="notice-dot active" id="noticeDot0" style="width:6px;height:6px;border-radius:50%;background:#07c160;cursor:pointer;transition:all 0.2s;"></div>
+        <div class="notice-dot active" id="noticeDot0" style="width:14px;height:6px;border-radius:3px;background:#07c160;cursor:pointer;transition:all 0.2s;"></div>
         <div class="notice-dot" id="noticeDot1" style="width:6px;height:6px;border-radius:50%;background:#dcdcdc;cursor:pointer;transition:all 0.2s;"></div>
         <div class="notice-dot" id="noticeDot2" style="width:6px;height:6px;border-radius:50%;background:#dcdcdc;cursor:pointer;transition:all 0.2s;"></div>
     </div>
 
-    <!-- 最下方常驻：作者碎碎念（不参与3页滑动，独立常驻展示） -->
+    <!-- 最下方常驻：作者碎碎念 -->
     <div style="background:#f7f7f7;border:1px solid #eeeeee;border-radius:8px;padding:10px 12px;margin-bottom:10px;">
         <div style="font-weight:700;font-size:12px;color:#666666;margin-bottom:6px;display:flex;align-items:center;gap:4px;">
             <span>💬 作者碎碎念</span>
         </div>
-        <div style="max-height:92px;overflow-y:auto;font-size:12px;color:#555555;line-height:1.65;padding-right:2px;">
-            我知道大多数人都只是单机玩软件，并不太想冒泡，与我的关系就像吃蛋人和一个免费送蛋的母鸡，但是只有更多的正面反馈，才能够令创作者有动力产出<br><br>
-            与史山搏斗已经让人精疲力尽，我希望有人repo，让我回血，而不是只有出现bug时才会冒出一连串询问，我不是机器人，软件不会无缘无故修复，创建东西也不是简单“豆包，豆包给我生成一个新功能”就能变出来，背后都是我消耗挤出自己大量时间，花自己钱修缮，与llm斗智斗勇弥补bug窟窿，只希望乙代同好玩的开心，说难听的，我半分钱没收，bug反馈这些完全可以鸟都不鸟<br><br>
-            要不是有人反馈bug和寻求解封，我都不知道有人，甚至有不少人在玩我的软件……这点很让人疲惫，很多人默默的在用，但是创作者从没得到回应，或许我发布相关时会有点下加一就有的赞美和期待，但转而消泯，此去无痕，只有我继续苦苦与ai搏斗<br><br>
-            母鸡也是需要投喂才有动力下蛋的，希望群repo相册可以多多投喂!
+        <div style="max-height:85px;overflow-y:auto;font-size:12.5px;color:#333333;line-height:1.6;padding-right:2px;font-weight:500;">
+            没什么想说的，只想赶快结束休息睡觉
         </div>
     </div>
 
