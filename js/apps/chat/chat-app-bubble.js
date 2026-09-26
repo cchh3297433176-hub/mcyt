@@ -1,7 +1,7 @@
 /**
  * js/apps/chat/chat-app-bubble.js
  * 💬 微信主应用 · 拆分分片 4/7：消息气泡长按操作菜单（openBubbleActionSheet）、长按引用/取消引用、
- *    编辑消息、删除消息、撤回消息（单次偷窥脱敏）、语音输入弹窗、
+ *    编辑消息、删除消息（含通话记录 call_record 一键物理删除防记忆污染）、撤回消息（单次偷窥脱敏）、语音输入弹窗、
  *    🌟 微信原生直显大图与沉浸式图文查看器（Lightbox Viewer，彻底去除小框翻转与抠滑，点击大图舒展呈现文字，再次点击秒退）。
  */
 
@@ -104,24 +104,33 @@
         window.openChatImageViewer(imgUrl, descText, '图片详情');
     };
 
-    // 气泡长按操作菜单
+    // 气泡长按操作菜单（已增强对 call_record 通话记录的原生删除支持）
     window.openBubbleActionSheet = function(msgId, type, targetId) {
         const history = (type === 'single') ? window.getAccountChatHistory(targetId) : (window.G.groupChatHistory[targetId] || []);
         const msg = history.find(m => m._id === msgId);
         if (!msg) return;
 
         const isSelf = (msg.from === 'player');
+        const isCallRecord = (msg.type === 'call_record');
+
         let mask = document.createElement('div');
         mask.className = 'wechat-action-sheet-mask';
 
         let itemsHtml = '';
-        itemsHtml += `<div class="wechat-action-item" onclick="window.triggerQuoteMessage('${msgId}','${type}','${targetId}')">引用</div>`;
-        itemsHtml += `<div class="wechat-action-item" onclick="window.doEditMessageContent('${msgId}','${type}','${targetId}')">编辑消息</div>`;
 
-        if (isSelf) {
-            itemsHtml += `<div class="wechat-action-item" onclick="window.doRecallMessageWithRandomPeek('${msgId}','${type}','${targetId}')">撤回消息</div>`;
+        if (isCallRecord) {
+            // 通话记录卡片专属极简选项：引用或彻底删除
+            itemsHtml += `<div class="wechat-action-item" onclick="window.triggerQuoteMessage('${msgId}','${type}','${targetId}')">引用记录</div>`;
+            itemsHtml += `<div class="wechat-action-item" style="color:#fa5151;font-weight:600;" onclick="window.doDeleteMessage('${msgId}','${type}','${targetId}')">删除此通话记录</div>`;
+        } else {
+            itemsHtml += `<div class="wechat-action-item" onclick="window.triggerQuoteMessage('${msgId}','${type}','${targetId}')">引用</div>`;
+            itemsHtml += `<div class="wechat-action-item" onclick="window.doEditMessageContent('${msgId}','${type}','${targetId}')">编辑消息</div>`;
+
+            if (isSelf) {
+                itemsHtml += `<div class="wechat-action-item" onclick="window.doRecallMessageWithRandomPeek('${msgId}','${type}','${targetId}')">撤回消息</div>`;
+            }
+            itemsHtml += `<div class="wechat-action-item" style="color:#fa5151;" onclick="window.doDeleteMessage('${msgId}','${type}','${targetId}')">删除</div>`;
         }
-        itemsHtml += `<div class="wechat-action-item" style="color:#fa5151;" onclick="window.doDeleteMessage('${msgId}','${type}','${targetId}')">删除</div>`;
 
         mask.innerHTML = `
             <div class="wechat-action-sheet-box">
@@ -150,6 +159,7 @@
 
         let summaryText = msg.text || '';
         if (msg.type === 'voice') summaryText = `[语音 ${msg.seconds || 3}"] ${msg.text || ''}`;
+        else if (msg.type === 'call_record') summaryText = `[通话记录 ${msg.callDuration || ''}]`;
         else if (msg.type === 'shared_tarot') summaryText = `[塔罗牌阵: ${msg.sharedTarot?.spreadName || '占卜'}]`;
         else if (msg.type === 'shared_moment') summaryText = `[朋友圈分享]`;
         else if (msg.type === 'contact_card') summaryText = `[名片] ${msg.contactCard?.name || ''}`;
@@ -205,9 +215,17 @@
         const history = (type === 'single') ? window.getAccountChatHistory(targetId) : (window.G.groupChatHistory[targetId] || []);
         const idx = history.findIndex(m => m._id === msgId);
         if (idx !== -1) {
+            const deletedMsg = history[idx];
             history.splice(idx, 1);
             window.syncChatHistoryToLocalBackup();
             if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+            
+            if (deletedMsg && deletedMsg.type === 'call_record') {
+                if (typeof showToast === 'function') showToast('已彻底删除该通话记录，防记忆污染', 'info', 1500);
+            } else {
+                if (typeof showToast === 'function') showToast('已删除消息', 'info', 1000);
+            }
+
             if (type === 'single') renderSingleChatWindow();
             else if (typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
         }
@@ -296,13 +314,12 @@
         });
     };
 
-    // 🖼️ 微信原生纯净直显图片气泡渲染器（点击打开全屏大图+文字沉浸式查看器，彻底告别拍立得与小框滚动）
+    // 🖼️ 微信原生纯净直显图片气泡渲染器
     window.renderWechatPureImageBubbleHTML = function(msg) {
         const descText = msg.imageDesc || msg.text || '';
         const hasRealImg = !!(msg.imageUrl || msg.url);
         const imgUrl = msg.imageUrl || msg.url || '';
 
-        // 如果既无真实图片又无文字描述，兜底保护
         if (!hasRealImg && !descText) {
             return `<div style="padding:10px 14px;background:#ededed;border-radius:8px;font-size:13px;color:#888;">[空图片消息]</div>`;
         }
@@ -310,7 +327,6 @@
         const safeImgUrl = escapeHtml(imgUrl);
         const safeDescText = escapeHtml(descText).replace(/"/g, '&quot;');
 
-        // 正面渲染内容：若有真实图片，正面为纯净图片；若是纯文字描绘图，展示微信原生极简温润微缩卡
         let bubbleContent = '';
         if (hasRealImg) {
             bubbleContent = `

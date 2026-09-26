@@ -1,17 +1,17 @@
 /**
  * js/apps/chat/chat-app-call.js
- * 📞 主播掌机 · 微信原生音视频实时通话独立中枢
+ * 📞 主播掌机 · 微信原生音视频实时通话独立中枢（抗噪防误触与 2 秒极速响应版）
  * 🛡️ 微信原生极简质感，消灭多余打字框与廉价元素，100% 纯粹全双工对讲体验。
  * 🌟 核心特性：
  *  1. 微信原生级视觉美学（纯语音居中波纹呼吸头像 / 视频画中画镜头）；
- *  2. 彻底移除打字框与多余按键（默认开麦，仅保留挂断红键与视频镜头翻转）；
- *  3. 基于 Web Audio API 的硬件级真实音量波形检测（VAD），开口说话实时展示跳动声波；
- *  4. 豆包式 5 秒静音自动触发：说话停顿 5 秒自动截取音频送入云端 faster-whisper 转文字发射；
- *  5. 豆包式开口即打断：AI 正在回复或念台词时，用户只要开口说话，毫秒级掐断发音转入倾听；
+ *  2. 2 秒自然静音停顿：说话停止 2 秒内无声，立刻提交并让 AI 回复；
+ *  3. 智能抗噪降噪门槛（门限提升至 38 + 能量连续确认），过滤风扇杂音与碰桌噪声；
+ *  4. 杂音幻觉过滤：转文字结果低于 2 字或纯象声词自动忽略，杜绝胡乱识别；
+ *  5. 防误打断锁：AI 说话时提高打断门限，防止背景噪音误掐断 AI 发音；
  *  6. 首次视频隐私门禁（本地抽帧不存云端、支持下次不再提醒，权限被拒友好引导设置）；
  *  7. 视频通话支持实时从摄像头抽帧直连独立识图 API，无缝事实感知注入；
  *  8. 专属极速口语 Prompt（剥离联网/表情包，短平快日常口语，细腻生活背景音）；
- *  9. 通话结束全自动归档为第三人称具名客观记录（IndexedDB 永久保存）。
+ *  9. 通话结束全自动归档为第三人称具名客观记录（IndexedDB 永久保存，支持长按彻底删除）。
  */
 
 (function() {
@@ -136,7 +136,11 @@
 
         try {
             const constraints = {
-                audio: true,
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                },
                 video: (mode === 'video') ? { facingMode: currentFacing, width: { ideal: 640 }, height: { ideal: 480 } } : false
             };
             localStream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -170,6 +174,7 @@
             recordedChunks: [],
             isUserSpeaking: false,
             speakingStartTime: 0,
+            consecutiveVoiceFrames: 0, // 连续语音帧滤波计数
             silenceTimer: null
         };
 
@@ -185,7 +190,7 @@
             }
         }, 1000);
 
-        // 启动硬件级麦克风音量监听与 VAD 全双工通道
+        // 启动抗噪麦克风音量监听与 VAD 全双工通道
         startHardwareAudioVAD(localStream);
 
         // 播报初始接通提示
@@ -197,7 +202,7 @@
         }, 400);
     }
 
-    // 硬件级音量分析器 + MediaRecorder 真实录制 + 5 秒静音自动触发
+    // 硬件级音量分析器 + MediaRecorder 真实录制 + 抗噪滤波 + 2 秒极速静音发射
     function startHardwareAudioVAD(stream) {
         try {
             const AudioCtx = window.AudioContext || window.webkitAudioContext;
@@ -207,13 +212,16 @@
             const source = ctx.createMediaStreamSource(stream);
             const analyser = ctx.createAnalyser();
             analyser.fftSize = 128;
+            analyser.smoothingTimeConstant = 0.4; // 平滑滤波
             source.connect(analyser);
 
             window._activeCallSession.audioContext = ctx;
             window._activeCallSession.audioAnalyser = analyser;
 
             const dataArray = new Uint8Array(analyser.frequencyBinCount);
-            const VAD_VOLUME_THRESHOLD = 18; // 触发音量门槛
+            
+            // 基础人声触发门槛调高至 38（有效压制环境风扇与底噪）
+            const BASE_VOICE_THRESHOLD = 38;
 
             const checkAudioLoop = () => {
                 if (!window._activeCallSession) return;
@@ -228,31 +236,43 @@
                 // 更新界面音波条动态
                 updateCallWaveBars(avgVolume);
 
-                if (avgVolume > VAD_VOLUME_THRESHOLD) {
-                    // 🌟 1. 用户出声：毫秒级打断正在说话的 AI！
-                    interruptAiReplyIfActive();
+                // 如果 AI 正在说话，需要更响亮的人声才触发打断（防环境杂音误打断）
+                const currentThreshold = window._activeCallSession.isAiReplying 
+                    ? (BASE_VOICE_THRESHOLD * 1.55) 
+                    : BASE_VOICE_THRESHOLD;
 
-                    // 启动录制块收集
-                    if (!window._activeCallSession.isUserSpeaking) {
-                        window._activeCallSession.isUserSpeaking = true;
-                        window._activeCallSession.speakingStartTime = Date.now();
-                        setUserSpeakingHUDStatus(true);
-                        startSessionMediaRecorder(stream);
-                    }
+                if (avgVolume > currentThreshold) {
+                    window._activeCallSession.consecutiveVoiceFrames++;
 
-                    // 重置 5 秒静音定时器
-                    if (window._activeCallSession.silenceTimer) {
-                        clearTimeout(window._activeCallSession.silenceTimer);
-                        window._activeCallSession.silenceTimer = null;
+                    // 必须连续 3 帧（约 100ms）超门槛才确认为真人出声，彻底过滤单点爆破杂音
+                    if (window._activeCallSession.consecutiveVoiceFrames >= 3) {
+                        // 🌟 用户出声确认：掐断正在说话的 AI
+                        interruptAiReplyIfActive();
+
+                        // 启动录制块收集
+                        if (!window._activeCallSession.isUserSpeaking) {
+                            window._activeCallSession.isUserSpeaking = true;
+                            window._activeCallSession.speakingStartTime = Date.now();
+                            setUserSpeakingHUDStatus(true);
+                            startSessionMediaRecorder(stream);
+                        }
+
+                        // 重置 2 秒静音定时器
+                        if (window._activeCallSession.silenceTimer) {
+                            clearTimeout(window._activeCallSession.silenceTimer);
+                            window._activeCallSession.silenceTimer = null;
+                        }
                     }
                 } else {
-                    // 音量低于门槛
+                    // 音量回落
+                    window._activeCallSession.consecutiveVoiceFrames = 0;
+
                     if (window._activeCallSession.isUserSpeaking) {
                         if (!window._activeCallSession.silenceTimer) {
-                            // 启动 5 秒静音倒计时
+                            // 🌟 核心改进：静音倒计时从 5 秒缩减至 2 秒（2000ms），停顿更自然干脆
                             window._activeCallSession.silenceTimer = setTimeout(() => {
                                 handleUserFinishSpokenAudio();
-                            }, 5000);
+                            }, 2000);
                         }
                     }
                 }
@@ -290,7 +310,18 @@
         }
     }
 
-    // 用户停止说话满 5 秒，提交音频转文字并触发 AI
+    // 校验文本是否属于背景杂音幻觉
+    function isJunkNoiseText(text) {
+        if (!text) return true;
+        const cleaned = text.trim().replace(/[，。！？,.!?~、 ]/g, '');
+        if (cleaned.length < 2) return true;
+        // 典型 Whisper 杂音幻觉过滤
+        const JUNK_PATTERNS = ['呃', '啊', '嗯', '哦', '哎', '谢谢收看', '感谢观看', 'you', 'the', '字幕', 'Bye'];
+        if (JUNK_PATTERNS.includes(cleaned)) return true;
+        return false;
+    }
+
+    // 用户停止说话满 2 秒，提交音频转文字并触发 AI
     async function handleUserFinishSpokenAudio() {
         const session = window._activeCallSession;
         if (!session) return;
@@ -314,18 +345,19 @@
                     }
                 };
                 try { session.mediaRecorder.stop(); } catch (_) { resolve(null); }
-                setTimeout(() => resolve(null), 800);
+                setTimeout(() => resolve(null), 600);
             });
             audioBlob = await waitChunkPromise;
             session.mediaRecorder = null;
         }
 
-        if (!audioBlob || audioBlob.size < 600) {
-            console.log('[WechatCall] 录音数据过小，忽略');
+        // 音频过小（少于 1 秒有效数据），判定为轻微杂音直接丢弃
+        if (!audioBlob || audioBlob.size < 1200) {
+            setCallStatusText('通话连接稳定', '#07c160');
             return;
         }
 
-        // 调用私有云端 faster-whisper ASR 进行秒级转写
+        // 调用私有云端 faster-whisper ASR
         setCallStatusText('正在理解你的话语...', '#07c160');
 
         let recognizedText = '';
@@ -340,7 +372,9 @@
             }
         }
 
-        if (!recognizedText) {
+        // 杂音幻觉过滤
+        if (!recognizedText || isJunkNoiseText(recognizedText)) {
+            console.log('[WechatCall] 过滤环境底噪或幻觉识别:', recognizedText);
             setCallStatusText('通话连接稳定', '#07c160');
             return;
         }
@@ -542,12 +576,12 @@
                 <!-- 底部磨砂流式字幕窗口（仅展示最近对白，前序平滑淡化，可手势翻看） -->
                 <div style="position: absolute; bottom: 10px; left: 18px; right: 18px; max-height: 155px; display: flex; flex-direction: column; z-index: 6;">
                     <div id="wechatCallSubtitleArea" style="overflow-y: auto; display: flex; flex-direction: column; gap: 6px; padding: 10px 14px; background: rgba(20, 20, 20, 0.65); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-radius: 14px; border: 0.5px solid rgba(255,255,255,0.1); box-shadow: 0 4px 20px rgba(0,0,0,0.35);">
-                        <div style="text-align: center; color: rgba(255,255,255,0.4); font-size: 11px;">— 说话停顿 5 秒自动发射 · 随时开口可打断 —</div>
+                        <div style="text-align: center; color: rgba(255,255,255,0.4); font-size: 11px;">— 说话停顿 2 秒自动发送 · 随时开口可打断 —</div>
                     </div>
                 </div>
             </div>
 
-            <!-- 底部极简微信按键栏（消灭打字框，只保留微信纯净功能键） -->
+            <!-- 底部极简微信按键栏 -->
             <div style="padding: 24px 20px 38px; display: flex; justify-content: center; align-items: center; position: relative; z-index: 10;">
                 
                 <!-- 挂断红键（居中醒目） -->
@@ -856,7 +890,7 @@
         let recordBody = '';
 
         if (validMsgs.length === 0) {
-            recordBody = `${playerName}与${targetName}进行了一次${modeLabel}，未产生对白已挂断。`;
+            recordBody = `${playerName}与${targetName}进行了一次${modeLabel}，未产生有效对白已挂断。`;
         } else {
             const transcriptSnippet = validMsgs.map(m => `${m.name}: ${m.text}`).join('；');
             recordBody = `${playerName}与${targetName}进行了${modeLabel}（通话时长 ${durationStr}）。通话期间：${transcriptSnippet}`;
@@ -865,7 +899,7 @@
         const time = new Date().toLocaleTimeString().slice(0, 5);
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
 
-        // 构造一条通话结束系统消息卡片
+        // 构造一条通话结束系统消息卡片（支持长按删除与防记忆污染）
         const callEndMessage = {
             _id: 'call_rec_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
             from: 'action',
@@ -902,6 +936,25 @@
         // 刷新聊天窗口
         if (typeof renderSingleChatWindow === 'function') {
             renderSingleChatWindow();
+        }
+    };
+
+    // 🌟 全局提供：删除单条通话记录并撤回记忆通道
+    window.deleteCallRecordMessage = async function(msgId, npcId) {
+        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
+        const hist = window.getAccountChatHistory(npcId, curAcc.id);
+        const idx = hist.findIndex(m => m._id === msgId);
+
+        if (idx !== -1) {
+            hist.splice(idx, 1);
+            if (typeof window.syncChatHistoryToLocalBackup === 'function') {
+                await window.syncChatHistoryToLocalBackup();
+            }
+            if (typeof window.autoSaveGame === 'function') {
+                window.autoSaveGame();
+            }
+            if (typeof showToast === 'function') showToast('已删除通话记录', 'success', 1000);
+            if (typeof renderSingleChatWindow === 'function') renderSingleChatWindow();
         }
     };
 
