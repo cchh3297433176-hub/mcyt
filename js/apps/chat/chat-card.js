@@ -1,14 +1,15 @@
 /**
  * js/apps/chat/chat-card.js
- * 📇 微信名片与人设资料设置独立模块（视频舞台立绘与多差分配组支持版）
+ * 📇 微信名片与人设资料设置独立模块（精简 5 核心表情 · 装扮中心免通话独立调位版）
  * 职责：
  * 1. 角色极简原生名片卡（保留必要信息，头像精准保活，支持原画/动图）
  * 2. 右上角「装扮中心」：
- *    - 【我的装扮】与【对方装扮】头像、头像框与气泡样式双轨分流
- *    - 🌟【视频舞台与立绘设置】：支持背景与多表情差分立绘管理，多套配组方案命名、切换、独立导入导出
- *    - 兼容本地与直链图片/GIF动图/视频，点击已导入项弹窗询问更换
- * 3. 🌟 导出人设卡时连同所有视频配组与立绘差分无缝打包嵌入
- * 4. 🌟 角色专属 TTS 语音音色配置（带独立开关与 CloneTTS 菜单拉取）
+ *    - 【基础装扮】头像框与气泡样式双轨分流
+ *    - 🌟【视频舞台与立绘设置】：精简 5 个核心表情槽（默认、开心、伤心、生气、害羞），支持自定义扩展；
+ *    - 🌟【免通话独立手势调位】：无需拨通视频，在装扮中心即可 1:1 全屏预览并手势拖拽缩放立绘；
+ *    - 支持本地/直链图片、GIF、短视频，点击已有项弹窗询问更换或删除；
+ *    - 单配组方案独立导出/导入，角色卡打包导出无缝集成。
+ * 3. 🌟 角色专属 TTS 语音音色配置（带独立开关与 CloneTTS 菜单拉取）
  */
 
 (function() {
@@ -26,7 +27,6 @@
         return '8px';
     }
 
-    // 辅助获取装扮池
     function getStoredFramesList() {
         return (typeof window.getStoredDecorFrames === 'function')
             ? window.getStoredDecorFrames()
@@ -39,7 +39,6 @@
             : [{ id: 'bubble_default', name: '原生微信白灰微绿', type: 'css' }];
     }
 
-    // 安全 HTML 转义
     function escapeHtml(str) {
         if (typeof window.escapeHtml === 'function') return window.escapeHtml(str);
         if (str === null || str === undefined) return '';
@@ -199,7 +198,7 @@
     }
     window.openNpcProfileCardModal = openNpcProfileCardModal;
 
-    // 🎨 装扮弹窗（包含：基础装扮 与 视频舞台立绘分区）
+    // 🎨 装扮弹窗（基础装扮 + 视频舞台立绘分区）
     function openNpcDecorModal(npcId) {
         if (!window.G || !window.G.npcs) return;
         const npc = window.G.npcs[npcId];
@@ -208,7 +207,6 @@
         if (!npc.chatSettings) npc.chatSettings = {};
         if (!npc.chatSettings.decor) npc.chatSettings.decor = {};
 
-        // 顶层主 Tab：'decor'（头像与气泡）| 'videoStage'（视频立绘与舞台）
         let activeMainTab = 'videoStage';
         let activeDecorTarget = 'npc';
 
@@ -226,7 +224,6 @@
         const userAvatar = (typeof window.getPlayerAvatarSafe === 'function') ? window.getPlayerAvatarSafe() : 'assets/icons/chat.png';
         const npcAvatar = npc.avatarUrl || npc.avatar || 'assets/icons/chat.png';
 
-        // 视频舞台配置数据
         const videoStageData = ensureNpcVideoStageProfiles(npc);
 
         let mask = document.createElement('div');
@@ -243,23 +240,19 @@
             const curFrameUrl = (curFrameObj && curFrameObj.url) ? curFrameObj.url : '';
             const curFrameScale = (curFrameObj && curFrameObj.scale) ? curFrameObj.scale : 1.18;
 
-            // 获取当前选中的视频配组
             let activeProf = videoStageData.profiles.find(p => p.id === videoStageData.activeProfileId);
             if (!activeProf) {
                 activeProf = videoStageData.profiles[0];
                 videoStageData.activeProfileId = activeProf.id;
             }
 
-            // 预设表情与自定义表情列表
+            // 🌟 严格限制为李敏指定的 5 大核心表情槽
             const defaultExprs = [
                 { id: 'default', label: '默认' },
-                { id: 'smile', label: '微笑' },
-                { id: 'shy', label: '害羞' },
+                { id: 'smile', label: '开心' },
+                { id: 'sad', label: '伤心' },
                 { id: 'angry', label: '生气' },
-                { id: 'sad', label: '难过' },
-                { id: 'think', label: '思考' },
-                { id: 'tsundere', label: '傲娇' },
-                { id: 'surprised', label: '惊讶' }
+                { id: 'shy', label: '害羞' }
             ];
             const allExprs = [...defaultExprs];
             if (Array.isArray(activeProf.customExpressions)) {
@@ -323,6 +316,17 @@
                                     </div>
                                 </div>
 
+                                <!-- 🌟 独立舞台调位快捷通道（无需通话即可调位） -->
+                                <div style="background:#eefbf3;border-radius:8px;padding:10px 12px;border:1px solid #bcecd0;display:flex;justify-content:space-between;align-items:center;">
+                                    <div>
+                                        <div style="font-size:12px;font-weight:600;color:#07c160;">舞台位置与缩放微调</div>
+                                        <div style="font-size:10.5px;color:#558f6b;margin-top:2px;">无需连线，全屏手势预览调位</div>
+                                    </div>
+                                    <button type="button" id="btnOpenStagePreviewAdjust" style="border:none;background:#07c160;color:#ffffff;padding:5px 12px;border-radius:6px;font-size:11.5px;font-weight:600;cursor:pointer;box-shadow:0 2px 6px rgba(7,193,96,0.3);">
+                                        开始调位 ➔
+                                    </button>
+                                </div>
+
                                 <!-- 舞台背景图管理 -->
                                 <div style="background:#f8f9fa;border-radius:8px;padding:10px;border:0.5px solid #eee;">
                                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
@@ -343,13 +347,13 @@
                                             `}
                                         </div>
                                         <div style="flex:1;font-size:11.5px;color:#666;line-height:1.5;">
-                                            <div>${activeProf.backgroundUrl ? '<span style="color:#07c160;font-weight:600;">● 已设置自定义背景</span>' : '当前使用默认黑灰舞台背景'}</div>
-                                            <div style="color:#999;font-size:10.5px;margin-top:2px;">点击方框可从本地相册选取，再次点击可弹窗更换或删除。</div>
+                                            <div>${activeProf.backgroundUrl ? '<span style="color:#07c160;font-weight:600;">● 已设置自定义背景</span>' : '当前使用默认黑灰背景'}</div>
+                                            <div style="color:#999;font-size:10.5px;margin-top:2px;">点击方框可从本地选取，再次点击可弹窗更换或删除。</div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <!-- 角色多表情差分立绘管理 -->
+                                <!-- 角色多表情差分立绘管理（5大核心表情） -->
                                 <div style="background:#f8f9fa;border-radius:8px;padding:10px;border:0.5px solid #eee;">
                                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;">
                                         <div style="font-size:12px;font-weight:600;color:#333;">表情差分立绘（透明PNG/GIF/视频）：</div>
@@ -357,13 +361,13 @@
                                     </div>
                                     <div style="font-size:10.5px;color:#888;margin-bottom:8px;">同一方案下所有表情统一手势位置，通话中根据对话情绪自动切换：</div>
                                     
-                                    <div style="display:grid;grid-template-columns:repeat(4, 1fr);gap:8px;">
+                                    <div style="display:grid;grid-template-columns:repeat(5, 1fr);gap:6px;">
                                         ${allExprs.map(e => {
                                             const spriteUrl = activeProf.sprites && activeProf.sprites[e.id];
                                             const isVideo = spriteUrl && (spriteUrl.startsWith('data:video') || spriteUrl.endsWith('.mp4') || spriteUrl.endsWith('.webm'));
                                             return `
-                                                <div class="sprite-slot-card" data-eid="${e.id}" data-label="${escapeHtml(e.label)}" style="display:flex;flex-direction:column;align-items:center;background:#fff;border:1px solid ${spriteUrl ? '#07c160' : '#e0e0e0'};border-radius:8px;padding:6px 4px;cursor:pointer;position:relative;">
-                                                    <div style="width:48px;height:56px;background:#f3f4f6;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;position:relative;">
+                                                <div class="sprite-slot-card" data-eid="${e.id}" data-label="${escapeHtml(e.label)}" style="display:flex;flex-direction:column;align-items:center;background:#fff;border:1px solid ${spriteUrl ? '#07c160' : '#e0e0e0'};border-radius:8px;padding:6px 2px;cursor:pointer;position:relative;">
+                                                    <div style="width:44px;height:52px;background:#f3f4f6;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;position:relative;">
                                                         ${spriteUrl ? `
                                                             ${isVideo ? `
                                                                 <video src="${spriteUrl}" muted loop autoplay playsinline style="width:100%;height:100%;object-fit:contain;pointer-events:none;"></video>
@@ -371,10 +375,10 @@
                                                                 <img src="${spriteUrl}" style="width:100%;height:100%;object-fit:contain;pointer-events:none;" onerror="this.src='assets/icons/chat.png';">
                                                             `}
                                                         ` : `
-                                                            <span style="font-size:16px;color:#bbb;">+</span>
+                                                            <span style="font-size:15px;color:#bbb;">+</span>
                                                         `}
                                                     </div>
-                                                    <span style="font-size:10.5px;color:#333;margin-top:4px;font-weight:500;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;">${escapeHtml(e.label)}</span>
+                                                    <span style="font-size:10px;color:#333;margin-top:4px;font-weight:500;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;width:100%;">${escapeHtml(e.label)}</span>
                                                 </div>
                                             `;
                                         }).join('')}
@@ -464,13 +468,12 @@
                     </div>
 
                     <div style="display:flex;gap:8px;margin-top:12px;">
-                        <button type="button" id="btnSaveDecorChoice" style="flex:1;padding:8px;background:#07c160;border:none;border-radius:6px;color:#fff;font-size:12.5px;font-weight:600;cursor:pointer;">保存装扮配置</button>
+                        <button type="button" id="btnSaveDecorChoice" style="flex:1;padding:8px;background:#07c160;border:none;border-radius:6px;color:#fff;font-size:12.5px;font-weight:600;cursor:pointer;">保存配置</button>
                         <button type="button" id="btnCancelDecorChoice" style="flex:1;padding:8px;background:#f2f2f2;border:none;border-radius:6px;color:#555;font-size:12.5px;cursor:pointer;">返回名片</button>
                     </div>
                 </div>
             `;
 
-            // 选项卡切换事件
             mask.querySelector('#tabMainVideoStage')?.addEventListener('click', () => {
                 activeMainTab = 'videoStage';
                 renderDecorModalInner();
@@ -480,7 +483,6 @@
                 renderDecorModalInner();
             });
 
-            // 基础装扮事件
             if (activeMainTab === 'decor') {
                 mask.querySelector('#tabTargetNpc')?.addEventListener('click', () => { activeDecorTarget = 'npc'; renderDecorModalInner(); });
                 mask.querySelector('#tabTargetUser')?.addEventListener('click', () => { activeDecorTarget = 'user'; renderDecorModalInner(); });
@@ -497,11 +499,8 @@
                 mask.querySelectorAll('.opt-frame-card').forEach(card => {
                     card.onclick = () => {
                         const val = card.getAttribute('data-val');
-                        if (isUser) {
-                            userFrameId = (userFrameId === val) ? 'frame_none' : val;
-                        } else {
-                            npcFrameId = (npcFrameId === val) ? 'frame_none' : val;
-                        }
+                        if (isUser) userFrameId = (userFrameId === val) ? 'frame_none' : val;
+                        else npcFrameId = (npcFrameId === val) ? 'frame_none' : val;
                         renderDecorModalInner();
                     };
                 });
@@ -515,8 +514,11 @@
                     };
                 });
             } else {
-                // 🌟 视频舞台配组事件绑定
-                // 切换方案
+                // 🌟 独立舞台调位快捷通道
+                mask.querySelector('#btnOpenStagePreviewAdjust')?.addEventListener('click', () => {
+                    openStandAloneStageAdjuster(npcId, activeProf);
+                });
+
                 mask.querySelectorAll('.btn-switch-stage-profile').forEach(btn => {
                     btn.onclick = () => {
                         videoStageData.activeProfileId = btn.getAttribute('data-pid');
@@ -524,7 +526,6 @@
                     };
                 });
 
-                // 新建配组
                 mask.querySelector('#btnAddNewStageProfile')?.addEventListener('click', () => {
                     const newId = 'prof_' + Date.now();
                     const newIndex = videoStageData.profiles.length + 1;
@@ -542,7 +543,6 @@
                     renderDecorModalInner();
                 });
 
-                // 重命名方案
                 mask.querySelector('#btnRenameProfile')?.addEventListener('click', () => {
                     const newName = mask.querySelector('#inputStageProfileName')?.value.trim();
                     if (newName && activeProf) {
@@ -552,7 +552,6 @@
                     }
                 });
 
-                // 删除当前方案
                 mask.querySelector('#btnDeleteCurrentProfile')?.addEventListener('click', () => {
                     if (videoStageData.profiles.length <= 1) return;
                     if (confirm(`确定要删除方案「${activeProf.name}」吗？`)) {
@@ -562,12 +561,10 @@
                     }
                 });
 
-                // 导出当前独立方案 JSON
                 mask.querySelector('#btnExportCurrentProfile')?.addEventListener('click', () => {
                     exportSingleStageProfile(activeProf, npc.name || 'NPC');
                 });
 
-                // 导入单个方案 JSON
                 mask.querySelector('#btnImportProfileDirect')?.addEventListener('click', () => {
                     importSingleStageProfile((imported) => {
                         const newId = 'prof_' + Date.now();
@@ -579,10 +576,8 @@
                     });
                 });
 
-                // 背景图点击（导入或弹窗更换）
                 mask.querySelector('#btnStageBgPreviewBox')?.addEventListener('click', () => {
                     if (activeProf.backgroundUrl) {
-                        // 弹窗询问更换
                         showMediaReplaceDialog('背景', (action) => {
                             if (action === 'replace') {
                                 pickLocalMediaFile((mediaData, mediaType) => {
@@ -597,7 +592,6 @@
                             }
                         });
                     } else {
-                        // 直接挑选
                         pickLocalMediaFile((mediaData, mediaType) => {
                             activeProf.backgroundUrl = mediaData;
                             activeProf.bgType = mediaType;
@@ -606,7 +600,6 @@
                     }
                 });
 
-                // 背景直链输入
                 mask.querySelector('#btnUploadStageBgUrl')?.addEventListener('click', () => {
                     promptMediaUrl('背景直链', activeProf.backgroundUrl || '', (url) => {
                         activeProf.backgroundUrl = url;
@@ -615,7 +608,6 @@
                     });
                 });
 
-                // 点击立绘表情卡槽
                 mask.querySelectorAll('.sprite-slot-card').forEach(card => {
                     card.onclick = () => {
                         const exprId = card.getAttribute('data-eid');
@@ -641,7 +633,6 @@
                                 }
                             }, true);
                         } else {
-                            // 未导入过，弹出选择本地文件或直链
                             showMediaPickDialog(`导入「${exprLabel}」立绘`, (mediaData) => {
                                 activeProf.sprites[exprId] = mediaData;
                                 renderDecorModalInner();
@@ -650,7 +641,6 @@
                     };
                 });
 
-                // 添加自定义表情
                 mask.querySelector('#btnAddCustomExpression')?.addEventListener('click', () => {
                     if (typeof window.openWechatCleanModal === 'function') {
                         window.openWechatCleanModal('添加自定义表情槽', `
@@ -673,7 +663,6 @@
             mask.querySelector('#btnDecorModalX').onclick = () => { mask.remove(); openNpcProfileCardModal(npcId); };
             mask.querySelector('#btnCancelDecorChoice').onclick = () => { mask.remove(); openNpcProfileCardModal(npcId); };
 
-            // 保存装扮配置
             mask.querySelector('#btnSaveDecorChoice').onclick = () => {
                 localStorage.setItem('mcyt_active_avatar_shape', userShape);
                 localStorage.setItem('mcyt_active_decor_frame', userFrameId);
@@ -713,7 +702,140 @@
     }
     window.openNpcDecorModal = openNpcDecorModal;
 
-    // 辅助：从本地选取图片/动图/视频（解除任何格式死锁，GIF 与 MP4 全面支持）
+    // 🌟 免通话独立全屏 1:1 手势舞台调位器
+    function openStandAloneStageAdjuster(npcId, prof) {
+        if (!prof) return;
+        if (!prof.position) prof.position = { x: 0, y: 0, scale: 1.0 };
+
+        const testSprite = prof.sprites?.default || Object.values(prof.sprites || {})[0] || '';
+        const bgUrl = prof.backgroundUrl || '';
+        const isBgVideo = prof.bgType === 'video';
+
+        const adjusterMask = document.createElement('div');
+        adjusterMask.style.cssText = `
+            position: fixed; inset: 0; z-index: 100020;
+            background: #0d0f12; display: flex; flex-direction: column;
+            overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            user-select: none; -webkit-user-select: none;
+        `;
+
+        adjusterMask.innerHTML = `
+            <!-- 顶栏状态 -->
+            <div style="position: absolute; top: 16px; left: 16px; right: 16px; z-index: 25; display: flex; justify-content: space-between; align-items: center;">
+                <div style="padding: 5px 12px; border-radius: 20px; background: rgba(0,0,0,0.5); backdrop-filter: blur(10px); color: #fff; font-size: 12px; border: 0.5px solid rgba(255,255,255,0.15);">
+                    <span style="color: #07c160; font-weight: bold;">●</span> 舞台调位预览（方案: ${escapeHtml(prof.name)}）
+                </div>
+                <button type="button" id="btnFinishStandAloneAdjust" style="border: none; background: #07c160; color: #fff; padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(7,193,96,0.35);">
+                    完成并保存
+                </button>
+            </div>
+
+            <!-- 背景预览 -->
+            <div style="position: absolute; inset: 0; z-index: 1; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+                ${bgUrl ? `
+                    ${isBgVideo ? `
+                        <video src="${bgUrl}" muted loop autoplay playsinline style="width: 100%; height: 100%; object-fit: cover; pointer-events: none;"></video>
+                    ` : `
+                        <img src="${bgUrl}" style="width: 100%; height: 100%; object-fit: cover; pointer-events: none;">
+                    `}
+                ` : `
+                    <div style="width: 100%; height: 100%; background: radial-gradient(circle at center, #1e2638 0%, #0a0d14 100%);"></div>
+                `}
+            </div>
+
+            <!-- 立绘手势框 -->
+            <div style="flex: 1; position: relative; z-index: 5; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                <div id="standAloneTransformBox" style="position: absolute; width: 280px; height: 380px; border: 1.5px dashed #07c160; background: rgba(7,193,96,0.08); display: flex; align-items: center; justify-content: center; transform-origin: center center; cursor: move; touch-action: none;">
+                    <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; pointer-events: none;">
+                        ${testSprite ? `
+                            <img src="${testSprite}" style="width: 100%; height: 100%; object-fit: contain;">
+                        ` : `
+                            <span style="font-size: 13px; color: #07c160; background: rgba(0,0,0,0.6); padding: 4px 8px; border-radius: 4px;">暂无立绘，拖动预览框调位</span>
+                        `}
+                    </div>
+                    <div id="standAloneResizeHandle" style="position: absolute; right: -9px; bottom: -9px; width: 24px; height: 24px; border-radius: 50%; background: #07c160; border: 2px solid #ffffff; box-shadow: 0 2px 8px rgba(0,0,0,0.5); cursor: nwse-resize; touch-action: none;"></div>
+                </div>
+            </div>
+
+            <!-- 底部操作提示 -->
+            <div style="position: absolute; bottom: 24px; left: 0; right: 0; z-index: 25; display: flex; justify-content: center; pointer-events: none;">
+                <div style="padding: 6px 14px; border-radius: 16px; background: rgba(0,0,0,0.65); backdrop-filter: blur(10px); color: rgba(255,255,255,0.85); font-size: 11px;">
+                    单指按住方框拖动位移 · 按住右下角绿点放大缩小
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(adjusterMask);
+
+        const box = adjusterMask.querySelector('#standAloneTransformBox');
+        const handle = adjusterMask.querySelector('#standAloneResizeHandle');
+
+        const applyTransform = () => {
+            box.style.transform = `translate(${prof.position.x}px, ${prof.position.y}px) scale(${prof.position.scale})`;
+        };
+        applyTransform();
+
+        // 绑定手势平移
+        let startX = 0, startY = 0;
+        let initPosX = prof.position.x;
+        let initPosY = prof.position.y;
+        let isDragging = false;
+
+        box.addEventListener('touchstart', (e) => {
+            if (e.target === handle) return;
+            const touch = e.touches[0];
+            startX = touch.clientX;
+            startY = touch.clientY;
+            initPosX = prof.position.x;
+            initPosY = prof.position.y;
+            isDragging = true;
+            e.stopPropagation();
+        }, { passive: false });
+
+        window.addEventListener('touchmove', (e) => {
+            if (!isDragging) return;
+            const touch = e.touches[0];
+            prof.position.x = initPosX + (touch.clientX - startX);
+            prof.position.y = initPosY + (touch.clientY - startY);
+            applyTransform();
+            e.preventDefault();
+        }, { passive: false });
+
+        window.addEventListener('touchend', () => { isDragging = false; });
+
+        // 绑定右下角缩放手柄
+        let resizeStartX = 0;
+        let initScale = prof.position.scale;
+        let isResizing = false;
+
+        handle.addEventListener('touchstart', (e) => {
+            const touch = e.touches[0];
+            resizeStartX = touch.clientX;
+            initScale = prof.position.scale;
+            isResizing = true;
+            e.stopPropagation();
+        }, { passive: false });
+
+        window.addEventListener('touchmove', (e) => {
+            if (!isResizing) return;
+            const touch = e.touches[0];
+            const dx = touch.clientX - resizeStartX;
+            prof.position.scale = parseFloat(Math.min(2.5, Math.max(0.4, initScale + (dx / 180))).toFixed(2));
+            applyTransform();
+            e.preventDefault();
+        }, { passive: false });
+
+        window.addEventListener('touchend', () => { isResizing = false; });
+
+        // 完成保存
+        adjusterMask.querySelector('#btnFinishStandAloneAdjust').onclick = () => {
+            if (typeof window.syncCustomNpcsToLocalBackup === 'function') window.syncCustomNpcsToLocalBackup();
+            if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+            adjusterMask.remove();
+            if (typeof showToast === 'function') showToast('舞台位置已保存', 'success', 1000);
+        };
+    }
+
     function pickLocalMediaFile(onSuccess) {
         const input = document.createElement('input');
         input.type = 'file';
@@ -738,7 +860,6 @@
         input.click();
     }
 
-    // 辅助：弹窗输入直链
     function promptMediaUrl(title, defaultVal, onSuccess) {
         if (typeof window.openWechatCleanModal === 'function') {
             window.openWechatCleanModal(`导入${title}`, `
@@ -753,7 +874,6 @@
         }
     }
 
-    // 辅助：点击已有项弹窗询问更换
     function showMediaReplaceDialog(label, onAction, allowUrl = false) {
         let mask = document.createElement('div');
         mask.className = 'wechat-action-sheet-mask';
@@ -779,7 +899,6 @@
         mask.querySelector('#actSheetCancel').onclick = close;
     }
 
-    // 辅助：首次导入方式选择弹窗（本地/直链）
     function showMediaPickDialog(title, onSuccess) {
         let mask = document.createElement('div');
         mask.className = 'wechat-action-sheet-mask';
@@ -811,7 +930,6 @@
         mask.querySelector('#actPickCancel').onclick = close;
     }
 
-    // 🌟 单方案独立 JSON 导出
     function exportSingleStageProfile(profile, charName) {
         try {
             const dataStr = JSON.stringify(profile, null, 2);
@@ -829,7 +947,6 @@
         }
     }
 
-    // 🌟 单方案独立 JSON 导入
     function importSingleStageProfile(onSuccess) {
         const input = document.createElement('input');
         input.type = 'file';
@@ -860,7 +977,6 @@
         input.click();
     }
 
-    // ⚙️ 角色资料设置弹窗（含专属 TTS 开关与一键选择音色菜单）
     function openNpcSettingsModal(npcId) {
         if (!window.G || !window.G.npcs) return;
         const npc = window.G.npcs[npcId];
@@ -890,7 +1006,6 @@
         const disableBilingual = !!npc.chatSettings.disableBilingual;
         const curFavor = parseFloat(npc.favor !== undefined ? npc.favor : 50);
 
-        // 读取角色独立 TTS 配置（默认关闭）
         const curTtsEnabled = !!(npc.chatSettings.tts && npc.chatSettings.tts.enabled);
         const curTtsVoice = (npc.chatSettings.tts && npc.chatSettings.tts.voice) || '';
         const curTtsSpeed = (npc.chatSettings.tts && npc.chatSettings.tts.speed) || 1.0;
@@ -944,7 +1059,6 @@
                             <input type="hidden" id="wcleanSetVoiceFreqVal" value="${voiceFreq}">
                         </div>
 
-                        <!-- 角色专属 TTS 语音音色设置 -->
                         <div style="border-top:0.5px solid #eee;padding-top:8px;">
                             <label style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;font-size:12px;color:#181818;margin-bottom:6px;">
                                 <div style="display:flex;flex-direction:column;">
@@ -1163,7 +1277,6 @@
     }
     window.openNpcSettingsModal = openNpcSettingsModal;
 
-    // 🌟 导出人设卡（自动包含视频舞台配组与立绘差分）
     function promptExportFilename(npc) {
         const defaultName = (npc.remark && npc.remark.trim()) ? npc.remark.trim() : (npc.name || 'NPC');
         if (typeof openWechatCleanModal === 'function') {
@@ -1176,7 +1289,6 @@
                 const fname = document.getElementById('wcleanExportCardFilename')?.value.trim() || `${defaultName}_人设卡`;
                 if (typeof window.exportTavernCharacterPng === 'function') {
                     if (typeof showToast === 'function') showToast('正在生成角色卡（含舞台立绘）...', 'info', 1000);
-                    // 确保打包前完整性
                     ensureNpcVideoStageProfiles(npc);
                     await window.exportTavernCharacterPng(npc, fname);
                 } else {
@@ -1213,7 +1325,6 @@
                     const reader = new FileReader();
                     reader.onload = async (evt) => {
                         const rawData = evt.target.result;
-                        // 若是 GIF 则保持动图原画不压缩
                         const isGif = file.type === 'image/gif' || rawData.startsWith('data:image/gif');
                         const finalData = isGif ? rawData : (
                             (typeof window.compressAvatarDataUrl === 'function')
@@ -1328,7 +1439,6 @@
     }
     window.addContactFromCard = addContactFromCard;
 
-    // 🌟 导入角色卡（自动还原内置的视频舞台方案与立绘差分）
     function openImportCharacterCardModal(onSuccess = null) {
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
@@ -1352,7 +1462,6 @@
                     throw new Error('角色卡未能成功识别');
                 }
 
-                // 还原可能存在的视频舞台数据
                 const importedVideoStage = (profile.chatSettings && profile.chatSettings.videoStage) || profile.videoStage || null;
 
                 if (typeof onSuccess === 'function') {
