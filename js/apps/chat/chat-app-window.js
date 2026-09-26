@@ -4,15 +4,8 @@
  *    微信内嵌全屏浏览器浮层（window.openWebPageLink）、
  *    重新生成回复的确认与执行（confirmRetryLastAIReply / doRetryLastAIReply）、
  *    微信原生直显大图与沉浸式大图文字查看器对接、拟真生活排版卡片（ui_card）渲染、
- *    🌟 通话记录专属高质感卡片（call_record 彻底杜绝系统文字选中，长按秒级弹出引用与物理删除菜单）。
- * 🌟 核心特性：
- *  1. 真实用户录音管线：消灭并发开麦冲突，MediaRecorder 与 HUD 分析器共用单一麦克风流，彻底保证 Base64 音频 100% 写入；
- *  2. 私有云端 ASR 与系统听写双轨融合：松手后全透视展示转写过程，底层异常不掩盖，UI 体验原生平滑；
- *  3. 双轨文本保底：如果云端口令未激活或网络异常，自动无缝提取实时语音听写文字，彻底消灭“（发送了一条语音）”；
- *  4. 交互解耦：点击声波播放/暂停音频；点击末尾空白处/微标专门展开/收起转文字与背景音，绝对不误触发播放；
- *  5. 全语种支持：支持德语、英语、日语等外语原声（originalText）、中文翻译（text）与生活背景音（audioBg）清晰排版；
- *  6. 发送语音后不自动触发 AI 回复，严格遵循点击闪电才生成；
- *  7. 通话记录（call_record）专属原生微信卡片封装，禁止文本长按选中，支持长按菜单物理删除防记忆污染。
+ *    🌟 通话记录专属高质感卡片（call_record 彻底杜绝系统文字选中，长按秒级弹出引用与物理删除菜单）、
+ *    🌟 AO3 同人文分享专属卡片（ao3_share_card 原生白灰微绿经典卡片，点击一键唤起 AO3 打开全文）。
  */
 
 (function() {
@@ -137,7 +130,6 @@
         } catch (_) {}
     }
 
-    // 将 HUD 转为正在云端识别状态
     function setVoiceHudTranscribing(tip = '正在云端极速转文字...') {
         const hud = document.getElementById('wechatVoiceRecordingHUD');
         if (!hud) return;
@@ -170,7 +162,6 @@
         }
     }
 
-    // 辅助：统一获取全局/运行时头像框配置列表
     function getAvailableFramesList() {
         if (typeof window.getStoredDecorFrames === 'function') {
             const list = window.getStoredDecorFrames();
@@ -191,7 +182,6 @@
         return [...DEFAULT_FRAMES, ...framesList];
     }
 
-    // 辅助：获取气泡样式字符串
     function getDecorBubbleCss(bubbleId, isSelf) {
         let bubbles = [];
         try {
@@ -225,7 +215,6 @@
         }
     }
 
-    // 辅助：统一渲染气泡内容
     function renderSafeBubbleHtml(contentHtml, isSelf, bubbleId, customClass = '') {
         if (typeof window.buildDecorBubbleHtml === 'function') {
             return window.buildDecorBubbleHtml(contentHtml, isSelf, bubbleId, customClass);
@@ -238,7 +227,6 @@
         `;
     }
 
-    // 辅助：渲染带装扮与头像框的头像元素
     function renderDecorAvatarHtml(avatarUrl, shape, frameObjOrUrl, size = 38) {
         const rad = getShapeBorderRadius(shape);
         let frameUrl = '';
@@ -265,7 +253,6 @@
         `;
     }
 
-    // 全局统一语音播放中枢
     window.playVoiceMessageDirect = function(msgId) {
         const curNpcId = window.G && window.G.currentChatNpc;
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
@@ -308,7 +295,6 @@
             _currentPlayingMsgId = null;
         }
 
-        // 1. 优先播放真实录音文件
         if (msg.audioData) {
             try {
                 const aud = new Audio(msg.audioData);
@@ -321,20 +307,13 @@
                     _currentPlayingMsgId = null;
                 };
                 aud.onerror = (e) => {
-                    console.warn('[VoicePlayer] 播放失败:', e);
                     updateWaveIcon(false);
                     _currentPlayingAudio = null;
                     _currentPlayingMsgId = null;
-                    if (typeof showToast === 'function') showToast('音频播放异常', 'info', 1200);
                 };
-                aud.play().catch(e => {
-                    console.warn('[VoicePlayer] 播放受阻:', e);
-                    updateWaveIcon(false);
-                });
+                aud.play().catch(() => { updateWaveIcon(false); });
                 return;
-            } catch (err) {
-                console.warn('[VoicePlayer] 初始化 Audio 失败:', err);
-            }
+            } catch (_) {}
         }
 
         if (msg.from === 'player') {
@@ -342,11 +321,10 @@
             return;
         }
 
-        // 2. 如果是 NPC 发出的语音，且角色开启了 TTS
         const npc = window.G.npcs ? window.G.npcs[curNpcId] : null;
         const npcVoiceCfg = (npc && npc.chatSettings && npc.chatSettings.tts) || {};
-        
         const isTtsEnabled = !!(npcVoiceCfg.enabled || (window.ttsEngine && window.ttsEngine.getConfig && window.ttsEngine.getConfig().enabled));
+
         if (msg.from !== 'player' && isTtsEnabled && window.ttsEngine) {
             updateWaveIcon(true);
             const speechText = msg.originalText || msg.text || '';
@@ -360,45 +338,36 @@
         }
     };
 
-    // 全局挂载：纯粹展开/折叠语音详情文本（绝对不触发任何播放）
     window.toggleVoiceMessageDetailsDirect = function(msgId) {
         const box = document.getElementById('voiceDescBox_' + msgId);
         const tag = document.getElementById('voiceToggleTag_' + msgId);
         if (box) {
             const isHidden = (box.style.display === 'none' || getComputedStyle(box).display === 'none');
             box.style.display = isHidden ? 'block' : 'none';
-            if (tag) {
-                tag.style.opacity = isHidden ? '1' : '0.65';
-            }
+            if (tag) tag.style.opacity = isHidden ? '1' : '0.65';
         }
     };
 
-    // 全局挂载直接展开/收起翻译函数
     window.toggleMessageTranslationDirect = function(btn, msgId) {
         const box = document.getElementById('transBox_' + msgId);
         if (box) {
             const isHidden = (box.style.display === 'none' || getComputedStyle(box).display === 'none');
             box.style.display = isHidden ? 'block' : 'none';
-            if (btn) {
-                btn.textContent = isHidden ? '收起翻译' : '翻译';
-            }
+            if (btn) btn.textContent = isHidden ? '收起翻译' : '翻译';
         }
     };
 
-    // 控制左下角语音纯图标弹出菜单
     window.toggleVoiceActionMenu = function(type, npcId) {
         window._voiceActionMenuOpen = !window._voiceActionMenuOpen;
         window.renderSingleChatWindow(null, { keepScroll: true });
     };
 
-    // 切换至打字/语音模式
     window.switchChatVoiceMode = async function(mode, npcId) {
         window._voiceActionMenuOpen = false;
         window._chatInputMode = (mode === 'voice') ? 'voice' : 'text';
         window.renderSingleChatWindow(null, { keepScroll: true });
     };
 
-    // 真实录音与 ASR 云端极速语音识别核心
     window.startRealVoiceRecord = async function(npcId) {
         if (_isRecordingVoice) return;
 
@@ -408,7 +377,6 @@
         _recognizedVoiceText = '';
         _audioRecordedChunks = [];
 
-        // 立即展示录音 HUD
         showVoiceRecordingHUD(null);
 
         const recordBtn = document.getElementById('btnVoiceRecordPress');
@@ -449,16 +417,14 @@
                 _mediaRecorderInstance = mr;
             }
         } catch (recErr) {
-            console.error('[VoiceRecord] 硬件媒体录音启动失败:', recErr);
             _isRecordingVoice = false;
             hideVoiceRecordingHUD();
             if (typeof showToast === 'function') {
-                showToast('请在手机或应用设置中允许麦克风权限', 'info', 2000);
+                showToast('请允许麦克风权限', 'info', 2000);
             }
             return;
         }
 
-        // 🌟 辅助双轨：系统级 Web Speech 兜底侦听（实时把说话变成文字）
         const SpeechRec = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (SpeechRec) {
             try {
@@ -471,12 +437,8 @@
                     for (let i = 0; i < event.results.length; ++i) {
                         full += event.results[i][0].transcript;
                     }
-                    if (full.trim()) {
-                        _recognizedVoiceText = full.trim();
-                        console.log('[VoiceRecord] 系统原生听写收到:', _recognizedVoiceText);
-                    }
+                    if (full.trim()) _recognizedVoiceText = full.trim();
                 };
-                rec.onerror = (e) => { console.warn('[VoiceRecord] 原生听写通知:', e); };
                 rec.start();
                 _speechRecognitionInstance = rec;
             } catch (_) {}
@@ -525,22 +487,15 @@
                     setTimeout(() => resolve(''), 1500);
                 });
 
-                if (mr.state !== 'inactive') {
-                    mr.stop();
-                }
-
+                if (mr.state !== 'inactive') mr.stop();
                 audioBase64Data = await recordWaitPromise;
-            } catch (err) {
-                console.error('[VoiceRecord] 音频收集失败:', err);
-            }
+            } catch (_) {}
             _mediaRecorderInstance = null;
             _audioRecordedChunks = [];
         }
 
         if (_activeRecordStream) {
-            try {
-                _activeRecordStream.getTracks().forEach(t => t.stop());
-            } catch (_) {}
+            try { _activeRecordStream.getTracks().forEach(t => t.stop()); } catch (_) {}
             _activeRecordStream = null;
         }
 
@@ -551,37 +506,20 @@
         }
 
         setVoiceHudTranscribing('正在云端极速转文字...');
-
-        // 🌟 1. 优先暂存系统实时听写的文本
         let finalText = _recognizedVoiceText ? _recognizedVoiceText.trim() : '';
 
-        // 🌟 2. 执行私有云端 faster-whisper ASR 推理
         if (window.mcytAsr && recordedAudioBlob) {
             try {
                 const asrConfig = await window.mcytAsr.loadConfig();
-                if (!asrConfig.accessCode || !asrConfig.accessCode.trim()) {
-                    console.warn('[VoiceRecord] 尚未在设置中激活 ASR 口令');
-                    if (!finalText && typeof showToast === 'function') {
-                        showToast('尚未配置 ASR 激活口令，已保留录音原声', 'info', 2000);
-                    }
-                } else {
+                if (asrConfig.accessCode && asrConfig.accessCode.trim()) {
                     const asrResult = await window.mcytAsr.transcribe(recordedAudioBlob);
-                    console.log('[VoiceRecord] 云端 ASR 转写结果:', asrResult);
-                    if (asrResult && asrResult.trim()) {
-                        finalText = asrResult.trim();
-                    }
+                    if (asrResult && asrResult.trim()) finalText = asrResult.trim();
                 }
-            } catch (asrErr) {
-                console.error('[VoiceRecord] 云端 ASR 转录异常:', asrErr);
-                if (typeof showToast === 'function') {
-                    showToast('云端识别: ' + (asrErr.message || '网络异常'), 'info', 2500);
-                }
-            }
+            } catch (_) {}
         }
 
         hideVoiceRecordingHUD();
 
-        // 🌟 3. 最终落盘文本：若有识别字词则填入字词；若彻底没有收到任何有效字词，保留提示
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
         const newMsg = {
             _id: 'msg_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
@@ -607,7 +545,6 @@
         window.renderSingleChatWindow();
     };
 
-    // 微信原生质感内嵌网页安全浏览器浮层
     window.openWebPageLink = function(url, pageTitle = '网页浏览') {
         if (!url || url === '#' || !url.startsWith('http')) {
             if (typeof showToast === 'function') showToast('无法打开非 HTTP 网页链接', 'info', 1500);
@@ -654,11 +591,6 @@
 
             <div style="flex: 1; position: relative; width: 100%; height: 100%; overflow: hidden; background: #f2f2f2;">
                 <iframe id="wechatBrowserIframe" src="${escapeHtml(url)}" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" style="width: 100%; height: 100%; border: none; background: #ffffff;"></iframe>
-                
-                <div id="browserCspTip" style="position: absolute; bottom: 12px; left: 50%; transform: translateX(-50%); background: rgba(0,0,0,0.72); backdrop-filter: blur(4px); color: #fff; padding: 6px 14px; border-radius: 18px; font-size: 11px; display: flex; align-items: center; gap: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); pointer-events: auto; white-space: nowrap;">
-                    <span>部分页面若受限无法完全展示</span>
-                    <span id="fallbackOpenLinkBtn" style="color: #6ee7b7; font-weight: 600; cursor: pointer; text-decoration: underline;">唤起系统应用打开 ›</span>
-                </div>
             </div>
         `;
 
@@ -697,7 +629,7 @@
             }
         });
 
-        const triggerExternal = () => {
+        browserModal.querySelector('#openExternalBrowserBtn')?.addEventListener('click', () => {
             try {
                 const a = document.createElement('a');
                 a.href = url;
@@ -709,10 +641,7 @@
             } catch (_) {
                 window.location.href = url;
             }
-        };
-
-        browserModal.querySelector('#openExternalBrowserBtn')?.addEventListener('click', triggerExternal);
-        browserModal.querySelector('#fallbackOpenLinkBtn')?.addEventListener('click', triggerExternal);
+        });
     };
 
     // ============================================================
@@ -819,7 +748,7 @@
 
         let messagesHtml = collapseBannerHtml;
         for (const msg of visibleMessages) {
-            const isSelf = (msg.from === 'player');
+            const isSelf = (msg.from === 'player' || msg.role === 'player');
             const currentBubbleId = isSelf ? userBubbleId : npcBubbleId;
 
             const currentAvatarHtml = isSelf
@@ -834,7 +763,7 @@
                 </div>`;
             }
 
-            // 🌟 核心升级：优先识别通话记录卡片（call_record），独立封装行，彻底杜绝系统文字长按复制，直接触发气泡操作菜单
+            // 🌟 1. 通话记录卡片
             if (msg.type === 'call_record') {
                 const isVideo = (msg.callMode === 'video');
                 messagesHtml += `
@@ -858,6 +787,40 @@
                             <span>${msg.time || ''}</span>
                         </div>
                     </div>
+                </div>`;
+            } 
+            // 🌟 2. 核心新增：AO3 同人文分享专属卡片（纯净微信原生白灰微绿与经典暗红）
+            else if (msg.type === 'ao3_share_card') {
+                const wId = msg.workId || '';
+                const wTitle = msg.workTitle || '同人文作品';
+                const wAuthor = msg.workAuthor || '匿名作者';
+                const wPairing = msg.workPairing || '全员向';
+                const wSnippet = msg.workSnippet || msg.text || '';
+
+                messagesHtml += `
+                <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:${isSelf ? 'flex-end' : 'flex-start'};margin-bottom:12px;align-items:flex-start;">
+                    ${!isSelf ? `<div style="margin-right:8px;flex-shrink:0;">${currentAvatarHtml}</div>` : ''}
+                    <div style="max-width:76%;display:flex;flex-direction:column;align-items:${isSelf ? 'flex-end' : 'flex-start'};">
+                        ${quoteHtml}
+                        <div class="wechat-ao3-card" onclick="window.openAo3WorkFromChat('${escapeHtml(wId)}')" style="background:#ffffff;border:0.5px solid #e0d8cc;border-left:4px solid #990000;border-radius:8px;padding:11px 13px;box-shadow:0 1.5px 5px rgba(0,0,0,0.05);cursor:pointer;width:245px;box-sizing:border-box;-webkit-tap-highlight-color:transparent;">
+                            <div style="display:flex;align-items:center;justify-content:space-between;border-bottom:0.5px solid #f2ede4;padding-bottom:5px;margin-bottom:7px;">
+                                <span style="font-size:9.5px;font-weight:700;color:#990000;letter-spacing:0.6px;font-family:Georgia,serif;">ARCHIVE OF OUR OWN</span>
+                                <span style="font-size:10.5px;color:#07c160;font-weight:600;">阅读全文 ›</span>
+                            </div>
+                            <div style="font-size:14px;font-weight:700;color:#181818;line-height:1.35;margin-bottom:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+                                ${escapeHtml(wTitle)}
+                            </div>
+                            <div style="font-size:11px;color:#666;margin-bottom:7px;">
+                                by <span style="color:#222;font-weight:600;">${escapeHtml(wAuthor)}</span> · 配对: <b>${escapeHtml(wPairing)}</b>
+                            </div>
+                            ${wSnippet ? `
+                            <div style="font-size:11.5px;color:#555;line-height:1.45;background:#faf8f3;border-radius:4px;padding:6px 8px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;">
+                                ${escapeHtml(wSnippet)}
+                            </div>` : ''}
+                        </div>
+                        <div style="font-size:10px;color:#bbb;margin-top:3px;">${msg.time || ''}</div>
+                    </div>
+                    ${isSelf ? `<div style="margin-left:8px;flex-shrink:0;">${currentAvatarHtml}</div>` : ''}
                 </div>`;
             } else if (msg.from === 'action') {
                 messagesHtml += `
@@ -1163,12 +1126,6 @@
 
         const voiceMenuPopoverHtml = window._voiceActionMenuOpen ? `
             <div id="wechatVoiceActionPopover" style="position:absolute;bottom:42px;left:0;z-index:999;background:#ffffff;border-radius:8px;box-shadow:0 4px 18px rgba(0,0,0,0.12);border:0.5px solid #e0e0e0;padding:6px;display:flex;align-items:center;gap:6px;animation:wechatPopIn 0.15s cubic-bezier(0.1, 0.9, 0.2, 1);">
-                <style>
-                    @keyframes wechatPopIn {
-                        from { opacity:0; transform: translateY(8px) scale(0.95); }
-                        to { opacity:1; transform: translateY(0) scale(1); }
-                    }
-                </style>
                 <button type="button" onclick="window.switchChatVoiceMode('voice','${npcId}')" title="直接对讲发送语音条" style="border:none;background:${isVoiceMode ? '#e8f8ee' : '#f7f7f7'};color:${isVoiceMode ? '#07c160' : '#444'};width:38px;height:38px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;padding:0;">
                     <svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;">
                         <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
@@ -1299,7 +1256,6 @@
             setTimeout(() => { msgArea.scrollTop = msgArea.scrollHeight; }, 50);
         }
 
-        // 🌟 统一事件绑定：包括通话记录卡片在内的所有行，绑定长按时调用 preventDefault()，彻底消除原生放大镜与复制浮层
         container.querySelectorAll('.chat-msg-row[data-msgid]').forEach(row => {
             const mid = row.dataset.msgid;
             if (!mid) return;

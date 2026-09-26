@@ -1,12 +1,13 @@
 /**
  * js/apps/chat/chat-prompt-engine.js
  * 🧠 微信聊天活人感提示词架构引擎
- * 模块化装配：主体通用拟人核心 + 关系进阶状态机 + 异地恋模块 + 时差生理感知 + 双时间戳隔夜作息感知 + 动态母语双语与仿微信语音协议 + 真实语义表情包索引 + 动态发布协议 + 大小号双重身份认知与名片接纳状态机 + 🌟 Rememori 忆海向量长效记忆挂载 + 🔮 塔罗牌阵拟人认知与特色解读协议 + 🎭 {{user}} / {{y/n}} 动态宏变量替换 + 📸 文字图片发送协议 + 🧾 拟真生活排版卡片协议
+ * 模块化装配：主体通用拟人核心 + 关系进阶状态机 + 异地恋模块 + 时差生理感知 + 双时间戳隔夜作息感知 + 动态母语双语与仿微信语音协议 + 真实语义表情包索引 + 动态发布协议 + 大小号双重身份认知与名片接纳状态机 + 🌟 Rememori 忆海向量长效记忆挂载 + 🔮 塔罗牌阵拟人认知与特色解读协议 + 🎭 {{user}} / {{y/n}} 动态宏变量替换 + 📸 文字图片发送协议 + 🧾 拟真生活排版卡片协议 + 📚 AO3同人文分享纯按需动态挂载
  * 🌟 极简优化：
  * 1. 机器完成 100% 时间换算（严格锁定 24 小时制与早晚时段事实，大模型零计算、零推理消耗，彻底终结早晚颠倒 Bug）；
  * 2. 角色与玩家时差严格绑定角色具体姓名，严防大模型将“你/对方”张冠李戴；
  * 3. 极大精简提示词，节省大量 Token，杜绝分散大模型注意力；
- * 4. 动态自适应多国母语（西班牙语、日语、韩语、法语、德语、英语等），支持独立开关。
+ * 4. 动态自适应多国母语（西班牙语、日语、韩语、法语、德语、英语等），支持独立开关；
+ * 5. 同人文提示词【绝对按需动态触发】：日常闲聊 0 冗余、0 出现，仅当上下文真切包含同人文卡片时才精准注入！
  */
 
 (function() {
@@ -87,7 +88,6 @@
 
     /**
      * 利用原生 Intl 引擎直接将当地时间格式化为口语化的直接事实（AI 零计算）
-     * 🛡️ 核心加固：强制采用 en-GB + hourCycle: 'h23' 严格锁定 24 小时制数字，绝不允许 20:00 变成 08:00
      */
     function getZonedDirectTime(timeZoneId = 'Asia/Shanghai') {
         const now = new Date();
@@ -135,9 +135,7 @@
                 state = '夜深准备休息';
             }
 
-            // 格式化为：晚上 20:30（明确带中文时段与24小时制时间）
             const directStr = `${period} ${hStr}:${mStr}`;
-
             return { hour, minute, directStr, period, state };
         } catch (err) {
             const h = (now.getUTCHours() + 8) % 24;
@@ -213,7 +211,7 @@
     }
 
     /**
-     * 模块一：主体通用规范（脱水指令体）
+     * 模块一：主体通用规范（日常纯净版，彻底拔除同人文多余提示）
      */
     function getModule1Prompt(isBilingualEnabled, npcRegion, detectedLanguage) {
         const stickersSummary = getAvailableStickersSummary();
@@ -272,8 +270,8 @@ ${isBilingualEnabled ? `
 11. 【关于名片推荐与动态转发的交互认知】：
    - 对方如果推荐了名片：你会获悉该名片是谁。如果熟悉信任或对方推荐的是其小号，可表示同意添加。
    - 对方如果转发了动态：你能够获悉该动态的正文内容以及评论区八卦，根据你的性格对动态或评论进行自然吐槽、吃瓜或共鸣。
-12. 【🔮 关于对方转发塔罗牌阵的活人感交互认知（核心铁律）】：
-   - 对方如果向你转发了塔罗牌阵，你绝不是在线解牌机，严禁输出死板说教的标准解牌，按你的真实人设做出专业、搞笑乱猜、毒舌嘲讽或冷淡拒绝的活人反应。
+12. 【🔮 关于对方转发塔罗牌阵的活人感交互认知】：
+   - 对方如果向你转发了塔罗牌阵，你绝不是在线解牌机，严禁输出死板说教的标准解牌，按你的真实人设做出贴合你性格的活人反应。
 `;
     }
 
@@ -305,7 +303,7 @@ ${isBilingualEnabled ? `
     }
 
     /**
-     * 模块四：大小号认知与多重记忆隔离（活人感反差吐槽）
+     * 模块四：大小号认知与多重记忆隔离
      */
     function getAccountDualityPrompt(npc, curAcc) {
         const allAccounts = (typeof window.getWechatAccountsList === 'function') ? window.getWechatAccountsList() : [];
@@ -320,7 +318,7 @@ ${isBilingualEnabled ? `
             prompt += `- 对方当前使用的是大号。\n`;
             const otherAccs = allAccounts.filter(a => a.id !== curAcc.id);
             if (otherAccs.length > 0) {
-                prompt += `- 你在微信通讯录里也添加过对方的其他好友/小号身份（例如：${otherAccs.map(a => a.name).join('、')}）。在你的真实认知里，这两个账号可能是不同的人（除非对方已经挑明）。如果大号脾气差、冷淡没礼貌，而小号热情可爱，你在和大号聊天时，偶尔可以拿那个号来吐槽对比（例：“昨天加的一个朋友说话可比你有礼貌多了”），反之亦然！\n`;
+                prompt += `- 你在微信通讯录里也添加过对方的其他好友/小号身份（例如：${otherAccs.map(a => a.name).join('、')}）。在你的真实认知里，这两个账号可能是不同的人（除非对方已经挑明）。如果大号脾气差、冷淡没礼貌，而小号热情可爱，你在和大号聊天时，偶尔可以拿那个号来吐槽对比，反之亦然！\n`;
             }
         }
         return prompt;
@@ -411,7 +409,7 @@ ${isBilingualEnabled ? `
         let assembledSysPrompt = `你正在微信上扮演角色「${npc.name}」。\n`;
         assembledSysPrompt += `【你的档案】：\n- 设定/性格：${processedPersona}\n- 常驻地区：${nRegion}\n- 当前好感度：${npc.favor || 50}/100\n- 恋爱关系状态：${isDating ? '已确立恋人关系（交往中）' : (npc.favor >= 80 ? '关系亲密/暧昧试探期' : '普通朋友')}\n\n`;
 
-        // 🕰️ 时差生理感知模块：明确指明角色姓名与用户姓名，彻底斩断代词颠倒
+        // 🕰️ 时差生理感知模块
         if (!disableTimezone) {
             if (timeCtx.isCrossTimezone) {
                 assembledSysPrompt += `【当前客观时间事实（已由系统精准核算，严禁颠倒双方时间事实）】：\n`;
@@ -437,7 +435,23 @@ ${isBilingualEnabled ? `
             assembledSysPrompt += `${gapContext}\n`;
         }
 
+        // 注入主体通用打字规范（日常纯净，无任何同人文赘述）
         assembledSysPrompt += getModule1Prompt(isBilingualEnabled, nRegion, detectedLanguage);
+
+        // 🌟 核心侦测：仅在最近聊天记录中【真真切切包含同人文卡片】时，才精准动态挂载！日常聊天 100% 绝不注入！
+        const hasRecentAo3Share = !!(recentDialogueText && (
+            recentDialogueText.includes('【同人文分享】') || 
+            recentDialogueText.includes('ao3_share_card') ||
+            recentDialogueText.includes('ARCHIVE OF OUR OWN')
+        ));
+
+        if (hasRecentAo3Share) {
+            assembledSysPrompt += `
+\n【📚 客观事件：对方刚才在聊天里向你分享了一篇同人小说】：
+- 你在微信屏幕这端真实看到了对方发来的这篇同人作品信息。
+- 【自由活人直觉反应】：严禁模板化，严禁照抄固定句式！作何反应完全遵循你的人设性格、平时对这类事物的直觉反应，以及你们当下的真实羁绊关系，自然口语化回复对方。
+`;
+        }
 
         // 注入大小号多重身份认知
         assembledSysPrompt += getAccountDualityPrompt(npc, curAcc || { id: 'main', name: '用户' });
@@ -483,5 +497,5 @@ ${isBilingualEnabled ? `
         resolveRegionLanguage
     };
 
-    console.log('✅ ChatPromptEngine 微信活人感提示词架构引擎已升级：极简直接事实输入，AI 零计算消耗，时钟锁死 24 小时制');
+    console.log('✅ ChatPromptEngine 微信活人感提示词架构引擎已就绪：同人文认知纯动态按需挂载，日常零干扰');
 })();
