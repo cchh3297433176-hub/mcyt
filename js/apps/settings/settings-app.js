@@ -2,8 +2,8 @@
 // 系统设置中心 App（全站版本号唯一定义源 · 微信原生白灰微绿设计 · 云端免口令极速 ASR · 独立视觉识图 API 凭证与真图实测 · 小手机记忆卡原生直接下载 · 版本更新公告中枢）
 // ============================================================
 
-// 【全项目版本号唯一真源】：以后打包发新版本，直接在此修改此常量即可！
-const CURRENT_APP_VERSION = '1.62';
+// 【全项目版本号唯一真源】：设定为 1.620，彻底解决安卓将 1.611 误判为更高版本导致无法覆盖安装的问题
+const CURRENT_APP_VERSION = '1.620';
 window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
 
 // 🌟 全局最新公告与致谢名单（一字不漏原文字符）
@@ -209,7 +209,7 @@ window.APP_ANNOUNCEMENT_CONTENT = APP_ANNOUNCEMENT_CONTENT;
         }
     }
 
-    // 仿微信居中白灰确认/说明弹窗（支持格式化排版与换行）
+    // 仿微信居中白灰确认/说明弹窗
     function openWechatConfirmModal(title, msg, onConfirm) {
         const modal = document.getElementById('modal');
         const modalBody = document.getElementById('modalBody');
@@ -433,7 +433,7 @@ window.APP_ANNOUNCEMENT_CONTENT = APP_ANNOUNCEMENT_CONTENT;
 
         const view = new DataView(chunk.buffer);
         view.setUint32(0, dataLen);
-        chunk[4] = 0x74; chunk[5] = 0x45; chunk[6] = 0x58; chunk[7] = 0x74;
+        chunk[4] = 0x74; chunk[5] = 0x45; chunk[6] = 0x74; chunk[7] = 0x74;
 
         let offset = 8;
         chunk.set(keyBytes, offset);
@@ -1881,7 +1881,6 @@ window.APP_ANNOUNCEMENT_CONTENT = APP_ANNOUNCEMENT_CONTENT;
             importCardBtn.onclick = () => openMemoryCardImportModal();
         }
 
-        // 🌟 绑定打开更新与致谢公告按钮
         const openAnnounceBtn = document.getElementById('openAppAnnouncementModalBtn');
         if (openAnnounceBtn) {
             openAnnounceBtn.onclick = () => openAppAnnouncementModal();
