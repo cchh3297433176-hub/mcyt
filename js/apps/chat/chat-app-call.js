@@ -6,12 +6,13 @@
  *  1. 深度抗噪滤波：人声门限提升至 50，连续 5 帧确认，0.8 秒最短有效出声门禁，压死环境风扇与杂音；
  *  2. 接通首 1.5 秒噪声免疫锁：杜绝开麦瞬间环境音误掐断角色的主动问候；
  *  3. 异步 TTS 序列锁（ttsSequenceId）：彻底根除由于 TTS 合成慢导致新旧对白串音错乱的 Bug；
- *  4. 视频通话全链路修复：加入超时兜底，彻底解决无回复、无字幕与死锁问题；
- *  5. 视觉三模态实时开关：支持【设置外挂视觉 API】/【主模型原生看图】/【关闭视觉】一键循环切换；
- *  6. 视频/语音双轨动态声波 HUD：微信原生微绿平滑动态声波条与实时倾听状态；
- *  7. 视频通话支持实时从摄像头抽帧直连独立识图 API 或直传多模态主模型；
- *  8. 专属极速口语 Prompt（剥离联网/表情包，短平快日常口语，细腻生活背景音）；
- *  9. 通话结束全自动归档为第三人称具名客观记录（IndexedDB 永久保存，支持长按彻底删除）。
+ *  4. 视频通话全链路修复：音视频流轨道分离，彻底解决 MediaRecorder 报错导致的无回复、无字幕与死锁；
+ *  5. 细粒度状态反馈：区分“正在听你说/正在转文字/正在感知视频画面/正在思考回复中/对方正在讲话”；
+ *  6. 视觉三模态实时开关：支持【设置外挂视觉 API】/【主模型原生看图】/【关闭视觉】一键循环切换；
+ *  7. 视频/语音双轨动态声波 HUD：微信原生微绿平滑动态声波条与实时倾听状态；
+ *  8. 视频通话支持实时从摄像头抽帧直连独立识图 API 或直传多模态主模型；
+ *  9. 专属极速口语 Prompt（剥离联网/表情包，短平快日常口语，细腻生活背景音）；
+ *  10. 通话结束全自动归档为第三人称具名客观记录（IndexedDB 永久保存，支持长按彻底删除）。
  */
 
 (function() {
@@ -25,6 +26,18 @@
 
     const PRIVACY_STORAGE_KEY = 'mcyt_call_video_privacy_agreed';
     const VISION_MODE_STORAGE_KEY = 'mcyt_call_vision_mode'; // 'external' | 'direct' | 'off'
+
+    // 安全 HTML 转义辅助函数（跨模块兜底保障）
+    function escapeHtml(str) {
+        if (typeof window.escapeHtml === 'function') return window.escapeHtml(str);
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;');
+    }
 
     // 格式化秒数为 00:00
     function formatCallTimer(seconds) {
@@ -221,7 +234,16 @@
             if (!AudioCtx || !stream) return;
 
             const ctx = new AudioCtx();
-            const source = ctx.createMediaStreamSource(stream);
+            if (ctx.state === 'suspended') {
+                ctx.resume().catch(() => {});
+            }
+
+            // 🌟 纯音频流接入 AudioContext，防止复合媒体流在 WebKit 下产生流同步异常
+            const audioTracks = stream.getAudioTracks();
+            if (!audioTracks || audioTracks.length === 0) return;
+            const audioStream = new MediaStream(audioTracks);
+
+            const source = ctx.createMediaStreamSource(audioStream);
             const analyser = ctx.createAnalyser();
             analyser.fftSize = 128;
             analyser.smoothingTimeConstant = 0.45; // 平滑滤波
@@ -305,18 +327,28 @@
         }
     }
 
-    // 启动 MediaRecorder 片段采集
+    // 启动 MediaRecorder 片段采集（🌟 轨道解耦，彻底修复视频通话下音频录制报错的严重 Bug）
     function startSessionMediaRecorder(stream) {
         if (!window.MediaRecorder || !window._activeCallSession) return;
         window._activeCallSession.recordedChunks = [];
 
         try {
+            // 🌟 核心修复：必须从当前流中分离出纯音频轨（AudioTrack）！
+            // 视频通话中 stream 同时包含音频轨与视频轨。若将含视频轨的流直接传递给仅支持音频 mimeType 的 MediaRecorder，
+            // 浏览器会直接抛出 NotSupportedError 异常，导致录音组件静默崩溃、音频 Blob 永远为空、ASR 无法触发、无法上字幕、无法触发 AI！
+            const audioTracks = stream.getAudioTracks();
+            if (!audioTracks || audioTracks.length === 0) {
+                console.warn('[WechatCall] 流中没有可用的音频轨');
+                return;
+            }
+            const audioOnlyStream = new MediaStream(audioTracks);
+
             let mimeType = '';
             if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) mimeType = 'audio/webm;codecs=opus';
             else if (MediaRecorder.isTypeSupported('audio/webm')) mimeType = 'audio/webm';
             else if (MediaRecorder.isTypeSupported('audio/mp4')) mimeType = 'audio/mp4';
 
-            const mr = mimeType ? new MediaRecorder(stream, { mimeType }) : new MediaRecorder(stream);
+            const mr = mimeType ? new MediaRecorder(audioOnlyStream, { mimeType }) : new MediaRecorder(audioOnlyStream);
             mr.ondataavailable = (e) => {
                 if (e.data && e.data.size > 0 && window._activeCallSession) {
                     window._activeCallSession.recordedChunks.push(e.data);
@@ -378,8 +410,8 @@
             return;
         }
 
-        // 调用私有云端 faster-whisper ASR
-        setCallStatusText('正在理解你的话语...', '#07c160');
+        // 调用私有云端 faster-whisper ASR，显示明确状态
+        setCallStatusText('正在转文字中...', '#07c160');
 
         let recognizedText = '';
         if (window.mcytAsr && typeof window.mcytAsr.transcribe === 'function') {
@@ -408,11 +440,15 @@
         let base64DirectImg = null;
 
         if (session.mode === 'video' && session.visionMode !== 'off') {
+            setCallStatusText('正在感知视频画面...', '#38bdf8');
             const base64Img = captureVideoFrameBase64();
             if (base64Img) {
                 if (session.visionMode === 'external') {
                     // 模式 A：外挂独立视觉识图 API（带 3.5 秒极速超时保护，超时不卡死通话）
                     visualInsight = await inspectVisualFrameAsync(base64Img);
+                    if (visualInsight) {
+                        console.log('[WechatCall] 外挂识图获取到画面描述:', visualInsight);
+                    }
                 } else if (session.visionMode === 'direct') {
                     // 模式 B：主模型原生识图，直接暂存 Base64 供组装 messages
                     base64DirectImg = base64Img;
@@ -527,6 +563,7 @@
                 if (videoEl) {
                     videoEl.srcObject = session.stream;
                     videoEl.style.transform = (nextFacing === 'user') ? 'scaleX(-1)' : 'none';
+                    videoEl.play().catch(() => {});
                 }
 
                 if (typeof showToast === 'function') {
@@ -566,7 +603,19 @@
             textEl.textContent = '外挂识图';
             iconWrap.style.color = '#07c160';
             iconWrap.style.borderColor = '#07c160';
-            if (typeof showToast === 'function') showToast('视觉模式: 调用设置中的独立识图 API', 'info', 1500);
+            let hasCfg = false;
+            try {
+                const rawCfg = localStorage.getItem('mcyt_vision_api_config');
+                if (rawCfg) {
+                    const parsed = JSON.parse(rawCfg);
+                    if (parsed.apiKey && parsed.baseUrl) hasCfg = true;
+                }
+            } catch (_) {}
+            if (!hasCfg && typeof showToast === 'function') {
+                showToast('已切至外挂识图（需在设置中配置识图 API）', 'warning', 2000);
+            } else if (typeof showToast === 'function') {
+                showToast('视觉模式: 调用设置中的独立识图 API', 'info', 1500);
+            }
         } else if (mode === 'direct') {
             textEl.textContent = '原生看图';
             iconWrap.style.color = '#38bdf8';
@@ -704,11 +753,12 @@
             updateVisionModeUI(initialVisionMode);
         }
 
-        // 挂载本地视频流
+        // 挂载本地视频流并显式播放
         if (mode === 'video' && stream) {
             const videoEl = document.getElementById('wechatCallLocalVideo');
             if (videoEl) {
                 videoEl.srcObject = stream;
+                videoEl.play().catch(e => console.warn('[WechatCall] 本地视频播放提示:', e));
             }
         }
 
@@ -731,13 +781,21 @@
     function captureVideoFrameBase64() {
         const video = document.getElementById('wechatCallLocalVideo');
         const canvas = document.getElementById('wechatCallSnapshotCanvas');
-        if (!video || !canvas || video.videoWidth === 0) return null;
+        if (!video || !canvas) return null;
 
-        canvas.width = Math.min(480, video.videoWidth);
-        canvas.height = Math.round(canvas.width * (video.videoHeight / video.videoWidth));
+        const vw = video.videoWidth || 640;
+        const vh = video.videoHeight || 480;
+
+        canvas.width = Math.min(480, vw);
+        canvas.height = Math.round(canvas.width * (vh / vw));
         const ctx = canvas.getContext('2d');
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        return canvas.toDataURL('image/jpeg', 0.7);
+        try {
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            return canvas.toDataURL('image/jpeg', 0.7);
+        } catch (e) {
+            console.warn('[WechatCall] 画面抓帧失败:', e);
+            return null;
+        }
     }
 
     // 🌟 独立识图 API 调用（带 3.5 秒极速超时保护，超时不卡死通话）
@@ -853,7 +911,8 @@
         const abortCtrl = new AbortController();
         session.currentAbortController = abortCtrl;
 
-        setCallStatusText('对方正在说话...', '#07c160');
+        // 明确状态：正在思考回复中
+        setCallStatusText('正在思考回复中...', '#07c160');
 
         const npcId = session.npcId;
         const npc = window.G.npcs[npcId];
@@ -969,7 +1028,6 @@
         }
 
         session.isAiReplying = false;
-        setCallStatusText('通话连接稳定', '#07c160');
 
         appendCallSubtitle('npc', npcName, text);
 
@@ -979,6 +1037,7 @@
         const isTtsEnabled = !!(npcVoiceCfg.enabled || (window.ttsEngine && window.ttsEngine.getConfig && window.ttsEngine.getConfig().enabled));
 
         if (isTtsEnabled && window.ttsEngine) {
+            setCallStatusText('对方正在讲话...', '#07c160');
             // 剥离掉背景音括号，仅朗读对白
             const speakPureText = text.replace(/\(.*?\)|（.*?）/g, '').trim() || text;
             
@@ -987,6 +1046,8 @@
                     setCallStatusText('通话连接稳定', '#07c160');
                 }
             });
+        } else {
+            setCallStatusText('通话连接稳定', '#07c160');
         }
     }
 
