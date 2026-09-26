@@ -1,20 +1,24 @@
 // js/07-actions-social.js
-// 行动处理与外部社区（AO3 同人中心 & YouTube 油管中心 - 状态防丢失与严格智能沉浸版）
+// 行动处理与外部社区（YouTube 油管中心独立运行版 · 已彻底剥离并淘汰旧 AO3 史山）
 // ============================================================
+
 async function performAction(action, detail = '', useSearch = false) {
     if (G.isGenerating) { showToast('⏳ 正在生成剧情...'); return; }
     if (action === 'next') { advanceDayFree(); return; }
 
     if (action === 'chat' || action === 'dm' || action === 'friend' || action === 'fanclub') {
-        switchTab('social');
+        if (typeof openPhoneApp === 'function') openPhoneApp('chat');
+        else switchTab('social');
         return;
     }
-    if (action === 'fanart') {
-        switchTab('browser');
+    if (action === 'fanart' || action === 'ao3') {
+        if (typeof openPhoneApp === 'function') openPhoneApp('ao3');
+        else switchTab('browser');
         return;
     }
     if (action === 'youtube' || action === 'yt' || action === 'comment') {
-        switchTab('youtube');
+        if (typeof openPhoneApp === 'function') openPhoneApp('youtube');
+        else switchTab('youtube');
         return;
     }
 
@@ -23,7 +27,8 @@ async function performAction(action, detail = '', useSearch = false) {
 
     switch (action) {
         case 'stream':
-            switchTab('stream');
+            if (typeof openPhoneApp === 'function') openPhoneApp('streaming');
+            else switchTab('stream');
             showToast('📺 切换到直播页面', 'success', 1500);
             break;
         case 'video':
@@ -44,20 +49,12 @@ async function performAction(action, detail = '', useSearch = false) {
 }
 
 function triggerRandomFriendRequest() {
-    const fanTypes = [
-        { name: 'RedstoneBoy_' + rand(10, 99), reason: '视频热心粉丝', persona: '超喜欢你的红石黑科技视频，希望能向你请教！' },
-        { name: 'PixelBuilder' + rand(1, 99), reason: '建筑同好', persona: '也是一名MC建筑爱好者，看了你的实况特别想加好友一起交流！' },
-        { name: 'SpeedRunnerMC', reason: '速通同行主播', persona: '经常在各大榜单看到你的名字，加个好友有机会联机切磋！' },
-        { name: 'MikuCraft' + rand(100, 999), reason: '直播铁粉', persona: '从你开播第一天就在看直播的老粉，天天给你刷礼物！' },
-        { name: 'EndCityWalker', reason: '探索模组玩家', persona: '性格比较随和，喜欢到处挖矿和探索遗迹的休闲玩家。' }
-    ];
-    const chosen = pick(fanTypes);
-    if (Object.values(G.npcs).some(n => n.name === chosen.name) || (G.friendRequests || []).some(r => r.name === chosen.name)) return;
-    
+    // 纯动态随机粉丝名
+    const fanName = '粉丝_' + rand(100, 999);
     receiveFriendRequest({
-        name: chosen.name,
-        fromReason: chosen.reason,
-        persona: chosen.persona,
+        name: fanName,
+        fromReason: '视频热心粉丝',
+        persona: '一直在关注你的频道视频与直播，特别希望能成为好友！',
         avatarEmoji: pick(['🎮', '⛏️', '🏹', '🎨', '🌟', '👒', '🎧', '👾']),
         day: G.day
     });
@@ -65,1426 +62,23 @@ function triggerRandomFriendRequest() {
 
 async function handleSubAction(detail, useSearch = false) {
     await generateStory('🧘 皮下活动', `玩家选择进行皮下活动：${detail || '放松身心'}`, useSearch);
-    const lower = (detail || '').toLowerCase();
-    const isMinecraft = lower.includes('minecraft') || lower.includes('mc') || lower.includes('我的世界') || lower.includes('玩');
-    if (isMinecraft && Math.random() < 0.12) {
-        const npc = G.npcs.dream;
-        if (npc) {
-            const gain = rand(3, 6);
-            npc.favor = Math.min(100, (npc.favor || 0) + gain);
-            G.player.metDream = true;
-            appendStory(`🎉 你在MC中偶遇了神秘大神 Dream！好感度 +${gain}！`, '👾 偶遇 Dream');
-            showToast('🌟 你偶遇了 Dream！好感度增加！', 'success', 3000);
-            updateUI();
-        }
-    }
     G.player.followers += rand(1, 10);
     updateUI();
 }
 
-// ============================================================
-// 🌐 浏览器 App & AO3 同人中心
-// ============================================================
-function ensureBrowserIntegrity() {
-    if (!G.browserState) {
-        G.browserState = {
-            view: 'home',
-            activeWorkId: null,
-            urlText: 'browser://bookmarks'
-        };
-    }
-    if (!G.fanworks) G.fanworks = [];
-    if (!G.ao3User) {
-        G.ao3User = {
-            username: (G.player && G.player.ytName) || 'MC_CraftMaster',
-            avatarEmoji: '📖'
-        };
-    }
-}
-ensureBrowserIntegrity();
-
-function getIsPlayerAo3MainAccount() {
-    ensureBrowserIntegrity();
-    return G.ao3User && G.player && (G.ao3User.username.trim() === G.player.ytName.trim());
-}
-
+// 兼容老旧浏览器的占位（旧 AO3 现已彻底迁移至 js/apps/ao3/ao3-app.js）
 function renderBrowserPanel() {
-    const container = document.getElementById('browserTab');
-    if (!container) return;
-    ensureBrowserIntegrity();
-    const st = G.browserState;
-
-    let bodyHtml = '';
-    if (st.view === 'home') {
-        bodyHtml = `
-        <div style="padding:16px 14px;background:#fff;border-bottom:1px solid #eee;">
-            <div style="font-size:16px;font-weight:700;color:var(--text);">🌐 手机浏览器</div>
-            <div style="font-size:12px;color:#888;margin-top:2px;">点击书签快速访问外部同人社区与论坛</div>
-        </div>
-        <div class="browser-bookmarks-grid">
-            <div class="browser-bookmark-item" onclick="openAo3Home()">
-                <div class="browser-bookmark-icon" style="background:#900;color:#fff;">📚</div>
-                <div class="browser-bookmark-title">Archive of Our Own (AO3)</div>
-            </div>
-            <div class="browser-bookmark-item" onclick="showToast('💡 论坛正在维护升级中', 'info')">
-                <div class="browser-bookmark-icon" style="background:#2b5278;color:#fff;">🎮</div>
-                <div class="browser-bookmark-title">MC 官方论坛</div>
-            </div>
-            <div class="browser-bookmark-item" onclick="showToast('💡 维基百科已收录你的名录', 'info')">
-                <div class="browser-bookmark-icon" style="background:#4a4a4a;color:#fff;">📖</div>
-                <div class="browser-bookmark-title">MC Wiki 百科</div>
-            </div>
-            <div class="browser-bookmark-item" onclick="showToast('💡 热门趋势正在分析中', 'info')">
-                <div class="browser-bookmark-icon" style="background:#e040fb;color:#fff;">🔥</div>
-                <div class="browser-bookmark-title">油管热搜榜</div>
-            </div>
-        </div>
-        <div style="flex:1;display:flex;align-items:center;justify-content:center;color:#bbb;font-size:12px;padding:20px;text-align:center;">
-            点击上方「AO3」图标，即可查看同人文、使用大号/小号创作或与读者书评互动！
-        </div>
-        `;
-        st.urlText = 'browser://bookmarks';
-    } else if (st.view === 'ao3') {
-        bodyHtml = buildAo3HomeHTML();
-        st.urlText = 'https://archiveofourown.org/tags/Minecraft_YT';
-    } else if (st.view === 'ao3_read') {
-        bodyHtml = buildAo3ReadHTML(st.activeWorkId);
-        st.urlText = `https://archiveofourown.org/works/${st.activeWorkId || ''}`;
+    if (typeof openPhoneApp === 'function') {
+        openPhoneApp('ao3');
     }
-
-    container.innerHTML = `
-    <div class="browser-app-wrap">
-        <div class="browser-header-bar">
-            <button class="browser-nav-btn" onclick="handleBrowserBack()">❮</button>
-            <div class="browser-url-box">
-                <span>🔒</span>
-                <span style="overflow:hidden;text-overflow:ellipsis;">${escapeHtml(st.urlText)}</span>
-            </div>
-            <button class="browser-nav-btn" onclick="renderBrowserPanel()" title="刷新">🔄</button>
-            <button class="browser-nav-btn" onclick="G.browserState.view='home'; renderBrowserPanel();" title="主页">🏠</button>
-        </div>
-        <div class="browser-body">
-            ${bodyHtml}
-        </div>
-    </div>
-    `;
-
-    bindBrowserPanelEvents(container);
 }
-
 function handleBrowserBack() {
-    ensureBrowserIntegrity();
-    const st = G.browserState;
-    if (st.view === 'ao3_read') {
-        st.view = 'ao3';
-        renderBrowserPanel();
-    } else if (st.view === 'ao3') {
-        st.view = 'home';
-        renderBrowserPanel();
-    } else {
-        switchTab('story');
-    }
+    switchTab('story');
 }
 
-function openAo3Home() {
-    ensureBrowserIntegrity();
-    G.browserState.view = 'ao3';
-    renderBrowserPanel();
-}
-
-function buildAo3HomeHTML() {
-    ensureBrowserIntegrity();
-    const works = [...(G.fanworks || [])].reverse();
-    const isMain = getIsPlayerAo3MainAccount();
-    const currentAo3Name = (G.ao3User && G.ao3User.username) || G.player.ytName;
-
-    let worksListHtml = '';
-    if (!works.length) {
-        worksListHtml = `
-        <div style="text-align:center;padding:50px 20px;color:#888;">
-            <div style="font-size:32px;margin-bottom:8px;">📖</div>
-            <div style="font-weight:700;font-size:14px;">当前书架空空如也</div>
-            <div style="font-size:12px;margin-top:4px;">长按或点击右侧管理即可编辑/删除已有书籍。点击右上角 ➕ 开坑新书吧！</div>
-            <button class="btn-primary" onclick="triggerFanCreationPrompt()" style="margin-top:14px;max-width:200px;display:inline-block;padding:8px 16px;font-size:13px;">🎲 随机生成粉丝同人文</button>
-        </div>
-        `;
-    } else {
-        worksListHtml = works.map(w => {
-            const tags = (w.tags || []).slice(0, 4).map(t => `<span class="ao3-tag-badge">#${escapeHtml(t)}</span>`).join('');
-            const chapterCount = (w.chapters && w.chapters.length) ? w.chapters.length : 1;
-            const coverHtml = w.coverUrl 
-                ? `<img src="${w.coverUrl}">` 
-                : `<div style="font-size:24px;">${w.coverEmoji || '📖'}</div>`;
-
-            const isAuthorMe = w.author === G.player.ytName;
-            const authorBadge = isAuthorMe 
-                ? `<span style="background:#ffefe8;color:#d84315;border:1px solid #ffccbc;border-radius:4px;padding:0 4px;font-size:10px;font-weight:700;">正主大号</span>` 
-                : '';
-
-            const isViolationDraft = !!w._isViolationDraft;
-            const violationBadge = isViolationDraft 
-                ? `<span style="background:#fef2f2;color:#dc2626;border:1px solid #fca5a5;border-radius:4px;padding:1px 5px;font-size:10px;font-weight:800;margin-left:4px;">🚨 违规待审取证稿</span>`
-                : '';
-
-            const povBadgeMap = {
-                first: '<span style="font-size:10px;background:#e8f5e9;color:#2e7d32;padding:1px 5px;border-radius:4px;margin-left:4px;">第一人称</span>',
-                second: '<span style="font-size:10px;background:#e0f2fe;color:#0369a1;padding:1px 5px;border-radius:4px;margin-left:4px;">第二人称</span>',
-                third: '<span style="font-size:10px;background:#fef3c7;color:#b45309;padding:1px 5px;border-radius:4px;margin-left:4px;">第三人称</span>'
-            };
-            const povBadge = povBadgeMap[w.pov] || '';
-
-            return `
-            <div class="ao3-work-entry" data-work-id="${w._id}" style="${isViolationDraft ? 'border-left:4px solid #dc2626;background:#fffbfb;' : ''}">
-                <div class="ao3-work-cover">${coverHtml}</div>
-                <div class="ao3-work-meta">
-                    <div class="ao3-work-title">${escapeHtml(w.title)} ${violationBadge} ${povBadge}</div>
-                    <div class="ao3-work-author">by <span style="color:#900;font-weight:600;">${escapeHtml(w.author || '匿名粉')}</span> ${authorBadge}${w.pairing ? ` · CP: <b>${escapeHtml(w.pairing)}</b>` : ''}</div>
-                    <div>${tags}</div>
-                    <div class="ao3-work-summary">${escapeHtml(w.summary || '暂无简介')}</div>
-                    <div class="ao3-stats-row">
-                        <span>📖 ${chapterCount} 章</span>
-                        <span>💚 ${w.kudos || 0} Kudos</span>
-                        <span>💬 ${(w.reviews || []).length + (w.comments || 0)} 评论</span>
-                        <button class="ao3-manage-book-btn" data-act-id="${w._id}">⚙️ 管理/长按</button>
-                    </div>
-                </div>
-            </div>
-            `;
-        }).join('');
-    }
-
-    return `
-    <div class="ao3-site-container">
-        <div class="ao3-topbar">
-            <span class="ao3-logo-title">Archive of Our Own <sup>beta</sup></span>
-            <div class="ao3-user-badge" id="ao3UserAccountBtn" title="点击切换/设置账号">
-                <span>👤</span>
-                <span>${escapeHtml(currentAo3Name)}</span>
-                <span style="font-size:9px;opacity:0.85;">(${isMain ? '主播大号' : '小号'})</span>
-            </div>
-        </div>
-        <div class="ao3-sub-nav">
-            <span>标签：<b>MC YouTube (${(G.fanworks||[]).length} Works)</b></span>
-            <div style="display:flex;gap:4px;">
-                <button id="ao3RandomGenBtn" title="粉丝随机创作" style="background:#700;color:#fff;border:none;padding:3px 7px;border-radius:4px;font-size:11px;cursor:pointer;">🎲 催粉发文</button>
-                <button id="ao3NewBookBtn" title="自己开坑" style="background:#2e7d32;color:#fff;border:none;padding:3px 7px;border-radius:4px;font-size:11px;cursor:pointer;">➕ 开坑新书</button>
-            </div>
-        </div>
-        <div style="font-size:11px;color:#888;padding:5px 12px;background:#fff8ee;border-bottom:1px dashed #e8d8c8;">
-            🌸 <b>纯乙女/百合/GB原则</b>：生理心理皆为女性。严禁男男拉郎，所有向往皆属主角本人！
-        </div>
-        <div class="ao3-work-list">
-            ${worksListHtml}
-        </div>
-    </div>
-    `;
-}
-
-function openAo3Reader(id) {
-    ensureBrowserIntegrity();
-    G.browserState.view = 'ao3_read';
-    G.browserState.activeWorkId = id;
-    renderBrowserPanel();
-}
-
-function buildAo3ReadHTML(id) {
-    ensureBrowserIntegrity();
-    const work = (G.fanworks || []).find(w => w._id === id);
-    if (work) normalizeAo3Work(work);
-    if (!work) {
-        return `<div style="padding:30px;text-align:center;color:#888;">找不到该作品 <button onclick="G.browserState.view='ao3';renderBrowserPanel();">返回列表</button></div>`;
-    }
-
-    if (!work.chapters || !work.chapters.length) {
-        work.chapters = [{
-            chapterNum: 1,
-            title: work.title,
-            content: work.content || '正文内容暂缺...',
-            day: work.day || G.day
-        }];
-    }
-
-    const totalChapters = work.chapters.length;
-    const currentChapterIdx = (work.activeChapterIdx !== undefined && work.activeChapterIdx < totalChapters) 
-        ? work.activeChapterIdx 
-        : (totalChapters - 1);
-    
-    work.activeChapterIdx = currentChapterIdx;
-    const chapter = work.chapters[currentChapterIdx] || work.chapters[0];
-
-    const tagsHtml = (work.tags || []).map(t => `<span class="ao3-tag-badge">#${escapeHtml(t)}</span>`).join('');
-    const coverHtml = work.coverUrl 
-        ? `<img src="${work.coverUrl}" style="width:64px;height:90px;border-radius:4px;object-fit:cover;border:1px solid #ccc;float:right;margin-left:8px;">` 
-        : '';
-
-    let chapterOptions = '';
-    work.chapters.forEach((c, idx) => {
-        chapterOptions += `<option value="${idx}" ${idx === currentChapterIdx ? 'selected' : ''}>第 ${idx + 1} 章：${escapeHtml(c.title || `第${idx+1}章`)}</option>`;
-    });
-
-    const isFirstChapter = currentChapterIdx === 0;
-    const isLastChapter = currentChapterIdx === totalChapters - 1;
-
-    if (!work.reviews) work.reviews = [];
-    let reviewsHtml = '';
-    if (!work.reviews.length) {
-        reviewsHtml = `<div style="text-align:center;color:#999;font-size:12px;padding:16px 0;">暂无书评，点击下方「🎲 生成读者书评」或发表你的感想吧！</div>`;
-    } else {
-        reviewsHtml = work.reviews.map((rev, rIdx) => {
-            // 容错处理：防止以前旧数据是个纯字符串导致报错
-            let rAuthor = rev.author;
-            let rText = rev.text;
-            let rTime = rev.time;
-            if (typeof rev === 'string') {
-                rAuthor = '匿名粉';
-                rText = rev;
-                rTime = '';
-            }
-
-            let repliesHtml = '';
-            if (rev.replies && rev.replies.length) {
-                repliesHtml = `<div class="ao3-replies-list">` + rev.replies.map(rep => {
-                    let repAuthor = rep.author;
-                    let repText = rep.text;
-                    let repTime = rep.time;
-                    let repIsSelf = rep.isSelf;
-                    if (typeof rep === 'string') { repAuthor = '匿名粉'; repText = rep; repTime = ''; repIsSelf = false; }
-                    
-                    return `
-                    <div class="ao3-reply-entry">
-                        <span style="font-weight:700;color:${repIsSelf ? '#2e7d32' : '#900'};">${escapeHtml(repAuthor)}</span>
-                        ${repIsSelf ? '<span style="font-size:9px;background:#eaf5ea;color:#2e7d32;padding:1px 4px;border-radius:4px;margin-left:3px;">你</span>' : ''}：
-                        <span>${escapeHtml(repText)}</span>
-                        <div style="font-size:9px;color:#bbb;text-align:right;">${repTime || ''}</div>
-                    </div>
-                `}).join('') + `</div>`;
-            }
-
-            return `
-            <div class="ao3-comment-item">
-                <div class="ao3-comment-header">
-                    <span class="ao3-comment-user">${escapeHtml(rAuthor)}</span>
-                    <span style="font-size:10px;color:#aaa;">${rTime || ''}</span>
-                </div>
-                <div class="ao3-comment-text">${escapeHtml(rText)}</div>
-                <div class="ao3-comment-actions">
-                    <button class="btn-secondary small" onclick="openAo3ReplyModal('${work._id}', ${rIdx})">💬 回复</button>
-                </div>
-                ${repliesHtml}
-            </div>
-            `;
-        }).join('');
-    }
-
-    const currentAo3Name = (G.ao3User && G.ao3User.username) || G.player.ytName;
-
-    return `
-    <div class="ao3-site-container" style="padding:14px;background:#fdfbf7;">
-        <div style="border-bottom:2px solid #900;padding-bottom:12px;margin-bottom:12px;">
-            ${coverHtml}
-            <div style="font-size:10px;color:#900;letter-spacing:1px;font-weight:700;">ARCHIVE OF OUR OWN · FANWORK</div>
-            <div style="font-size:20px;font-weight:700;color:#222;margin-top:4px;">${escapeHtml(work.title)}</div>
-            <div style="font-size:12px;color:#666;margin:3px 0;">by <span style="color:#900;font-weight:700;">${escapeHtml(work.author || '匿名粉')}</span>${work.pairing ? ` · CP: <b>${escapeHtml(work.pairing)}</b>` : ''}</div>
-            <div style="margin:6px 0;">${tagsHtml}</div>
-            <div style="font-size:11px;color:#888;">
-                共 ${totalChapters} 章 · 💚 Kudos ${work.kudos || 0} · 💬 ${work.reviews.length + (work.comments || 0)} 评论
-            </div>
-            ${work.summary ? `<div style="font-size:12px;color:#555;font-style:italic;background:#f5eee1;padding:8px 10px;border-left:3px solid #900;margin-top:10px;">${escapeHtml(work.summary)}</div>` : ''}
-        </div>
-
-        <div class="ao3-chapter-nav-bar">
-            <button class="ao3-nav-step-btn" id="ao3PrevChapterBtn" ${isFirstChapter ? 'disabled' : ''}>⬅️ 上一章</button>
-            <select id="ao3ChapterSelect" style="font-size:12px;border-radius:6px;border:1px solid #ccc;padding:4px;background:#fff;max-width:48%;">
-                ${chapterOptions}
-            </select>
-            <button class="ao3-nav-step-btn" id="ao3NextChapterBtn" ${isLastChapter ? 'disabled' : ''}>下一章 ➡️</button>
-        </div>
-
-        <div style="font-size:16px;font-weight:700;color:#900;margin:8px 0 12px;border-bottom:1px dashed #ddd;padding-bottom:4px;">
-            第 ${currentChapterIdx + 1} 章：${escapeHtml(chapter.title || `第${currentChapterIdx+1}章`)}
-        </div>
-
-        <div style="font-size:14.5px;line-height:2.05;color:#1a1a1a;white-space:pre-wrap;word-break:break-word;font-family:Georgia,serif;padding:4px 2px;">
-            ${escapeHtml(chapter.content)}
-        </div>
-
-        <div style="margin-top:20px;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;">
-            <button id="ao3UrgeBtn" style="background:#900;color:#fff;border:none;padding:7px 16px;border-radius:18px;font-size:12px;font-weight:700;cursor:pointer;">📢 催更续写第 ${totalChapters + 1} 章</button>
-            <button id="ao3GiveKudosBtn" style="background:#fff;border:1px solid #900;color:#900;padding:7px 16px;border-radius:18px;font-size:12px;font-weight:700;cursor:pointer;">💚 投喂 Kudos (${work.kudos || 0})</button>
-        </div>
-
-        <div class="ao3-comments-section">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-                <span style="font-size:15px;font-weight:700;color:#900;">💬 读者评论区 (${work.reviews.length})</span>
-                <div style="display:flex;gap:6px;">
-                    <button class="btn-secondary small" id="ao3GenCommentsBtn">🎲 生成书评</button>
-                    <button class="btn-primary small" id="ao3PostMyCommentBtn" style="margin:0;padding:4px 10px;font-size:11px;">✍️ 我要写评</button>
-                </div>
-            </div>
-            <div style="font-size:11px;color:#888;margin-bottom:10px;">
-                当前评论身份：<b style="color:#2e7d32;">${escapeHtml(currentAo3Name)}</b> ${getIsPlayerAo3MainAccount() ? '（主播实名）' : '（小号）'}
-            </div>
-            <div id="ao3ReviewsListContainer">
-                ${reviewsHtml}
-            </div>
-        </div>
-    </div>
-    `;
-}
-
-function bindBrowserPanelEvents(container) {
-    document.getElementById('ao3UserAccountBtn')?.addEventListener('click', openAo3AccountSettingsModal);
-    document.getElementById('ao3RandomGenBtn')?.addEventListener('click', triggerFanCreationPrompt);
-    document.getElementById('ao3NewBookBtn')?.addEventListener('click', openCreateCustomBookModal);
-
-    container.querySelectorAll('.ao3-work-entry').forEach(el => {
-        const wid = el.dataset.workId;
-        const coverEl = el.querySelector('.ao3-work-cover');
-        const titleEl = el.querySelector('.ao3-work-title');
-
-        coverEl?.addEventListener('click', () => openAo3Reader(wid));
-        titleEl?.addEventListener('click', () => openAo3Reader(wid));
-        bindLongPressEvent(el, () => openAo3WorkActionModal(wid), null);
-    });
-
-    container.querySelectorAll('.ao3-manage-book-btn').forEach(btn => {
-        btn.onclick = (e) => {
-            e.stopPropagation();
-            openAo3WorkActionModal(btn.dataset.actId);
-        };
-    });
-
-    const chSelect = document.getElementById('ao3ChapterSelect');
-    if (chSelect) {
-        chSelect.onchange = () => {
-            const work = (G.fanworks || []).find(w => w._id === G.browserState.activeWorkId);
-            if (work) {
-                work.activeChapterIdx = parseInt(chSelect.value) || 0;
-                renderBrowserPanel();
-            }
-        };
-    }
-
-    document.getElementById('ao3PrevChapterBtn')?.addEventListener('click', () => {
-        const work = (G.fanworks || []).find(w => w._id === G.browserState.activeWorkId);
-        if (work && work.activeChapterIdx > 0) {
-            work.activeChapterIdx--;
-            renderBrowserPanel();
-        }
-    });
-
-    document.getElementById('ao3NextChapterBtn')?.addEventListener('click', () => {
-        const work = (G.fanworks || []).find(w => w._id === G.browserState.activeWorkId);
-        if (work && work.activeChapterIdx < (work.chapters.length - 1)) {
-            work.activeChapterIdx++;
-            renderBrowserPanel();
-        }
-    });
-
-    document.getElementById('ao3UrgeBtn')?.addEventListener('click', () => {
-        urgeContinueBookChapter(G.browserState.activeWorkId);
-    });
-
-    document.getElementById('ao3GiveKudosBtn')?.addEventListener('click', () => {
-        const work = (G.fanworks || []).find(w => w._id === G.browserState.activeWorkId);
-        if (work) {
-            work.kudos = (work.kudos || 0) + rand(1, 5);
-            showToast('💚 已给作者投喂 Kudos！', 'success', 1500);
-            renderBrowserPanel();
-            autoSaveGame();
-        }
-    });
-
-    document.getElementById('ao3GenCommentsBtn')?.addEventListener('click', () => {
-        generateAo3ReviewsByAI(G.browserState.activeWorkId);
-    });
-
-    document.getElementById('ao3PostMyCommentBtn')?.addEventListener('click', () => {
-        openAo3WriteCommentModal(G.browserState.activeWorkId);
-    });
-}
-
-function openAo3AccountSettingsModal() {
-    ensureBrowserIntegrity();
-    const currentAo3Name = (G.ao3User && G.ao3User.username) || G.player.ytName;
-    const isMain = currentAo3Name.trim() === G.player.ytName.trim();
-
-    openModal(`
-        <h3>👤 AO3 账户设置</h3>
-        <p style="font-size:12px;color:#666;line-height:1.6;">
-            在同人社区，你可以选择使用<b>主播大号</b>实名发文/评论，或者换上<b>披皮小号</b>进行创作交流。
-        </p>
-        <div class="form-group">
-            <label>当前 AO3 用户名 / 笔名</label>
-            <input type="text" id="ao3UsernameInput" value="${escapeHtml(currentAo3Name)}" placeholder="输入你在 AO3 的账号昵称...">
-        </div>
-        <div style="background:#f7faf7;border:1px solid #dce8dc;padding:10px;border-radius:8px;font-size:12px;margin:8px 0;line-height:1.5;">
-            <div><b>当前状态说明：</b></div>
-            <div id="ao3NameStatusHint" style="margin-top:4px;color:${isMain ? '#2e7d32' : '#8a5a00'};">
-                ${isMain 
-                    ? '🌟 <b>主播大号模式</b>：名字与你的 YouTube 频道完全一致。AI 和读者将直接认出是你本人！' 
-                    : '🎭 <b>披皮小号模式</b>：名字与主播不同。读者不知道是你，但可能会因为神级操作产生“掉马怀疑”！'}
-            </div>
-        </div>
-        <div class="btn-row" style="margin-top:14px;">
-            <button class="btn-secondary" id="ao3ResetToMainBtn">还原为主播大号</button>
-            <button class="btn-primary" id="ao3SaveAccountBtn">保存设置</button>
-        </div>
-    `);
-
-    const input = document.getElementById('ao3UsernameInput');
-    const hint = document.getElementById('ao3NameStatusHint');
-
-    input.oninput = () => {
-        const val = input.value.trim();
-        const eq = val === G.player.ytName.trim();
-        hint.style.color = eq ? '#2e7d32' : '#8a5a00';
-        hint.innerHTML = eq 
-            ? '🌟 <b>主播大号模式</b>：名字与你的 YouTube 频道完全一致。AI 和读者将直接认出是你本人！' 
-            : '🎭 <b>披皮小号模式</b>：名字与主播不同。读者不知道是你，但可能偶发掉马怀疑。';
-    };
-
-    document.getElementById('ao3ResetToMainBtn').onclick = () => {
-        input.value = G.player.ytName;
-        input.dispatchEvent(new Event('input'));
-    };
-
-    document.getElementById('ao3SaveAccountBtn').onclick = () => {
-        const val = input.value.trim();
-        if (!val) { showToast('⚠️ 用户名不能为空', 'error'); return; }
-        if (!G.ao3User) G.ao3User = {};
-        G.ao3User.username = val;
-        closeModal();
-        showToast(`✅ AO3 账号已切换为「${val}」`, 'success', 2000);
-        renderBrowserPanel();
-        autoSaveGame();
-    };
-}
-
-function openAo3WorkActionModal(workId) {
-    const work = (G.fanworks || []).find(w => w._id === workId);
-    if (!work) return;
-
-    openModal(`
-        <h3>📚 小说管理：《${escapeHtml(work.title)}》</h3>
-        <p style="font-size:12px;color:#666;">你可以修改小说的人设标签、简介、封面，或将该作品移出书架。</p>
-        <div class="btn-row" style="flex-direction:column;gap:8px;">
-            <button class="btn-primary" id="actEditBookBtn" style="width:100%;">✏️ 编辑书籍信息与封面</button>
-            <button class="btn-secondary" id="actDelBookBtn" style="width:100%;color:#c62828;border-color:#ffcdd2;">🗑️ 从书架中删除该书</button>
-            <button class="btn-secondary" onclick="closeModal()" style="width:100%;">取消</button>
-        </div>
-    `);
-
-    document.getElementById('actEditBookBtn').onclick = () => {
-        closeModal();
-        openEditBookSettingsModal(workId);
-    };
-
-    document.getElementById('actDelBookBtn').onclick = () => {
-        if (confirm(`确定要从 AO3 书架中删除《${work.title}》吗？`)) {
-            const idx = G.fanworks.findIndex(w => w._id === workId);
-            if (idx !== -1) G.fanworks.splice(idx, 1);
-            if (G.browserState.activeWorkId === workId) {
-                G.browserState.view = 'ao3';
-                G.browserState.activeWorkId = null;
-            }
-            showToast('🗑️ 书籍已删除', 'success', 1500);
-            closeModal();
-            renderBrowserPanel();
-            autoSaveGame();
-        }
-    };
-}
-
-function openEditBookSettingsModal(workId) {
-    const work = (G.fanworks || []).find(w => w._id === workId);
-    if (!work) return;
-
-    openModal(`
-        <h3>✏️ 编辑书籍设定</h3>
-        <div class="form-group">
-            <label>书籍名称 <span class="required">*</span></label>
-            <input type="text" id="editBookTitle" value="${escapeHtml(work.title)}">
-        </div>
-        <div class="form-group">
-            <label>标签 Tags（逗号隔开）</label>
-            <input type="text" id="editBookTags" value="${escapeHtml((work.tags || []).join(', '))}">
-        </div>
-        <div class="form-group">
-            <label>封面设置</label>
-            <div style="display:flex;align-items:center;gap:10px;">
-                <label class="upload-btn" style="cursor:pointer;padding:6px 12px;font-size:12px;">
-                    📁 更换封面图
-                    <input type="file" id="editCoverFileInput" accept="image/*" style="display:none;">
-                </label>
-                <input type="text" id="editCoverEmoji" value="${escapeHtml(work.coverEmoji || '📖')}" style="width:50px;text-align:center;">
-                <div id="editCoverPreview" style="width:40px;height:56px;border:1px solid #ccc;border-radius:4px;display:flex;align-items:center;justify-content:center;background:#eee;overflow:hidden;font-size:20px;">
-                    ${work.coverUrl ? `<img src="${work.coverUrl}" style="width:100%;height:100%;object-fit:cover;">` : (work.coverEmoji || '📖')}
-                </div>
-            </div>
-        </div>
-        <div class="form-group">
-            <label>故事简介</label>
-            <textarea id="editBookSummary" rows="3">${escapeHtml(work.summary || '')}</textarea>
-        </div>
-        <div class="btn-row">
-            <button class="btn-secondary" onclick="closeModal()">取消</button>
-            <button class="btn-primary" id="saveEditBookBtn">💾 保存修改</button>
-        </div>
-    `);
-
-    let newCoverUrl = work.coverUrl || '';
-    document.getElementById('editCoverFileInput').onchange = function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = function(evt) {
-            newCoverUrl = evt.target.result;
-            document.getElementById('editCoverPreview').innerHTML = `<img src="${newCoverUrl}" style="width:100%;height:100%;object-fit:cover;">`;
-            showToast('✅ 封面已选择', 'success', 1200);
-        };
-        reader.readAsDataURL(file);
-    };
-
-    document.getElementById('saveEditBookBtn').onclick = async () => {
-        const t = document.getElementById('editBookTitle').value.trim();
-        const tagStr = document.getElementById('editBookTags').value.trim();
-        const em = document.getElementById('editCoverEmoji').value.trim() || '📖';
-        const s = document.getElementById('editBookSummary').value.trim();
-
-        if (!t) { showToast('⚠️ 标题不能为空', 'error'); return; }
-
-        if (typeof OtomeSecurityGuard !== 'undefined') {
-            const vReason = await OtomeSecurityGuard.judgeSemanticViolation(t + '\n' + tagStr + '\n' + s);
-            if (vReason) {
-                work.title = t;
-                work.summary = s;
-                work._isViolationDraft = true;
-                autoSaveGame();
-                closeModal();
-                OtomeSecurityGuard.triggerDeviceBan(vReason, `[AO3修改书籍违规] 《${t}》 | 简介: ${s}`);
-                return;
-            }
-        }
-
-        work.title = t;
-        work.tags = tagStr ? tagStr.split(/[,，\s]+/).filter(Boolean) : [];
-        work.coverUrl = newCoverUrl;
-        work.coverEmoji = em;
-        work.summary = s;
-
-        closeModal();
-        showToast('✅ 书籍信息已更新！', 'success');
-        renderBrowserPanel();
-        autoSaveGame();
-    };
-}
-
-async function triggerFanCreationPrompt() {
-    if (G.isGenerating) { showToast('⏳ 正在生成中，请稍候'); return; }
-    openModal(`
-        <h3>🎲 粉丝同人创作</h3>
-        <p style="font-size:12px;color:#666;">粉丝们正在 AO3 上为你创作同人小说（纯乙女向）：</p>
-        <div class="form-group">
-            <textarea id="fanPromptDetail" rows="2" placeholder="可选：例如「与 Dream 联机迷路」、「红石实验室大爆炸」、「和 Twixxel 一起露营」..."></textarea>
-        </div>
-        <div class="btn-row">
-            <button class="btn-secondary" onclick="closeModal()">取消</button>
-            <button class="btn-primary" id="confirmGenFanBtn">开始创作 (0消耗)</button>
-        </div>
-    `);
-
-    document.getElementById('confirmGenFanBtn').onclick = async () => {
-        const detail = document.getElementById('fanPromptDetail').value.trim();
-        if (typeof OtomeSecurityGuard !== 'undefined' && detail) {
-            const vReason = await OtomeSecurityGuard.judgeSemanticViolation(detail);
-            if (vReason) {
-                closeModal();
-                OtomeSecurityGuard.triggerDeviceBan(vReason, `[粉丝同人要求违规] ${detail}`);
-                return;
-            }
-        }
-        closeModal();
-        await generateNewBookFromAI({
-            themePrompt: detail,
-            author: '狂热粉丝_' + rand(10, 99)
-        });
-    };
-}
-
-// ============================================================
-// ➕ AO3 开坑新书：智能防拉郎守卫 + 自由 CP
-// ============================================================
-function openCreateCustomBookModal() {
-    ensureBrowserIntegrity();
-    const currentAo3Name = (G.ao3User && G.ao3User.username) || G.player.ytName;
-    const isMain = getIsPlayerAo3MainAccount();
-    const pName = G.player.ytName;
-
-    const characterMap = new Map();
-    if (typeof OFFICIAL_NPCS !== 'undefined') {
-        Object.values(OFFICIAL_NPCS).forEach(n => {
-            if (n && n.name) characterMap.set(n.name.trim(), { name: n.name.trim(), desc: n.persona || '官方MC大主播' });
-        });
-    }
-    if (G.npcs) {
-        Object.values(G.npcs).forEach(n => {
-            if (n && n.name) characterMap.set(n.name.trim(), { name: n.name.trim(), desc: n.persona || (n.isCustom ? '自建好友' : '通讯录好友') });
-        });
-    }
-
-    const allCharacters = Array.from(characterMap.values());
-
-    openModal(`
-        <h3>➕ AO3 开坑新书</h3>
-        <div style="font-size:12px;color:#666;margin-bottom:8px;">
-            发布账号：<b style="color:${isMain ? '#2e7d32' : '#8a5a00'};">${escapeHtml(currentAo3Name)}</b> ${isMain ? '（主播实名发布）' : '（小号发布）'}
-        </div>
-        <div class="form-group">
-            <label>书籍名称 <span class="required">*</span></label>
-            <input type="text" id="newBookTitle" placeholder="如：《下界回响：红石冒险录》">
-        </div>
-
-        <div class="form-group">
-            <label>📖 同人文叙事人称 (POV)</label>
-            <select id="newBookPovSelect" style="width:100%;padding:8px;border-radius:8px;border:1px solid #ccc;background:#fff;font-size:13px;">
-                <option value="third" selected>第三人称【她 / 主角名】（经典同人小说视角）</option>
-                <option value="second">第二人称【你】（沉浸式代入交互视角）</option>
-                <option value="first">第一人称【我】（女主第一视点自白）</option>
-            </select>
-        </div>
-
-        <div class="form-group" style="background:#fdfcf9;padding:10px;border-radius:8px;border:1px solid #efe5d8;">
-            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-                <label style="font-weight:700;font-size:12.5px;margin:0;">
-                    👥 涉及角色与羁绊 <span style="font-size:11px;color:#2e7d32;">(🌸纯乙女原则)</span>
-                </label>
-                <button type="button" id="btnTogglePoolExpand" style="border:none;background:none;color:#900;font-size:11px;font-weight:700;cursor:pointer;padding:2px 4px;">
-                    🔽 展开全部 (${allCharacters.length})
-                </button>
-            </div>
-            
-            <div style="margin:4px 0 6px;">
-                <input type="text" id="charSearchFilterInput" placeholder="🔍 快速搜索过滤角色（如 Dream、ThatMob...）" style="width:100%;padding:6px 9px;font-size:12px;border-radius:6px;border:1px solid #d4c4b2;box-sizing:border-box;">
-            </div>
-
-            <div id="characterChipsPool" style="display:flex;flex-wrap:wrap;gap:5px;max-height:56px;overflow-y:hidden;padding:4px;background:#fff;border-radius:6px;border:1px dashed #d8cfc4;margin-bottom:8px;transition:max-height 0.25s ease;">
-                <!-- 动态生成可选角色胶囊 -->
-            </div>
-
-            <div style="margin-bottom:6px;">
-                <label style="font-size:11.5px;color:#666;">选择关系模板：</label>
-                <select id="pairingTemplateSelect" style="width:100%;padding:7px;font-size:12.5px;border-radius:6px;border:1px solid #ccc;background:#fff;margin-top:2px;">
-                    <option value="独宠专一向">独宠专一向</option>
-                    <option value="欢喜冤家向">欢喜冤家向</option>
-                    <option value="互宠甜文向">互宠甜文向</option>
-                    <option value="全员团宠修罗场向">全员团宠修罗场向</option>
-                    <option value="战友救赎向">战友救赎向</option>
-                    <option value="__custom__">✍️ 自定义手写关系设定...</option>
-                </select>
-                <div id="customRelInputWrap" style="display:none;margin-top:6px;">
-                    <input type="text" id="customRelationInput" placeholder="手写你的专属设定（如：前世宿敌今生救赎、冷战后追妻...）" style="width:100%;padding:6px 8px;font-size:12px;border-radius:6px;border:1.5px solid #2e7d32;box-sizing:border-box;">
-                </div>
-            </div>
-
-            <label style="font-size:11.5px;color:#777;">最终生成的 CP / 关系设定（可随意手动直接修改）：</label>
-            <input type="text" id="finalPairingInput" value="全员向 / 友情向 (无固定CP)" style="width:100%;padding:7px;font-size:13px;border-radius:6px;border:1px solid #b8a694;box-sizing:border-box;font-weight:700;color:#900;">
-        </div>
-
-        <div class="form-group">
-            <label>标签 Tags（用逗号隔开）</label>
-            <input type="text" id="newBookTags" placeholder="如：冒险, 团宠, 甜文, 互宠日常">
-        </div>
-        <div class="form-group">
-            <label>封面设置（本地相册上传 / Emoji）</label>
-            <div style="display:flex;align-items:center;gap:10px;">
-                <label class="upload-btn" style="cursor:pointer;padding:6px 12px;font-size:12px;">
-                    📁 选择本地封面图
-                    <input type="file" id="newBookCoverFile" accept="image/*" style="display:none;">
-                </label>
-                <input type="text" id="newBookEmoji" value="📕" style="width:50px;text-align:center;">
-                <div id="newBookCoverPreview" style="width:40px;height:56px;border:1px solid #ccc;border-radius:4px;display:flex;align-items:center;justify-content:center;background:#eee;overflow:hidden;font-size:20px;">📕</div>
-            </div>
-        </div>
-        <div class="form-group">
-            <label>故事简介与梗概 <span class="required">*</span></label>
-            <textarea id="newBookSummary" rows="3" placeholder="写写这本书的主线设定（纯乙女向，所有攻略对象仅爱慕女主角本人）..."></textarea>
-        </div>
-        <div class="btn-row">
-            <button class="btn-secondary" onclick="closeModal()">取消</button>
-            <button class="btn-primary" id="startGenCustomBookBtn">🚀 启动 AI 生成第 1 章</button>
-        </div>
-    `);
-
-    const poolContainer = document.getElementById('characterChipsPool');
-    const filterInput = document.getElementById('charSearchFilterInput');
-    const finalPairingInput = document.getElementById('finalPairingInput');
-    const templateSelect = document.getElementById('pairingTemplateSelect');
-    const customRelWrap = document.getElementById('customRelInputWrap');
-    const customRelInput = document.getElementById('customRelationInput');
-    const togglePoolBtn = document.getElementById('btnTogglePoolExpand');
-
-    let selectedChars = [];
-    let isPoolExpanded = false;
-
-    togglePoolBtn.onclick = () => {
-        isPoolExpanded = !isPoolExpanded;
-        poolContainer.style.maxHeight = isPoolExpanded ? '180px' : '56px';
-        poolContainer.style.overflowY = isPoolExpanded ? 'auto' : 'hidden';
-        togglePoolBtn.textContent = isPoolExpanded ? '🔼 收起' : `🔽 展开全部 (${allCharacters.length})`;
-    };
-
-    function updateFinalPairingText() {
-        let relStyle = templateSelect.value;
-        if (relStyle === '__custom__') {
-            relStyle = customRelInput.value.trim() || '自定义关系';
-        }
-        if (!selectedChars.length) {
-            finalPairingInput.value = (templateSelect.value === '__custom__' && customRelInput.value.trim()) 
-                ? `全员向 (${relStyle})` 
-                : '全员向 / 友情向 (无固定CP)';
-        } else {
-            const joinedNames = selectedChars.join(' & ');
-            finalPairingInput.value = `${joinedNames} × ${pName} (${relStyle})`;
-        }
-    }
-
-    function renderChips(filterTxt = '') {
-        const q = filterTxt.trim().toLowerCase();
-        let html = `
-        <button type="button" class="ao3-char-chip ${!selectedChars.length ? 'selected' : ''}" data-name="__all__" style="border:1px solid #ccc;background:${!selectedChars.length ? '#900' : '#f5f5f5'};color:${!selectedChars.length ? '#fff' : '#333'};padding:3px 8px;border-radius:12px;font-size:11px;cursor:pointer;">
-            🌟 全员向
-        </button>
-        `;
-
-        const filtered = allCharacters.filter(c => {
-            if (!q) return true;
-            return c.name.toLowerCase().includes(q) || c.desc.toLowerCase().includes(q);
-        });
-
-        filtered.forEach(c => {
-            const isSel = selectedChars.includes(c.name);
-            html += `
-            <button type="button" class="ao3-char-chip" data-name="${escapeHtml(c.name)}" style="border:1px solid ${isSel ? '#900' : '#ccc'};background:${isSel ? '#ffebee' : '#fff'};color:${isSel ? '#900' : '#333'};padding:3px 8px;border-radius:12px;font-size:11px;cursor:pointer;display:inline-flex;align-items:center;gap:3px;" title="${escapeHtml(c.desc)}">
-                <span>${isSel ? '❤️' : '➕'}</span>
-                <span>${escapeHtml(c.name)}</span>
-            </button>
-            `;
-        });
-
-        if (!filtered.length && q) {
-            html += `
-            <button type="button" class="ao3-char-chip" data-name="${escapeHtml(q)}" style="border:1px dashed #2e7d32;background:#e8f5e9;color:#2e7d32;padding:3px 8px;border-radius:12px;font-size:11px;cursor:pointer;">
-                ➕ 选用自定义角色: "${escapeHtml(q)}"
-            </button>
-            `;
-        }
-
-        poolContainer.innerHTML = html;
-
-        poolContainer.querySelectorAll('.ao3-char-chip').forEach(btn => {
-            btn.onclick = () => {
-                const cName = btn.dataset.name;
-                if (cName === '__all__') {
-                    selectedChars = [];
-                } else {
-                    const idx = selectedChars.indexOf(cName);
-                    if (idx !== -1) {
-                        selectedChars.splice(idx, 1);
-                    } else {
-                        selectedChars.push(cName);
-                    }
-                }
-                renderChips(filterInput.value);
-                updateFinalPairingText();
-            };
-        });
-    }
-
-    filterInput.oninput = () => {
-        renderChips(filterInput.value);
-        if (filterInput.value.trim() && !isPoolExpanded) {
-            togglePoolBtn.click();
-        }
-    };
-
-    templateSelect.onchange = () => {
-        const isCust = templateSelect.value === '__custom__';
-        customRelWrap.style.display = isCust ? 'block' : 'none';
-        if (isCust) customRelInput.focus();
-        updateFinalPairingText();
-    };
-
-    customRelInput.oninput = () => updateFinalPairingText();
-
-    renderChips();
-
-    let loadedCoverUrl = '';
-    document.getElementById('newBookCoverFile').onchange = function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = function(evt) {
-            loadedCoverUrl = evt.target.result;
-            document.getElementById('newBookCoverPreview').innerHTML = `<img src="${loadedCoverUrl}" style="width:100%;height:100%;object-fit:cover;">`;
-            showToast('✅ 封面已载入', 'success', 1200);
-        };
-        reader.readAsDataURL(file);
-    };
-
-    document.getElementById('startGenCustomBookBtn').onclick = async () => {
-        const title = document.getElementById('newBookTitle').value.trim();
-        const summary = document.getElementById('newBookSummary').value.trim();
-        const pairing = finalPairingInput.value.trim() || '全员向 / 独宠女主';
-        const tagsRaw = document.getElementById('newBookTags').value.trim();
-        const coverEmoji = document.getElementById('newBookEmoji').value.trim() || '📕';
-        const pov = document.getElementById('newBookPovSelect').value || 'third';
-
-        if (!title) { showToast('⚠️ 请输入书籍名称', 'error'); return; }
-        if (!summary) { showToast('⚠️ 请填写简介作为生成线索', 'error'); return; }
-
-        if (typeof OtomeSecurityGuard !== 'undefined') {
-            const btn = document.getElementById('startGenCustomBookBtn');
-            const origText = btn.textContent;
-            btn.disabled = true;
-            btn.textContent = '⏳ 乙女护栏审查中...';
-            showToast('⏳ 正在进行内容审核...', 'info', 1200);
-            
-            const vReason = await OtomeSecurityGuard.judgeSemanticViolation(title + '\n' + pairing + '\n' + tagsRaw + '\n' + summary);
-            if (vReason) {
-                const workId = 'ao3_banned_' + Date.now();
-                const capturedViolationDraft = {
-                    _id: workId,
-                    _isViolationDraft: true,
-                    title: title,
-                    pairing: pairing,
-                    pov: pov,
-                    tags: tagsRaw ? tagsRaw.split(/[,，\s]+/).filter(Boolean) : ['违规取证'],
-                    summary: summary,
-                    author: currentAo3Name,
-                    coverUrl: loadedCoverUrl || null,
-                    coverEmoji: coverEmoji,
-                    kudos: 0,
-                    comments: 0,
-                    reviews: [],
-                    day: G.day || 1,
-                    activeChapterIdx: 0,
-                    chapters: [{
-                        chapterNum: 1,
-                        title: '【违规草稿梗概未过审】',
-                        content: `【涉嫌违规被安全系统拦截的原作大纲】：\n\n书名：《${title}》\nCP关系：${pairing}\n视角：${pov}\n标签：${tagsRaw}\n简介/梗概：\n${summary}\n\n⚠️ 该书籍在向 AI 发送生成请求前已被纯乙女安全守卫拦截并锁定为物证。`,
-                        day: G.day || 1
-                    }]
-                };
-
-                if (!G.fanworks) G.fanworks = [];
-                G.fanworks.push(capturedViolationDraft);
-                if (typeof autoSaveGame === 'function') autoSaveGame();
-
-                closeModal();
-                const fullOffendingProof = `[AO3开坑草稿物证]\n书名：《${title}》\nCP设定：${pairing}\n简介内容：${summary}`;
-                OtomeSecurityGuard.triggerDeviceBan(vReason, fullOffendingProof);
-                return;
-            }
-            btn.disabled = false;
-            btn.textContent = origText;
-        }
-
-        const tags = tagsRaw ? tagsRaw.split(/[,，\s]+/).filter(Boolean) : ['原创同人'];
-        closeModal();
-
-        await generateNewBookFromAI({
-            customTitle: title,
-            customSummary: summary,
-            pairing,
-            pov,
-            tags,
-            coverUrl: loadedCoverUrl,
-            coverEmoji,
-            author: currentAo3Name
-        });
-    };
-}
-
-function cleanAo3AIOutput(raw) {
-    let s = String(raw || '');
-    s = s.replace(/<think>[\s\S]*?<\/think>/gi, '');
-    s = s.replace(/<analysis>[\s\S]*?<\/analysis>/gi, '');
-    s = s.replace(/```(?:text|markdown)?\s*/gi, '').replace(/```/g, '');
-    return s.trim();
-}
-
-function grabAo3Tag(raw, tag) {
-    const s = cleanAo3AIOutput(raw);
-    const escaped = tag.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    let m = s.match(new RegExp(`\\[${escaped}\\]\\s*([\\s\\S]*?)\\s*\\[\\/${escaped}\\]`, 'i'));
-    if (m) return m[1].trim();
-    const known = ['TITLE','PAIRING','TAGS','SUMMARY','CHAPTER_TITLE','CONTENT'];
-    m = s.match(new RegExp(`\\[${escaped}\\]\\s*[:：]?\\s*([\\s\\S]*?)(?=\\s*\\[(?:${known.join('|')})\\]\\s*[:：]?|$)`, 'i'));
-    return m ? m[1].trim() : '';
-}
-
-function normalizeAo3Work(work) {
-    if (!work || !Array.isArray(work.chapters) || !work.chapters.length) return work;
-    const ch = work.chapters[0];
-    const rawCandidate = `${ch.title || ''}\n${ch.content || ''}`;
-    const looksBroken = /(?:<think>|<\/think>|\[TITLE\]|\[CHAPTER_TITLE\]|\[CONTENT\]|To be written)/i.test(rawCandidate);
-    if (!looksBroken) return work;
-
-    const title = grabAo3Tag(rawCandidate, 'TITLE');
-    const pairing = grabAo3Tag(rawCandidate, 'PAIRING');
-    const tags = grabAo3Tag(rawCandidate, 'TAGS');
-    const summary = grabAo3Tag(rawCandidate, 'SUMMARY');
-    const chapterTitle = grabAo3Tag(rawCandidate, 'CHAPTER_TITLE');
-    const content = grabAo3Tag(rawCandidate, 'CONTENT');
-
-    if (title) work.title = title;
-    if (pairing) work.pairing = pairing;
-    if (tags) work.tags = tags.split(/[,，、\s]+/).filter(Boolean);
-    if (summary) work.summary = summary;
-    if (chapterTitle) ch.title = chapterTitle;
-    if (content) ch.content = content;
-    else {
-        let cleaned = cleanAo3AIOutput(ch.content || '');
-        cleaned = cleaned
-            .replace(/\[TITLE\][\s\S]*?(?=\[PAIRING\]|\[CHAPTER_TITLE\]|\[CONTENT\]|$)/gi, '')
-            .replace(/\[PAIRING\][\s\S]*?(?=\[TAGS\]|\[SUMMARY\]|\[CHAPTER_TITLE\]|\[CONTENT\]|$)/gi, '')
-            .replace(/\[TAGS\][\s\S]*?(?=\[SUMMARY\]|\[CHAPTER_TITLE\]|\[CONTENT\]|$)/gi, '')
-            .replace(/\[SUMMARY\][\s\S]*?(?=\[CHAPTER_TITLE\]|\[CONTENT\]|$)/gi, '')
-            .replace(/\[CHAPTER_TITLE\][\s\S]*?(?=\[CONTENT\]|$)/gi, '')
-            .trim();
-        if (cleaned) ch.content = cleaned;
-    }
-    if (ch.title) ch.title = cleanAo3AIOutput(ch.title).replace(/^\s*[:：]+\s*/, '').trim();
-    if (ch.content) ch.content = cleanAo3AIOutput(ch.content);
-    return work;
-}
-
-async function generateNewBookFromAI(params = {}) {
-    if (G.isGenerating) { showToast('⏳ 正在生成中，请稍候'); return; }
-    G.isGenerating = true;
-
-    try {
-        const p = G.player;
-        const authorName = params.author || (G.ao3User && G.ao3User.username) || p.ytName;
-        const isAuthorMe = (authorName.trim() === p.ytName.trim());
-        const pov = params.pov || 'third';
-
-        let povPrompt = '';
-        if (pov === 'first') {
-            povPrompt = `【文章叙事人称】：严格使用【第一人称「我」】以女主角「${p.ytName}」的心境自述展开小说！`;
-        } else if (pov === 'second') {
-            povPrompt = `【文章叙事人称】：严格使用【第二人称「你」】以沉浸式交互视角描摹女主角的遭遇！`;
-        } else {
-            povPrompt = `【文章叙事人称】：严格使用【第三人称「她 / ${p.ytName}」】以经典同人小说视角展开行文！`;
-        }
-
-        let accountIdentityPrompt = '';
-        if (isAuthorMe) {
-            accountIdentityPrompt = `【重大背景】：本文是由著名 MC 主播「${p.ytName}」本人亲自以大号在 AO3 上实名开坑创作的！`;
-        } else {
-            accountIdentityPrompt = `【作者背景】：作者笔名为「${authorName}」，表面上是一名同人作者，但其实是主播「${p.ytName}」披着的小号。`;
-        }
-
-        let promptGuide = '';
-        if (params.customTitle) {
-            promptGuide = `
-            【书籍设定】
-            书名：《${params.customTitle}》
-            简介：${params.customSummary}
-            关系/CP：${params.pairing || '独宠女主向'}
-            标签：${(params.tags || []).join(', ')}
-            请创作第 1 章节，字数 500-800 字。
-            `;
-        } else {
-            const npcNames = Object.values(G.npcs).map(n => n.name).join('、');
-            promptGuide = `
-            【随机同人创作】
-            围绕女主播「${p.ytName}」（人设：${p.persona}，赛道：${p.category}）。
-            相关角色池：${npcNames}。
-            灵感线索：${params.themePrompt || '自由发挥，符合MC世界与主播生活趣味'}。
-            `;
-        }
-
-        const sysPrompt = `
-        你是一名热爱 Minecraft 主播圈的资深同人文作者，正在 AO3 网站发布小说。
-        ${accountIdentityPrompt}
-        ${povPrompt}
-        ${promptGuide}
-        【性别与情感绝对铁律（最重要）】：
-        1. 无论支持 GL(女同)、GB(女攻男受)、还是 BG(男女)，主角「${p.ytName}」绝对是纯正的女性（生理与心理皆为女性，绝无男性生殖器官或扶他特征）！
-        2. 所有登场角色只能对女主角「${p.ytName}」产生爱意、守护或友谊，女主角是绝对的情感核心！
-        3. 绝对严禁描写任何两个男性角色之间的同性恋爱、接吻或拉郎倾向！如果设定中出现多名男性，他们之间必须是竞争对手或纯粹的兄弟情！
-        
-        请严格按以下标签输出：
-        [TITLE]书籍标题[/TITLE]
-        [PAIRING]CP关系或组合[/PAIRING]
-        [TAGS]标签1, 标签2, 标签3[/TAGS]
-        [SUMMARY]一段引人入胜的简介（100字左右）[/SUMMARY]
-        [CHAPTER_TITLE]第1章标题[/CHAPTER_TITLE]
-        [CONTENT]第1章正文内容（500-800字，行文细腻生动，画面感强烈，文笔极佳）[/CONTENT]
-        `;
-
-        const raw = await callAI([
-            { role: 'system', content: sysPrompt },
-            { role: 'user', content: '请创作新书第1章。' }
-        ], { maxTokens: 10000, temperature: 0.95 });
-
-        const grab = (tag) => grabAo3Tag(raw, tag);
-        const title = params.customTitle || grab('TITLE') || 'MC世界奇幻之旅';
-        const pairing = params.pairing || grab('PAIRING') || `${p.ytName} & 好友`;
-        const tags = params.tags || (grab('TAGS') || '同人, MC, 冒险').split(/[,，、\s]+/).filter(Boolean);
-        const summary = params.customSummary || grab('SUMMARY') || '在方块世界中展开的全新篇章。';
-        const chTitle = grab('CHAPTER_TITLE') || '初遇与启程';
-        const content = grab('CONTENT') || cleanAo3AIOutput(raw).trim();
-
-        const workId = 'ao3_' + Date.now();
-        const newWork = {
-            _id: workId,
-            title,
-            pairing,
-            pov,
-            tags,
-            summary,
-            author: authorName,
-            coverUrl: params.coverUrl || null,
-            coverEmoji: params.coverEmoji || pick(['📕', '📗', '📘', '📙', '📓', '📜']),
-            kudos: rand(30, 260),
-            comments: rand(2, 35),
-            reviews: [],
-            day: G.day,
-            activeChapterIdx: 0,
-            chapters: [{
-                chapterNum: 1,
-                title: chTitle,
-                content: content,
-                day: G.day
-            }]
-        };
-
-        if (!G.fanworks) G.fanworks = [];
-        G.fanworks.push(newWork);
-
-        G.player.followers += rand(10, 50);
-        G.player.likes += rand(5, 20);
-
-        showToast(`🎉 成功在 AO3 上线新书《${title}》！`, 'success', 2500);
-        appendStory(`🎨 AO3 上线了小说《${title}》（作者：${authorName}，CP: ${pairing}）！`, '🎨 同人新作');
-        autoSaveGame();
-
-        openAo3Reader(workId);
-
-    } catch (e) {
-        showToast('❌ 同人作品生成失败：' + e.message, 'error');
-    } finally {
-        G.isGenerating = false;
-        updateUI();
-    }
-}
-
-async function urgeContinueBookChapter(workId) {
-    const work = (G.fanworks || []).find(w => w._id === workId);
-    if (!work) return;
-    if (G.isGenerating) { showToast('⏳ 正在生成中，请稍候'); return; }
-
-    // 催更前置智能裁决，防止已有书籍里的不良倾向在后续被放大
-    if (typeof OtomeSecurityGuard !== 'undefined') {
-        showToast('⏳ 正在审核催更内容走向...', 'info', 1000);
-        const vReason = await OtomeSecurityGuard.judgeSemanticViolation(work.title + '\n' + work.pairing + '\n' + work.summary);
-        if (vReason) {
-            OtomeSecurityGuard.triggerDeviceBan(vReason, `[AO3催更违规] 《${work.title}》 | CP: ${work.pairing}`);
-            return;
-        }
-    }
-
-    G.isGenerating = true;
-
-    try {
-        const nextChapterNum = work.chapters.length + 1;
-        const lastChapter = work.chapters[work.chapters.length - 1];
-        const lastSlice = (lastChapter && lastChapter.content) ? lastChapter.content.slice(-400) : '';
-        const pov = work.pov || 'third';
-
-        let povPrompt = '';
-        if (pov === 'first') {
-            povPrompt = `【续写人称约束】：延续第一人称「我」的女主主观视角续写！`;
-        } else if (pov === 'second') {
-            povPrompt = `【续写人称约束】：延续第二人称「你」的交互式视角续写！`;
-        } else {
-            povPrompt = `【续写人称约束】：延续第三人称「她」的视角续写！`;
-        }
-
-        const sysPrompt = `
-        你正在 AO3 网站上续写 MC 同人小说《${work.title}》（作者：${work.author}，CP: ${work.pairing || '无'}，简介: ${work.summary}）。
-        ${povPrompt}
-        【性别与情感铁律（最重要）】：
-        1. 坚守纯正女性主角定位（生理心理皆为女，绝无男性器官）。支持GL/GB/BG但女主是唯一核心！
-        2. 所有登场男性必须只对女主产生情愫。绝对禁止描写任何两个男性角色之间的同性恋情或拉郎暧昧！如果发生互动，只能是情敌竞争或纯粹的兄弟情。
-        
-        上一章结尾片段如下：
-        “${lastSlice}”
-        读者正在疯狂催更！请续写【第 ${nextChapterNum} 章】，承接前文剧情，生动推进情节。
-        格式要求：
-        [CHAPTER_TITLE]本章小标题[/CHAPTER_TITLE]
-        [CONTENT]续写正文（500-800字）[/CONTENT]
-        `;
-
-        const raw = await callAI([
-            { role: 'system', content: sysPrompt },
-            { role: 'user', content: `请续写第 ${nextChapterNum} 章。` }
-        ], { maxTokens: 10000, temperature: 0.95 });
-
-        const grab = (tag) => grabAo3Tag(raw, tag);
-        const chTitle = grab('CHAPTER_TITLE') || `第 ${nextChapterNum} 章`;
-        const content = grab('CONTENT') || cleanAo3AIOutput(raw).trim();
-
-        work.chapters.push({
-            chapterNum: nextChapterNum,
-            title: chTitle,
-            content: content,
-            day: G.day
-        });
-
-        work.kudos = (work.kudos || 0) + rand(15, 60);
-        work.comments = (work.comments || 0) + rand(3, 15);
-        work.activeChapterIdx = work.chapters.length - 1;
-
-        showToast(`🎉 成功催更！第 ${nextChapterNum} 章已发布！`, 'success', 2500);
-        appendStory(`📖 小说《${work.title}》催更成功，更新了第 ${nextChapterNum} 章「${chTitle}」！`, '📢 同人更新');
-        autoSaveGame();
-        renderBrowserPanel();
-
-    } catch (e) {
-        showToast('❌ 催更续写失败：' + e.message, 'error');
-    } finally {
-        G.isGenerating = false;
-        updateUI();
-    }
-}
-
-async function generateAo3ReviewsByAI(workId) {
-    const work = (G.fanworks || []).find(w => w._id === workId);
-    if (!work) return;
-    if (G.isGenerating) { showToast('⏳ 正在生成中，请稍候'); return; }
-
-    G.isGenerating = true;
-
-    try {
-        const p = G.player;
-        const isAuthorMain = (work.author.trim() === p.ytName.trim());
-
-        let accountReactionsPrompt = '';
-        if (isAuthorMain) {
-            accountReactionsPrompt = `
-            【注意重点】：这本书的作者就是主播「${p.ytName}」本人实名开号写的！
-            读者评论中必须充满强烈的戏剧性反应：
-            1. 读者在评论区集体尖叫：“卧槽？我没看错吧？作者是正主本人？！”
-            2. “正主亲自下场产粮了！救命！你视频不更新原来是在背地里写这个？！”
-            3. 催促主播开直播朗读自己的同人文。
-            `;
-        } else {
-            accountReactionsPrompt = `
-            【注意重点】：作者名叫「${work.author}」（其实是主播 ${p.ytName} 披的小号）。
-            读者评论可以包括：
-            1. 普通读者的夸赞与沉浸式讨论。
-            2. 随机出现 1 位读者怀疑是不是正主主播开的小号。
-            `;
-        }
-
-        const currentCh = work.chapters[work.activeChapterIdx || 0] || work.chapters[0];
-        const sysPrompt = `
-        你正在模拟 AO3 网站《${work.title}》（CP: ${work.pairing || '无'}）评论区下的真实读者书评。
-        ${accountReactionsPrompt}
-        【设定铁律】：本书的主角是生理及心理完全正常的女性。绝不存在男男暧昧。如果有读者在评论区磕男男CP，必须马上安排其他读者痛骂他们（比如回复“腐蟑螂别来沾边”、“别发癫”、“恶心”等词汇）！
-        请生成 3 至 4 条读者长短不一的真实评论。表情只能使用标准 Emoji。
-        格式要求（每行一条）：
-        [REVIEW name=读者昵称]评论正文内容[/REVIEW]
-        `;
-
-        const raw = await callAI([
-            { role: 'system', content: sysPrompt },
-            { role: 'user', content: `读者阅读完章节「${currentCh.title}」后的最新书评：` }
-        ], { maxTokens: 800, temperature: 0.95 });
-
-        if (!work.reviews) work.reviews = [];
-        const re = /\[REVIEW\s+name=([^\]]+?)\]([\s\S]*?)(?:\[\/REVIEW\]|$)/gi;
-        let m;
-        let count = 0;
-        while ((m = re.exec(raw)) !== null) {
-            const cleanAuthor = m[1].replace(/\[\/?REVIEW[^\]]*\]/gi, '').replace(/^name=/i, '').trim();
-            const cleanText = m[2].replace(/\[\/?REVIEW[^\]]*\]/gi, '').trim();
-            if (cleanText) {
-                work.reviews.unshift({
-                    id: 'rev_' + Date.now() + '_' + rand(100, 999),
-                    author: cleanAuthor || getRandomRealisticNetName(),
-                    text: cleanText,
-                    time: `第${G.day}天 ${new Date().toLocaleTimeString().slice(0, 5)}`,
-                    replies: []
-                });
-                count++;
-            }
-        }
-
-        if (count === 0 && raw.trim()) {
-            const fallback = raw.replace(/\[\/?REVIEW[^\]]*\]/gi, '').trim();
-            work.reviews.unshift({
-                id: 'rev_' + Date.now(),
-                author: getRandomRealisticNetName(),
-                text: fallback.slice(0, 150) || '太好看了，作者大大快催更！🔥',
-                time: `第${G.day}天`,
-                replies: []
-            });
-        }
-
-        showToast('✅ 读者评论已刷新！', 'success', 1500);
-        renderBrowserPanel();
-        autoSaveGame();
-
-    } catch (e) {
-        showToast('❌ 评论生成失败：' + e.message, 'error');
-    } finally {
-        G.isGenerating = false;
-    }
-}
-
-function openAo3WriteCommentModal(workId) {
-    ensureBrowserIntegrity();
-    const currentAo3Name = (G.ao3User && G.ao3User.username) || G.player.ytName;
-    openModal(`
-        <h3>✍️ 发表书评</h3>
-        <p style="font-size:12px;color:#666;">以 <b>${escapeHtml(currentAo3Name)}</b> 的身份为本书留下你的评语：</p>
-        <div class="form-group">
-            <textarea id="myAo3CommentInput" rows="3" placeholder="写下你的想法、对剧情的吐槽或催更..."></textarea>
-        </div>
-        <div class="btn-row">
-            <button class="btn-secondary" onclick="closeModal()">取消</button>
-            <button class="btn-primary" id="confirmPostAo3Comment">发表评论</button>
-        </div>
-    `);
-
-    document.getElementById('confirmPostAo3Comment').onclick = async () => {
-        const text = document.getElementById('myAo3CommentInput').value.trim();
-        if (!text) { showToast('⚠️ 评论内容不能为空', 'error'); return; }
-
-        if (typeof OtomeSecurityGuard !== 'undefined') {
-            const btn = document.getElementById('confirmPostAo3Comment');
-            const origText = btn.textContent;
-            btn.disabled = true; btn.textContent = '⏳ 审核中...';
-            const vReason = await OtomeSecurityGuard.judgeSemanticViolation(text);
-            if (vReason) {
-                const work = (G.fanworks || []).find(w => w._id === workId);
-                if (work) {
-                    if (!work.reviews) work.reviews = [];
-                    work.reviews.unshift({
-                        id: 'rev_viol_' + Date.now(),
-                        author: currentAo3Name + ' (🚨违规物证)',
-                        text: text,
-                        time: `第${G.day}天`,
-                        replies: []
-                    });
-                    autoSaveGame();
-                }
-
-                closeModal();
-                OtomeSecurityGuard.triggerDeviceBan(vReason, `[AO3发表评论物证] ${text}`);
-                return;
-            }
-            btn.disabled = false; btn.textContent = origText;
-        }
-
-        const work = (G.fanworks || []).find(w => w._id === workId);
-        if (work) {
-            if (!work.reviews) work.reviews = [];
-            work.reviews.unshift({
-                id: 'rev_' + Date.now(),
-                author: currentAo3Name,
-                text,
-                time: `第${G.day}天 ${new Date().toLocaleTimeString().slice(0, 5)}`,
-                replies: []
-            });
-            closeModal();
-            showToast('✅ 评论发表成功！', 'success');
-            renderBrowserPanel();
-            autoSaveGame();
-        }
-    };
-}
-
-function openAo3ReplyModal(workId, reviewIdx) {
-    ensureBrowserIntegrity();
-    const work = (G.fanworks || []).find(w => w._id === workId);
-    if (!work || !work.reviews || !work.reviews[reviewIdx]) return;
-    const targetRev = work.reviews[reviewIdx];
-    const currentAo3Name = (G.ao3User && G.ao3User.username) || G.player.ytName;
-    
-    // 容错防止旧版字符串导致崩溃
-    const targetRevText = typeof targetRev === 'string' ? targetRev : targetRev.text;
-    const targetRevAuthor = typeof targetRev === 'string' ? '匿名粉' : targetRev.author;
-
-    openModal(`
-        <h3>💬 回复 @${escapeHtml(targetRevAuthor)}</h3>
-        <div style="font-size:12px;color:#555;background:#f5eee1;padding:8px;border-radius:6px;margin-bottom:10px;">
-            原评：“${escapeHtml(targetRevText)}”
-        </div>
-        <div class="form-group">
-            <textarea id="myAo3ReplyInput" rows="2" placeholder="回复该读者..."></textarea>
-        </div>
-        <div class="btn-row">
-            <button class="btn-secondary" onclick="closeModal()">取消</button>
-            <button class="btn-primary" id="confirmPostAo3Reply">发送回复</button>
-        </div>
-    `);
-
-    document.getElementById('confirmPostAo3Reply').onclick = async () => {
-        const text = document.getElementById('myAo3ReplyInput').value.trim();
-        if (!text) { showToast('⚠️ 回复内容不能为空', 'error'); return; }
-
-        if (typeof OtomeSecurityGuard !== 'undefined') {
-            const btn = document.getElementById('confirmPostAo3Reply');
-            const origText = btn.textContent;
-            btn.disabled = true; btn.textContent = '⏳ 审核中...';
-            const vReason = await OtomeSecurityGuard.judgeSemanticViolation(text);
-            if (vReason) {
-                if (typeof targetRev === 'object') {
-                    if (!targetRev.replies) targetRev.replies = [];
-                    targetRev.replies.push({
-                        author: currentAo3Name + ' (🚨违规回复)',
-                        text: text,
-                        isSelf: true,
-                        time: '待审取证'
-                    });
-                    autoSaveGame();
-                }
-                closeModal();
-                OtomeSecurityGuard.triggerDeviceBan(vReason, `[AO3回复读者物证] 针对原评「${targetRevText}」回复: ${text}`);
-                return;
-            }
-            btn.disabled = false; btn.textContent = origText;
-        }
-
-        if (typeof targetRev === 'object') {
-            if (!targetRev.replies) targetRev.replies = [];
-            targetRev.replies.push({
-                author: currentAo3Name,
-                text,
-                isSelf: true,
-                time: `${new Date().toLocaleTimeString().slice(0, 5)}`
-            });
-        }
-
-        closeModal();
-        showToast('✅ 已回复该读者！', 'success');
-        renderBrowserPanel();
-        autoSaveGame();
-    };
-}
-
-// 真实的 MC 游戏圈网友昵称生成池
+// 真实的活跃网友昵称生成池
 function getRandomRealisticNetName() {
     const realisticNames = [
-        'DreamWasTakenFan', 'George_Goggles', 'Techno_NeverDies', 'Enderman_007',
-        'Redstone_Wired', 'DiamondPickaxe99', 'Speedrun_Hunter', 'Creeper_AwMan',
-        'Minecrafter_Alex', 'Blocky_Surfer', 'NetheriteGod_X', 'PixelKnight_22',
         '末影猫猫', '红石研究所长', '纯路人被封面吸引', '吃瓜第一线烤肉人',
         'MC十年老萌新', 'TNT炸穿地壳', '我的肝在隐隐作痛', '今晚下界不见不散',
         '全自动烤鸡机', '下界合金骨灰粉', '建筑党绝不认输', '速通查成分现场',
@@ -1520,7 +114,7 @@ function ensureYtIntegrity() {
             { id: 'ch_funny', name: '日常搞笑', prompt: '搞笑整活、沙雕操作、MC日常互怼' },
             { id: 'ch_tech', name: '红石黑科技', prompt: '高深红石电脑、自动化农场、黑科技机关' },
             { id: 'ch_mod', name: '模组大赏', prompt: '机械动力、灾厄变兽、生活调味品等最新热门MC模组与玩法演示' },
-            { id: 'ch_cut', name: '高光切片', prompt: '关于MC知名主播以及玩家的高光击杀切片、直播爆笑Reaction、技术解析' }
+            { id: 'ch_cut', name: '高光切片', prompt: '知名主播以及玩家的高光击杀切片、直播爆笑Reaction、技术解析' }
         ];
     }
 }
@@ -1532,7 +126,7 @@ function getIsPlayerYtMainAccount() {
 }
 
 function renderYouTubePanel() {
-    const container = document.getElementById('youtubeTab');
+    const container = document.getElementById('youtubeTab') || document.getElementById('appModalBody');
     if (!container) return;
     ensureYtIntegrity();
     const st = G.ytState;
@@ -1552,7 +146,6 @@ function renderYouTubePanel() {
 
     const currentYtName = (G.ytUser && G.ytUser.username) || G.player.ytName;
     const isMain = getIsPlayerYtMainAccount();
-    
     const avatarSrc = (isMain && G.player.avatar) ? G.player.avatar : (G.ytUser.avatarUrl || G.player.avatar || '');
 
     container.innerHTML = `
@@ -1587,30 +180,18 @@ function initDefaultYtFeed() {
     const preset = [
         {
             _id: 'yt_ext_1',
-            title: '【Dream】MC 终极追杀挑战：四人猎人围捕反杀！',
-            author: 'Dream',
-            authorId: 'dream',
+            title: '【终极实况】末地决战：全自动红石大炮与末影龙决斗！',
+            author: '方块科技组',
+            authorId: null,
             views: '382万',
             time: '1天前',
             duration: '28:45',
             thumbnailEmoji: '⚔️',
-            summary: '这是一场惊心动魄的末地决战！在仅剩半颗心时利用潜影盒与末影珍珠实现不可思议的绝地翻盘！',
+            summary: '超高难度的末地攻坚实况！在半颗心极限濒危下利用末影珍珠实现不可思议的绝地翻盘！',
             comments: []
         },
         {
             _id: 'yt_ext_2',
-            title: 'Whispy 的快乐生存：如何在一小时内造出自动化南瓜农场？',
-            author: 'Whispy',
-            authorId: 'whispy',
-            views: '45万',
-            time: '3天前',
-            duration: '14:20',
-            thumbnailEmoji: '🎃',
-            summary: '超简单的红石侦测器结构，即使是生存萌新也能闭着眼睛搭出来！',
-            comments: []
-        },
-        {
-            _id: 'yt_ext_3',
             title: `【高能切片】盘点 ${pName} 在直播中那些惊为天人的名场面TOP5！`,
             author: 'MC爆笑烤肉组',
             authorId: null,
@@ -1622,7 +203,7 @@ function initDefaultYtFeed() {
             comments: []
         },
         {
-            _id: 'yt_ext_4',
+            _id: 'yt_ext_3',
             title: '【机械动力】用齿轮与蒸汽造出全自动自动化火车物流网！',
             author: 'Redstone_Crafter',
             authorId: null,
@@ -1681,7 +262,7 @@ function buildYtFeedHTML() {
         <div style="text-align:center;padding:50px 20px;color:#888;">
             <div style="font-size:32px;margin-bottom:8px;">📺</div>
             <div style="font-weight:700;font-size:14px;">该频道暂无推送视频</div>
-            <div style="font-size:12px;margin-top:4px;">点击右上角 🔄 图标，AI 将结合圈内热搜与最新模组为你生成专属视频流！</div>
+            <div style="font-size:12px;margin-top:4px;">点击右上角 🔄 图标，AI 将结合圈内热点与模组为你生成专属视频流！</div>
         </div>
         `;
     } else {
@@ -1691,14 +272,9 @@ function buildYtFeedHTML() {
         const hiddenCount = allCards.length - MAX_VISIBLE;
 
         visibleCards.forEach(v => {
-            const npcObj = v.authorId ? G.npcs[v.authorId] : null;
             let avatarHtml = '<span>👤</span>';
             if (v.isPlayer) {
                 avatarHtml = G.player.avatar ? `<img src="${G.player.avatar}">` : '<span>🧑</span>';
-            } else if (npcObj && npcObj.avatarUrl) {
-                avatarHtml = `<img src="${npcObj.avatarUrl}">`;
-            } else if (npcObj && npcObj.avatarEmoji) {
-                avatarHtml = `<span>${npcObj.avatarEmoji}</span>`;
             }
 
             const thumbContent = v.thumbnailUrl 
@@ -1776,7 +352,7 @@ function buildYtChannelHTML() {
     const liveHistory = (p.streamHistory || []).slice().reverse();
     let liveListHtml = '';
     if (!liveHistory.length) {
-        liveListHtml = `<div style="text-align:center;color:#888;padding:20px 0;font-size:12px;">暂无历史直播记录，去左侧「📹直播」开播吧！</div>`;
+        liveListHtml = `<div style="text-align:center;color:#888;padding:20px 0;font-size:12px;">暂无历史直播记录</div>`;
     } else {
         liveListHtml = liveHistory.map((lh, idx) => `
             <div class="yt-feed-card" data-live-idx="${idx}" style="margin-bottom:10px;">
@@ -1842,15 +418,11 @@ function cleanYtCommentText(rawText) {
 
     text = text.replace(/乙女向/g, 'MC解密剧情')
                .replace(/乙女/g, '沉浸微电影')
-               .replace(/男主们/g, '大主播们')
-               .replace(/男主/g, '搭档大主播')
+               .replace(/男主们/g, '大神搭档')
+               .replace(/男主/g, '搭档好友')
                .replace(/女主视角/g, '第一人称实况')
                .replace(/女主/g, '主播')
-               .replace(/女主角/g, '主播')
-               .replace(/攻略难度/g, '通关难度')
-               .replace(/鸢尾老师/g, 'UP主')
-               .replace(/鸢尾黎明/g, '优秀制作团队')
-               .replace(/预约/g, '追更');
+               .replace(/女主角/g, '主播');
 
     return text;
 }
@@ -1871,7 +443,7 @@ function buildYtWatchHTML(videoId) {
             author: G.player.ytName,
             views: (liveData ? (liveData.maxViewers || 500) : 1000) + '次观看',
             time: `第${liveData ? liveData.day : G.day}天直播`,
-            summary: liveData ? `【直播实况记录】：本场直播累计获得金币 ${liveData.moneyEarned||0}，涨粉 ${liveData.fansGained||0}！${liveData.summaryText || '全程互动火爆，观众刷屏热烈！'}` : '精彩直播内容。',
+            summary: liveData ? `【直播实况记录】：本场直播累计获得金币 ${liveData.moneyEarned||0}，涨粉 ${liveData.fansGained||0}！${liveData.summaryText || '全程互动火爆！'}` : '精彩直播内容。',
             comments: liveData ? (liveData.danmakuList || []) : []
         };
     } else {
@@ -1903,7 +475,6 @@ function buildYtWatchHTML(videoId) {
         commentsHtml = `<div style="text-align:center;color:#999;font-size:12px;padding:20px 0;">视频刚发布，快点击下方「🎲 生成更多AI评论」或抢沙发！</div>`;
     } else {
         commentsHtml = video.comments.map((c, cIdx) => {
-            // ✅ 核心容错修复：防止以前的旧评论仅是一段纯文本，导致解析不到 user 与 content
             let cUser = c.user || c.author;
             let cText = c.content || c.text;
             let cTime = c.time;
@@ -1935,8 +506,6 @@ function buildYtWatchHTML(videoId) {
 
             const cleanAuthor = cleanYtUsername(cUser);
             const cleanText = cleanYtCommentText(cText || '');
-
-            // 过滤空评论内容（防止渲染出白板）
             if (!cleanText) return '';
 
             return `
@@ -2112,7 +681,7 @@ function openCreateCustomChannelModal() {
         </div>
         <div class="form-group">
             <label>频道推送内容设定 (Prompt 线索) <span class="required">*</span></label>
-            <textarea id="newChannelPrompt" rows="3" placeholder="描述该频道应推送什么样的视频（如：整蛊挑战、沙雕搞笑日常、探店试吃、数码评测等，无需拘泥于MC）"></textarea>
+            <textarea id="newChannelPrompt" rows="3" placeholder="描述该频道应推送什么样的视频"></textarea>
         </div>
         <div class="btn-row">
             <button class="btn-secondary" onclick="closeModal()">取消</button>
@@ -2124,21 +693,7 @@ function openCreateCustomChannelModal() {
         const name = document.getElementById('newChannelName').value.trim();
         const promptText = document.getElementById('newChannelPrompt').value.trim();
 
-        if (!name) { showToast('⚠️ 频道名称不能为空', 'error'); return; }
-        if (!promptText) { showToast('⚠️ 请填写频道内容设定', 'error'); return; }
-
-        if (typeof OtomeSecurityGuard !== 'undefined') {
-            const btn = document.getElementById('confirmCreateChannelBtn');
-            const orig = btn.textContent;
-            btn.disabled = true; btn.textContent = '⏳ 审核中...';
-            const vReason = await OtomeSecurityGuard.judgeSemanticViolation(name + '\n' + promptText);
-            if (vReason) {
-                closeModal();
-                OtomeSecurityGuard.triggerDeviceBan(vReason, `[创建油管分区物证] 分区名: ${name} | 内容设定: ${promptText}`);
-                return;
-            }
-            btn.disabled = false; btn.textContent = orig;
-        }
+        if (!name || !promptText) { showToast('⚠️ 请填写完整信息', 'error'); return; }
 
         const newId = 'ch_' + Date.now();
         if (!G.ytCustomChannels) G.ytCustomChannels = [];
@@ -2151,7 +706,6 @@ function openCreateCustomChannelModal() {
         G.ytState.activeChannelId = newId;
         closeModal();
         showToast(`🎉 频道「${name}」已创建！正在生成专属推送...`, 'success', 2000);
-        
         await refreshYtExternalFeedByAI();
     };
 }
@@ -2164,19 +718,11 @@ function openYtAccountModal() {
     openModal(`
         <h3>👤 油管账户切换</h3>
         <p style="font-size:12px;color:#666;line-height:1.6;">
-            你可以使用主播<b>官方主号</b>带蓝标认证发言，或者切换为<b>路人小号</b>潜水、整活或围观其他主播。
+            你可以使用主播<b>官方主号</b>带蓝标认证发言，或者切换为<b>路人小号</b>潜水、整活或围观。
         </p>
         <div class="form-group">
             <label>当前登录账号昵称</label>
             <input type="text" id="ytAccountNameInput" value="${escapeHtml(currentName)}" placeholder="输入账号名称...">
-        </div>
-        <div style="background:#f7faf7;border:1px solid #dce8dc;padding:10px;border-radius:8px;font-size:12px;margin:8px 0;line-height:1.5;">
-            <div><b>身份状态：</b></div>
-            <div id="ytAccountDesc" style="margin-top:4px;color:${isMain ? '#2e7d32' : '#b26a00'};">
-                ${isMain 
-                    ? '🌟 <b>主播大号模式</b>：发布视频直接计入你的官方频道！' 
-                    : '🕶️ <b>披皮小号模式</b>：以路人普通观众身份潜水与评论。'}
-            </div>
         </div>
         <div class="btn-row" style="margin-top:14px;">
             <button class="btn-secondary" id="ytResetMainAccount">还原主号</button>
@@ -2185,20 +731,9 @@ function openYtAccountModal() {
     `);
 
     const input = document.getElementById('ytAccountNameInput');
-    const desc = document.getElementById('ytAccountDesc');
-
-    input.oninput = () => {
-        const val = input.value.trim();
-        const eq = val === G.player.ytName.trim();
-        desc.style.color = eq ? '#2e7d32' : '#b26a00';
-        desc.innerHTML = eq 
-            ? '🌟 <b>主播大号模式</b>：发布视频直接计入你的官方频道！' 
-            : '🕶️ <b>披皮小号模式</b>：以路人普通观众身份潜水与评论。';
-    };
 
     document.getElementById('ytResetMainAccount').onclick = () => {
         input.value = G.player.ytName;
-        input.dispatchEvent(new Event('input'));
     };
 
     document.getElementById('ytSaveAccountBtn').onclick = () => {
@@ -2223,73 +758,28 @@ async function refreshYtExternalFeedByAI() {
         const curCh = (G.ytCustomChannels || []).find(c => c.id === activeChId);
         const playerName = (G.player && G.player.ytName) || 'MC主播';
 
-        const contactsList = Object.values(G.npcs).map(n => `【${n.name}】(${n.persona || 'MC主播'})`).join('、');
-
-        let webSearchInfo = '';
-        if (typeof webSearch === 'function' && G.searchConfig && G.searchConfig.enabled) {
-            try {
-                const searchKeywords = [
-                    'Minecraft 热门模组 流行新玩法',
-                    'Minecraft YouTube trending challenges gameplay',
-                    '我的世界 最新大热更新 模组推荐 bug特性展示',
-                    curCh ? `Minecraft ${curCh.name} 热门实况` : 'Minecraft 最火爆整活实况 挑战'
-                ];
-                const q = pick(searchKeywords);
-                const sRes = await webSearch(q);
-                if (sRes && sRes.results && sRes.results.length) {
-                    if (typeof formatSearchContext === 'function') {
-                        webSearchInfo = formatSearchContext(sRes.results);
-                    } else {
-                        webSearchInfo = sRes.results.slice(0, 3).map(r => `【${r.title}】：${r.content}`).join('\n');
-                    }
-                }
-            } catch (err) {
-                console.warn('油管刷新联网搜索降级：', err);
-            }
-        }
-
-        let categoryPrompt = '';
-        if (curCh) {
-            categoryPrompt = `
-            【当前专区限定】：该专区为「${curCh.name}」，内容设定要求为：${curCh.prompt}。
-            所有推荐视频必须紧密贴合该专区的主题！
-            `;
-        } else {
-            categoryPrompt = `
-            【内容主题】：Minecraft 我的世界油管实况与社区大热专区，兼顾大神技术、流行模组、硬核挑战、爆笑沙雕与同圈互动。
-            `;
-        }
+        let categoryPrompt = curCh 
+            ? `【专区限定】：该专区为「${curCh.name}」，内容设定：${curCh.prompt}。` 
+            : `【内容主题】：游戏与日常生活大热专区，兼顾大神技术、流行模组、硬核挑战、爆笑沙雕。`;
 
         const sysPrompt = `
 你正在模拟 YouTube 游戏与生活视频推荐流系统。
 ${categoryPrompt}
-${webSearchInfo ? `【当前互联网MC圈最新资讯/模组/热点参考】：\n${webSearchInfo}\n` : ''}
-玩家频道名：「${playerName}」（人设风格：${G.player.persona || 'MC主播'}）。
-玩家的好友与同行NPC包括：${contactsList}。
-
-【创作者与视频类型丰富性（重点）】：
-请从以下 3 种来源中随机组合，生成 3 条热门推荐视频：
-1. 【圈内同行好友】：从通讯录好友（如 Dream, Twixxel, ThatMob, Whispy 等）中选择 1 位发布的新作；
-2. 【全网顶流/模组/技术高玩】：知名的 MC 大主播、红石黑科技 UP、热门模组（如机械动力 Create、灾厄、冰与火等）试玩博主，或展现 Minecraft 最新版奇葩 Bug/特性的整活视频；
-3. 【关于主播本人（${playerName}）的切片/二创】：由粉丝、烤肉组或切片 UP 主上传的关于「${playerName}」的高光反杀剪辑、直播爆笑名场面切片、或针对 ${playerName} 操作的 Reaction（反应）视频！
-
-【🚨 严禁打破第四面墙，绝不涉及男男拉郎】：
-1. 这是一个真正的 YouTube 视频社区！严禁出现任何“乙女向/恋爱游戏预告”等词汇，所有视频必须是真实、地道的游戏实况、挑战、微电影、建筑展示或切片！
-2. 绝对不允许出现男角色之间的拉郎CP、耽美BL、或男男同人切片！本圈子严打腐向言论！
-
-请生成 3 条推荐视频，严格遵循以下格式（每条以 [VIDEO] 开头，[/VIDEO] 结尾）：
+玩家频道名：「${playerName}」。
+请生成 3 条热门推荐视频，包括圈内好友作品、高玩技术、以及关于「${playerName}」的高光 Reaction 或切片。
+严格遵循格式：
 [VIDEO]
 TITLE: 视频爆款吸睛标题
 AUTHOR: 主播名字或地道网名
 VIEWS: 播放量（如：85万次观看）
 TIME: 发布时间（如：2小时前、刚刚）
-SUMMARY: 视频核心内容与高光描述（80字左右，可提及流行模组、特性或主角的高光操作）
+SUMMARY: 视频核心内容高光描述
 [/VIDEO]
-        `;
+`;
 
         const raw = await callAI([
             { role: 'system', content: sysPrompt },
-            { role: 'user', content: '请刷新 3 条贴合圈内热点的热门推荐视频。' }
+            { role: 'user', content: '请刷新 3 条热门推荐视频。' }
         ], { maxTokens: 950, temperature: 0.95 });
 
         const newCards = [];
@@ -2303,14 +793,11 @@ SUMMARY: 视频核心内容与高光描述（80字左右，可提及流行模组
             const time = (clean.match(/TIME:\s*(.+)/i) || [])[1] || '刚刚';
             const summary = (clean.match(/SUMMARY:\s*([\s\S]+)/i) || [])[1] || '全程高能精彩绝伦！';
 
-            const matchedNpc = Object.values(G.npcs).find(n => n.name.trim() === author.trim());
-
             newCards.push({
                 _id: 'yt_ai_' + Date.now() + '_' + idx,
                 channelId: activeChId,
                 title: title.trim(),
                 author: author.trim(),
-                authorId: matchedNpc ? matchedNpc.id : null,
                 views: views.trim(),
                 time: time.trim(),
                 duration: `${rand(8, 25)}:${rand(10, 59)}`,
@@ -2322,7 +809,7 @@ SUMMARY: 视频核心内容与高光描述（80字左右，可提及流行模组
 
         if (newCards.length) {
             G.ytExternalVideos = [...newCards, ...(G.ytExternalVideos || [])];
-            showToast('✅ 视频推荐已刷新，最新热点已送达！', 'success', 1500);
+            showToast('✅ 视频推荐已刷新！', 'success', 1500);
             renderYouTubePanel();
             autoSaveGame();
         }
@@ -2342,31 +829,15 @@ function openPublishVideoModal() {
     openModal(`
         <h3>➕ YouTube 发布新视频</h3>
         <div style="font-size:12px;color:#666;margin-bottom:8px;">
-            发布身份：<b style="color:${isMain ? '#2e7d32' : '#b26a00'};">${escapeHtml(currentName)}</b> ${isMain ? '（官方频道发布）' : '（小号发布）'}
+            发布身份：<b style="color:${isMain ? '#2e7d32' : '#b26a00'};">${escapeHtml(currentName)}</b>
         </div>
         <div class="form-group">
             <label>视频标题 <span class="required">*</span></label>
             <input type="text" id="ytNewVideoTitle" placeholder="起一个吸睛的油管爆款标题...">
         </div>
         <div class="form-group">
-            <label>视频封面模式</label>
-            <div class="radio-group-inline" style="margin-bottom:6px;">
-                <label><input type="radio" name="coverMode" value="text" checked> 📝 纯文字生动描述封面</label>
-                <label><input type="radio" name="coverMode" value="image"> 🖼️ 导入本地图片封面</label>
-            </div>
-            <textarea id="ytCoverDescInput" rows="2" placeholder="输入封面图的文字描绘（如：身披钻石甲与末影龙对视的震撼特写...）"></textarea>
-            <div id="ytImageUploadBox" style="display:none;margin-top:6px;">
-                <label class="upload-btn" style="cursor:pointer;padding:6px 12px;font-size:12px;">
-                    📁 选择图片
-                    <input type="file" id="ytCoverFileInput" accept="image/*" style="display:none;">
-                </label>
-                <button type="button" class="btn-secondary small" id="ytVisionAiCheckBtn" style="margin-left:6px;">🤖 开启AI视觉识图解析</button>
-                <div id="ytCoverImgPreview" style="margin-top:6px;width:100px;height:60px;border-radius:6px;background:#eee;overflow:hidden;display:flex;align-items:center;justify-content:center;font-size:11px;color:#999;">无图片</div>
-            </div>
-        </div>
-        <div class="form-group">
             <label>视频脚本剧情 / 简介 <span class="required">*</span></label>
-            <textarea id="ytNewVideoSummary" rows="3" placeholder="描述这期视频的核心内容、高光击杀、搞笑反转等..."></textarea>
+            <textarea id="ytNewVideoSummary" rows="3" placeholder="描述这期视频的核心内容、高光反杀、搞笑日常等..."></textarea>
         </div>
         <div class="btn-row">
             <button class="btn-secondary" onclick="closeModal()">取消</button>
@@ -2374,83 +845,17 @@ function openPublishVideoModal() {
         </div>
     `);
 
-    let loadedCoverData = null;
-
-    document.querySelectorAll('input[name="coverMode"]').forEach(radio => {
-        radio.onchange = () => {
-            const isImg = radio.value === 'image';
-            document.getElementById('ytImageUploadBox').style.display = isImg ? 'block' : 'none';
-        };
-    });
-
-    document.getElementById('ytCoverFileInput').onchange = function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-        const reader = new FileReader();
-        reader.onload = function(evt) {
-            loadedCoverData = evt.target.result;
-            document.getElementById('ytCoverImgPreview').innerHTML = `<img src="${loadedCoverData}" style="width:100%;height:100%;object-fit:cover;">`;
-            showToast('✅ 封面图片已载入', 'success', 1200);
-        };
-        reader.readAsDataURL(file);
-    };
-
-    document.getElementById('ytVisionAiCheckBtn').onclick = () => {
-        openModal(`
-            <h3 style="color:#e65100;">⚠️ AI 识图功能提示</h3>
-            <div style="font-size:13px;color:#333;line-height:1.6;margin:10px 0;">
-                <p>1. 该功能要求您在模型设置中填入的 API 模型具有<b>视觉识图（Vision / 多模态）</b>支持（例如 gpt-4o, claude-3-5-sonnet 等）。</p>
-                <p style="margin-top:6px;color:#c62828;"><b>2. 图片上传会转化为 Base64 编码，单次请求将消耗大量 Token 额度！</b></p>
-            </div>
-            <p style="font-size:12px;color:#666;">若模型不支持多模态，建议使用“文字描述代替图片”以保证生成流畅稳定并节省费用。</p>
-            <div class="btn-row" style="margin-top:14px;">
-                <button class="btn-secondary" onclick="closeModal(); openPublishVideoModal();">知道了，返回编辑</button>
-            </div>
-        `);
-    };
-
-    document.getElementById('ytConfirmPublishBtn').onclick = async () => {
+    document.getElementById('ytConfirmPublishBtn').onclick = () => {
         const title = document.getElementById('ytNewVideoTitle').value.trim();
         const summary = document.getElementById('ytNewVideoSummary').value.trim();
-        const coverDesc = document.getElementById('ytCoverDescInput').value.trim();
 
-        if (!title) { showToast('⚠️ 标题不能为空', 'error'); return; }
-        if (!summary) { showToast('⚠️ 视频简介剧情不能为空', 'error'); return; }
-
-        if (typeof OtomeSecurityGuard !== 'undefined') {
-            const btn = document.getElementById('ytConfirmPublishBtn');
-            const orig = btn.textContent;
-            btn.disabled = true; btn.textContent = '⏳ 审核中...';
-            const vReason = await OtomeSecurityGuard.judgeSemanticViolation(title + '\n' + coverDesc + '\n' + summary);
-            if (vReason) {
-                const bannedVideoDraft = {
-                    title: `[🚨违规取证视频] ${title}`,
-                    desc: `【涉嫌违规被拦截视频内容】：\n封面描述：${coverDesc}\n视频脚本梗概：${summary}`,
-                    coverUrl: loadedCoverData,
-                    coverDesc: coverDesc,
-                    views: 0,
-                    likes: 0,
-                    day: G.day || 1,
-                    comments: []
-                };
-                if (!G.player.videos) G.player.videos = [];
-                G.player.videos.push(bannedVideoDraft);
-                if (typeof autoSaveGame === 'function') autoSaveGame();
-
-                closeModal();
-                OtomeSecurityGuard.triggerDeviceBan(vReason, `[油管发布视频物证]\n标题：《${title}》\n封面描述：${coverDesc}\n剧情简介：${summary}`);
-                return;
-            }
-            btn.disabled = false; btn.textContent = orig;
-        }
+        if (!title || !summary) { showToast('⚠️ 标题与简介不能为空', 'error'); return; }
 
         closeModal();
 
         const videoObj = {
             title,
             desc: summary,
-            coverUrl: loadedCoverData,
-            coverDesc: coverDesc,
             views: rand(300, 2000),
             likes: rand(50, 400),
             day: G.day,
@@ -2463,8 +868,8 @@ function openPublishVideoModal() {
         G.player.followers += rand(50, 300);
         G.player.money += rand(30, 100);
 
-        showToast(`🎉 视频《${title}》已成功发布到 YouTube！`, 'success', 2500);
-        appendStory(`🎬 你在 YouTube 上发布了新视频《${title}》！收获了首波播放与点赞。`, '🎬 视频发布');
+        showToast(`🎉 视频《${title}》已成功发布！`, 'success', 2500);
+        appendStory(`🎬 你在 YouTube 上发布了新视频《${title}》！`, '🎬 视频发布');
         autoSaveGame();
         renderYouTubePanel();
     };
@@ -2476,13 +881,6 @@ async function generateMoreYtCommentsByAI(videoId) {
     if (!video) {
         video = (G.player.videos || []).find(v => ('yt_my_' + (v.title || v.day)) === videoId);
     }
-    if (!video && videoId && videoId.startsWith('live_')) {
-        const lIdx = parseInt(videoId.replace('live_', ''));
-        const ld = (G.player.streamHistory || []).slice().reverse()[lIdx];
-        if (ld) {
-            video = { comments: (ld.danmakuList = ld.danmakuList || []), title: ld.title || '直播回放', author: G.player.ytName };
-        }
-    }
     if (!video) return;
     if (G.isGenerating) { showToast('⏳ 正在生成评论...'); return; }
 
@@ -2490,33 +888,24 @@ async function generateMoreYtCommentsByAI(videoId) {
 
     try {
         const sysPrompt = `
-你正在模拟 YouTube 游戏频道《${video.title}》（作者：${video.author || '游戏主播'}，内容概要：${video.summary || video.desc || '精彩MC实况分享'}）下方的海外及本土真实观众评论区。
-
-【🚨 严禁打破第四堵墙与网络喷子设定】：
-1. 这是一个真实的 Minecraft 游戏与 YouTube 创作者圈子！作者「${video.author || '主播'}」是一位纯正女性的主播，支持 GL、GB、BG。
-2. 绝对禁止打破次元壁出现“纸片人”、“乙女向”、“攻略”、“男主”、“鸢尾老师”等元游戏词汇！
-3. 观众只是纯正看实况的粉丝。评论必须聚焦：游戏操作、红石建筑、整活调侃、或者被惊艳到了。
-4. 【社区防线】：这个世界的网民对“磕男男CP/男男拉郎”极度厌恶反感！如果你模拟的 4-6 个网友中有人偶然发癫磕起了男男CP，必须立刻、马上安排另一条或多条网友评论来痛骂反击他们（如：“楼上腐蟑螂是不是看耽美给自己看傻了”、“有病吧恶心死我了”、“别在这发癫！”）！坚决捍卫纯正的环境。
-5. 名字必须像真实的油管活跃玩家（如：末影猫猫、DreamWasTakenFan、纯路人被封面吸引），严禁使用 YouTuber_数字。
-6. 严格遵循以下输出格式（每行一条）：
+你正在模拟 YouTube 游戏频道《${video.title}》（作者：${video.author || '游戏主播'}）下方的海外及本土真实观众评论区。
+请生成 4 条真实生动的网友评论。
+格式要求：
 [COMMENT user=网友昵称]评论正文[/COMMENT]
-        `;
+`;
 
         const raw = await callAI([
             { role: 'system', content: sysPrompt },
-            { role: 'user', content: '请生成4~6条生动真实的油管网友游戏评论。' }
+            { role: 'user', content: '请生成4条真实的油管网友评论。' }
         ], { maxTokens: 900, temperature: 0.95 });
 
         if (!video.comments) video.comments = [];
-        
-        // 更健壮的正则，兼顾各种可能没闭合的情况
         const re = /\[COMMENT(?:\s+user=|\s*:\s*)(["']?)([^\]"'\n]+)\1\]([\s\S]*?)(?:\[\/COMMENT\]|(?=\[COMMENT)|$)/gi;
         let m;
         let cCount = 0;
         while ((m = re.exec(raw)) !== null) {
             let uName = cleanYtUsername(m[2]);
             let cBody = cleanYtCommentText(m[3]);
-
             if (cBody) {
                 video.comments.unshift({
                     user: uName,
@@ -2528,41 +917,11 @@ async function generateMoreYtCommentsByAI(videoId) {
             }
         }
 
-        // 强力兜底回退：如果 AI 完全没有按标签输出，那就按行读取
-        if (cCount === 0 && raw.trim()) {
-            const lines = raw.split('\n').filter(l => l.trim().length > 3);
-            lines.forEach((l) => {
-                let parsedUser = null;
-                let parsedContent = l;
-
-                // 捕捉 [COMMENT user=XXX] 内容
-                const nameMatch = l.match(/\[COMMENT\s+user=([^\]]+)\](.*)/i) || l.match(/^([^:：]{2,16})[:：]\s*(.+)$/);
-                if (nameMatch) {
-                    parsedUser = nameMatch[1];
-                    parsedContent = nameMatch[2] || l;
-                }
-
-                parsedUser = cleanYtUsername(parsedUser);
-                parsedContent = cleanYtCommentText(parsedContent);
-
-                if (parsedContent) {
-                    video.comments.unshift({
-                        user: parsedUser,
-                        content: parsedContent,
-                        time: `第${G.day}天`,
-                        replies: []
-                    });
-                    cCount++;
-                }
-            });
-        }
-
-        showToast(`✅ 评论区已生成 ${cCount} 条真实网友热评！`, 'success', 1500);
+        showToast(`✅ 评论区已刷新！`, 'success', 1500);
         renderYouTubePanel();
         autoSaveGame();
 
     } catch (e) {
-        console.error('评论生成失败', e);
         showToast('❌ 评论生成失败：' + e.message, 'error');
     } finally {
         G.isGenerating = false;
@@ -2572,11 +931,9 @@ async function generateMoreYtCommentsByAI(videoId) {
 function openYtWriteCommentModal(videoId) {
     ensureYtIntegrity();
     const currentName = (G.ytUser && G.ytUser.username) || G.player.ytName;
-    const isMain = getIsPlayerYtMainAccount();
-
     openModal(`
         <h3>✍️ 发布 YouTube 评论</h3>
-        <p style="font-size:12px;color:#666;">以 <b>${escapeHtml(currentName)}</b> ${isMain ? '(官方认证大号)' : '(小号)'} 的身份留言：</p>
+        <p style="font-size:12px;color:#666;">以 <b>${escapeHtml(currentName)}</b> 的身份留言：</p>
         <div class="form-group">
             <textarea id="myYtCommentInput" rows="3" placeholder="添加公开评论..."></textarea>
         </div>
@@ -2586,45 +943,13 @@ function openYtWriteCommentModal(videoId) {
         </div>
     `);
 
-    document.getElementById('confirmPostYtComment').onclick = async () => {
+    document.getElementById('confirmPostYtComment').onclick = () => {
         const text = document.getElementById('myYtCommentInput').value.trim();
         if (!text) { showToast('⚠️ 评论内容不能为空', 'error'); return; }
-
-        if (typeof OtomeSecurityGuard !== 'undefined') {
-            const btn = document.getElementById('confirmPostYtComment');
-            const orig = btn.textContent;
-            btn.disabled = true; btn.textContent = '⏳ 审核中...';
-            const vReason = await OtomeSecurityGuard.judgeSemanticViolation(text);
-            if (vReason) {
-                let targetVideo = (G.ytExternalVideos || []).find(v => v._id === videoId);
-                if (!targetVideo) targetVideo = (G.player.videos || []).find(v => ('yt_my_' + (v.title || v.day)) === videoId);
-                if (targetVideo) {
-                    if (!targetVideo.comments) targetVideo.comments = [];
-                    targetVideo.comments.unshift({
-                        user: currentName + ' (🚨违规物证)',
-                        content: text,
-                        time: '刚刚'
-                    });
-                    autoSaveGame();
-                }
-
-                closeModal();
-                OtomeSecurityGuard.triggerDeviceBan(vReason, `[油管评论留言物证] ${text}`);
-                return;
-            }
-            btn.disabled = false; btn.textContent = orig;
-        }
 
         let video = (G.ytExternalVideos || []).find(v => v._id === videoId);
         if (!video) {
             video = (G.player.videos || []).find(v => ('yt_my_' + (v.title || v.day)) === videoId);
-        }
-        if (!video && videoId && videoId.startsWith('live_')) {
-            const lIdx = parseInt(videoId.replace('live_', ''));
-            const ld = (G.player.streamHistory || []).slice().reverse()[lIdx];
-            if (ld) {
-                video = { comments: (ld.danmakuList = ld.danmakuList || []) };
-            }
         }
 
         if (video) {
@@ -2636,14 +961,6 @@ function openYtWriteCommentModal(videoId) {
                 isSelf: true,
                 replies: []
             });
-
-            if (isMain && video.authorId && G.npcs[video.authorId]) {
-                const targetNpc = G.npcs[video.authorId];
-                const note = `【油管评论互动】：${G.player.ytName} 在你的视频《${video.title}》下方留言：“${text}”。`;
-                targetNpc.memorySummary = (targetNpc.memorySummary || '') + `\n${note}`;
-                showToast(`🌟 主播 ${targetNpc.name} 注意到了你的留言！`, 'success', 2500);
-            }
-
             closeModal();
             showToast('✅ 评论发送成功！', 'success', 1500);
             renderYouTubePanel();
@@ -2658,21 +975,11 @@ function openYtReplyCommentModal(videoId, commentIdx) {
     if (!video) {
         video = (G.player.videos || []).find(v => ('yt_my_' + (v.title || v.day)) === videoId);
     }
-    if (!video && videoId && videoId.startsWith('live_')) {
-        const lIdx = parseInt(videoId.replace('live_', ''));
-        const ld = (G.player.streamHistory || []).slice().reverse()[lIdx];
-        if (ld) video = { comments: (ld.danmakuList = ld.danmakuList || []) };
-    }
-    if (!video || !video.comments || !video.comments[commentIdx]) {
-        showToast('⚠️ 找不到该评论或已被删除', 'error');
-        return;
-    }
+    if (!video || !video.comments || !video.comments[commentIdx]) return;
 
     const targetComment = video.comments[commentIdx];
-    
-    // 容错修复旧字符串
-    const displayTargetUser = cleanYtUsername(typeof targetComment === 'string' ? '匿名粉' : (targetComment.user || targetComment.author));
-    const displayTargetText = cleanYtCommentText(typeof targetComment === 'string' ? targetComment : (targetComment.content || targetComment.text || ''));
+    const displayTargetUser = cleanYtUsername(targetComment.user || targetComment.author);
+    const displayTargetText = cleanYtCommentText(targetComment.content || targetComment.text || '');
     const currentName = (G.ytUser && G.ytUser.username) || G.player.ytName;
 
     openModal(`
@@ -2681,7 +988,7 @@ function openYtReplyCommentModal(videoId, commentIdx) {
             原评：“${escapeHtml(displayTargetText)}”
         </div>
         <div class="form-group">
-            <textarea id="myYtReplyInput" rows="2" placeholder="输入你的公开回复..."></textarea>
+            <textarea id="myYtReplyInput" rows="2" placeholder="输入回复..."></textarea>
         </div>
         <div class="btn-row">
             <button class="btn-secondary" onclick="closeModal()">取消</button>
@@ -2689,75 +996,26 @@ function openYtReplyCommentModal(videoId, commentIdx) {
         </div>
     `);
 
-    document.getElementById('confirmPostYtReply').onclick = async () => {
+    document.getElementById('confirmPostYtReply').onclick = () => {
         const replyText = document.getElementById('myYtReplyInput').value.trim();
         if (!replyText) { showToast('⚠️ 回复内容不能为空', 'error'); return; }
 
-        if (typeof OtomeSecurityGuard !== 'undefined') {
-            const btn = document.getElementById('confirmPostYtReply');
-            const orig = btn.textContent;
-            btn.disabled = true; btn.textContent = '⏳ 审核中...';
-            const vReason = await OtomeSecurityGuard.judgeSemanticViolation(replyText);
-            if (vReason) {
-                if (typeof targetComment === 'object') {
-                    if (!targetComment.replies) targetComment.replies = [];
-                    targetComment.replies.push({
-                        author: currentName + ' (🚨违规回复)',
-                        text: replyText,
-                        isSelf: true,
-                        time: '待审取证'
-                    });
-                    autoSaveGame();
-                }
-                closeModal();
-                OtomeSecurityGuard.triggerDeviceBan(vReason, `[油管回复他人物证] 针对原评「${displayTargetText}」回复: ${replyText}`);
-                return;
-            }
-            btn.disabled = false; btn.textContent = orig;
-        }
-
-        if (typeof targetComment === 'object') {
-            if (!targetComment.replies) targetComment.replies = [];
-            targetComment.replies.push({
-                author: currentName,
-                text: replyText,
-                isSelf: true,
-                time: '刚刚'
-            });
-        }
+        if (!targetComment.replies) targetComment.replies = [];
+        targetComment.replies.push({
+            author: currentName,
+            text: replyText,
+            isSelf: true,
+            time: '刚刚'
+        });
 
         closeModal();
-        showToast('✅ 回复发表成功！', 'success', 1200);
+        showToast('✅ 回复成功！', 'success', 1200);
         renderYouTubePanel();
         autoSaveGame();
-
-        if (Math.random() < 0.7) {
-            setTimeout(async () => {
-                try {
-                    const responder = displayTargetUser;
-                    const sys = `你正在模拟真实油管游戏玩家「${responder}」。Minecraft主播回复了你的评论：“${replyText}”。请给出风趣简短的接话，只使用标准Emoji表情，字数在30字以内，禁止输出任何标记代码。绝对严禁打破第四面墙，你就是一名看MC视频的普通观众！`;
-                    const res = await callAI([{ role: 'system', content: sys }, { role: 'user', content: '请接话。' }], { maxTokens: 80, temperature: 0.9 });
-                    const cleanReply = cleanYtCommentText(res);
-                    if (cleanReply && typeof targetComment === 'object') {
-                        targetComment.replies.push({
-                            author: responder,
-                            text: cleanReply,
-                            isSelf: false,
-                            time: '片刻后'
-                        });
-                        showToast(`💬 @${responder} 回复了你！`, 'info', 2000);
-                        renderYouTubePanel();
-                        autoSaveGame();
-                    }
-                } catch(e) {
-                    console.warn('接话失败', e);
-                }
-            }, 1500);
-        }
     };
 }
 
-// 暴露全局
+// 挂载全局
 window.renderYouTubePanel = renderYouTubePanel;
 window.refreshYtExternalFeedByAI = refreshYtExternalFeedByAI;
 window.openYtAccountModal = openYtAccountModal;
@@ -2767,16 +1025,4 @@ window.openPublishVideoModal = openPublishVideoModal;
 window.generateMoreYtCommentsByAI = generateMoreYtCommentsByAI;
 window.openYtWriteCommentModal = openYtWriteCommentModal;
 window.openYtReplyCommentModal = openYtReplyCommentModal;
-
 window.renderBrowserPanel = renderBrowserPanel;
-window.openAo3Home = openAo3Home;
-window.openAo3Reader = openAo3Reader;
-window.triggerFanCreationPrompt = triggerFanCreationPrompt;
-window.openCreateCustomBookModal = openCreateCustomBookModal;
-window.urgeContinueBookChapter = urgeContinueBookChapter;
-window.openAo3AccountSettingsModal = openAo3AccountSettingsModal;
-window.openAo3WorkActionModal = openAo3WorkActionModal;
-window.openEditBookSettingsModal = openEditBookSettingsModal;
-window.generateAo3ReviewsByAI = generateAo3ReviewsByAI;
-window.openAo3WriteCommentModal = openAo3WriteCommentModal;
-window.openAo3ReplyModal = openAo3ReplyModal;
