@@ -6,7 +6,7 @@
  *       桌面 App 图标与小组件全自由长按晃动编辑态、粉白仿Windows甜心弹窗、
  *       🌟 4 格宽专属复古星象塔罗大组件驱动引擎、
  *       🌟 桌面层级自由手拖微调引擎（锁定屏幕条、塔罗、日历、便签、App网格分别手拖并持久化保存与一键重置）、
- *       🌟 独立 App 路由中枢（接通微信、个性主题、系统设置、塔罗牌、忆海 Rememori、AO3同人文库原生沙盒保活）。
+ *       🌟 独立 App 路由中枢（接通微信、个性主题、系统设置、塔罗牌、忆海 Rememori、AO3同人文库无缝沉浸全屏）。
  */
 
 (function () {
@@ -1302,18 +1302,23 @@
         const appModalBody = document.getElementById('appModalBody');
         if (!appModal || !appModalTitle || !appModalBody) return;
 
-        if (appKey !== 'chat' && appKey !== 'ao3') appModal.classList.remove('wechat-seamless-shell');
+        // 默认移除无缝沉浸模式，仅在 chat 与 ao3 时开启
+        if (appKey !== 'chat' && appKey !== 'ao3') {
+            appModal.classList.remove('wechat-seamless-shell');
+        }
 
-        // 💬 微信/聊天 App
+        // 💬 微信/聊天 App（全屏无缝沉浸）
         if (appKey === 'chat' && typeof window.renderChatApp === 'function') {
+            appModal.classList.add('wechat-seamless-shell');
             appModalTitle.textContent = "💬 聊天中心";
             window.renderChatApp(appModalBody);
             appModal.classList.add('opened');
             return;
         }
 
-        // 📚 🌟 全新接通 AO3 同人文库 App（纯正白描学术质感）
+        // 📚 🌟 全新接通 AO3 同人文库 App（加入 wechat-seamless-shell 彻底消除原生粉色假顶栏）
         if (appKey === 'ao3' && typeof window.renderAo3App === 'function') {
+            appModal.classList.add('wechat-seamless-shell');
             appModalTitle.textContent = "Archive of Our Own (AO3)";
             window.renderAo3App(appModalBody);
             appModal.classList.add('opened');
@@ -1381,7 +1386,11 @@
 
     window.closePhoneApp = function () {
         const appModal = document.getElementById('appModal');
-        if (appModal) appModal.classList.remove('opened');
+        if (appModal) {
+            appModal.classList.remove('opened');
+            appModal.classList.remove('wechat-seamless-shell');
+        }
+        document.body.classList.remove('ao3-active-fullscreen');
     };
 
     function bootShell() {
