@@ -6,8 +6,8 @@
  *    微信原生直显大图与沉浸式大图文字查看器对接、拟真生活排版卡片（ui_card）渲染。
  * 🌟 升级：
  *  1. 真实用户录音管线：消灭并发开麦冲突，MediaRecorder 与 HUD 分析器共用单一麦克风流，彻底保证 Base64 音频 100% 写入；
- *  2. 离线 ASR 与系统听写双轨融合：松手后全透视展示转写过程，底层异常不掩盖，UI 体验原生平滑；
- *  3. 双轨文本保底：如果离线 WASM 遇到限制，自动无缝提取实时语音听写文字，彻底消灭“（发送了一条语音）”；
+ *  2. 私有云端 ASR 与系统听写双轨融合：松手后全透视展示转写过程，底层异常不掩盖，UI 体验原生平滑；
+ *  3. 双轨文本保底：如果云端口令未激活或网络异常，自动无缝提取实时语音听写文字，彻底消灭“（发送了一条语音）”；
  *  4. 交互解耦：点击声波播放/暂停音频；点击末尾空白处/微标专门展开/收起转文字与背景音，绝对不误触发播放；
  *  5. 全语种支持：支持德语、英语、日语等外语原声（originalText）、中文翻译（text）与生活背景音（audioBg）清晰排版；
  *  6. 发送语音后不自动触发 AI 回复，严格遵循点击闪电才生成。
@@ -135,8 +135,8 @@
         } catch (_) {}
     }
 
-    // 将 HUD 转为正在离线识别状态
-    function setVoiceHudTranscribing(tip = '正在本地离线转文字...') {
+    // 将 HUD 转为正在云端识别状态
+    function setVoiceHudTranscribing(tip = '正在云端极速转文字...') {
         const hud = document.getElementById('wechatVoiceRecordingHUD');
         if (!hud) return;
         const iconGroup = document.getElementById('hudWaveIconGroup');
@@ -396,7 +396,7 @@
         window.renderSingleChatWindow(null, { keepScroll: true });
     };
 
-    // 真实录音与 ASR 本地离线语音识别核心（零延迟单次硬件接管）
+    // 真实录音与 ASR 云端极速语音识别核心
     window.startRealVoiceRecord = async function(npcId) {
         if (_isRecordingVoice) return;
 
@@ -548,32 +548,31 @@
             return;
         }
 
-        setVoiceHudTranscribing('正在本地离线转文字...');
+        setVoiceHudTranscribing('正在云端极速转文字...');
 
         // 🌟 1. 优先暂存系统实时听写的文本
         let finalText = _recognizedVoiceText ? _recognizedVoiceText.trim() : '';
 
-        // 🌟 2. 执行离线 Whisper ASR 推理，异常优雅处理
+        // 🌟 2. 执行私有云端 faster-whisper ASR 推理
         if (window.mcytAsr && recordedAudioBlob) {
             try {
-                const activeModel = await window.mcytAsr.getActiveModelMeta();
-                if (!activeModel) {
-                    console.warn('[VoiceRecord] 未找到已激活的本地 ASR 模型');
+                const asrConfig = await window.mcytAsr.loadConfig();
+                if (!asrConfig.accessCode || !asrConfig.accessCode.trim()) {
+                    console.warn('[VoiceRecord] 尚未在设置中激活 ASR 口令');
                     if (!finalText && typeof showToast === 'function') {
-                        showToast('未激活离线模型，已保留原生语音', 'info', 2000);
+                        showToast('尚未配置 ASR 激活口令，已保留录音原声', 'info', 2000);
                     }
                 } else {
-                    setVoiceHudTranscribing(`正在装配 ${activeModel.name || '模型'}...`);
                     const asrResult = await window.mcytAsr.transcribe(recordedAudioBlob);
-                    console.log('[VoiceRecord] 离线 ASR 推理返回结果:', asrResult);
+                    console.log('[VoiceRecord] 云端 ASR 转写结果:', asrResult);
                     if (asrResult && asrResult.trim()) {
                         finalText = asrResult.trim();
                     }
                 }
             } catch (asrErr) {
-                console.error('[VoiceRecord] 本地 ASR 离线推理报错:', asrErr);
+                console.error('[VoiceRecord] 云端 ASR 转录异常:', asrErr);
                 if (typeof showToast === 'function') {
-                    showToast('ASR: ' + (asrErr.message || '识别异常'), 'info', 2500);
+                    showToast('云端识别: ' + (asrErr.message || '网络异常'), 'info', 2500);
                 }
             }
         }
@@ -926,7 +925,7 @@
                         ${quoteHtml}
                         <div class="wechat-contact-card" onclick="if(typeof window.openContactCardDetailModal==='function')window.openContactCardDetailModal('${escapeHtml(card.id || '')}', '${escapeHtml(card.name || '')}', '${escapeHtml(card.persona || '')}', '${escapeHtml(card.avatar || '')}', '${escapeHtml(card.signature || '')}')">
                             <div style="font-size:11px;color:#888;margin-bottom:6px;border-bottom:0.5px solid #f0f0f0;padding-bottom:4px;">个人名片</div>
-                            <div style="display:flex;align-items:center;gap:10px;">
+                            <div style="display:flex;align-items:gap:10px;">
                                 <div style="width:42px;height:42px;border-radius:6px;overflow:hidden;background:#eee;flex-shrink:0;">
                                     <img src="${card.avatar || 'assets/icons/chat.png'}" style="width:100%;height:100%;object-fit:cover;" onerror="this.src='assets/icons/chat.png';">
                                 </div>
@@ -1191,7 +1190,7 @@
                 </div>
                 <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
                     <button onclick="window.toggleBehindScreen('${npcId}')" style="border:0.5px solid ${isBehindActive ? '#07c160' : '#ccc'};background:${isBehindActive ? '#d4f5dd' : '#fff'};color:${isBehindActive ? '#07c160' : '#555'};width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="动作感知">
-                        <svg viewBox="0 0 24 24" style="width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+                        <svg viewBox="0 0 24 24" style="width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="13" r="3"/></svg>
                     </button>
                     
                     <button id="btnChatLightningTrigger" onclick="window.triggerAIReplyForSingle('${npcId}')" style="border:none;background:#07c160;color:#fff;width:32px;height:32px;border-radius:6px;display:flex;align-items:center;justify-content:center;cursor:pointer;" title="让对方继续说话">

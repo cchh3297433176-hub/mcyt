@@ -5,12 +5,74 @@
  *    🌟 全球母语多语言语音支持：拟真语音环境音（audio_bg）与【母语原声（英语/德语/日语等）+ 中文翻译对照】；
  *    带跨时段、隔夜双时间戳感知、塔罗牌解读感知、Rememori 证据链沉淀、
  *    专属好友独立联网搜索检索与权威网页卡片推送、以及好感度铁律动态结算机制；
+ *    🌟 独立外挂视觉识图：若开启独立识图 API，自动将用户发送的真实图片解析为客观画面事实注入提示词；
  *    🌟 极简优化：机器直接在末尾提供确定的时间事实，杜绝大模型计算，节省 Token 与注意力；
  *    🌟 角色主动发送文字图片（[IMAGE_TEXT]）与拟真生活排版卡片（[UI_CARD]）无损解析与安全消毒。
  */
 
 (function() {
     'use strict';
+
+    // 独立视觉 / 识图 API 调用核心管道（OpenAI Vision 规范，兼容智谱 glm-4v-flash 等）
+    async function callVisionAPI(imageUrl) {
+        if (!imageUrl) return '';
+        let visionCfg = null;
+        try {
+            if (typeof window.getSafeVisionConfig === 'function') {
+                visionCfg = window.getSafeVisionConfig();
+            } else {
+                const raw = localStorage.getItem('mcyt_vision_api_config');
+                if (raw) visionCfg = JSON.parse(raw);
+            }
+        } catch (_) {}
+
+        if (!visionCfg || !visionCfg.enabled || !visionCfg.apiKey) {
+            return '';
+        }
+
+        const baseUrl = (visionCfg.baseUrl || 'https://open.bigmodel.cn/api/paas/v4').replace(/\/+$/, '');
+        const endpoint = `${baseUrl}/chat/completions`;
+        const modelName = visionCfg.model || 'glm-4v-flash';
+        const promptText = visionCfg.prompt || '请用简明而生动的中文客观描述这张图片的核心内容、场景、人物动作与关键细节，不超过120字。';
+
+        const payload = {
+            model: modelName,
+            messages: [
+                {
+                    role: 'user',
+                    content: [
+                        { type: 'text', text: promptText },
+                        {
+                            type: 'image_url',
+                            image_url: {
+                                url: imageUrl
+                            }
+                        }
+                    ]
+                }
+            ],
+            max_tokens: 300,
+            temperature: 0.3
+        };
+
+        const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${visionCfg.apiKey}`
+            },
+            body: JSON.stringify(payload)
+        });
+
+        if (!res.ok) {
+            const errTxt = await res.text().catch(() => '');
+            throw new Error(`识图接口响应异常(${res.status}): ${errTxt.slice(0, 80)}`);
+        }
+
+        const data = await res.json();
+        const content = data?.choices?.[0]?.message?.content || '';
+        return content.trim();
+    }
 
     // 辅助函数：判断是否需要联网搜索并提取关键词
     function checkSearchIntent(lastPlayerText, searchCfg) {
@@ -137,7 +199,7 @@
         return htmlStr.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
     }
 
-    // 🤖 单人私聊 AI 回复触发（多语种母语语音条、条数控制、好感度动态铁律、文字图片、拟真UI卡片）
+    // 🤖 单人私聊 AI 回复触发（多语种母语语音条、条数控制、好感度动态铁律、独立视觉识图、文字图片、拟真UI卡片）
     window.triggerAIReplyForSingle = async function(npcId) {
         const npc = window.G.npcs ? window.G.npcs[npcId] : null;
         if (!npc) return;
@@ -174,6 +236,39 @@
         const uiCardCfg = (typeof window.getNpcUiCardConfig === 'function')
             ? window.getNpcUiCardConfig(npcId)
             : { enabled: false, customPrompt: '' };
+
+        // 👁️ 独立视觉识图前置处理：检查历史记录中用户发出的尚未解析过的真实图片
+        let visionCfg = null;
+        try {
+            if (typeof window.getSafeVisionConfig === 'function') visionCfg = window.getSafeVisionConfig();
+        } catch (_) {}
+
+        if (visionCfg && visionCfg.enabled && visionCfg.apiKey) {
+            for (let i = history.length - 1; i >= Math.max(0, history.length - 6); i--) {
+                const item = history[i];
+                if (item && item.from === 'player' && (item.type === 'image' || item.imageUrl)) {
+                    // 若有真实图片链接但尚未经过识图解析
+                    if (!item.visionAnalyzed && (item.imageUrl || item.url)) {
+                        const targetImgUrl = item.imageUrl || item.url;
+                        try {
+                            if (typeof showToast === 'function') showToast('正在使用外挂视觉识别图片...', 'info', 1500);
+                            const recognizedDesc = await callVisionAPI(targetImgUrl);
+                            if (recognizedDesc) {
+                                item.visionAnalyzed = true;
+                                item.imageDesc = recognizedDesc; // 赋予客观画面细节
+                                console.log('[VisionAPI] 成功解析图片画面:', recognizedDesc);
+                                if (typeof window.syncChatHistoryToLocalBackup === 'function') {
+                                    window.syncChatHistoryToLocalBackup();
+                                }
+                            }
+                        } catch (visionErr) {
+                            console.warn('[VisionAPI] 视觉识图调用异常，跳过独立解析:', visionErr);
+                        }
+                        break; // 每次主要解析最近的一张
+                    }
+                }
+            }
+        }
 
         let lastMsgTime = '';
         let lastMsgTimestamp = null;
@@ -225,7 +320,7 @@
             if (m.type === 'ui_card') return `${speaker} [分享了拟真物品卡片: ${m.cardType || '卡片'}]: ${m.cardSummary || extractTextFromHtml(m.cardHtml) || '卡片内容'}`;
             if (m.type === 'moment_notice') return `[系统提醒]: ${m.author} 刚发了一条新朋友圈动态`;
             if (m.originalText) return `${speaker}: ${m.originalText} (译: ${m.text || ''})`;
-            if (m.imageDesc) return `${speaker} [发了张照片，画面描绘]: ${m.imageDesc}`;
+            if (m.imageDesc) return `${speaker} [发了张照片，画面细节事实]: ${m.imageDesc}`;
             if (m.type === 'image' || m.imageUrl) return `${speaker} [发了张自拍/游戏截图]`;
             return `${speaker}: ${m.text || ''}`;
         }).join('\n');
