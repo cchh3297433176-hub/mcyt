@@ -5,7 +5,7 @@
  *    🌟 全球母语多语言语音支持：拟真语音环境音（audio_bg）与【母语原声（英语/德语/日语等）+ 中文翻译对照】；
  *    带跨时段、隔夜双时间戳感知、塔罗牌解读感知、Rememori 证据链沉淀、
  *    专属好友独立联网搜索检索与权威网页卡片推送、以及好感度铁律动态结算机制；
- *    🌟 独立外挂视觉识图：若开启独立识图 API，自动将用户发送的真实图片解析为客观画面事实注入提示词；
+ *    🌟 独立外挂视觉识图：尊重用户发图弹窗勾选，精准调用外部 Vision 接口为纯文本 AI 解析客观画面事实；
  *    🌟 极简优化：机器直接在末尾提供确定的时间事实，杜绝大模型计算，节省 Token 与注意力；
  *    🌟 角色主动发送文字图片（[IMAGE_TEXT]）与拟真生活排版卡片（[UI_CARD]）无损解析与安全消毒。
  */
@@ -26,7 +26,7 @@
             }
         } catch (_) {}
 
-        if (!visionCfg || !visionCfg.enabled || !visionCfg.apiKey) {
+        if (!visionCfg || !visionCfg.apiKey) {
             return '';
         }
 
@@ -237,25 +237,25 @@
             ? window.getNpcUiCardConfig(npcId)
             : { enabled: false, customPrompt: '' };
 
-        // 👁️ 独立视觉识图前置处理：检查历史记录中用户发出的尚未解析过的真实图片
+        // 👁️ 独立视觉识图前置处理：尊重发图勾选 useVision !== false，自动识别真实图片
         let visionCfg = null;
         try {
             if (typeof window.getSafeVisionConfig === 'function') visionCfg = window.getSafeVisionConfig();
         } catch (_) {}
 
-        if (visionCfg && visionCfg.enabled && visionCfg.apiKey) {
+        if (visionCfg && visionCfg.apiKey) {
             for (let i = history.length - 1; i >= Math.max(0, history.length - 6); i--) {
                 const item = history[i];
                 if (item && item.from === 'player' && (item.type === 'image' || item.imageUrl)) {
-                    // 若有真实图片链接但尚未经过识图解析
-                    if (!item.visionAnalyzed && (item.imageUrl || item.url)) {
+                    // 若用户在发图时勾选了使用识图（useVision !== false），且尚未解析过
+                    if (item.useVision !== false && !item.visionAnalyzed && (item.imageUrl || item.url)) {
                         const targetImgUrl = item.imageUrl || item.url;
                         try {
-                            if (typeof showToast === 'function') showToast('正在使用外挂视觉识别图片...', 'info', 1500);
+                            if (typeof showToast === 'function') showToast('正在调用视觉识图解析相片...', 'info', 1500);
                             const recognizedDesc = await callVisionAPI(targetImgUrl);
                             if (recognizedDesc) {
                                 item.visionAnalyzed = true;
-                                item.imageDesc = recognizedDesc; // 赋予客观画面细节
+                                item.imageDesc = recognizedDesc;
                                 console.log('[VisionAPI] 成功解析图片画面:', recognizedDesc);
                                 if (typeof window.syncChatHistoryToLocalBackup === 'function') {
                                     window.syncChatHistoryToLocalBackup();
@@ -264,7 +264,7 @@
                         } catch (visionErr) {
                             console.warn('[VisionAPI] 视觉识图调用异常，跳过独立解析:', visionErr);
                         }
-                        break; // 每次主要解析最近的一张
+                        break;
                     }
                 }
             }

@@ -1,22 +1,21 @@
 /**
  * js/apps/chat/chat-app-media.js
- * 💬 微信主应用 · 拆分分片 7/7：聊天发图片（3 种模式）、隐藏屏幕对话框切换、发送表情、单聊文字发送、
+ * 💬 微信主应用 · 拆分分片 7/7：聊天发图片（3 种模式 + 独立视觉识图勾选框）、隐藏屏幕对话框切换、发送表情、单聊文字发送、
  *    底部Tab入口（switchChatTab / openChat / closeChat）。
- * ⚠️ 拆分自 chat-app.js，仅做物理搬家。
- * 🛡️ 关键修复：修正群聊发表情、发图片时错误的单聊备份调用与落盘漏调，确保群聊即时落盘。
+ * 🛡️ 微信原生白灰微绿设计，无红黑偏移阴影，清晰舒适护眼。
  */
 
 (function() {
     'use strict';
 
-    // 📷 聊天发图片（恢复完整的 3 种模式）
+    // 📷 聊天发图片（带真实图识图 AI 勾选开关）
     window.openChatSendImageModal = function(type, id) {
         let chatSendMode = 'text_only';
         let uploadedChatImg = null;
 
         window.openWechatCleanModal('发送图片消息', `
-            <div style="text-align:left;">
-                <div style="font-size:12px;color:#666;margin-bottom:6px;font-weight:600;">选择发图模式：</div>
+            <div style="text-align:left;font-family:-apple-system,BlinkMacSystemFont,sans-serif;color:#222222;">
+                <div style="font-size:12px;color:#555555;margin-bottom:6px;font-weight:600;">选择发图模式：</div>
                 <div style="display:flex;gap:6px;margin-bottom:12px;">
                     <button type="button" id="btnChatModeText" class="moment-mode-tab-btn active" onclick="window._switchChatSendMode('text_only')">① 文字代替图片</button>
                     <button type="button" id="btnChatModeReal" class="moment-mode-tab-btn" onclick="window._switchChatSendMode('real_only')">② 纯真实图片</button>
@@ -24,30 +23,42 @@
                 </div>
 
                 <div id="panelChatTextOnly" style="display:block;">
-                    <div style="font-size:11.5px;color:#888;margin-bottom:4px;">填写画面描绘（点击卡片翻转查看）：</div>
-                    <textarea id="wchatFlipDescInput" rows="3" placeholder="例如：我在平原建造好的两层原木别墅、箱子里的整整一组下界合金锭..." class="wechat-clean-input" style="line-height:1.4;resize:none;"></textarea>
+                    <div style="font-size:11.5px;color:#666666;margin-bottom:4px;">填写画面描绘（点击卡片翻转查看）：</div>
+                    <textarea id="wchatFlipDescInput" rows="3" placeholder="例如：我在平原建造好的两层原木别墅、箱子里的整整一组下界合金锭..." class="wechat-clean-input" style="line-height:1.5;resize:none;color:#222;background:#f9f9f9;border:1px solid #e0e0e0;border-radius:6px;padding:8px;box-sizing:border-box;width:100%;"></textarea>
                 </div>
 
                 <div id="panelChatRealImg" style="display:none;">
                     <div style="margin-bottom:8px;">
-                        <label style="border:1px dashed #07c160;background:#f6fbf8;color:#07c160;padding:10px;border-radius:6px;font-size:13px;font-weight:500;text-align:center;cursor:pointer;display:block;">
+                        <label style="border:1px dashed #07c160;background:#f0f9eb;color:#07c160;padding:10px;border-radius:6px;font-size:13px;font-weight:600;text-align:center;cursor:pointer;display:block;">
                             <span>从手机相册选择图片</span>
                             <input type="file" id="wchatFileInput" accept="image/*" style="display:none;">
                         </label>
                         <div id="wchatFilePreviewWrap" style="display:none;text-align:center;margin-top:8px;">
-                            <img id="wchatFilePreview" src="" style="max-height:100px;border-radius:6px;object-fit:cover;">
+                            <img id="wchatFilePreview" src="" style="max-height:100px;border-radius:6px;object-fit:cover;border:1px solid #e0e0e0;">
                         </div>
                     </div>
                 </div>
 
                 <div id="panelChatExtraDesc" style="display:none;">
-                    <div style="font-size:11.5px;color:#888;margin-bottom:4px;">向对方描述图片内容（极省Token）：</div>
-                    <textarea id="wchatRealDescInput" rows="2" placeholder="向AI描述图片中的关键画面（如：我的血量只剩半颗心，正在被苦力怕追赶）" class="wechat-clean-input" style="line-height:1.4;resize:none;"></textarea>
+                    <div style="font-size:11.5px;color:#666666;margin-bottom:4px;">向对方描述图片内容（极省 Token）：</div>
+                    <textarea id="wchatRealDescInput" rows="2" placeholder="向AI描述图片中的关键画面（如：我的血量只剩半颗心，正在被苦力怕追赶）" class="wechat-clean-input" style="line-height:1.5;resize:none;color:#222;background:#f9f9f9;border:1px solid #e0e0e0;border-radius:6px;padding:8px;box-sizing:border-box;width:100%;"></textarea>
+                </div>
+
+                <!-- 🌟 针对真实图片的识图 AI 勾选开关 -->
+                <div id="panelChatVisionAiToggleWrap" style="display:none;margin-top:10px;padding:8px 10px;background:#f9f9f9;border-radius:6px;border:1px solid #eeeeee;">
+                    <label style="display:flex;align-items:center;gap:7px;font-size:12px;color:#222222;font-weight:600;cursor:pointer;user-select:none;">
+                        <input type="checkbox" id="wchatUseVisionAiToggle" checked style="width:15px;height:15px;accent-color:#07c160;">
+                        <span>启用独立识图 AI 辅助解析画面</span>
+                    </label>
+                    <div style="font-size:10.5px;color:#888888;margin-top:2px;margin-left:22px;line-height:1.4;">
+                        勾选后，系统将自动调用视觉模型提炼相片细节，免去手动打字描述。
+                    </div>
                 </div>
             </div>
         `, () => {
             const time = new Date().toLocaleTimeString().slice(0, 5);
             const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '我' };
+            const useVision = !!document.getElementById('wchatUseVisionAiToggle')?.checked;
             let msgObj = null;
 
             if (chatSendMode === 'text_only') {
@@ -81,6 +92,7 @@
                     type: 'image',
                     imageUrl: uploadedChatImg,
                     imageDesc: null,
+                    useVision: useVision,
                     text: '[图片]',
                     senderName: curAcc.name,
                     time,
@@ -92,7 +104,7 @@
                     if (typeof showToast === 'function') showToast('请从相册选择图片', 'error');
                     return false;
                 }
-                const desc = document.getElementById('wchatRealDescInput').value.trim() || 'MC截图';
+                const desc = document.getElementById('wchatRealDescInput').value.trim() || 'MC生活截图';
                 msgObj = {
                     _id: 'cmsg_' + Date.now() + '_' + Math.floor(Math.random() * 8999 + 1000),
                     from: 'player',
@@ -100,6 +112,7 @@
                     type: 'image',
                     imageUrl: uploadedChatImg,
                     imageDesc: desc,
+                    useVision: useVision,
                     text: `[图片] ${desc}`,
                     senderName: curAcc.name,
                     time,
@@ -119,7 +132,6 @@
                 if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
                 if (!window.G.groupChatHistory[id]) window.G.groupChatHistory[id] = [];
                 window.G.groupChatHistory[id].push(msgObj);
-                // 🛡️ 关键修复：群聊发图片必须同步群聊独立备份，绝不漏掉！
                 if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
             }
 
@@ -137,11 +149,12 @@
             const pText = document.getElementById('panelChatTextOnly');
             const pReal = document.getElementById('panelChatRealImg');
             const pDesc = document.getElementById('panelChatExtraDesc');
+            const pVisionToggle = document.getElementById('panelChatVisionAiToggleWrap');
 
             [b1, b2, b3].forEach(b => {
                 if (b) {
                     b.style.background = '#f0f0f0';
-                    b.style.color = '#555';
+                    b.style.color = '#555555';
                 }
             });
 
@@ -150,16 +163,19 @@
                 if (pText) pText.style.display = 'block';
                 if (pReal) pReal.style.display = 'none';
                 if (pDesc) pDesc.style.display = 'none';
+                if (pVisionToggle) pVisionToggle.style.display = 'none';
             } else if (mode === 'real_only') {
                 if (b2) { b2.style.background = '#07c160'; b2.style.color = '#fff'; }
                 if (pText) pText.style.display = 'none';
                 if (pReal) pReal.style.display = 'block';
                 if (pDesc) pDesc.style.display = 'none';
+                if (pVisionToggle) pVisionToggle.style.display = 'block';
             } else if (mode === 'real_with_desc') {
                 if (b3) { b3.style.background = '#07c160'; b3.style.color = '#fff'; }
                 if (pText) pText.style.display = 'none';
                 if (pReal) pReal.style.display = 'block';
                 if (pDesc) pDesc.style.display = 'block';
+                if (pVisionToggle) pVisionToggle.style.display = 'block';
             }
         };
 
@@ -223,7 +239,6 @@
             if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
             if (!window.G.groupChatHistory[id]) window.G.groupChatHistory[id] = [];
             window.G.groupChatHistory[id].push(stickerMsg);
-            // 🛡️ 关键修复：群聊发表情必须调用群聊专用落盘函数，彻底纠正此前错调单聊的 Bug！
             if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
         }
         window._stickerDrawerOpen = false;
