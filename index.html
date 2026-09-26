@@ -97,7 +97,7 @@
                                 <div class="app-title-label">聊天中心</div>
                             </div>
 
-                            <!-- 独立记忆中枢：忆海 (Rememori) 替换原有朋友圈位置 -->
+                            <!-- 独立记忆中枢：忆海 (Rememori) -->
                             <div class="app-slot" id="appSlotRememori" onclick="openPhoneApp('rememori')">
                                 <div class="app-icon-box" style="background: linear-gradient(135deg, #7048e8, #4c1d95);">
                                     <img src="assets/icons/app_rememori.png" alt="忆海" draggable="false" style="display:none;" onload="this.style.display='block';if(this.nextElementSibling)this.nextElementSibling.style.display='none';this.parentElement.style.background='none';" onerror="this.style.display='none';" />
@@ -118,13 +118,13 @@
                                 <div class="app-title-label">油管视频</div>
                             </div>
 
+                            <!-- 🌟 AO3 同人文库图标：优先读取 assets/icons/ao3.png，备选优雅学术红徽章 -->
                             <div class="app-slot" id="appSlotAo3" onclick="openPhoneApp('ao3')">
-                                <div class="app-icon-box" style="background: linear-gradient(135deg, #cc5de8, #862e9c);">
-                                    <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
-                                        <path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM6 4h5v8l-2.5-1.5L6 12V4z"/>
-                                    </svg>
+                                <div class="app-icon-box" style="background: linear-gradient(135deg, #990000, #660000);">
+                                    <img src="assets/icons/ao3.png" alt="同人文库" draggable="false" style="display:none;" onload="this.style.display='block';if(this.nextElementSibling)this.nextElementSibling.style.display='none';this.parentElement.style.background='none';" onerror="this.style.display='none';" />
+                                    <span class="ao3-fallback-monogram" style="font-family: Georgia, serif; font-size: 16px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px;">AO3</span>
                                 </div>
-                                <div class="app-title-label">AO3同人</div>
+                                <div class="app-title-label">同人文库</div>
                             </div>
 
                             <div class="app-slot" id="appSlotStream" onclick="openPhoneApp('streaming')">
@@ -242,7 +242,7 @@
             <div id="gamePage" style="display:none;"></div>
         </div>
 
-        <!-- 全站通用弹窗基座（仿微信原生白灰极简质感，100%保留所有原始ID确保脚本与事件调用稳定） -->
+        <!-- 全站通用弹窗基座 -->
         <div class="modal-overlay" id="modal" style="background: rgba(0,0,0,0.45) !important; backdrop-filter: blur(2px) !important;">
             <div class="modal-box retro-pink-window" id="modalContent" style="background: #ffffff !important; border: none !important; border-radius: 12px !important; box-shadow: 0 10px 30px rgba(0,0,0,0.18) !important; padding: 0 !important; overflow: hidden !important; max-width: 320px !important; width: 90% !important; font-family: -apple-system, sans-serif !important;">
                 <div class="retro-pink-titlebar" style="background: #ffffff !important; border-bottom: 0.5px solid #f0f0f0 !important; padding: 14px 16px !important; display: flex !important; justify-content: space-between !important; align-items: center !important;">
@@ -263,7 +263,7 @@
         })();
     </script>
 
-    <!-- 0. 存储引擎与本地核心算法库：localForage 与 本地离线 ONNX/ASR 库，必须在业务脚本前加载 -->
+    <!-- 0. 存储引擎与本地核心算法库 -->
     <script src="js/lib/localforage.min.js"></script>
     <script src="js/lib/transformers.min.js"></script>
 
@@ -278,11 +278,8 @@
     <script src="js/10-native-bridge.js"></script>
     <script src="js/11-image-backup.js"></script>
     <script src="js/system/save-engine.js"></script>
-    <!-- 全新纯前端 TTS 语音统一中枢引擎 -->
     <script src="js/system/tts-engine.js"></script>
-    <!-- 🎙️ 离线语音识别 (ASR) transformers.js + ONNX 中枢引擎 -->
     <script src="js/system/asr-engine.js"></script>
-    <!-- 🛡️ 主播掌机·QQ群白名单验证与反盗用风控引擎 -->
     <script src="js/system/auth-engine.js"></script>
     <script src="js/09-events-init.js"></script>
 
@@ -306,7 +303,6 @@
     <script src="js/apps/chat/chat-profile.js"></script>
     <script src="js/apps/chat/chat-moments.js"></script>
     <script src="js/apps/chat/chat-prompt-engine.js"></script>
-    <!-- 去中心化群聊独立提示词与高级设定中心（保持模块化与依赖就位） -->
     <script src="js/apps/chat/chat-prompt-group.js"></script>
     <script src="js/apps/chat/chat-group-settings.js"></script>
     <script src="js/apps/chat/chat-group.js"></script>
@@ -317,17 +313,18 @@
     <script src="js/apps/chat/chat-app-window.js"></script>
     <script src="js/apps/chat/chat-app-bubble.js"></script>
     <script src="js/apps/chat/chat-app-ai.js"></script>
-    <!-- 📞 独立音视频通话中枢（置于 panels 之前，确保加号抽屉可直接唤起） -->
     <script src="js/apps/chat/chat-app-call.js"></script>
     <script src="js/apps/chat/chat-app-panels.js"></script>
     <script src="js/apps/chat/chat-app-media.js"></script>
 
-    <!-- 冷启动异步加载守护：优先执行 QQ 白名单鉴权门禁，保障未放行与封禁用户绝对无法触碰掌机底层 -->
+    <!-- 🌟 全新独立同人文库 AO3 App（紧随微信子系统引入，全面联动聊天通讯录） -->
+    <script src="js/apps/ao3/ao3-app.js"></script>
+
+    <!-- 冷启动异步加载守护 -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             setTimeout(async function() {
                 try {
-                    // 1. 🛡️ 优先进入 QQ 白名单与风控死锁门禁校验
                     if (window.OtomeSecurityGuard && typeof window.OtomeSecurityGuard.checkGate === 'function') {
                         var pass = await window.OtomeSecurityGuard.checkGate();
                         if (!pass) {
@@ -336,7 +333,6 @@
                         }
                     }
 
-                    // 2. 存档引擎冷启动异步装载
                     var autoInfo = null;
                     if (typeof getAutoSaveInfo === 'function') {
                         autoInfo = await getAutoSaveInfo();
