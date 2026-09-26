@@ -7,7 +7,9 @@
  * 2. ➕ 加号抽屉（buildChatPlusDrawerHTML）：
  *    - 群聊专享【发送图片、群转账、群收款、群待办、群接龙、群投票、群打卡】；
  *    - 单聊专享【发送图片、语音通话、视频通话、红包、转账、戳一戳、亲密度、情侣空间、特别关心】。
- * 3. 📷 发送图片统一弹窗（openChatSendImageModal）：支持本地图片导入、网络图片导入、文字画片（假图片，输入画面描述）发送。
+ * 3. 📷 发送图片统一弹窗（openChatSendImageModal）：
+ *    - 支持本地图片导入、网络图片导入、文字画片（假图片，输入画面描述）发送；
+ *    - 🌟 真实图片下方提供【是否使用识图API】选项（单选框/开关，默认开启），发送真实图片后若开启，自动后台调用识图接口生成画面分析！
  */
 
 (function() {
@@ -298,19 +300,33 @@
     }
     window.buildChatPlusDrawerHTML = buildChatPlusDrawerHTML;
 
-    // 📷 全局统一图片与文字画片发送弹窗（支持群聊与单聊）
+    // 📷 全局统一图片与文字画片发送弹窗（支持群聊与单聊，配备是否使用识图API选项）
     window.openChatSendImageModal = function(type, id) {
         window._plusDrawerOpen = false;
         window._settingsDrawerOpen = false;
         document.querySelectorAll('.wechat-clean-modal-mask').forEach(el => el.remove());
 
+        let pendingBase64 = null;
+
         const modalHtml = `
             <div style="display:flex;flex-direction:column;gap:12px;text-align:left;">
-                <label style="border:1px solid #dcdcdc;background:#f9f9f9;padding:12px;border-radius:6px;font-size:13px;font-weight:500;color:#333;cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
-                    <span>📷 从手机相册选择真实图片</span>
+                <label style="border:1px dashed #07c160;background:#f6fbf8;padding:12px;border-radius:6px;font-size:13px;font-weight:500;color:#07c160;cursor:pointer;display:flex;justify-content:space-between;align-items:center;">
+                    <span id="chatImagePickerLabel">📷 从手机相册选择真实图片</span>
                     <input type="file" id="localChatImageFileInput" accept="image/*" style="display:none;">
                     <span style="color:#07c160;font-size:15px;">›</span>
                 </label>
+                <div id="chatImagePreviewWrap" style="display:none;text-align:center;padding:4px 0;">
+                    <img id="chatImagePreviewImg" src="" style="max-height:110px;border-radius:6px;object-fit:contain;box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+                </div>
+
+                <!-- 🌟 核心选项：是否使用识图 API -->
+                <div style="background:#f8f9fa;padding:8px 10px;border-radius:6px;border:1px solid #ebebeb;display:flex;align-items:center;justify-content:space-between;">
+                    <div>
+                        <div style="font-size:12px;font-weight:600;color:#181818;">启用识图 API 自动解析图片</div>
+                        <div style="font-size:10.5px;color:#888;">发送后自动分析画面细节，AI 角色知晓图片具体内容</div>
+                    </div>
+                    <input type="checkbox" id="wcleanUseVisionChk" checked style="width:17px;height:17px;accent-color:#07c160;cursor:pointer;">
+                </div>
 
                 <div style="border-top:0.5px solid #eee;padding-top:10px;">
                     <div style="font-size:12px;color:#666;margin-bottom:4px;">或输入网络图片链接：</div>
@@ -328,21 +344,37 @@
         window.openWechatCleanModal('发送图片', modalHtml, () => {
             const urlVal = document.getElementById('wcleanWebImageUrlInput')?.value.trim();
             const descVal = document.getElementById('wcleanTextImageDescInput')?.value.trim();
+            const useVision = document.getElementById('wcleanUseVisionChk')?.checked ?? true;
 
-            if (urlVal) {
+            // 1. 如果选择了本地真实图片
+            if (pendingBase64) {
                 window.doSendImageMessageDirect(type, id, {
                     type: 'image',
-                    imageUrl: urlVal,
-                    text: '[图片]'
+                    imageUrl: pendingBase64,
+                    text: '[图片]',
+                    useVision: useVision
                 });
                 return;
             }
 
+            // 2. 如果填了网络图片
+            if (urlVal) {
+                window.doSendImageMessageDirect(type, id, {
+                    type: 'image',
+                    imageUrl: urlVal,
+                    text: '[图片]',
+                    useVision: useVision
+                });
+                return;
+            }
+
+            // 3. 如果填了假图片文字描绘
             if (descVal) {
                 window.doSendImageMessageDirect(type, id, {
                     type: 'image_text_only',
                     imageDesc: descVal,
-                    text: `[图片描述：${descVal}]`
+                    text: `[图片描述：${descVal}]`,
+                    useVision: false
                 });
                 return;
             }
@@ -353,18 +385,20 @@
 
         setTimeout(() => {
             const fileInput = document.getElementById('localChatImageFileInput');
+            const previewWrap = document.getElementById('chatImagePreviewWrap');
+            const previewImg = document.getElementById('chatImagePreviewImg');
+            const pickerLabel = document.getElementById('chatImagePickerLabel');
+
             if (fileInput) {
                 fileInput.onchange = (e) => {
                     const file = e.target.files && e.target.files[0];
                     if (!file) return;
                     const reader = new FileReader();
                     reader.onload = (evt) => {
-                        document.querySelector('.wechat-clean-modal-mask')?.remove();
-                        window.doSendImageMessageDirect(type, id, {
-                            type: 'image',
-                            imageUrl: evt.target.result,
-                            text: '[图片]'
-                        });
+                        pendingBase64 = evt.target.result;
+                        if (previewImg) previewImg.src = pendingBase64;
+                        if (previewWrap) previewWrap.style.display = 'block';
+                        if (pickerLabel) pickerLabel.textContent = '已选图片：' + file.name;
                     };
                     reader.readAsDataURL(file);
                 };
@@ -372,7 +406,7 @@
         }, 30);
     };
 
-    // 🚀 底层派发图片/文字画片消息（单聊与群聊原子分流）
+    // 🚀 底层派发图片/文字画片消息（若勾选识图则自动在后台调用 Vision API，为后续 AI 闪电生成或交互提供画面内容）
     window.doSendImageMessageDirect = function(type, id, payload) {
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '我' };
         const time = new Date().toLocaleTimeString().slice(0, 5);
@@ -387,7 +421,9 @@
             type: payload.type || 'image',
             text: payload.text || '[图片]',
             time,
-            timestamp
+            timestamp,
+            useVision: !!payload.useVision,
+            visionAnalyzed: false
         };
 
         if (payload.imageUrl) msgObj.imageUrl = payload.imageUrl;
@@ -411,6 +447,29 @@
 
         if (typeof showToast === 'function') showToast('已发送', 'success', 1000);
         if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+
+        // 🌟 自动异步识图：若用户勾选了 useVision，后台立即调用视觉 API 生成文字分析并持久化保存
+        if (msgObj.useVision && msgObj.imageUrl && typeof window.callVisionAPI === 'function') {
+            (async () => {
+                try {
+                    const analyzed = await window.callVisionAPI(msgObj.imageUrl);
+                    if (analyzed) {
+                        msgObj.visionAnalyzed = true;
+                        msgObj.imageDesc = analyzed;
+                        console.log('[VisionAPI] 消息图片识图分析完成:', analyzed);
+                        if (type === 'single') {
+                            if (typeof window.syncChatHistoryToLocalBackup === 'function') window.syncChatHistoryToLocalBackup();
+                            if (window.G.currentChatNpc === id && typeof renderSingleChatWindow === 'function') renderSingleChatWindow();
+                        } else {
+                            if (typeof window.syncGroupChatsToLocalBackup === 'function') window.syncGroupChatsToLocalBackup();
+                            if (typeof window.renderGroupChatWindow === 'function') window.renderGroupChatWindow();
+                        }
+                    }
+                } catch (vErr) {
+                    console.warn('[VisionAPI] 自动识图处理异常:', vErr);
+                }
+            })();
+        }
     };
 
     // 槽位点击轻量提示
@@ -1134,5 +1193,5 @@
         `, () => {});
     };
 
-    console.log('✅ ChatAppPanels 微信抽屉架构升级成功：加号互动抽屉已挂接音视频通话');
+    console.log('✅ ChatAppPanels 微信抽屉架构升级成功：真实图片支持勾选启用识图API并异步解析');
 })();

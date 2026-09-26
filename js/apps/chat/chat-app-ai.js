@@ -21,6 +21,7 @@
     }
 
     // 独立视觉 / 识图 API 调用核心管道（OpenAI Vision 规范，兼容智谱 glm-4v-flash 等）
+    // 提升为全局通用挂载，供聊天面板与朋友圈动态流无缝调用
     async function callVisionAPI(imageUrl) {
         if (!imageUrl) return '';
         let visionCfg = null;
@@ -80,6 +81,7 @@
         const content = data?.choices?.[0]?.message?.content || '';
         return content.trim();
     }
+    window.callVisionAPI = callVisionAPI;
 
     // 辅助函数：判断是否需要联网搜索并提取关键词
     function checkSearchIntent(lastPlayerText, searchCfg) {
@@ -244,7 +246,7 @@
             ? window.getNpcUiCardConfig(npcId)
             : { enabled: false, customPrompt: '' };
 
-        // 👁️ 独立视觉识图前置处理：尊重发图勾选 useVision !== false，自动识别真实图片
+        // 👁️ 独立视觉识图前置兜底处理：尊重发图勾选 useVision === true，若尚未分析则自动补查
         let visionCfg = null;
         try {
             if (typeof window.getSafeVisionConfig === 'function') visionCfg = window.getSafeVisionConfig();
@@ -254,7 +256,7 @@
             for (let i = history.length - 1; i >= Math.max(0, history.length - 6); i--) {
                 const item = history[i];
                 if (item && item.from === 'player' && (item.type === 'image' || item.imageUrl)) {
-                    if (item.useVision !== false && !item.visionAnalyzed && (item.imageUrl || item.url)) {
+                    if (item.useVision === true && !item.visionAnalyzed && (item.imageUrl || item.url)) {
                         const targetImgUrl = item.imageUrl || item.url;
                         try {
                             if (typeof showToast === 'function') showToast('正在调用视觉识图解析相片...', 'info', 1500);

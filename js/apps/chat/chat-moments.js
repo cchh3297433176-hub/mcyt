@@ -6,12 +6,13 @@
  * 2. 动态自下而上阅读习惯：超过 10 条历史动态自动折叠在下方，提供原地展开/收起
  * 3. 完整的三种发动态配图模式：
  *    - ① 纯文字代替图片（拍立得快照质感）
- *    - ② 纯真实图片（从本地相册自选）
- *    - ③ 真实图片 + 文字描绘（AI仅读取文字描述极省Token）
+ *    - ② 纯真实图片（从本地相册自选，配备【是否使用识图API】选项，发送后自动异步分析画面）
+ *    - ③ 真实图片 + 文字描绘（AI读取文字描述极省Token，亦可结合识图API辅助）
  * 4. 指定角色发布动态：可自选大号/小号、通讯录好友或专属群演发动态
  * 5. 刷新动态：支持智能随机抽取或用户指定具体角色接话生成
  * 6. 专属群演固定永久头像机制（锁定不变脸）
- * 7. 点赞、评论、回复、转发至聊天（右侧紧凑布局，转发后静止不自动触发回复）
+ * 7. 点赞、评论、回复、转发至聊天（右侧紧凑布局，转发后静止不自动触发回复，保留识图意象）
+ * 8. 🌟 召唤互动评论深度感知：精准读取真实图片的视觉解析内容（imageDesc），让评论角色真正“看懂”照片！
  */
 
 (function() {
@@ -335,7 +336,7 @@
         // 优化规范：转发动态后保持静止，不再自动调用 triggerAIReplyForSingle，由用户手动点闪电生成
     };
 
-    // 📷 发布动态弹窗（增添自选指定角色/身份发布功能）
+    // 📷 发布动态弹窗（增添自选指定角色/身份发布功能，增添是否使用识图API选项）
     window.openPostMomentModal = function() {
         ensureFeedLoaded();
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main', name: '我', avatar: 'assets/icons/chat.png' };
@@ -387,13 +388,22 @@
                     <div id="panelRealImg" style="display:none;">
                         <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;">
                             <label style="flex:1;border:1px dashed #07c160;background:#f6fbf8;color:#07c160;padding:8px;border-radius:6px;font-size:12px;font-weight:500;text-align:center;cursor:pointer;display:block;">
-                                <span>从相册选择真实配图</span>
+                                <span id="wpostRealFileLabel">从相册选择真实配图</span>
                                 <input type="file" id="wpostRealFileInput" accept="image/*" style="display:none;">
                             </label>
                             <button type="button" id="wpostClearFileBtn" style="display:none;border:none;background:#fee2e2;color:#ef4444;padding:8px 10px;border-radius:6px;font-size:12px;cursor:pointer;">清除</button>
                         </div>
                         <div id="wpostRealPreviewWrap" style="display:none;text-align:center;margin-bottom:8px;">
                             <img id="wpostRealPreview" src="" style="max-height:100px;border-radius:6px;object-fit:cover;">
+                        </div>
+
+                        <!-- 🌟 核心选项：朋友圈真实图片是否使用识图API -->
+                        <div id="wpostVisionWrap" style="background:#f8f9fa;padding:8px 10px;border-radius:6px;border:1px solid #ebebeb;display:flex;align-items:center;justify-content:space-between;margin-top:6px;">
+                            <div>
+                                <div style="font-size:12px;font-weight:600;color:#181818;">启用识图 API 自动解析配图</div>
+                                <div style="font-size:10.5px;color:#888;">发布后自动分析画面细节，圈友召唤评论能看懂图片内容</div>
+                            </div>
+                            <input type="checkbox" id="wpostUseVisionChk" checked style="width:17px;height:17px;accent-color:#07c160;cursor:pointer;">
                         </div>
                     </div>
 
@@ -415,6 +425,7 @@
                 let finalImg = null;
                 let finalDesc = null;
                 let modeType = selectedMode;
+                let useVision = false;
 
                 if (selectedMode === 'text_only') {
                     finalDesc = document.getElementById('wpostDescOnlyInput').value.trim() || null;
@@ -424,6 +435,7 @@
                         return false;
                     }
                     finalImg = uploadedBase64;
+                    useVision = document.getElementById('wpostUseVisionChk')?.checked ?? true;
                 } else if (selectedMode === 'real_with_desc') {
                     if (!uploadedBase64) {
                         if (typeof showToast === 'function') showToast('请从相册选择图片', 'error');
@@ -431,11 +443,13 @@
                     }
                     finalImg = uploadedBase64;
                     finalDesc = document.getElementById('wpostExtraDescInput').value.trim() || 'MC精彩瞬间';
+                    useVision = document.getElementById('wpostUseVisionChk')?.checked ?? false;
                 }
 
                 ensureFeedLoaded();
-                window.G.feed.unshift({
-                    id: Date.now() + Math.floor(Math.random() * 899 + 100),
+                const newMomentId = Date.now() + Math.floor(Math.random() * 899 + 100);
+                const momentItem = {
+                    id: newMomentId,
                     author: chosenAuthor.rawName,
                     avatar: chosenAuthor.avatar || 'assets/icons/chat.png',
                     isPlayer: chosenAuthor.isPlayer,
@@ -443,16 +457,38 @@
                     imageMode: modeType,
                     image: finalImg,
                     imageDesc: finalDesc,
+                    useVision: useVision,
+                    visionAnalyzed: false,
                     time: '刚刚',
                     liked: false,
                     likes: 0,
                     comments: []
-                });
+                };
+
+                window.G.feed.unshift(momentItem);
 
                 if (typeof syncMomentsFeedToLocalBackup === 'function') syncMomentsFeedToLocalBackup();
                 if (typeof renderChatApp === 'function') renderChatApp();
                 if (typeof showToast === 'function') showToast('动态已发布', 'success', 1200);
                 if (typeof autoSaveGame === 'function') autoSaveGame();
+
+                // 🌟 自动异步识图处理：若勾选了识图，后台自动调用 Vision API 生成文字描述并保存
+                if (useVision && finalImg && typeof window.callVisionAPI === 'function') {
+                    (async () => {
+                        try {
+                            const recognizedDesc = await window.callVisionAPI(finalImg);
+                            if (recognizedDesc) {
+                                momentItem.visionAnalyzed = true;
+                                momentItem.imageDesc = recognizedDesc;
+                                console.log('[VisionAPI] 朋友圈动态配图识别成功:', recognizedDesc);
+                                if (typeof syncMomentsFeedToLocalBackup === 'function') syncMomentsFeedToLocalBackup();
+                                if (typeof renderChatApp === 'function') renderChatApp();
+                            }
+                        } catch (vErr) {
+                            console.warn('[VisionAPI] 朋友圈动态识图失败:', vErr);
+                        }
+                    })();
+                }
             });
 
             window._switchMomentPostMode = function(mode) {
@@ -463,6 +499,7 @@
                 const pText = document.getElementById('panelTextOnly');
                 const pReal = document.getElementById('panelRealImg');
                 const pExtra = document.getElementById('panelRealDescExtra');
+                const visionWrap = document.getElementById('wpostVisionWrap');
 
                 [b1, b2, b3].forEach(b => {
                     if (b) {
@@ -481,11 +518,13 @@
                     if (pText) pText.style.display = 'none';
                     if (pReal) pReal.style.display = 'block';
                     if (pExtra) pExtra.style.display = 'none';
+                    if (visionWrap) visionWrap.style.display = 'flex';
                 } else if (mode === 'real_with_desc') {
                     if (b3) { b3.style.background = '#07c160'; b3.style.color = '#fff'; }
                     if (pText) pText.style.display = 'none';
                     if (pReal) pReal.style.display = 'block';
                     if (pExtra) pExtra.style.display = 'block';
+                    if (visionWrap) visionWrap.style.display = 'flex';
                 }
             };
 
@@ -496,6 +535,7 @@
                 const pWrap = document.getElementById('wpostRealPreviewWrap');
                 const pImg = document.getElementById('wpostRealPreview');
                 const clearBtn = document.getElementById('wpostClearFileBtn');
+                const labelTxt = document.getElementById('wpostRealFileLabel');
 
                 if (input) {
                     input.onchange = (e) => {
@@ -507,6 +547,7 @@
                             if (pImg) pImg.src = uploadedBase64;
                             if (pWrap) pWrap.style.display = 'block';
                             if (clearBtn) clearBtn.style.display = 'inline-block';
+                            if (labelTxt) labelTxt.textContent = '已选图片：' + file.name;
                         };
                         reader.readAsDataURL(file);
                     };
@@ -517,6 +558,7 @@
                         if (pWrap) pWrap.style.display = 'none';
                         clearBtn.style.display = 'none';
                         if (input) input.value = '';
+                        if (labelTxt) labelTxt.textContent = '从相册选择真实配图';
                     };
                 }
             }, 30);
@@ -578,6 +620,7 @@
         }
     };
 
+    // 🌟 召唤互动：AI 评论（深度接入真实图片画面细节，准确读懂配图！）
     window.triggerAiCommentForMoment = async function(momentId) {
         ensureFeedLoaded();
         const item = window.G.feed.find(f => f.id === momentId);
@@ -596,10 +639,28 @@
         const speaker = candidates.length ? candidates[Math.floor(Math.random() * candidates.length)] : pool[0];
 
         showMomentsGeneratingBanner(`「${speaker.name}」正在赶来评论...`);
-        let picInfo = item.imageDesc ? ` [配图描述：${item.imageDesc}]` : (item.image ? ` [好友发了张自拍/游戏截图]` : '');
+
+        // 👁️ 深度提炼配图信息：若动态包含真实图片但尚未解析，自动兜底调用识图 API
+        if (item.image && !item.imageDesc && item.useVision && typeof window.callVisionAPI === 'function') {
+            try {
+                const autoRecognized = await window.callVisionAPI(item.image);
+                if (autoRecognized) {
+                    item.imageDesc = autoRecognized;
+                    item.visionAnalyzed = true;
+                    if (typeof syncMomentsFeedToLocalBackup === 'function') syncMomentsFeedToLocalBackup();
+                }
+            } catch (_) {}
+        }
+
+        let picInfo = '';
+        if (item.imageDesc) {
+            picInfo = ` [配图画面细节事实：“${item.imageDesc}”]`;
+        } else if (item.image) {
+            picInfo = ` [好友发了张自拍或生活照片]`;
+        }
 
         try {
-            const sys = `你正在扮演MC好友「${speaker.name}」（性格/风格：${speaker.persona || '朋友'}）。好友「${item.author}」发了一条朋友圈：“${item.body}”${picInfo}。请写一句接地气的微信朋友圈评论（20字内），自然吐槽、开玩笑或点赞，严禁任何括号动作描写，句末绝不加句号。`;
+            const sys = `你正在扮演MC好友「${speaker.name}」（性格/风格：${speaker.persona || '朋友'}）。好友「${item.author}」发了一条朋友圈：“${item.body}”${picInfo}。请写一句接地气的微信朋友圈评论（20字内），根据动态文字或照片画面细节自然吐槽、开玩笑或点赞，严禁任何括号动作描写，句末绝不加句号。`;
             const raw = await callAI([{ role: 'system', content: sys }, { role: 'user', content: '写一条评论' }], { maxTokens: 80, temperature: 0.85, silent: true });
             let clean = (typeof stripThought === 'function') ? stripThought(raw.trim()) : raw.trim();
             clean = clean.replace(/\([^)]*\)/g, '').replace(/（[^）]*）/g, '').replace(/。+$/g, '').trim();
