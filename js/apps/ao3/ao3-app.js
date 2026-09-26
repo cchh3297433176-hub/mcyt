@@ -3,9 +3,9 @@
  * 同人文库 App（站点聚合导航与沉浸式 AO3 文学空间）
  * 
  * 核心设计：
- * 1. 强制覆盖原生丑粉框：彻底隐藏宿主粉红假顶栏，视口 100% 沉浸全屏，保留系统时间电量。
+ * 1. 强制覆盖原生丑粉框：彻底隐藏宿主粉红假顶栏与全局粉红 AI loading 框，仅留顶部纯净微胶囊。
  * 2. 站点聚合门户：进入首先呈现同人文库站点导航，首发收录 Archive of Our Own (AO3)。
- * 3. 独立纯净弹窗：自建白灰极简大方卡片浮层，拔除任何红黑位移、重影与粉框。
+ * 3. 聊天联动直通：转发消息确立为玩家自身发言（from: 'player'），支持从微信单聊卡片一键平滑跳转直达小说阅读。
  * 4. 纯净文学排版：地毯式清除全部 Emoji，纯正象牙白与学术暗红质感。
  * 5. 唯一角色来源：100% 直连通讯录自建联系人，深度去 AI 味小说创作。
  */
@@ -138,8 +138,17 @@
     }
 
     // ============================================================
-    // 2. 自建高级白灰纯净弹窗与状态胶囊
+    // 2. 自建高级白灰纯净弹窗与状态胶囊（彻底删除粉红丑框）
     // ============================================================
+    function suppressLegacyPinkLoadingModal() {
+        const legacyModals = document.querySelectorAll('#aiLoadingModal, .ai-loading-modal, #loadingModal, .loading-modal');
+        legacyModals.forEach(m => {
+            m.style.setProperty('display', 'none', 'important');
+            m.style.setProperty('opacity', '0', 'important');
+            m.style.setProperty('pointer-events', 'none', 'important');
+        });
+    }
+
     function openAo3CustomModal(htmlContent) {
         let modalEl = document.getElementById('ao3GlobalCustomModal');
         if (!modalEl) {
@@ -168,6 +177,7 @@
     window.closeAo3CustomModal = closeAo3CustomModal;
 
     function showAo3GeneratingPill(text) {
+        suppressLegacyPinkLoadingModal();
         let pill = document.getElementById('ao3GeneratingPill');
         if (!pill) {
             pill = document.createElement('div');
@@ -185,10 +195,25 @@
     function hideAo3GeneratingPill() {
         const pill = document.getElementById('ao3GeneratingPill');
         if (pill) pill.classList.remove('visible');
+        suppressLegacyPinkLoadingModal();
     }
 
     /**
-     * 退出 App 返回手机桌面，并复原宿主顶栏
+     * 从聊天窗口中点击卡片一键跳转打开该篇小说
+     */
+    window.openAo3WorkFromChat = function (workId) {
+        if (!workId) return;
+        if (typeof window.openPhoneApp === 'function') {
+            window.openPhoneApp('ao3');
+        }
+        ensureAo3DataIntegrity();
+        G.ao3State.view = 'read';
+        G.ao3State.activeWorkId = workId;
+        window.renderAo3App();
+    };
+
+    /**
+     * 退出 App 返回手机桌面
      */
     window.exitAo3ToDesktop = function () {
         document.body.classList.remove('ao3-active-fullscreen');
@@ -209,8 +234,8 @@
     // ============================================================
     window.renderAo3App = function (containerEl) {
         ensureAo3DataIntegrity();
-        // 激活全局全屏沉浸标记，强制隐藏原生粉框
         document.body.classList.add('ao3-active-fullscreen');
+        suppressLegacyPinkLoadingModal();
 
         const target = containerEl || document.getElementById('appModalBody');
         if (!target) return;
@@ -232,7 +257,6 @@
         const worksCount = (G.fanworks || []).length;
         container.innerHTML = `
             <div class="ao3-app-viewport">
-                <!-- 顶层系统级导航栏（替代原生粉框） -->
                 <div class="ao3-top-unified-bar">
                     <button class="ao3-back-nav-btn" onclick="window.exitAo3ToDesktop()">
                         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 18l-6-6 6-6"/></svg>
@@ -249,7 +273,6 @@
                     </div>
 
                     <div class="ao3-portal-grid">
-                        <!-- AO3 主站点卡片 -->
                         <div class="ao3-portal-card active" onclick="G.ao3State.view='home'; window.renderAo3App();">
                             <div class="ao3-portal-card-top">
                                 <span class="ao3-portal-badge">主站点</span>
@@ -271,7 +294,6 @@
                             </div>
                         </div>
 
-                        <!-- 预留扩展站点位 -->
                         <div class="ao3-portal-card disabled">
                             <div class="ao3-portal-card-top">
                                 <span class="ao3-portal-badge-muted">待接入</span>
@@ -353,7 +375,6 @@
 
         container.innerHTML = `
             <div class="ao3-app-viewport">
-                <!-- AO3 顶层沉浸导航栏 -->
                 <div class="ao3-top-unified-bar">
                     <button class="ao3-back-nav-btn" onclick="G.ao3State.view='portal'; window.renderAo3App();">
                         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 18l-6-6 6-6"/></svg>
@@ -367,7 +388,6 @@
                     </div>
                 </div>
 
-                <!-- 次级工具栏 -->
                 <div class="ao3-sub-toolbar">
                     <div class="ao3-filter-label">收录作品：<b>${works.length}</b> 篇</div>
                     <div style="display:flex;gap:8px;">
@@ -422,7 +442,6 @@
 
         container.innerHTML = `
             <div class="ao3-app-viewport">
-                <!-- 阅读器顶栏 -->
                 <div class="ao3-top-unified-bar">
                     <button class="ao3-back-nav-btn" onclick="G.ao3State.view='home'; window.renderAo3App();">
                         <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M15 18l-6-6 6-6"/></svg>
@@ -437,7 +456,6 @@
                     </div>
                 </div>
 
-                <!-- 文章主体 -->
                 <div class="ao3-reading-container">
                     <div class="ao3-work-header-meta-block">
                         <div class="ao3-meta-tag-pre">ARCHIVE OF OUR OWN · WORK #${work._id.slice(-6)}</div>
@@ -452,20 +470,17 @@
                         ${work.summary ? `<div class="ao3-work-summary-box" style="margin-top:10px;">${escapeHtml(work.summary)}</div>` : ''}
                     </div>
 
-                    <!-- 章节切换导航 -->
                     <div class="ao3-chapter-switch-bar">
                         <button class="ao3-step-btn" ${curIdx === 0 ? 'disabled' : ''} onclick="window.stepAo3Chapter('${work._id}', -1)">上一章</button>
                         <span class="ao3-chapter-indicator">第 ${curIdx + 1} / ${totalChapters} 章</span>
                         <button class="ao3-step-btn" ${curIdx === totalChapters - 1 ? 'disabled' : ''} onclick="window.stepAo3Chapter('${work._id}', 1)">下一章</button>
                     </div>
 
-                    <!-- 章节标题与正文 -->
                     <div class="ao3-chapter-content-wrap">
                         <h3 class="ao3-chapter-title">第 ${curIdx + 1} 章：${escapeHtml(chapter.title || '无题')}</h3>
                         <div class="ao3-prose-body">${escapeHtml(chapter.content)}</div>
                     </div>
 
-                    <!-- 互动按钮群 -->
                     <div class="ao3-interaction-bar">
                         <button class="ao3-btn ao3-btn-red" onclick="window.urgeAo3NextChapter('${work._id}')">
                             <span>催更续写第 ${totalChapters + 1} 章</span>
@@ -475,7 +490,6 @@
                         </button>
                     </div>
 
-                    <!-- 读者评论区 -->
                     <div class="ao3-reviews-section">
                         <div class="ao3-reviews-header">
                             <span class="ao3-reviews-title">读者书评 (${work.reviews.length})</span>
@@ -497,7 +511,7 @@
     }
 
     // ============================================================
-    // 4. 极简转发弹窗（自建纯净浮层，无说教）
+    // 4. 极简转发弹窗（发件人为玩家本人，携带完整小说事实）
     // ============================================================
     window.openShareAo3ToChatModal = function (workId) {
         const work = (G.fanworks || []).find(w => w._id === workId);
@@ -541,23 +555,28 @@
         const curChapter = (work.chapters && work.chapters[curIdx]) ? work.chapters[curIdx] : { content: '' };
         const textSnippet = (curChapter.content || '').slice(0, 260) + '...';
 
+        // 🌟 核心修正：from 必须为 'player'，才能正确展示为玩家自己发送的消息气泡！
         const shareMsg = {
-            id: 'ao3_share_' + Date.now(),
-            role: 'user',
+            _id: 'msg_ao3_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
+            from: 'player',
+            role: 'player',
             type: 'ao3_share_card',
             workId: work._id,
             workTitle: work.title,
             workAuthor: work.author,
             workPairing: work.pairing || '全员向',
             workSnippet: textSnippet,
-            text: `【同人文分享】《${work.title}》（配对：${work.pairing || '全员向'}）`,
-            time: new Date().toLocaleTimeString().slice(0, 5)
+            text: `【同人文分享】《${work.title}》（配对：${work.pairing || '全员向'}）\n作者：${work.author}\n故事节选：“${textSnippet}”`,
+            time: new Date().toLocaleTimeString().slice(0, 5),
+            timestamp: Date.now()
         };
 
+        const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
+
         if (typeof pushChatMessageSafe === 'function') {
-            pushChatMessageSafe(contactId, shareMsg);
+            pushChatMessageSafe(contactId, shareMsg, curAcc.id);
         } else {
-            const storageKey = `mcyt_wechat_history_main_${contactId}`;
+            const storageKey = `mcyt_wechat_history_${curAcc.id}_${contactId}`;
             try {
                 const raw = localStorage.getItem(storageKey);
                 const list = raw ? JSON.parse(raw) : [];
@@ -566,6 +585,9 @@
             } catch (_) {}
         }
 
+        if (typeof window.syncChatHistoryToLocalBackup === 'function') window.syncChatHistoryToLocalBackup();
+        if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
+
         closeAo3CustomModal();
         if (typeof showToast === 'function') {
             showToast(`已将《${work.title}》分享给 ${contactName}`, 'success', 2000);
@@ -573,7 +595,7 @@
     };
 
     // ============================================================
-    // 5. 开坑弹窗（自建白灰纯净卡片，彻底消灭旧粉框）
+    // 5. 开坑弹窗与人称卡片
     // ============================================================
     window._ao3SelectedPov = 'third';
 
@@ -633,9 +655,6 @@
         `);
     };
 
-    /**
-     * POV 叙事人称卡片选择浮层
-     */
     window.openAo3PovSelectSheet = function () {
         const povOptions = [
             { key: 'third', title: '第三人称【她 / 主角名】', desc: '经典文库视角，克制细腻，留白丰富' },
@@ -1113,14 +1132,22 @@ ${isAuthorMe ? `小说作者正是主播「${playerInfo.name}」本人！读者�
     };
 
     // ============================================================
-    // 8. 样式注入（强制隐藏原生粉框，沉浸铺满）
+    // 8. 样式注入（强力干掉粉色原生假顶栏与粉红丑框）
     // ============================================================
     function injectAo3Styles() {
         if (document.getElementById('ao3UnifiedStyles')) return;
         const style = document.createElement('style');
         style.id = 'ao3UnifiedStyles';
         style.textContent = `
-            /* 1. 核心关键：当 AO3 激活时，彻底强力隐藏宿主那个丑陋的粉红原生标题栏与粉红分割线！ */
+            /* 1. 彻底干掉旧系统里的粉红生成框与 Emoji 遮罩 */
+            #aiLoadingModal, .ai-loading-modal, #loadingModal, .loading-modal, .sweet-alert, [id*="loadingModal"] {
+                display: none !important;
+                opacity: 0 !important;
+                visibility: hidden !important;
+                pointer-events: none !important;
+            }
+
+            /* 2. 隐藏宿主粉色原生顶栏 */
             body.ao3-active-fullscreen #appModalHeader,
             body.ao3-active-fullscreen .app-modal-header,
             body.ao3-active-fullscreen .phone-app-header {
@@ -1137,7 +1164,7 @@ ${isAuthorMe ? `小说作者正是主播「${playerInfo.name}」本人！读者�
                 overflow: hidden !important;
             }
 
-            /* 2. 我们的视口容器：铺满整个屏幕，顶部适配安全区不挡电量时间 */
+            /* 3. 视口容器 */
             .ao3-app-viewport {
                 display: flex; flex-direction: column; width: 100%; height: 100%;
                 background: #fbf9f4; color: #222222; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
@@ -1145,7 +1172,7 @@ ${isAuthorMe ? `小说作者正是主播「${playerInfo.name}」本人！读者�
                 padding-top: max(10px, env(safe-area-inset-top, 10px));
             }
 
-            /* 3. 自建统一定制顶栏：替代原生粉框，高级白灰微质感 */
+            /* 顶层统一定制顶栏 */
             .ao3-top-unified-bar {
                 display: flex; align-items: center; justify-content: space-between;
                 padding: 10px 16px; background: #ffffff; border-bottom: 1px solid #ebe5d8;
@@ -1218,7 +1245,7 @@ ${isAuthorMe ? `小说作者正是主播「${playerInfo.name}」本人！读者�
             }
             .ao3-filter-label { font-size: 12px; color: #555; }
 
-            /* 按钮无位移规范 */
+            /* 按钮通用 */
             .ao3-btn {
                 border: none; outline: none; border-radius: 6px; padding: 6px 12px;
                 font-size: 12px; font-weight: 600; cursor: pointer; transition: opacity 0.15s ease;
