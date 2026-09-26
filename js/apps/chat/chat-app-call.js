@@ -1,17 +1,19 @@
 /**
  * js/apps/chat/chat-app-call.js
- * 📞 主播掌机 · 微信原生音视频实时通话独立中枢（抗噪防误触与 2 秒极速响应版）
+ * 📞 主播掌机 · 微信原生音视频实时通话独立中枢（抗噪防误触、2 秒极速响应与 TTS 序列锁防串音版）
  * 🛡️ 微信原生极简质感，消灭多余打字框与廉价元素，100% 纯粹全双工对讲体验。
  * 🌟 核心特性：
- *  1. 微信原生级视觉美学（纯语音居中波纹呼吸头像 / 视频画中画镜头）；
+ *  1. 微信原生级视觉美学（纯语音居中波纹呼吸头像 / 视频画中画镜头 + 实时动态声波 HUD）；
  *  2. 2 秒自然静音停顿：说话停止 2 秒内无声，立刻提交并让 AI 回复；
  *  3. 智能抗噪降噪门槛（门限提升至 38 + 能量连续确认），过滤风扇杂音与碰桌噪声；
  *  4. 杂音幻觉过滤：转文字结果低于 2 字或纯象声词自动忽略，杜绝胡乱识别；
  *  5. 防误打断锁：AI 说话时提高打断门限，防止背景噪音误掐断 AI 发音；
- *  6. 首次视频隐私门禁（本地抽帧不存云端、支持下次不再提醒，权限被拒友好引导设置）；
- *  7. 视频通话支持实时从摄像头抽帧直连独立识图 API，无缝事实感知注入；
- *  8. 专属极速口语 Prompt（剥离联网/表情包，短平快日常口语，细腻生活背景音）；
- *  9. 通话结束全自动归档为第三人称具名客观记录（IndexedDB 永久保存，支持长按彻底删除）。
+ *  6. 🌟 异步 TTS 序列锁（ttsSequenceId）：彻底根除由于 TTS 合成慢导致新旧对白串音错乱的 Bug；
+ *  7. 🌟 视频通话声波 HUD：为视频通话界面补充微信原生微绿平滑动态声波条与实时倾听状态；
+ *  8. 首次视频隐私门禁（本地抽帧不存云端、支持下次不再提醒，权限被拒友好引导设置）；
+ *  9. 视频通话支持实时从摄像头抽帧直连独立识图 API，无缝事实感知注入；
+ *  10. 专属极速口语 Prompt（剥离联网/表情包，短平快日常口语，细腻生活背景音）；
+ *  11. 通话结束全自动归档为第三人称具名客观记录（IndexedDB 永久保存，支持长按彻底删除）。
  */
 
 (function() {
@@ -19,6 +21,9 @@
 
     // 通话运行态对象
     window._activeCallSession = null;
+
+    // 全局 TTS 发音版本序列锁（防止网络延迟导致多句语音重叠/错位播放）
+    let _globalCallTtsSequence = 0;
 
     const PRIVACY_STORAGE_KEY = 'mcyt_call_video_privacy_agreed';
 
@@ -154,7 +159,9 @@
             return;
         }
 
-        // 初始化 Session 运行时状态
+        // 初始化 Session 运行时状态并自增序列锁
+        _globalCallTtsSequence++;
+
         window._activeCallSession = {
             npcId,
             mode,
@@ -166,6 +173,7 @@
             transcript: [], // [{ role: 'player'|'npc'|'system', name: '', text: '', time: '' }]
             isAiReplying: false,
             currentAbortController: null,
+            activeTtsSequenceId: _globalCallTtsSequence,
             // 真实音频采集与 VAD 音量检测
             audioContext: null,
             audioAnalyser: null,
@@ -233,7 +241,7 @@
                 }
                 const avgVolume = sum / 24;
 
-                // 更新界面音波条动态
+                // 更新界面音波条动态（同时更新语音与视频界面中的声波条）
                 updateCallWaveBars(avgVolume);
 
                 // 如果 AI 正在说话，需要更响亮的人声才触发打断（防环境杂音误打断）
@@ -246,7 +254,7 @@
 
                     // 必须连续 3 帧（约 100ms）超门槛才确认为真人出声，彻底过滤单点爆破杂音
                     if (window._activeCallSession.consecutiveVoiceFrames >= 3) {
-                        // 🌟 用户出声确认：掐断正在说话的 AI
+                        // 🌟 用户出声确认：掐断正在说话的 AI 与所有旧 TTS
                         interruptAiReplyIfActive();
 
                         // 启动录制块收集
@@ -269,7 +277,7 @@
 
                     if (window._activeCallSession.isUserSpeaking) {
                         if (!window._activeCallSession.silenceTimer) {
-                            // 🌟 核心改进：静音倒计时从 5 秒缩减至 2 秒（2000ms），停顿更自然干脆
+                            // 🌟 静音倒计时满 2 秒（2000ms），停顿更自然干脆
                             window._activeCallSession.silenceTimer = setTimeout(() => {
                                 handleUserFinishSpokenAudio();
                             }, 2000);
@@ -395,10 +403,14 @@
         triggerCallAIReply(false, recognizedText, visualInsight);
     }
 
-    // 豆包式打断机制：用户出声瞬间掐断 AI 网络生成与 TTS 发音
+    // 🌟 豆包式打断机制：用户出声瞬间掐断 AI 网络生成与旧 TTS 发音，并自增序列号
     function interruptAiReplyIfActive() {
         const session = window._activeCallSession;
         if (!session) return;
+
+        // 序列号自增，废弃之前任何未完成的 TTS 异步操作
+        _globalCallTtsSequence++;
+        session.activeTtsSequenceId = _globalCallTtsSequence;
 
         if (session.isAiReplying) {
             session.isAiReplying = false;
@@ -433,9 +445,13 @@
     }
 
     function setUserSpeakingHUDStatus(isSpeaking) {
-        const indicator = document.getElementById('callSpeakingWaveWrap');
-        if (indicator) {
-            indicator.style.opacity = isSpeaking ? '1' : '0.2';
+        const indicatorVoice = document.getElementById('callSpeakingWaveWrap');
+        if (indicatorVoice) {
+            indicatorVoice.style.opacity = isSpeaking ? '1' : '0.2';
+        }
+        const indicatorVideo = document.getElementById('callSpeakingWaveWrapVideo');
+        if (indicatorVideo) {
+            indicatorVideo.style.opacity = isSpeaking ? '1' : '0.35';
         }
         if (isSpeaking) {
             setCallStatusText('正在听你说...', '#38bdf8');
@@ -447,6 +463,11 @@
         if (statusEl) {
             statusEl.textContent = text;
             statusEl.style.color = color;
+        }
+        const statusVideoEl = document.getElementById('callAiStatusTextVideo');
+        if (statusVideoEl) {
+            statusVideoEl.textContent = text;
+            statusVideoEl.style.color = color;
         }
     }
 
@@ -544,7 +565,16 @@
                     <div style="position: absolute; inset: 0; background: radial-gradient(circle at center, #1f2937 0%, #0b0f19 100%); display: flex; flex-direction: column; align-items: center; justify-content: center;">
                         <img src="${npcAvatar}" style="width: 86px; height: 86px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.2); object-fit: cover; box-shadow: 0 10px 30px rgba(0,0,0,0.6);">
                         <div style="color: #ffffff; font-size: 16px; font-weight: 600; margin-top: 14px; letter-spacing: 0.3px;">${escapeHtml(targetName)}</div>
-                        <div id="callAiStatusText" style="font-size: 12px; color: #07c160; margin-top: 6px;">通话连接稳定</div>
+                        <div id="callAiStatusTextVideo" style="font-size: 12px; color: #07c160; margin-top: 6px;">通话连接稳定</div>
+
+                        <!-- 🌟 视频通话实时出声动态声波指示器（毛玻璃胶囊） -->
+                        <div id="callSpeakingWaveWrapVideo" style="display: flex; align-items: center; gap: 4px; height: 26px; margin-top: 12px; padding: 0 12px; border-radius: 14px; background: rgba(0,0,0,0.4); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); opacity: 0.35; transition: opacity 0.2s ease;">
+                            <span class="call-live-wave-bar" style="width: 3px; height: 4px; background: #07c160; border-radius: 2px; transition: height 0.08s ease;"></span>
+                            <span class="call-live-wave-bar" style="width: 3px; height: 6px; background: #07c160; border-radius: 2px; transition: height 0.08s ease;"></span>
+                            <span class="call-live-wave-bar" style="width: 3px; height: 8px; background: #07c160; border-radius: 2px; transition: height 0.08s ease;"></span>
+                            <span class="call-live-wave-bar" style="width: 3px; height: 6px; background: #07c160; border-radius: 2px; transition: height 0.08s ease;"></span>
+                            <span class="call-live-wave-bar" style="width: 3px; height: 4px; background: #07c160; border-radius: 2px; transition: height 0.08s ease;"></span>
+                        </div>
                     </div>
 
                     <!-- 本地画中画视窗（右上角微信质感圆角框） -->
@@ -719,6 +749,18 @@
         const session = window._activeCallSession;
         if (!session) return;
 
+        // 🌟 新一轮生成开启：自增序列锁并终止前置未完成的请求
+        _globalCallTtsSequence++;
+        const currentSequenceId = _globalCallTtsSequence;
+        session.activeTtsSequenceId = currentSequenceId;
+
+        // 停止之前的 TTS 播放与发音
+        if (window.ttsEngine && typeof window.ttsEngine.stop === 'function') {
+            window.ttsEngine.stop();
+        } else if (window.speechSynthesis) {
+            try { window.speechSynthesis.cancel(); } catch (_) {}
+        }
+
         session.isAiReplying = true;
         const abortCtrl = new AbortController();
         session.currentAbortController = abortCtrl;
@@ -738,9 +780,9 @@
 
         if (!aiConfig || !aiConfig.apiKey) {
             setTimeout(() => {
-                if (abortCtrl.signal.aborted) return;
+                if (abortCtrl.signal.aborted || session.activeTtsSequenceId !== currentSequenceId) return;
                 const fallbackReply = isFirstGreeting ? `喂？${playerName}，能听到我说话吗？` : `嗯嗯，我在听呢！`;
-                finishAiReply(npcId, npcName, fallbackReply);
+                finishAiReply(npcId, npcName, fallbackReply, currentSequenceId);
             }, 600);
             return;
         }
@@ -798,27 +840,37 @@
                 })
             });
 
-            if (abortCtrl.signal.aborted) return;
+            if (abortCtrl.signal.aborted || session.activeTtsSequenceId !== currentSequenceId) {
+                console.log('[CallAI] 回复已过期或被中止，废弃网络返回');
+                return;
+            }
             if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
             const data = await resp.json();
             const replyText = data?.choices?.[0]?.message?.content?.trim() || '喂？信号好像有点卡住了，能听到吗？';
 
-            finishAiReply(npcId, npcName, replyText);
+            finishAiReply(npcId, npcName, replyText, currentSequenceId);
         } catch (err) {
-            if (err.name === 'AbortError') {
-                console.log('[CallAI] 回复已被用户打断');
+            if (err.name === 'AbortError' || session.activeTtsSequenceId !== currentSequenceId) {
+                console.log('[CallAI] 回复已被用户打断或序列已失效');
                 return;
             }
             console.warn('[CallAI] 通话回复出错:', err);
-            finishAiReply(npcId, npcName, isFirstGreeting ? `喂，${playerName}？能听到我说话吗？` : '嗯嗯，我在听呢！');
+            finishAiReply(npcId, npcName, isFirstGreeting ? `喂，${playerName}？能听到我说话吗？` : '嗯嗯，我在听呢！', currentSequenceId);
         }
     }
 
-    // 完成角色回复：上字幕 + 播放 TTS
-    function finishAiReply(npcId, npcName, text) {
-        if (!window._activeCallSession) return;
-        window._activeCallSession.isAiReplying = false;
+    // 完成角色回复：上字幕 + 播放 TTS（带 sequenceId 校验）
+    function finishAiReply(npcId, npcName, text, sequenceId) {
+        const session = window._activeCallSession;
+        if (!session) return;
+        
+        // 🌟 序列锁门禁：如果不是当前最新一轮生成，绝对不上屏不发音！
+        if (sequenceId !== undefined && sequenceId !== session.activeTtsSequenceId) {
+            console.log('[CallAI] 拦截到陈旧回复，已就地丢弃防串音');
+            return;
+        }
 
+        session.isAiReplying = false;
         setCallStatusText('通话连接稳定', '#07c160');
 
         appendCallSubtitle('npc', npcName, text);
@@ -831,7 +883,13 @@
         if (isTtsEnabled && window.ttsEngine) {
             // 剥离掉背景音括号，仅朗读对白
             const speakPureText = text.replace(/\(.*?\)|（.*?）/g, '').trim() || text;
-            window.ttsEngine.speak(speakPureText, npcVoiceCfg, () => {});
+            
+            // 异步 TTS 发音保护：传入当前 sequenceId，避免回调时串音
+            window.ttsEngine.speak(speakPureText, npcVoiceCfg, () => {
+                if (window._activeCallSession && window._activeCallSession.activeTtsSequenceId === sequenceId) {
+                    setCallStatusText('通话连接稳定', '#07c160');
+                }
+            });
         }
     }
 
@@ -839,6 +897,9 @@
     window.endWechatCall = async function() {
         const session = window._activeCallSession;
         if (!session) return;
+
+        // 自增序列并物理掐断
+        _globalCallTtsSequence++;
 
         clearInterval(session.timerInterval);
         if (session.silenceTimer) clearTimeout(session.silenceTimer);

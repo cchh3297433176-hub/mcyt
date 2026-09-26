@@ -3,14 +3,16 @@
  * 💬 微信主应用 · 拆分分片 3/7：单人私聊窗口渲染（renderSingleChatWindow，仿群聊双层工具栏 · 顶栏闪电继续说 · 输入栏纯图标重说键 · 消息折叠 · 装扮与气泡/头像框自适应渲染）、
  *    微信内嵌全屏浏览器浮层（window.openWebPageLink）、
  *    重新生成回复的确认与执行（confirmRetryLastAIReply / doRetryLastAIReply）、
- *    微信原生直显大图与沉浸式大图文字查看器对接、拟真生活排版卡片（ui_card）渲染。
- * 🌟 升级：
+ *    微信原生直显大图与沉浸式大图文字查看器对接、拟真生活排版卡片（ui_card）渲染、
+ *    🌟 通话记录专属高质感卡片（call_record 彻底杜绝系统文字选中，长按秒级弹出引用与物理删除菜单）。
+ * 🌟 核心特性：
  *  1. 真实用户录音管线：消灭并发开麦冲突，MediaRecorder 与 HUD 分析器共用单一麦克风流，彻底保证 Base64 音频 100% 写入；
  *  2. 私有云端 ASR 与系统听写双轨融合：松手后全透视展示转写过程，底层异常不掩盖，UI 体验原生平滑；
  *  3. 双轨文本保底：如果云端口令未激活或网络异常，自动无缝提取实时语音听写文字，彻底消灭“（发送了一条语音）”；
  *  4. 交互解耦：点击声波播放/暂停音频；点击末尾空白处/微标专门展开/收起转文字与背景音，绝对不误触发播放；
  *  5. 全语种支持：支持德语、英语、日语等外语原声（originalText）、中文翻译（text）与生活背景音（audioBg）清晰排版；
- *  6. 发送语音后不自动触发 AI 回复，严格遵循点击闪电才生成。
+ *  6. 发送语音后不自动触发 AI 回复，严格遵循点击闪电才生成；
+ *  7. 通话记录（call_record）专属原生微信卡片封装，禁止文本长按选中，支持长按菜单物理删除防记忆污染。
  */
 
 (function() {
@@ -832,9 +834,34 @@
                 </div>`;
             }
 
-            if (msg.from === 'action') {
+            // 🌟 核心升级：优先识别通话记录卡片（call_record），独立封装行，彻底杜绝系统文字长按复制，直接触发气泡操作菜单
+            if (msg.type === 'call_record') {
+                const isVideo = (msg.callMode === 'video');
                 messagesHtml += `
-                <div style="text-align:center;margin:8px 0;">
+                <div class="chat-msg-row" data-msgid="${msg._id || ''}" style="display:flex;justify-content:center;margin:12px 0;width:100%;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;">
+                    <div class="wechat-call-record-pill" style="display:inline-flex;flex-direction:column;align-items:center;max-width:86%;background:#ffffff;border:0.5px solid #e2e8f0;border-radius:12px;padding:10px 14px;box-shadow:0 1px 4px rgba(0,0,0,0.05);cursor:pointer;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none;-webkit-tap-highlight-color:transparent;">
+                        <div style="display:flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:#181818;margin-bottom:4px;">
+                            ${isVideo ? `
+                                <svg viewBox="0 0 24 24" style="width:15px;height:15px;fill:none;stroke:#07c160;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+                                <span>视频通话记录</span>
+                            ` : `
+                                <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:none;stroke:#07c160;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path></svg>
+                                <span>语音通话记录</span>
+                            `}
+                            <span style="font-size:11px;color:#07c160;background:#e8f8ee;padding:1px 6px;border-radius:10px;font-weight:500;">时长 ${escapeHtml(msg.callDuration || '00:00')}</span>
+                        </div>
+                        <div style="font-size:11.5px;color:#555;line-height:1.45;text-align:left;word-break:break-word;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;text-overflow:ellipsis;">
+                            ${escapeHtml(msg.callSummary || msg.text || '')}
+                        </div>
+                        <div style="font-size:9.5px;color:#aaa;margin-top:5px;display:flex;align-items:center;gap:6px;width:100%;justify-content:space-between;border-top:0.5px dashed #eee;padding-top:4px;">
+                            <span>长按可引用或彻底删除</span>
+                            <span>${msg.time || ''}</span>
+                        </div>
+                    </div>
+                </div>`;
+            } else if (msg.from === 'action') {
+                messagesHtml += `
+                <div style="text-align:center;margin:8px 0;user-select:none;-webkit-user-select:none;">
                     <span style="display:inline-block;background:rgba(0,0,0,0.05);color:#888;padding:3px 10px;border-radius:4px;font-size:11.5px;max-width:85%;">${escapeHtml(msg.text || '')}</span>
                 </div>`;
             } else if (msg.type === 'moment_notice') {
@@ -1272,11 +1299,13 @@
             setTimeout(() => { msgArea.scrollTop = msgArea.scrollHeight; }, 50);
         }
 
+        // 🌟 统一事件绑定：包括通话记录卡片在内的所有行，绑定长按时调用 preventDefault()，彻底消除原生放大镜与复制浮层
         container.querySelectorAll('.chat-msg-row[data-msgid]').forEach(row => {
             const mid = row.dataset.msgid;
             if (!mid) return;
             if (typeof bindLongPressEvent === 'function') {
-                bindLongPressEvent(row, null, () => {
+                bindLongPressEvent(row, null, (e) => {
+                    if (e && e.preventDefault) e.preventDefault();
                     window.openBubbleActionSheet(mid, 'single', npcId);
                 });
             }
