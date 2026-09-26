@@ -1,5 +1,5 @@
 // js/apps/settings/settings-app.js
-// 系统设置中心 App（全站版本号唯一定义源 · 微信原生白灰微绿设计 · 云端 ASR 口令核销 · 独立视觉识图 API · 小手机记忆卡原生直接下载 · 备份周期提醒）
+// 系统设置中心 App（全站版本号唯一定义源 · 微信原生白灰微绿设计 · 云端免口令极速 ASR · 独立视觉识图 API 凭证与真图实测 · 小手机记忆卡原生直接下载）
 // ============================================================
 
 // 【全项目版本号唯一真源】：以后打包发新版本，直接在此修改此常量即可！
@@ -67,10 +67,9 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
         return cfg;
     }
 
-    // 获取独立视觉/识图 API 配置
+    // 获取独立视觉/识图 API 配置（开关已彻底交由发图弹窗控制）
     function getSafeVisionConfig() {
         const cfg = {
-            enabled: false,
             baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
             apiKey: '',
             model: 'glm-4v-flash',
@@ -140,7 +139,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
         if (retroModalTitle) retroModalTitle.textContent = title || '输入内容';
 
         modalBody.innerHTML = `
-            <div style="font-size:13px;color:#222;margin-bottom:10px;font-weight:600;">
+            <div style="font-size:13px;color:#222222;margin-bottom:10px;font-weight:600;">
                 请输入内容：
             </div>
             <input type="text" id="wechatCustomInputVal" value="${escapeHtml(defaultVal || '')}" placeholder="${escapeHtml(placeholder || '')}" style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid #e0e0e0;background:#f9f9f9;font-size:13px;outline:none;color:#222;box-sizing:border-box;">
@@ -168,7 +167,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
         }
     }
 
-    // 仿微信居中白灰确认弹窗
+    // 仿微信居中白灰确认/说明弹窗（支持格式化排版与换行）
     function openWechatConfirmModal(title, msg, onConfirm) {
         const modal = document.getElementById('modal');
         const modalBody = document.getElementById('modalBody');
@@ -177,22 +176,29 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
 
         if (retroModalTitle) retroModalTitle.textContent = title || '提示';
 
+        const isCustomHtml = msg.includes('<div') || msg.includes('<p') || msg.includes('<br');
+        const formattedContent = isCustomHtml ? msg : msg.split('\n').map(line => {
+            const trimmed = line.trim();
+            if (!trimmed) return '<div style="height:6px;"></div>';
+            return `<div style="margin-bottom:4px;">${escapeHtml(trimmed)}</div>`;
+        }).join('');
+
         modalBody.innerHTML = `
-            <div style="font-size:13.5px;line-height:1.6;color:#333;padding:6px 0;">
-                ${escapeHtml(msg)}
+            <div style="font-size:13px;line-height:1.6;color:#333333;padding:4px 0;max-height:360px;overflow-y:auto;">
+                ${formattedContent}
             </div>
-            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:18px;">
-                <button onclick="closeModal()" style="padding:7px 16px;border-radius:6px;border:1px solid #e0e0e0;background:#f5f5f5;color:#666;font-size:12.5px;cursor:pointer;">取消</button>
-                <button id="wechatConfirmActionBtn" style="padding:7px 20px;border-radius:6px;border:none;background:#07c160;color:#fff;font-size:12.5px;font-weight:600;cursor:pointer;">确定</button>
+            <div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px;">
+                <button onclick="closeModal()" style="padding:7px 16px;border-radius:6px;border:1px solid #e0e0e0;background:#f5f5f5;color:#666;font-size:12.5px;cursor:pointer;">知道了</button>
+                ${onConfirm ? `<button id="wechatConfirmActionBtn" style="padding:7px 20px;border-radius:6px;border:none;background:#07c160;color:#fff;font-size:12.5px;font-weight:600;cursor:pointer;">确定</button>` : ''}
             </div>
         `;
 
         modal.classList.add('open');
 
         const confirmBtn = document.getElementById('wechatConfirmActionBtn');
-        if (confirmBtn) {
+        if (confirmBtn && onConfirm) {
             confirmBtn.onclick = () => {
-                if (typeof onConfirm === 'function') onConfirm();
+                onConfirm();
                 closeModal();
             };
         }
@@ -365,7 +371,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
         return chunk;
     }
 
-    // 全量记忆备份卡导出：直接下载到设备存储（使用 DataURL 避免 WebView 拦截）
+    // 全量记忆备份卡导出
     function openMemoryCardExportModal() {
         if (!window.G) {
             if (typeof showToast === 'function') showToast('游戏状态未就绪', 'error');
@@ -572,7 +578,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
         }
     }
 
-    // 导入小手机记忆备份卡（PNG / JSON）
+    // 导入小手机记忆备份卡
     function openMemoryCardImportModal() {
         let fileInput = document.getElementById('memoryCardImportFileInput');
         if (!fileInput) {
@@ -717,7 +723,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
     }
 
     // ============================================================
-    // 🎙️ 云端极速语音识别 (ASR) 与一机一口令设备核销弹窗
+    // 🎙️ 云端极速语音识别 (ASR) 状态与网络连通性弹窗（免口令直接用）
     // ============================================================
     async function openAsrSettingsModal() {
         if (!window.mcytAsr) {
@@ -733,44 +739,23 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
         if (retroModalTitle) retroModalTitle.textContent = '私有云端语音识别 (ASR)';
 
         const config = await window.mcytAsr.loadConfig();
-        const deviceId = (typeof window.mcytAsr.getDeviceId === 'function') ? window.mcytAsr.getDeviceId() : 'unknown';
-        const hasAccessCode = !!(config.accessCode && config.accessCode.trim());
 
         modalBody.innerHTML = `
-            <div style="font-size:12.5px;color:#666;margin-bottom:12px;line-height:1.5;">
-                直连私有云端 GPU/高速 CPU 算力实例（faster-whisper），纯单次转录约 0.2~0.4 秒，免去移动端发热与离线模型下载。用户对白本地加密保存，云端绝不落盘。
+            <div style="font-size:12.5px;color:#555555;margin-bottom:12px;line-height:1.5;">
+                基于私有云端 faster-whisper 高速推理引擎，单次转录约 0.2~0.4 秒，免去移动端发热与下载庞大模型。全员默认开放通行，无需口令激活。
             </div>
 
-            <!-- 设备识别码展示 -->
-            <div style="background:#f9f9f9;border-radius:8px;border:1px solid #eeeeee;padding:9px 12px;margin-bottom:12px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px;">
-                    <span style="font-size:11.5px;font-weight:600;color:#444;">当前设备唯一标识 (Device ID)</span>
-                    <span style="font-size:10.5px;color:#888;">一机一口令防盗绑定</span>
+            <!-- 服务状态卡片 -->
+            <div style="background:#f0f9eb;border-radius:8px;border:1px solid #c2e7b0;padding:10px 12px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;">
+                <div style="display:flex;align-items:center;gap:8px;">
+                    <div style="width:8px;height:8px;border-radius:50%;background:#07c160;"></div>
+                    <span style="font-size:12.5px;font-weight:600;color:#07c160;">云端极速通道就绪（免口令直接通行）</span>
                 </div>
-                <div style="font-family:monospace;font-size:11px;color:#666;word-break:break-all;user-select:all;">
-                    ${escapeHtml(deviceId)}
-                </div>
-            </div>
-
-            <!-- 激活口令输入与核销状态 -->
-            <div style="background:#ffffff;border-radius:8px;border:1px solid #eeeeee;padding:12px;margin-bottom:12px;">
-                <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-                    <span style="font-size:12.5px;font-weight:600;color:#222;">通行激活口令</span>
-                    <span id="asrStatusBadge" style="font-size:11px;padding:2px 8px;border-radius:10px;background:${hasAccessCode ? '#f0f9eb' : '#fff2f0'};color:${hasAccessCode ? '#07c160' : '#fa5151'};font-weight:600;">
-                        ${hasAccessCode ? '● 已配置凭据' : '○ 未激活'}
-                    </span>
-                </div>
-                <div style="display:flex;gap:6px;margin-bottom:8px;">
-                    <input type="text" id="asrAccessCodeInput" value="${escapeHtml(config.accessCode || '')}" placeholder="输入专属激活卡密 (如 STREAM-XXXX-XXXX)" style="flex:1;padding:8px 10px;border-radius:6px;border:1px solid #e0e0e0;background:#fcfcfc;font-size:12px;font-family:monospace;outline:none;box-sizing:border-box;">
-                    <button id="btnVerifyAsrCode" style="padding:0 14px;font-size:12px;font-weight:600;border:none;background:#07c160;color:#fff;border-radius:6px;cursor:pointer;white-space:nowrap;">
-                        核销绑定
-                    </button>
-                </div>
-                <div style="font-size:11px;color:#888;">口令首次验证成功后将自动与当前设备硬件令牌锁定。</div>
+                <span style="font-size:11px;color:#666;">开箱即用</span>
             </div>
 
             <!-- 服务端地址与语言 -->
-            <div style="background:#ffffff;border-radius:8px;border:1px solid #eeeeee;padding:10px 12px;margin-bottom:14px;">
+            <div style="background:#ffffff;border-radius:8px;border:1px solid #eeeeee;padding:12px;margin-bottom:14px;">
                 <div style="margin-bottom:10px;">
                     <label style="font-size:11.5px;font-weight:600;color:#555;display:block;margin-bottom:4px;">服务中枢地址 (Server URL)</label>
                     <input type="text" id="asrServerUrlInput" value="${escapeHtml(config.serverUrl || 'http://121.43.122.253:8000')}" placeholder="http://121.43.122.253:8000" style="width:100%;padding:7px 10px;border-radius:6px;border:1px solid #e0e0e0;font-size:11.5px;background:#fcfcfc;outline:none;box-sizing:border-box;">
@@ -807,49 +792,17 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
 
         modal.classList.add('open');
 
-        // 核销口令
-        const verifyBtn = document.getElementById('btnVerifyAsrCode');
-        const codeInp = document.getElementById('asrAccessCodeInput');
-        if (verifyBtn && codeInp) {
-            verifyBtn.onclick = async () => {
-                const code = codeInp.value.trim();
-                if (!code) {
-                    if (typeof showToast === 'function') showToast('请输入激活口令', 'error');
-                    return;
-                }
-                verifyBtn.disabled = true;
-                verifyBtn.textContent = '核销中...';
-                try {
-                    const serverUrl = (document.getElementById('asrServerUrlInput')?.value || '').trim();
-                    if (serverUrl) await window.mcytAsr.saveConfig({ serverUrl });
-                    await window.mcytAsr.verifyAccessCode(code);
-                    if (typeof showToast === 'function') showToast('口令核销绑定成功！已激活云端识别', 'success', 2500);
-                    openAsrSettingsModal();
-                    renderSettingsApp();
-                } catch (err) {
-                    console.error('核销失败:', err);
-                    if (typeof showToast === 'function') showToast('核销失败: ' + err.message, 'error', 3000);
-                } finally {
-                    verifyBtn.disabled = false;
-                    verifyBtn.textContent = '核销绑定';
-                }
-            };
-        }
-
-        // 保存通用 ASR 配置
         const saveBtn = document.getElementById('btnSaveAsrConfig');
         if (saveBtn) {
             saveBtn.onclick = async () => {
                 const serverUrl = (document.getElementById('asrServerUrlInput')?.value || '').trim() || 'http://121.43.122.253:8000';
-                const code = (codeInp?.value || '').trim();
                 const selectedLang = document.querySelector('input[name="asrLangRadio"]:checked')?.value || 'zh';
-                await window.mcytAsr.saveConfig({ serverUrl, accessCode: code, language: selectedLang });
+                await window.mcytAsr.saveConfig({ serverUrl, language: selectedLang });
                 if (typeof showToast === 'function') showToast('已保存语音识别配置', 'success');
                 closeModal();
             };
         }
 
-        // 测试服务连通性
         const testHealthBtn = document.getElementById('btnTestAsrHealth');
         if (testHealthBtn) {
             testHealthBtn.onclick = async () => {
@@ -990,43 +943,39 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
                         </div>
                     </div>
 
-                    <!-- 👁️ 独立视觉与识图 API 配置卡片（给无识图能力的AI外挂视觉眼睛） -->
+                    <!-- 👁️ 独立视觉与识图 API 凭据卡片（专为无识图能力的AI外挂眼睛） -->
                     <div style="background:#ffffff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.04);border:1px solid #eeeeee;">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
                             <div style="display:flex;align-items:center;gap:6px;">
                                 <span style="font-size:13.5px;font-weight:600;color:#181818;">独立视觉 / 识图 API</span>
-                                <span id="openVisionHelpModalBtn" title="点击查看说明" style="display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;background:#ebebeb;color:#666;font-size:11px;font-weight:bold;cursor:pointer;user-select:none;">?</span>
+                                <span id="openVisionHelpModalBtn" title="点击查看功能说明" style="display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;background:#f0f0f0;color:#555;font-size:11px;font-weight:bold;cursor:pointer;user-select:none;">?</span>
                             </div>
-                            <label style="display:flex;align-items:center;gap:6px;cursor:pointer;">
-                                <input type="checkbox" id="visionApiMasterToggle" ${visionCfg.enabled ? 'checked' : ''} style="width:16px;height:16px;accent-color:#07c160;">
-                                <span id="visionApiToggleText" style="font-size:12px;font-weight:600;color:${visionCfg.enabled ? '#07c160' : '#888'};">${visionCfg.enabled ? '已启用' : '已关闭'}</span>
-                            </label>
+                            <span style="font-size:11px;color:#07c160;background:#f0f9eb;padding:2px 8px;border-radius:10px;">独立凭证</span>
                         </div>
                         <div style="font-size:11px;color:#888;margin-bottom:12px;line-height:1.45;">
-                            专用于为主剧情 AI 外挂“识图眼睛”。当收到真实图片时，先自动调用本接口解析画面，再喂给主模型。
+                            为主剧情 AI 提供外挂识图眼睛。在聊天界面发送真实图片时，可随时勾选调用此接口。
                         </div>
 
-                        <div id="visionConfigDetailContainer" style="${visionCfg.enabled ? '' : 'opacity:0.45;pointer-events:none;'}">
-                            <div style="display:flex;flex-direction:column;gap:9px;">
-                                <div>
-                                    <label style="font-size:11.5px;font-weight:600;color:#555;display:block;margin-bottom:4px;">识图接口地址 (Base URL)</label>
-                                    <input type="text" id="visionBaseUrlInput" value="${escapeHtml(visionCfg.baseUrl || 'https://open.bigmodel.cn/api/paas/v4')}" placeholder="https://open.bigmodel.cn/api/paas/v4" style="width:100%;padding:7px 10px;border:1px solid #e0e0e0;border-radius:7px;font-size:11.5px;background:#fcfcfc;outline:none;box-sizing:border-box;">
-                                </div>
+                        <div style="display:flex;flex-direction:column;gap:9px;">
+                            <div>
+                                <label style="font-size:11.5px;font-weight:600;color:#555;display:block;margin-bottom:4px;">识图接口地址 (Base URL)</label>
+                                <input type="text" id="visionBaseUrlInput" value="${escapeHtml(visionCfg.baseUrl || 'https://open.bigmodel.cn/api/paas/v4')}" placeholder="https://open.bigmodel.cn/api/paas/v4" style="width:100%;padding:7px 10px;border:1px solid #e0e0e0;border-radius:7px;font-size:11.5px;background:#fcfcfc;outline:none;box-sizing:border-box;">
+                            </div>
 
-                                <div>
-                                    <label style="font-size:11.5px;font-weight:600;color:#555;display:block;margin-bottom:4px;">识图 API 密钥 (API Key)</label>
-                                    <input type="password" id="visionApiKeyInput" value="${escapeHtml(visionCfg.apiKey || '')}" placeholder="填入支持识图的专属 API Key" style="width:100%;padding:7px 10px;border:1px solid #e0e0e0;border-radius:7px;font-size:11.5px;background:#fcfcfc;outline:none;box-sizing:border-box;">
-                                </div>
+                            <div>
+                                <label style="font-size:11.5px;font-weight:600;color:#555;display:block;margin-bottom:4px;">识图 API 密钥 (API Key)</label>
+                                <input type="password" id="visionApiKeyInput" value="${escapeHtml(visionCfg.apiKey || '')}" placeholder="填入支持识图的专属 API Key (如智谱Key)" style="width:100%;padding:7px 10px;border:1px solid #e0e0e0;border-radius:7px;font-size:11.5px;background:#fcfcfc;outline:none;box-sizing:border-box;">
+                            </div>
 
-                                <div>
-                                    <label style="font-size:11.5px;font-weight:600;color:#555;display:block;margin-bottom:4px;">多模态视觉模型名称</label>
-                                    <input type="text" id="visionModelInput" value="${escapeHtml(visionCfg.model || 'glm-4v-flash')}" placeholder="glm-4v-flash" style="width:100%;padding:7px 10px;border:1px solid #e0e0e0;border-radius:7px;font-size:11.5px;background:#fcfcfc;outline:none;box-sizing:border-box;">
-                                </div>
+                            <div>
+                                <label style="font-size:11.5px;font-weight:600;color:#555;display:block;margin-bottom:4px;">视觉多模态模型</label>
+                                <input type="text" id="visionModelInput" value="${escapeHtml(visionCfg.model || 'glm-4v-flash')}" placeholder="glm-4v-flash" style="width:100%;padding:7px 10px;border:1px solid #e0e0e0;border-radius:7px;font-size:11.5px;background:#fcfcfc;outline:none;box-sizing:border-box;">
+                            </div>
 
-                                <div style="display:flex;gap:8px;margin-top:4px;">
-                                    <button id="saveVisionConfigBtn" style="flex:1;padding:8px;font-size:12px;font-weight:600;background:#07c160;color:#fff;border:none;border-radius:7px;cursor:pointer;">保存识图配置</button>
-                                    <button id="testVisionApiBtn" style="padding:8px 14px;font-size:12px;background:#ffffff;color:#333;border:1px solid #e0e0e0;border-radius:7px;cursor:pointer;">连通测试</button>
-                                </div>
+                            <div style="display:flex;gap:8px;margin-top:4px;">
+                                <button id="saveVisionConfigBtn" style="flex:1;padding:8px;font-size:12px;font-weight:600;background:#07c160;color:#fff;border:none;border-radius:7px;cursor:pointer;">保存识图配置</button>
+                                <button id="testVisionApiBtn" style="padding:8px 14px;font-size:12px;background:#ffffff;color:#333;border:1px solid #e0e0e0;border-radius:7px;cursor:pointer;">相册选图实测</button>
+                                <input type="file" id="visionTestFileInput" accept="image/*" style="display:none;">
                             </div>
                         </div>
                     </div>
@@ -1048,7 +997,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
                         <button id="openTtsSettingsModalBtn" style="padding:6px 14px;font-size:12px;font-weight:500;border:1px solid #07c160;background:#ffffff;color:#07c160;border-radius:6px;cursor:pointer;">配置语音</button>
                     </div>
 
-                    <!-- 云端极速语音识别 (ASR) 与一机一口令管理卡片 -->
+                    <!-- 云端极速语音识别 (ASR) 免密通行状态卡片 -->
                     <div style="background:#ffffff;border-radius:12px;padding:12px 14px;box-shadow:0 1px 3px rgba(0,0,0,0.04);border:1px solid #eeeeee;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center;">
                         <div style="display:flex;align-items:center;gap:10px;">
                             <div style="width:36px;height:36px;border-radius:8px;background:#f0f9eb;display:flex;align-items:center;justify-content:center;">
@@ -1061,10 +1010,10 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
                             </div>
                             <div>
                                 <div style="font-size:13px;font-weight:600;color:#222;">云端语音识别 (ASR)</div>
-                                <div style="font-size:11px;color:#888;">直连私有云端 faster-whisper，激活口令管理</div>
+                                <div style="font-size:11px;color:#888;">直连 faster-whisper 实例 · 全员免口令开箱即用</div>
                             </div>
                         </div>
-                        <button id="openAsrSettingsModalBtn" style="padding:6px 14px;font-size:12px;font-weight:500;border:1px solid #07c160;background:#ffffff;color:#07c160;border-radius:6px;cursor:pointer;">激活与设置</button>
+                        <button id="openAsrSettingsModalBtn" style="padding:6px 14px;font-size:12px;font-weight:500;border:1px solid #07c160;background:#ffffff;color:#07c160;border-radius:6px;cursor:pointer;">服务状态</button>
                     </div>
 
                     <div style="background:#ffffff;border-radius:12px;padding:12px 14px;box-shadow:0 1px 3px rgba(0,0,0,0.04);border:1px solid #eeeeee;">
@@ -1523,37 +1472,35 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
         }
 
         // ============================================================
-        // 👁️ 独立视觉与识图 API 事件绑定
+        // 👁️ 独立视觉与识图 API 事件绑定（问号结构化弹窗 + 相册真图实测）
         // ============================================================
-        const visionToggle = document.getElementById('visionApiMasterToggle');
-        const visionToggleText = document.getElementById('visionApiToggleText');
-        const visionDetailBox = document.getElementById('visionConfigDetailContainer');
         const visionHelpBtn = document.getElementById('openVisionHelpModalBtn');
-
         if (visionHelpBtn) {
             visionHelpBtn.onclick = () => {
-                openWechatConfirmModal(
-                    '关于独立识图 API',
-                    '【什么是识图 API？】\n许多擅长写文和人设对话的模型（如 DeepSeek、Claude、部分中轻量级大模型）本身只有纯文本处理能力，无法直接读懂用户发送的真实相片。\n\n【功能机制】：\n当你勾选开启本功能后，聊天中如果发送了真实图片，系统会先在后台调用此处的独立视觉模型对图片做一次快速画面解析，将解析出的真实画面事实告诉主对话模型。这样无论你的主模型是否具备识图功能，角色都能准确“看”到你的图片！\n\n【推荐模型】：\n推荐使用智谱清言的 glm-4v-flash 模型（目前开放平台永久免费、响应极快、识图准确）。'
-                );
-            };
-        }
-
-        if (visionToggle) {
-            visionToggle.onchange = () => {
-                const enabled = visionToggle.checked;
-                const cur = getSafeVisionConfig();
-                cur.enabled = enabled;
-                saveVisionConfig(cur);
-                if (visionToggleText) {
-                    visionToggleText.textContent = enabled ? '已启用' : '已关闭';
-                    visionToggleText.style.color = enabled ? '#07c160' : '#888';
-                }
-                if (visionDetailBox) {
-                    visionDetailBox.style.opacity = enabled ? '1' : '0.45';
-                    visionDetailBox.style.pointerEvents = enabled ? 'auto' : 'none';
-                }
-                if (typeof showToast === 'function') showToast(enabled ? '已开启外挂识图功能' : '已关闭外挂识图功能', 'info');
+                const helpContent = `
+                    <div style="font-weight:600;font-size:13.5px;color:#181818;margin-bottom:8px;">
+                        【什么是独立识图 API？】
+                    </div>
+                    <div style="color:#555;font-size:12.5px;line-height:1.6;margin-bottom:12px;">
+                        许多写文对话极佳的模型（如 DeepSeek-Chat、Claude-3.5-Haiku 等）本身只支持纯文本，无法读懂真实相片。配置此处后，主模型就相当于拥有了一双“外挂视觉眼睛”。
+                    </div>
+                    <div style="font-weight:600;font-size:13px;color:#181818;margin-bottom:6px;">
+                        【自由开启机制】：
+                    </div>
+                    <div style="color:#555;font-size:12px;line-height:1.6;margin-bottom:12px;">
+                        • 不设强制总开关。只要在此配置好凭据，在微信单聊中点击 <b>[+]</b> 号发送图片时，切换到真实图片模式即可勾选 <b>[✔] 启用识图 AI 辅助解析</b>。<br>
+                        • 若主模型自带强大多模态能力（如 GPT-4o），可不勾选，完全自主选择。
+                    </div>
+                    <div style="font-weight:600;font-size:13px;color:#07c160;margin-bottom:6px;">
+                        【免费多模态模型推荐】：
+                    </div>
+                    <div style="background:#f0f9eb;padding:8px 10px;border-radius:6px;border:1px solid #c2e7b0;color:#2e7d32;font-size:11.5px;line-height:1.5;">
+                        推荐使用智谱清言的 <b>glm-4v-flash</b>：<br>
+                        • 接口地址：https://open.bigmodel.cn/api/paas/v4<br>
+                        • 开放平台永久免费，响应极快（约 0.5s），识图细致生动。
+                    </div>
+                `;
+                openWechatConfirmModal('识图 API 功能说明', helpContent);
             };
         }
 
@@ -1561,58 +1508,91 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
         if (saveVisionBtn) {
             saveVisionBtn.onclick = () => {
                 const cur = getSafeVisionConfig();
-                cur.enabled = !!(visionToggle && visionToggle.checked);
                 cur.baseUrl = (document.getElementById('visionBaseUrlInput')?.value || '').trim() || 'https://open.bigmodel.cn/api/paas/v4';
                 cur.apiKey = (document.getElementById('visionApiKeyInput')?.value || '').trim();
                 cur.model = (document.getElementById('visionModelInput')?.value || '').trim() || 'glm-4v-flash';
                 saveVisionConfig(cur);
-                if (typeof showToast === 'function') showToast('已保存独立识图 API 设置', 'success');
+                if (typeof showToast === 'function') showToast('已保存独立识图 API 凭证', 'success');
             };
         }
 
+        // 🌟 真刀真枪相册选图实测
         const testVisionBtn = document.getElementById('testVisionApiBtn');
-        if (testVisionBtn) {
-            testVisionBtn.onclick = async () => {
-                const key = (document.getElementById('visionApiKeyInput')?.value || '').trim();
-                const url = (document.getElementById('visionBaseUrlInput')?.value || '').trim() || 'https://open.bigmodel.cn/api/paas/v4';
-                const model = (document.getElementById('visionModelInput')?.value || '').trim() || 'glm-4v-flash';
+        const visionFileInput = document.getElementById('visionTestFileInput');
 
+        if (testVisionBtn && visionFileInput) {
+            testVisionBtn.onclick = () => {
+                const key = (document.getElementById('visionApiKeyInput')?.value || '').trim();
                 if (!key) {
                     if (typeof showToast === 'function') showToast('请先输入识图 API 密钥', 'error');
                     return;
                 }
+                visionFileInput.click();
+            };
+
+            visionFileInput.onchange = async (e) => {
+                const file = e.target.files && e.target.files[0];
+                if (!file) return;
+
+                const key = (document.getElementById('visionApiKeyInput')?.value || '').trim();
+                const url = (document.getElementById('visionBaseUrlInput')?.value || '').trim() || 'https://open.bigmodel.cn/api/paas/v4';
+                const model = (document.getElementById('visionModelInput')?.value || '').trim() || 'glm-4v-flash';
 
                 testVisionBtn.disabled = true;
-                testVisionBtn.textContent = '测试中...';
+                testVisionBtn.textContent = '识别中...';
+                if (typeof showToast === 'function') showToast('正在调用视觉模型解析图片...', 'info', 2000);
 
-                try {
-                    const endpoint = (url.replace(/\/+$/, '')) + '/chat/completions';
-                    // 测试纯文本对话连通性
-                    const res = await fetch(endpoint, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${key}`
-                        },
-                        body: JSON.stringify({
+                const reader = new FileReader();
+                reader.onload = async (evt) => {
+                    const base64Img = evt.target.result;
+                    try {
+                        const endpoint = (url.replace(/\/+$/, '')) + '/chat/completions';
+                        const payload = {
                             model: model,
-                            messages: [{ role: 'user', content: 'hello' }],
-                            max_tokens: 5
-                        })
-                    });
+                            messages: [
+                                {
+                                    role: 'user',
+                                    content: [
+                                        { type: 'text', text: '请用简明而生动的中文客观描述这张图片的内容与关键细节，不超过80字。' },
+                                        { type: 'image_url', image_url: { url: base64Img } }
+                                    ]
+                                }
+                            ],
+                            max_tokens: 150,
+                            temperature: 0.3
+                        };
 
-                    if (res.ok) {
-                        if (typeof showToast === 'function') showToast(`识图接口连接成功！[${model}] 正常响应`, 'success');
-                    } else {
-                        const errTxt = await res.text();
-                        if (typeof showToast === 'function') showToast(`识图接口异常(${res.status}): ${errTxt.slice(0, 45)}`, 'error');
+                        const res = await fetch(endpoint, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${key}`
+                            },
+                            body: JSON.stringify(payload)
+                        });
+
+                        if (!res.ok) {
+                            const errTxt = await res.text().catch(() => '');
+                            throw new Error(`HTTP ${res.status}: ${errTxt.slice(0, 60)}`);
+                        }
+
+                        const resData = await res.json();
+                        const parsedDesc = resData?.choices?.[0]?.message?.content || '无描述文本';
+
+                        openWechatConfirmModal(
+                            '识图实测成功！',
+                            `<div style="margin-bottom:8px;font-weight:600;color:#07c160;">【${escapeHtml(model)}】解析结果：</div><div style="background:#f9f9f9;padding:10px;border-radius:6px;border:1px solid #eee;font-size:12px;line-height:1.5;color:#222;">${escapeHtml(parsedDesc)}</div>`
+                        );
+                    } catch (testErr) {
+                        console.error('识图测试异常:', testErr);
+                        openWechatConfirmModal('识图实测失败', `接口调用发生异常：\n${testErr.message}`);
+                    } finally {
+                        testVisionBtn.disabled = false;
+                        testVisionBtn.textContent = '相册选图实测';
+                        visionFileInput.value = '';
                     }
-                } catch (err) {
-                    if (typeof showToast === 'function') showToast('识图接口连接失败: ' + err.message, 'error');
-                } finally {
-                    testVisionBtn.disabled = false;
-                    testVisionBtn.textContent = '连通测试';
-                }
+                };
+                reader.readAsDataURL(file);
             };
         }
 
@@ -1628,7 +1608,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
             };
         }
 
-        // 🎙️ 绑定打开云端 ASR 语音识别与口令激活弹窗按钮
+        // 🎙️ 绑定打开云端 ASR 服务状态弹窗按钮
         const openAsrBtn = document.getElementById('openAsrSettingsModalBtn');
         if (openAsrBtn) {
             openAsrBtn.onclick = () => openAsrSettingsModal();
