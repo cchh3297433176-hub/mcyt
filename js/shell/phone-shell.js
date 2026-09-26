@@ -6,7 +6,7 @@
  *       桌面 App 图标与小组件全自由长按晃动编辑态、粉白仿Windows甜心弹窗、
  *       🌟 4 格宽专属复古星象塔罗大组件驱动引擎、
  *       🌟 桌面层级自由手拖微调引擎（锁定屏幕条、塔罗、日历、便签、App网格分别手拖并持久化保存与一键重置）、
- *       🌟 独立 App 路由中枢（接通微信、个性主题、系统设置、塔罗牌、忆海 Rememori 原生沙盒保活）。
+ *       🌟 独立 App 路由中枢（接通微信、个性主题、系统设置、塔罗牌、忆海 Rememori、AO3同人文库原生沙盒保活）。
  */
 
 (function () {
@@ -592,7 +592,7 @@
     };
 
     // ============================================================
-    // 🌟 桌面块级自由手拖微调系统（锁定屏幕/塔罗/日历/便签/App网格）
+    // 🌟 桌面块级自由手拖微调系统
     // ============================================================
     window._isDesktopBlockAdjustMode = false;
     let _blockOffsets = { lock: 0, tarot: 0, calendar: 0, todo: 0, appGrid: 0 };
@@ -673,7 +673,7 @@
             { el: document.querySelector('.desktop-page-1 .app-grid'), key: 'appGrid', label: 'App图标网格' }
         ];
 
-        blocksConfig.forEach(({ el, key, label }) => {
+        blocksConfig.forEach(({ el, key }) => {
             if (!el) return;
             el.setAttribute('data-tuning-key', key);
             el.style.outline = '2px dashed #ff5c8a';
@@ -1225,13 +1225,11 @@
 
         const iframeEl = document.getElementById('phoneSandboxIframe');
         if (iframeEl) {
-            // 🌟 核心防白屏策略：若 URL 相同则复用已有页面状态秒开，若不同才进行切换
             if (_activeSandboxUrl !== url || iframeEl.getAttribute('src') === 'about:blank') {
                 _activeSandboxUrl = url;
                 iframeEl.src = url;
             }
 
-            // 监听 iframe 内部加载，严禁沙盒内重载宿主主页套娃
             iframeEl.onload = function () {
                 try {
                     const curLoc = iframeEl.contentWindow.location.href;
@@ -1257,10 +1255,8 @@
                 sandbox.style.display = 'none';
             }, 180);
         }
-        // 🌟 严禁使用 iframe.src = 'about:blank'，避免在 Android WebView 中引起下次打开时严重白屏
     };
 
-    // 🌟 监听子沙盒（塔罗、忆海）发来的关闭指令，实现原生无缝收起
     window.addEventListener('message', function (e) {
         if (!e || !e.data) return;
         const data = e.data;
@@ -1277,7 +1273,6 @@
         }
     });
 
-    // 检查并同步小手机后台任务悬浮状态（如私聊或朋友圈生成中）
     window.syncPhoneSandboxTaskState = function () {
         const capsule = document.getElementById('phoneSandboxActiveTaskCapsule');
         const taskText = document.getElementById('phoneSandboxActiveTaskText');
@@ -1297,6 +1292,9 @@
         }
     };
 
+    // ============================================================
+    // 🌟 独立 App 路由调度中枢（接入 AO3 独立文库 App）
+    // ============================================================
     window.openPhoneApp = function (appKey) {
         if (window._isWidgetEditMode || window._isDesktopBlockAdjustMode) return;
         const appModal = document.getElementById('appModal');
@@ -1304,8 +1302,9 @@
         const appModalBody = document.getElementById('appModalBody');
         if (!appModal || !appModalTitle || !appModalBody) return;
 
-        if (appKey !== 'chat') appModal.classList.remove('wechat-seamless-shell');
+        if (appKey !== 'chat' && appKey !== 'ao3') appModal.classList.remove('wechat-seamless-shell');
 
+        // 💬 微信/聊天 App
         if (appKey === 'chat' && typeof window.renderChatApp === 'function') {
             appModalTitle.textContent = "💬 聊天中心";
             window.renderChatApp(appModalBody);
@@ -1313,6 +1312,15 @@
             return;
         }
 
+        // 📚 🌟 全新接通 AO3 同人文库 App（纯正白描学术质感）
+        if (appKey === 'ao3' && typeof window.renderAo3App === 'function') {
+            appModalTitle.textContent = "Archive of Our Own (AO3)";
+            window.renderAo3App(appModalBody);
+            appModal.classList.add('opened');
+            return;
+        }
+
+        // 🎀 个性主题
         if (appKey === 'theme' && typeof window.renderThemeApp === 'function') {
             appModalTitle.textContent = "🎀 个性化与主题";
             window.renderThemeApp(appModalBody);
@@ -1320,29 +1328,39 @@
             return;
         }
 
+        // ⚙️ 系统设置
         if (appKey === 'settings' && typeof window.renderSettingsApp === 'function') {
             window.renderSettingsApp();
             appModal.classList.add('opened');
             return;
         }
 
-        // 🔮 塔罗牌占卜：原生沙盒拉起，保活主页后台生成，单例沉浸运行
+        // 🔮 塔罗牌占卜
         if (appKey === 'tarot') {
             window.openInAppSandbox('tarot/index.html', '🔮 塔罗牌占卜');
             return;
         }
 
-        // 🌟 独立记忆中枢：忆海 (Rememori) 原生沙盒拉起，保活主页后台生成，单例沉浸运行
+        // 🧠 忆海 (Rememori)
         if (appKey === 'rememori') {
             window.openInAppSandbox('rememori/index.html', '🧠 忆海 (Rememori)');
             return;
         }
 
+        // 📺 YouTube 油管
+        if (appKey === 'youtube' && typeof window.renderYouTubePanel === 'function') {
+            appModalTitle.textContent = "▶️ YouTube 视频";
+            appModalBody.innerHTML = '<div id="youtubeTab" style="width:100%;height:100%;"></div>';
+            window.renderYouTubePanel();
+            appModal.classList.add('opened');
+            return;
+        }
+
         const appMap = {
             chat: { title: '💬 聊天中心', desc: '单人私聊与多人群聊系统。' },
+            ao3: { title: '📚 同人文库', desc: 'Archive of Our Own 同人文创作与自建角色羁绊。' },
             rememori: { title: '🧠 忆海', desc: '基于向量检索与证据链的独立记忆中枢。' },
             youtube: { title: '▶️ 油管视频', desc: '视频推荐流与发布共创。' },
-            ao3: { title: '🎨 AO3 同人站', desc: '自建同人文与读者互动。' },
             streaming: { title: '🔴 直播推流', desc: '开播互动与弹幕分成。' },
             story: { title: '📖 主线频道', desc: '核心主线剧情卡片。' },
             shop: { title: '🛒 商务赞助', desc: '品牌代言接单与道具商店。' },
