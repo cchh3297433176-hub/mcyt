@@ -7,7 +7,7 @@
  * 2. 仿微信白灰微绿风格的【QQ号激活验证弹窗】。
  * 3. 向私有云鉴权端点 (http://121.43.122.253:8000/api/auth/verify) 上报 QQ 与 UUID 进行死锁绑定。
  * 4. 软硬件黑名单与冒领反制阻断：展示不可关闭的全屏微绿/告警 HUD，锁死一切操作。
- * 5. 鉴权状态本地快照保活与冷启动异步门禁（Gatekeeper）。
+ * 5. 具备解封实时检测通道（重试时主动问询服务器，解除死锁并恢复输入）。
  */
 
 (function () {
@@ -64,12 +64,13 @@
             localStorage.removeItem(KEY_AUTH_STATE);
             this.boundQQ = '';
             this.isVerified = false;
+            this.isBanned = false;
         },
 
         // 向服务器发起验证与绑定
         async verifyWithServer(qqNumber) {
             const payload = {
-                qq: String(qqNumber).trim(),
+                qq: String(qqNumber || '').trim(),
                 device_uuid: this.uuid,
                 version: window.CURRENT_APP_VERSION || '1.611'
             };
@@ -102,9 +103,9 @@
             }
         },
 
-        // 统一展示微信质感全屏阻断 HUD（锁死界面，阻止进入掌机）
+        // 统一展示微信质感全屏阻断 HUD
         showLockScreenHUD(options) {
-            const { title, message, statusType, onRetry, showClearQQ } = options;
+            const { title, message, statusType, onRetry, showClearQQ, customActionText } = options;
 
             let existingHud = document.getElementById('mcytAuthLockHUD');
             if (existingHud) existingHud.remove();
@@ -119,7 +120,6 @@
                 user-select: none; -webkit-user-select: none;
             `;
 
-            // 依据不同状态定制图标色调
             let iconSvg = '';
             if (statusType === 'BANNED' || statusType === 'DEVICE_BANNED') {
                 iconSvg = `
@@ -140,7 +140,6 @@
                     </div>
                 `;
             } else {
-                // 默认提示 / 待审核
                 iconSvg = `
                     <div style="width: 64px; height: 64px; border-radius: 50%; background: #e8f5e9; display: flex; align-items: center; justify-content: center; margin-bottom: 20px;">
                         <svg viewBox="0 0 24 24" style="width: 34px; height: 34px; stroke: #07c160; stroke-width: 2.2; fill: none; stroke-linecap: round; stroke-linejoin: round;">
@@ -158,7 +157,7 @@
                 <div style="font-size: 13.5px; color: #4b5563; line-height: 1.6; text-align: center; max-width: 300px; margin-bottom: 24px;">${message}</div>
                 
                 <div style="width: 100%; max-width: 280px; display: flex; flex-direction: column; gap: 10px;">
-                    ${onRetry ? `<button id="mcytAuthRetryBtn" style="width: 100%; height: 42px; border: none; border-radius: 8px; background: #07c160; color: #ffffff; font-size: 15px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center;">刷新重试</button>` : ''}
+                    ${onRetry ? `<button id="mcytAuthRetryBtn" style="width: 100%; height: 42px; border: none; border-radius: 8px; background: #07c160; color: #ffffff; font-size: 15px; font-weight: 500; cursor: pointer; display: flex; align-items: center; justify-content: center;">${customActionText || '刷新重试'}</button>` : ''}
                     ${showClearQQ ? `<button id="mcytAuthClearBtn" style="width: 100%; height: 40px; border: 1px solid #d1d5db; border-radius: 8px; background: #ffffff; color: #374151; font-size: 14px; cursor: pointer;">换号重新激活</button>` : ''}
                 </div>
 
@@ -279,9 +278,9 @@
             const status = res.status || (res.code === 0 ? 'APPROVED' : 'ERROR');
 
             if (status === 'APPROVED') {
-                // 审核通过并绑定成功
                 this.boundQQ = qqVal;
                 this.isVerified = true;
+                this.isBanned = false;
                 localStorage.setItem(KEY_BOUND_QQ, qqVal);
                 this.saveCache({ status: 'APPROVED', qq: qqVal });
 
@@ -344,15 +343,34 @@
                 this.isBanned = true;
                 this.showLockScreenHUD({
                     title: '当前设备已被永久拉黑',
-                    message: `该设备存在违规冒领或盗用行为，硬件 UUID 与 IP 已被系统风控死锁。<br>本掌机在此设备上已全面作废。`,
+                    message: `该设备存在违规冒领或盗用行为，硬件 UUID 已被系统风控死锁。<br>本掌机在此设备上已全面作废。`,
                     statusType: 'DEVICE_BANNED',
-                    onRetry: null,
+                    customActionText: '重新检测解封状态',
+                    onRetry: async () => {
+                        // 重新向服务器检查本设备是否已在群里被管理员解封
+                        const checkRes = await AuthEngine.verifyWithServer(qqVal || '00000');
+                        if (checkRes.status !== 'DEVICE_BANNED') {
+                            AuthEngine.isBanned = false;
+                            const hud = document.getElementById('mcytAuthLockHUD');
+                            if (hud) hud.remove();
+                            AuthEngine.clearBoundQQ();
+                            AuthEngine.showActivationModal();
+                            if (typeof showToast === 'function') {
+                                showToast('设备已解除风控锁定，请重新激活', 'info');
+                            }
+                        } else {
+                            const btn = document.getElementById('mcytAuthRetryBtn');
+                            if (btn) {
+                                btn.textContent = '设备仍在黑名单中';
+                                setTimeout(() => { btn.textContent = '重新检测解封状态'; btn.style.opacity = '1'; }, 1500);
+                            }
+                        }
+                    },
                     showClearQQ: false
                 });
                 return false;
             }
 
-            // 其他网络错误或提示
             const tipMsg = document.getElementById('mcytAuthTipMsg');
             if (tipMsg) {
                 tipMsg.textContent = res.message || '验证失败，请重试';
@@ -364,13 +382,17 @@
 
         // 冷启动生命周期统一门禁拦截
         async enforceStartupGate() {
-            // 1. 如果已有绑定的 QQ
+            // 优先检查硬件是否已被服务器封禁
+            const devCheck = await this.verifyWithServer(this.boundQQ || '00000');
+            if (devCheck.status === 'DEVICE_BANNED') {
+                return this.handleVerifyResponse(devCheck, this.boundQQ || '', null);
+            }
+
+            // 如果已有绑定的 QQ
             if (this.boundQQ) {
-                // 读取本地缓存状态，提升冷启动流畅度
                 const cache = this.getSavedCache();
                 if (cache && cache.status === 'APPROVED' && cache.qq === this.boundQQ) {
                     this.isVerified = true;
-                    // 后台静默校验状态（不阻塞主进程）
                     this.verifyWithServer(this.boundQQ).then(res => {
                         if (res.status === 'BANNED' || res.status === 'DEVICE_BANNED' || res.status === 'IMPOSTOR_LOCKED') {
                             AuthEngine.handleVerifyResponse(res, this.boundQQ, null);
@@ -379,18 +401,16 @@
                     return true;
                 }
 
-                // 无有效缓存，主动向服务器同步
                 const res = await this.verifyWithServer(this.boundQQ);
                 return this.handleVerifyResponse(res, this.boundQQ, null);
             }
 
-            // 2. 首次进入或未绑定 QQ，阻断并弹出激活弹窗
+            // 首次进入或未绑定 QQ，阻断并弹出激活弹窗
             this.showActivationModal();
             return false;
         }
     };
 
-    // 注入弹出动画样式
     const style = document.createElement('style');
     style.textContent = `
         @keyframes mcytAuthPop {
