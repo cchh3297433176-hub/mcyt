@@ -1,10 +1,12 @@
 /**
  * js/apps/chat/chat-app-panels.js
  * 💬 微信主应用 · 拆分分片 6/7：表情抽屉、设置抽屉（7大系统配置面板）、
- *    加号互动抽屉（单聊与群聊各自独立的聊天互动槽位，已接入发送图片/文字画片）、记忆/联网/排版/折叠/名片/Token等弹窗。
+ *    加号互动抽屉（单聊与群聊各自独立的聊天互动槽位，已接入发送图片/文字画片/音视频通话）、记忆/联网/排版/折叠/名片/Token等弹窗。
  * 🌟 升级特性：
  * 1. ⚙️ 设置抽屉（buildChatSettingsDrawerHTML）：聚焦纯系统排版（推荐名片、记忆设置、联网设置、拟真排版、聊天折叠、Token统计、共创视频）。
- * 2. ➕ 加号抽屉（buildChatPlusDrawerHTML）：发送图片正式迁移至加号抽屉首位；群聊专享【发送图片、群转账、群收款、群待办、群接龙、群投票、群打卡】；单聊专享【发送图片、红包、转账、戳一戳、亲密度、情侣空间、特别关心】。
+ * 2. ➕ 加号抽屉（buildChatPlusDrawerHTML）：
+ *    - 群聊专享【发送图片、群转账、群收款、群待办、群接龙、群投票、群打卡】；
+ *    - 单聊专享【发送图片、语音通话、视频通话、红包、转账、戳一戳、亲密度、情侣空间、特别关心】。
  * 3. 📷 发送图片统一弹窗（openChatSendImageModal）：支持本地图片导入、网络图片导入、文字画片（假图片，输入画面描述）发送。
  */
 
@@ -169,7 +171,7 @@
     };
 
     // ==========================================
-    // ➕ 加号抽屉（已将“发送图片”加入首位）
+    // ➕ 加号抽屉（已加入语音通话与视频通话按键）
     // ==========================================
     function buildChatPlusDrawerHTML(type, id) {
         if (type === 'group') {
@@ -222,7 +224,7 @@
                 </div>
             </div>`;
         } else {
-            // 单人私聊专属互动槽位
+            // 单人私聊专属互动槽位（接入语音通话与视频通话）
             return `
             <div id="chatPlusDrawer" style="background:#f7f7f7;border-top:0.5px solid #dcdcdc;flex-shrink:0;animation:wechatSlideUp 0.18s ease-out;">
                 <div class="wechat-plus-grid">
@@ -232,6 +234,28 @@
                         </div>
                         <span class="wechat-plus-label">发送图片</span>
                     </div>
+
+                    <!-- 📞 语音通话 -->
+                    <div class="wechat-plus-item" onclick="window._plusDrawerOpen=false; if(window.startWechatCall) window.startWechatCall('${id}', 'voice');">
+                        <div class="wechat-plus-icon-box">
+                            <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#07c160;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">
+                                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"></path>
+                            </svg>
+                        </div>
+                        <span class="wechat-plus-label">语音通话</span>
+                    </div>
+
+                    <!-- 📹 视频通话 -->
+                    <div class="wechat-plus-item" onclick="window._plusDrawerOpen=false; if(window.startWechatCall) window.startWechatCall('${id}', 'video');">
+                        <div class="wechat-plus-icon-box">
+                            <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#0284c7;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;">
+                                <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                            </svg>
+                        </div>
+                        <span class="wechat-plus-label">视频通话</span>
+                    </div>
+
                     <div class="wechat-plus-item" onclick="window.triggerChatFeaturePlaceholder('红包')">
                         <div class="wechat-plus-icon-box">
                             <svg viewBox="0 0 24 24" style="width:24px;height:24px;fill:none;stroke:#fa5151;stroke-width:1.8;stroke-linecap:round;"><rect x="4" y="2" width="16" height="20" rx="3"></rect><circle cx="12" cy="11" r="2.5"></circle><path d="M4 7c4 2 12 2 16 0"></path></svg>
@@ -1110,5 +1134,5 @@
         `, () => {});
     };
 
-    console.log('✅ ChatAppPanels 微信抽屉架构升级成功：发送图片已平滑迁入加号互动抽屉');
+    console.log('✅ ChatAppPanels 微信抽屉架构升级成功：加号互动抽屉已挂接音视频通话');
 })();
