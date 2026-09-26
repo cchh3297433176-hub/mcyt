@@ -1,12 +1,12 @@
 /**
  * js/apps/chat/chat-card.js
- * 📇 微信名片与人设资料设置独立模块（精简 5 核心表情 · 装扮中心免通话独立调位版 · 背景立绘双模调位与 Base64 导出版）
+ * 📇 微信名片与人设资料设置独立模块（精简 5 核心表情 · 相册级背景视口裁剪 · 表情长按删除 · Base64 导出版）
  * 职责：
  * 1. 角色极简原生名片卡（保留必要信息，头像精准保活，支持原画/动图）
  * 2. 右上角「装扮中心」：
  *    - 【基础装扮】头像框与气泡样式双轨分流
- *    - 🌟【视频舞台与立绘设置】：精简 5 个核心表情槽自适应网格排列，杜绝横向滚动条与文字挤压；
- *    - 🌟【免通话独立手势调位】：支持一键切换【编辑立绘】与【编辑背景】，自由拖拽平移、缩放构图与裁剪；
+ *    - 🌟【表情差分立绘】：默认槽永久保活，开心/伤心/生气/害羞及自建表情支持长按彻底删除；
+ *    - 🌟【相册级背景裁剪】：提供 9:16 沉浸式视口框，支持双指缩放拖拽与 Canvas 真实裁切；
  *    - 🌟【标准 Base64 导出】：穿透安卓 WebView 沙箱限制，方案直降系统 Download 目录；
  *    - 支持本地/直链图片、GIF、短视频，点击已有项弹窗询问更换或删除；
  *    - 单配组方案独立导出/导入，角色卡打包导出无缝集成。
@@ -63,10 +63,9 @@
                         name: '默认形象',
                         backgroundUrl: '',
                         bgType: 'image',
-                        sprites: {
-                            default: ''
-                        },
+                        sprites: { default: '' },
                         customExpressions: [],
+                        deletedCoreExprs: [], // 记录被用户删除的预设表情槽
                         position: { x: 0, y: 0, scale: 1.0 },
                         bgPosition: { x: 0, y: 0, scale: 1.0 }
                     }
@@ -83,6 +82,7 @@
                     bgType: 'image',
                     sprites: { default: '' },
                     customExpressions: [],
+                    deletedCoreExprs: [],
                     position: { x: 0, y: 0, scale: 1.0 },
                     bgPosition: { x: 0, y: 0, scale: 1.0 }
                 }
@@ -90,10 +90,11 @@
             vs.activeProfileId = 'default';
         }
 
-        // 补齐每个方案的位置结构
         vs.profiles.forEach(p => {
             if (!p.position) p.position = { x: 0, y: 0, scale: 1.0 };
             if (!p.bgPosition) p.bgPosition = { x: 0, y: 0, scale: 1.0 };
+            if (!Array.isArray(p.deletedCoreExprs)) p.deletedCoreExprs = [];
+            if (!Array.isArray(p.customExpressions)) p.customExpressions = [];
         });
 
         return vs;
@@ -254,19 +255,23 @@
                 videoStageData.activeProfileId = activeProf.id;
             }
 
-            // 🌟 严格限制为 5 大核心表情槽
-            const defaultExprs = [
-                { id: 'default', label: '默认' },
-                { id: 'smile', label: '开心' },
-                { id: 'sad', label: '伤心' },
-                { id: 'angry', label: '生气' },
-                { id: 'shy', label: '害羞' }
+            // 🌟 核心表情槽与自建表情整合（排除被删除的槽）
+            const coreExprDefs = [
+                { id: 'default', label: '默认', isCore: true },
+                { id: 'smile', label: '开心', isCore: true },
+                { id: 'sad', label: '伤心', isCore: true },
+                { id: 'angry', label: '生气', isCore: true },
+                { id: 'shy', label: '害羞', isCore: true }
             ];
-            const allExprs = [...defaultExprs];
+
+            const deletedCore = Array.isArray(activeProf.deletedCoreExprs) ? activeProf.deletedCoreExprs : [];
+            const activeCoreExprs = coreExprDefs.filter(c => c.id === 'default' || !deletedCore.includes(c.id));
+
+            const allExprs = [...activeCoreExprs];
             if (Array.isArray(activeProf.customExpressions)) {
                 activeProf.customExpressions.forEach(c => {
                     if (!allExprs.find(e => e.id === c.id)) {
-                        allExprs.push(c);
+                        allExprs.push({ id: c.id, label: c.label, isCore: false });
                     }
                 });
             }
@@ -324,22 +329,27 @@
                                     </div>
                                 </div>
 
-                                <!-- 🌟 独立舞台调位快捷通道（无需通话即可调位，支持立绘/背景双模与裁剪） -->
+                                <!-- 🌟 独立舞台调位通道 -->
                                 <div style="background:#eefbf3;border-radius:8px;padding:10px 12px;border:1px solid #bcecd0;display:flex;justify-content:space-between;align-items:center;gap:8px;">
                                     <div style="flex:1;min-width:0;">
-                                        <div style="font-size:12px;font-weight:600;color:#07c160;white-space:nowrap;">舞台位置与背景裁剪微调</div>
-                                        <div style="font-size:10.5px;color:#558f6b;margin-top:2px;">免通话，支持自由拖动缩放立绘及背景</div>
+                                        <div style="font-size:12px;font-weight:600;color:#07c160;white-space:nowrap;">舞台立绘位置微调</div>
+                                        <div style="font-size:10.5px;color:#558f6b;margin-top:2px;">免通话，1:1 全屏手势拖拽位移与缩放</div>
                                     </div>
                                     <button type="button" id="btnOpenStagePreviewAdjust" style="border:none;background:#07c160;color:#ffffff;padding:6px 12px;border-radius:6px;font-size:11.5px;font-weight:600;cursor:pointer;box-shadow:0 2px 6px rgba(7,193,96,0.3);flex-shrink:0;white-space:nowrap;">
                                         开始调位 ➔
                                     </button>
                                 </div>
 
-                                <!-- 舞台背景图管理 -->
+                                <!-- 舞台背景图管理（含相册级裁剪功能） -->
                                 <div style="background:#f8f9fa;border-radius:8px;padding:10px;border:0.5px solid #eee;">
                                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;">
-                                        <div style="font-size:12px;font-weight:600;color:#333;flex-shrink:0;white-space:nowrap;">视频背景（图片/GIF/视频）：</div>
-                                        <button type="button" id="btnUploadStageBgUrl" style="border:1px solid #07c160;background:#f0faf4;color:#07c160;border-radius:4px;padding:2px 8px;font-size:11px;cursor:pointer;flex-shrink:0;white-space:nowrap;">直链导入</button>
+                                        <div style="font-size:12px;font-weight:600;color:#333;flex-shrink:0;white-space:nowrap;">视频背景（支持相册级裁剪）：</div>
+                                        <div style="display:flex;gap:4px;">
+                                            ${activeProf.backgroundUrl && activeProf.bgType !== 'video' ? `
+                                                <button type="button" id="btnCropStageBgDirect" style="border:1px solid #07c160;background:#ffffff;color:#07c160;border-radius:4px;padding:2px 7px;font-size:11px;cursor:pointer;white-space:nowrap;font-weight:600;">裁剪背景</button>
+                                            ` : ''}
+                                            <button type="button" id="btnUploadStageBgUrl" style="border:1px solid #dcdcdc;background:#ffffff;color:#555;border-radius:4px;padding:2px 7px;font-size:11px;cursor:pointer;white-space:nowrap;">直链导入</button>
+                                        </div>
                                     </div>
                                     <div style="display:flex;align-items:center;gap:12px;">
                                         <div id="btnStageBgPreviewBox" style="width:72px;height:72px;border-radius:8px;background:#e5e7eb;overflow:hidden;cursor:pointer;position:relative;display:flex;align-items:center;justify-content:center;border:1px dashed #bbb;flex-shrink:0;" title="点击导入或更换背景">
@@ -356,26 +366,27 @@
                                         </div>
                                         <div style="flex:1;font-size:11.5px;color:#666;line-height:1.5;min-width:0;">
                                             <div>${activeProf.backgroundUrl ? '<span style="color:#07c160;font-weight:600;">● 已设置自定义背景</span>' : '当前使用默认黑灰背景'}</div>
-                                            <div style="color:#999;font-size:10.5px;margin-top:2px;">点击方框可从本地选取，再次点击可更换或删除；支持调位裁剪。</div>
+                                            <div style="color:#999;font-size:10.5px;margin-top:2px;">点击方框更换；点击右上角【裁剪背景】可按手机屏幕比例自由选区。</div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <!-- 角色多表情差分立绘管理（5大核心表情自适应 Grid 布局） -->
+                                <!-- 角色多表情差分立绘管理（支持长按删除非默认表情） -->
                                 <div style="background:#f8f9fa;border-radius:8px;padding:10px;border:0.5px solid #eee;">
                                     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;">
-                                        <div style="font-size:12px;font-weight:600;color:#333;flex-shrink:0;white-space:nowrap;">表情差分立绘（PNG/GIF/视频）：</div>
+                                        <div style="font-size:12px;font-weight:600;color:#333;flex-shrink:0;white-space:nowrap;">表情差分立绘：</div>
                                         <button type="button" id="btnAddCustomExpression" style="border:none;background:#07c160;color:#fff;border-radius:4px;padding:2px 7px;font-size:11px;cursor:pointer;font-weight:600;flex-shrink:0;white-space:nowrap;">+ 新表情</button>
                                     </div>
-                                    <div style="font-size:10.5px;color:#888;margin-bottom:8px;">同一方案下所有表情统一手势位置，通话中根据对话情绪自动切换：</div>
+                                    <div style="font-size:10.5px;color:#888;margin-bottom:8px;">点击录入立绘；<b>长按任意表情（默认除外）可彻底删除</b>该表情槽：</div>
                                     
-                                    <!-- 🌟 彻底解决溢出与横向滚动条：Grid 5 列等比分配，gap 4px -->
-                                    <div style="display:grid;grid-template-columns:repeat(5, 1fr);gap:5px;width:100%;box-sizing:border-box;overflow:hidden;">
+                                    <div style="display:grid;grid-template-columns:repeat(5, 1fr);gap:5px;width:100%;box-sizing:border-box;">
                                         ${allExprs.map(e => {
                                             const spriteUrl = activeProf.sprites && activeProf.sprites[e.id];
                                             const isVideo = spriteUrl && (spriteUrl.startsWith('data:video') || spriteUrl.endsWith('.mp4') || spriteUrl.endsWith('.webm'));
+                                            const canDelete = (e.id !== 'default');
+
                                             return `
-                                                <div class="sprite-slot-card" data-eid="${e.id}" data-label="${escapeHtml(e.label)}" style="display:flex;flex-direction:column;align-items:center;background:#fff;border:1px solid ${spriteUrl ? '#07c160' : '#e0e0e0'};border-radius:6px;padding:5px 1px;cursor:pointer;position:relative;box-sizing:border-box;min-width:0;">
+                                                <div class="sprite-slot-card" data-eid="${e.id}" data-label="${escapeHtml(e.label)}" data-candelete="${canDelete}" style="display:flex;flex-direction:column;align-items:center;background:#fff;border:1px solid ${spriteUrl ? '#07c160' : '#e0e0e0'};border-radius:6px;padding:5px 1px;cursor:pointer;position:relative;box-sizing:border-box;min-width:0;user-select:none;-webkit-user-select:none;">
                                                     <div style="width:100%;aspect-ratio:4/5;max-height:50px;background:#f3f4f6;border-radius:4px;overflow:hidden;display:flex;align-items:center;justify-content:center;position:relative;">
                                                         ${spriteUrl ? `
                                                             ${isVideo ? `
@@ -523,7 +534,7 @@
                     };
                 });
             } else {
-                // 🌟 独立舞台调位快捷通道
+                // 🌟 免通话独立舞台调位快捷通道
                 mask.querySelector('#btnOpenStagePreviewAdjust')?.addEventListener('click', () => {
                     openStandAloneStageAdjuster(npcId, activeProf);
                 });
@@ -545,6 +556,7 @@
                         bgType: 'image',
                         sprites: { default: '' },
                         customExpressions: [],
+                        deletedCoreExprs: [],
                         position: { x: 0, y: 0, scale: 1.0 },
                         bgPosition: { x: 0, y: 0, scale: 1.0 }
                     });
@@ -585,14 +597,32 @@
                     });
                 });
 
+                // 🌟 相册级背景裁剪入口
+                mask.querySelector('#btnCropStageBgDirect')?.addEventListener('click', () => {
+                    if (activeProf.backgroundUrl && activeProf.bgType !== 'video') {
+                        openPhotoStyleBgCropper(activeProf.backgroundUrl, (croppedBase64) => {
+                            activeProf.backgroundUrl = croppedBase64;
+                            renderDecorModalInner();
+                        });
+                    }
+                });
+
                 mask.querySelector('#btnStageBgPreviewBox')?.addEventListener('click', () => {
                     if (activeProf.backgroundUrl) {
                         showMediaReplaceDialog('背景', (action) => {
                             if (action === 'replace') {
                                 pickLocalMediaFile((mediaData, mediaType) => {
-                                    activeProf.backgroundUrl = mediaData;
-                                    activeProf.bgType = mediaType;
-                                    renderDecorModalInner();
+                                    if (mediaType === 'image') {
+                                        openPhotoStyleBgCropper(mediaData, (croppedBase64) => {
+                                            activeProf.backgroundUrl = croppedBase64;
+                                            activeProf.bgType = 'image';
+                                            renderDecorModalInner();
+                                        });
+                                    } else {
+                                        activeProf.backgroundUrl = mediaData;
+                                        activeProf.bgType = mediaType;
+                                        renderDecorModalInner();
+                                    }
                                 });
                             } else if (action === 'delete') {
                                 activeProf.backgroundUrl = '';
@@ -602,9 +632,17 @@
                         });
                     } else {
                         pickLocalMediaFile((mediaData, mediaType) => {
-                            activeProf.backgroundUrl = mediaData;
-                            activeProf.bgType = mediaType;
-                            renderDecorModalInner();
+                            if (mediaType === 'image') {
+                                openPhotoStyleBgCropper(mediaData, (croppedBase64) => {
+                                    activeProf.backgroundUrl = croppedBase64;
+                                    activeProf.bgType = 'image';
+                                    renderDecorModalInner();
+                                });
+                            } else {
+                                activeProf.backgroundUrl = mediaData;
+                                activeProf.bgType = mediaType;
+                                renderDecorModalInner();
+                            }
                         });
                     }
                 });
@@ -617,10 +655,49 @@
                     });
                 });
 
+                // 🌟 表情槽点击与长按删除绑定（默认槽除外）
                 mask.querySelectorAll('.sprite-slot-card').forEach(card => {
+                    const exprId = card.getAttribute('data-eid');
+                    const exprLabel = card.getAttribute('data-label');
+                    const canDelete = card.getAttribute('data-candelete') === 'true';
+
+                    let longPressTimer = null;
+                    let isLongPressTriggered = false;
+
+                    const startLongPress = () => {
+                        if (!canDelete) return;
+                        isLongPressTriggered = false;
+                        longPressTimer = setTimeout(() => {
+                            isLongPressTriggered = true;
+                            if (confirm(`确定要彻底删除「${exprLabel}」表情槽吗？`)) {
+                                if (activeProf.sprites && activeProf.sprites[exprId]) {
+                                    delete activeProf.sprites[exprId];
+                                }
+                                if (['smile', 'sad', 'angry', 'shy'].includes(exprId)) {
+                                    if (!Array.isArray(activeProf.deletedCoreExprs)) activeProf.deletedCoreExprs = [];
+                                    if (!activeProf.deletedCoreExprs.includes(exprId)) activeProf.deletedCoreExprs.push(exprId);
+                                } else if (Array.isArray(activeProf.customExpressions)) {
+                                    activeProf.customExpressions = activeProf.customExpressions.filter(c => c.id !== exprId);
+                                }
+                                if (typeof showToast === 'function') showToast(`已删除表情槽「${exprLabel}」`, 'info', 1000);
+                                renderDecorModalInner();
+                            }
+                        }, 600);
+                    };
+
+                    const clearLongPress = () => {
+                        if (longPressTimer) clearTimeout(longPressTimer);
+                    };
+
+                    card.addEventListener('touchstart', startLongPress, { passive: true });
+                    card.addEventListener('touchend', clearLongPress);
+                    card.addEventListener('touchmove', clearLongPress);
+                    card.addEventListener('mousedown', startLongPress);
+                    card.addEventListener('mouseup', clearLongPress);
+                    card.addEventListener('mouseleave', clearLongPress);
+
                     card.onclick = () => {
-                        const exprId = card.getAttribute('data-eid');
-                        const exprLabel = card.getAttribute('data-label');
+                        if (isLongPressTriggered) return;
                         if (!activeProf.sprites) activeProf.sprites = {};
 
                         const curSprite = activeProf.sprites[exprId];
@@ -711,13 +788,174 @@
     }
     window.openNpcDecorModal = openNpcDecorModal;
 
-    // 🌟 免通话独立全屏 1:1 手势舞台调位器（支持切换【编辑立绘】与【编辑背景】，支持背景裁剪）
+    // 🌟 核心升级：相册级背景视口裁切中心（9:16 视口框，支持双指缩放、拖拽与精准像素输出）
+    function openPhotoStyleBgCropper(rawImgUrl, onCropped) {
+        const cropMask = document.createElement('div');
+        cropMask.style.cssText = `
+            position: fixed; inset: 0; z-index: 100030;
+            background: #000000; display: flex; flex-direction: column;
+            overflow: hidden; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            user-select: none; -webkit-user-select: none;
+        `;
+
+        cropMask.innerHTML = `
+            <!-- 顶栏状态 -->
+            <div style="position: absolute; top: 16px; left: 16px; right: 16px; z-index: 25; display: flex; justify-content: space-between; align-items: center;">
+                <button type="button" id="btnCancelBgCrop" style="border: none; background: rgba(255,255,255,0.2); color: #fff; padding: 6px 14px; border-radius: 20px; font-size: 12px; cursor: pointer;">
+                    取消
+                </button>
+                <div style="color: #ffffff; font-size: 13px; font-weight: 600;">构图与区域裁剪</div>
+                <button type="button" id="btnConfirmBgCrop" style="border: none; background: #07c160; color: #fff; padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(7,193,96,0.35);">
+                    完成裁剪
+                </button>
+            </div>
+
+            <!-- 裁剪交互视区 -->
+            <div id="cropInteractiveArea" style="flex: 1; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center; touch-action: none;">
+                <!-- 待裁剪底图 -->
+                <img id="cropTargetImage" src="${rawImgUrl}" style="position: absolute; transform-origin: center center; cursor: move; pointer-events: none; max-width: none; max-height: none;">
+                
+                <!-- 9:16 沉浸式透明镂空取景框（带微信白描绿角点） -->
+                <div id="cropViewportBox" style="position: relative; width: min(84vw, 320px); aspect-ratio: 9/16; max-height: 72vh; border: 1.5px solid rgba(7,193,96,0.9); box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.72); pointer-events: none; box-sizing: border-box;">
+                    <!-- 辅助九宫格线 -->
+                    <div style="position: absolute; inset: 0; display: grid; grid-template-columns: 1fr 1fr 1fr; grid-template-rows: 1fr 1fr 1fr; pointer-events: none; opacity: 0.25;">
+                        <div style="border-right: 0.5px solid #ffffff; border-bottom: 0.5px solid #ffffff;"></div>
+                        <div style="border-right: 0.5px solid #ffffff; border-bottom: 0.5px solid #ffffff;"></div>
+                        <div style="border-bottom: 0.5px solid #ffffff;"></div>
+                        <div style="border-right: 0.5px solid #ffffff; border-bottom: 0.5px solid #ffffff;"></div>
+                        <div style="border-right: 0.5px solid #ffffff; border-bottom: 0.5px solid #ffffff;"></div>
+                        <div style="border-bottom: 0.5px solid #ffffff;"></div>
+                        <div style="border-right: 0.5px solid #ffffff;"></div>
+                        <div style="border-right: 0.5px solid #ffffff;"></div>
+                        <div></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 底部提示 -->
+            <div style="padding: 14px 20px calc(14px + env(safe-area-inset-bottom, 10px)); display: flex; justify-content: center; background: rgba(0,0,0,0.85); z-index: 25;">
+                <div style="color: rgba(255,255,255,0.7); font-size: 11.5px;">
+                    单指拖动对齐画面 · 双指缩放选区大小
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(cropMask);
+
+        const img = cropMask.querySelector('#cropTargetImage');
+        const touchArea = cropMask.querySelector('#cropInteractiveArea');
+        const viewport = cropMask.querySelector('#cropViewportBox');
+
+        let imgPos = { x: 0, y: 0, scale: 1.0 };
+
+        const updateTransform = () => {
+            img.style.transform = `translate(${imgPos.x}px, ${imgPos.y}px) scale(${imgPos.scale})`;
+        };
+
+        // 图片载入后自动初等适配
+        img.onload = () => {
+            const vpRect = viewport.getBoundingClientRect();
+            const nw = img.naturalWidth || 800;
+            const nh = img.naturalHeight || 600;
+            const scaleW = vpRect.width / nw;
+            const scaleH = vpRect.height / nh;
+            imgPos.scale = Math.max(scaleW, scaleH);
+            img.style.width = nw + 'px';
+            img.style.height = nh + 'px';
+            updateTransform();
+        };
+
+        // 绑定单指拖拽与双指手势缩放
+        let isDragging = false;
+        let startX = 0, startY = 0;
+        let initX = 0, initY = 0;
+        let initialPinchDist = 0;
+        let initScale = 1.0;
+
+        touchArea.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 1) {
+                isDragging = true;
+                startX = e.touches[0].clientX;
+                startY = e.touches[0].clientY;
+                initX = imgPos.x;
+                initY = imgPos.y;
+            } else if (e.touches.length === 2) {
+                isDragging = false;
+                initialPinchDist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                initScale = imgPos.scale;
+            }
+            e.preventDefault();
+        }, { passive: false });
+
+        touchArea.addEventListener('touchmove', (e) => {
+            if (isDragging && e.touches.length === 1) {
+                imgPos.x = initX + (e.touches[0].clientX - startX);
+                imgPos.y = initY + (e.touches[0].clientY - startY);
+                updateTransform();
+            } else if (e.touches.length === 2 && initialPinchDist > 0) {
+                const dist = Math.hypot(
+                    e.touches[0].clientX - e.touches[1].clientX,
+                    e.touches[0].clientY - e.touches[1].clientY
+                );
+                imgPos.scale = Math.max(0.1, initScale * (dist / initialPinchDist));
+                updateTransform();
+            }
+            e.preventDefault();
+        }, { passive: false });
+
+        touchArea.addEventListener('touchend', () => {
+            isDragging = false;
+            initialPinchDist = 0;
+        });
+
+        // 取消
+        cropMask.querySelector('#btnCancelBgCrop').onclick = () => cropMask.remove();
+
+        // 完成裁剪（Canvas 像素级离屏渲染）
+        cropMask.querySelector('#btnConfirmBgCrop').onclick = () => {
+            try {
+                const vpRect = viewport.getBoundingClientRect();
+                const imgRect = img.getBoundingClientRect();
+
+                // 目标输出分辨率设为 720x1280 高清
+                const canvas = document.createElement('canvas');
+                canvas.width = 720;
+                canvas.height = 1280;
+                const ctx = canvas.getContext('2d');
+
+                // 计算取景框在原图坐标系下的对应比例
+                const scaleRatio = imgRect.width / (img.naturalWidth || imgRect.width);
+                const cropSourceX = (vpRect.left - imgRect.left) / scaleRatio;
+                const cropSourceY = (vpRect.top - imgRect.top) / scaleRatio;
+                const cropSourceW = vpRect.width / scaleRatio;
+                const cropSourceH = vpRect.height / scaleRatio;
+
+                ctx.drawImage(
+                    img,
+                    cropSourceX, cropSourceY, cropSourceW, cropSourceH,
+                    0, 0, canvas.width, canvas.height
+                );
+
+                const croppedResult = canvas.toDataURL('image/jpeg', 0.88);
+                cropMask.remove();
+                if (typeof showToast === 'function') showToast('背景裁剪成功', 'success', 1000);
+                onCropped(croppedResult);
+            } catch (err) {
+                console.error('[BgCrop] 裁剪失败:', err);
+                if (typeof showToast === 'function') showToast('裁剪失败，已还原原图', 'error');
+                cropMask.remove();
+            }
+        };
+    }
+
+    // 🌟 免通话独立全屏 1:1 手势舞台调位器
     function openStandAloneStageAdjuster(npcId, prof) {
         if (!prof) return;
         if (!prof.position) prof.position = { x: 0, y: 0, scale: 1.0 };
-        if (!prof.bgPosition) prof.bgPosition = { x: 0, y: 0, scale: 1.0 };
 
-        let editTarget = 'sprite'; // 'sprite' | 'background'
         const testSprite = prof.sprites?.default || Object.values(prof.sprites || {})[0] || '';
         const bgUrl = prof.backgroundUrl || '';
         const isBgVideo = prof.bgType === 'video';
@@ -731,44 +969,32 @@
         `;
 
         adjusterMask.innerHTML = `
-            <!-- 顶栏状态与模式切换 -->
-            <div style="position: absolute; top: 16px; left: 14px; right: 14px; z-index: 25; display: flex; justify-content: space-between; align-items: center; gap: 8px;">
-                <div style="display:flex; align-items:center; gap:6px;">
-                    <div style="padding: 5px 10px; border-radius: 20px; background: rgba(0,0,0,0.5); backdrop-filter: blur(10px); color: #fff; font-size: 11.5px; border: 0.5px solid rgba(255,255,255,0.15); white-space:nowrap;">
-                        <span style="color: #07c160; font-weight: bold;">●</span> ${escapeHtml(prof.name)}
-                    </div>
-
-                    <!-- 🌟 调位对象切换胶囊 -->
-                    <button type="button" id="btnToggleAdjustTarget" style="border: 0.5px solid rgba(255,255,255,0.25); background: rgba(0,0,0,0.6); backdrop-filter: blur(12px); color: #ffffff; padding: 4px 10px; border-radius: 16px; font-size: 11px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 4px;">
-                        <span id="targetModeDot" style="width: 7px; height: 7px; border-radius: 50%; background: #07c160;"></span>
-                        <span id="targetModeLabel">正在编辑: 角色立绘</span>
-                        <span style="font-size: 9px; opacity: 0.7;">(点此切换)</span>
-                    </button>
+            <!-- 顶栏状态 -->
+            <div style="position: absolute; top: 16px; left: 16px; right: 16px; z-index: 25; display: flex; justify-content: space-between; align-items: center;">
+                <div style="padding: 5px 12px; border-radius: 20px; background: rgba(0,0,0,0.5); backdrop-filter: blur(10px); color: #fff; font-size: 12px; border: 0.5px solid rgba(255,255,255,0.15);">
+                    <span style="color: #07c160; font-weight: bold;">●</span> 舞台调位预览（方案: ${escapeHtml(prof.name)}）
                 </div>
-
-                <button type="button" id="btnFinishStandAloneAdjust" style="border: none; background: #07c160; color: #fff; padding: 6px 14px; border-radius: 20px; font-size: 11.5px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(7,193,96,0.35); flex-shrink: 0; white-space:nowrap;">
+                <button type="button" id="btnFinishStandAloneAdjust" style="border: none; background: #07c160; color: #fff; padding: 6px 16px; border-radius: 20px; font-size: 12px; font-weight: 600; cursor: pointer; box-shadow: 0 4px 12px rgba(7,193,96,0.35);">
                     完成并保存
                 </button>
             </div>
 
-            <!-- 背景预览容器（支持手势缩放与拖拽裁剪） -->
+            <!-- 背景预览 -->
             <div style="position: absolute; inset: 0; z-index: 1; overflow: hidden; display: flex; align-items: center; justify-content: center;">
-                <div id="standAloneBgTransformWrap" style="position: absolute; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; transform-origin: center center; cursor: move; touch-action: none;">
-                    ${bgUrl ? `
-                        ${isBgVideo ? `
-                            <video src="${bgUrl}" muted loop autoplay playsinline style="width: 100%; height: 100%; object-fit: cover; pointer-events: none;"></video>
-                        ` : `
-                            <img src="${bgUrl}" style="width: 100%; height: 100%; object-fit: cover; pointer-events: none;">
-                        `}
+                ${bgUrl ? `
+                    ${isBgVideo ? `
+                        <video src="${bgUrl}" muted loop autoplay playsinline style="width: 100%; height: 100%; object-fit: cover; pointer-events: none;"></video>
                     ` : `
-                        <div style="width: 100%; height: 100%; background: radial-gradient(circle at center, #1e2638 0%, #0a0d14 100%);"></div>
+                        <img src="${bgUrl}" style="width: 100%; height: 100%; object-fit: cover; pointer-events: none;">
                     `}
-                </div>
+                ` : `
+                    <div style="width: 100%; height: 100%; background: radial-gradient(circle at center, #1e2638 0%, #0a0d14 100%);"></div>
+                `}
             </div>
 
             <!-- 立绘手势框 -->
-            <div style="flex: 1; position: relative; z-index: 5; display: flex; align-items: center; justify-content: center; overflow: hidden; pointer-events: none;">
-                <div id="standAloneTransformBox" style="position: absolute; width: 280px; height: 380px; border: 1.5px dashed #07c160; background: rgba(7,193,96,0.08); display: flex; align-items: center; justify-content: center; transform-origin: center center; cursor: move; touch-action: none; pointer-events: auto;">
+            <div style="flex: 1; position: relative; z-index: 5; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                <div id="standAloneTransformBox" style="position: absolute; width: 280px; height: 380px; border: 1.5px dashed #07c160; background: rgba(7,193,96,0.08); display: flex; align-items: center; justify-content: center; transform-origin: center center; cursor: move; touch-action: none;">
                     <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; pointer-events: none;">
                         ${testSprite ? `
                             <img src="${testSprite}" style="width: 100%; height: 100%; object-fit: contain;">
@@ -782,170 +1008,77 @@
 
             <!-- 底部操作提示 -->
             <div style="position: absolute; bottom: 24px; left: 0; right: 0; z-index: 25; display: flex; justify-content: center; pointer-events: none;">
-                <div id="standAloneAdjustHudHint" style="padding: 6px 14px; border-radius: 16px; background: rgba(0,0,0,0.65); backdrop-filter: blur(10px); color: rgba(255,255,255,0.9); font-size: 11px;">
-                    【立绘模式】单指拖动位移 · 按住右下角绿点放大缩小
+                <div style="padding: 6px 14px; border-radius: 16px; background: rgba(0,0,0,0.65); backdrop-filter: blur(10px); color: rgba(255,255,255,0.85); font-size: 11px;">
+                    单指按住方框拖动位移 · 按住右下角绿点放大缩小
                 </div>
             </div>
         `;
 
         document.body.appendChild(adjusterMask);
 
-        const spriteBox = adjusterMask.querySelector('#standAloneTransformBox');
-        const spriteHandle = adjusterMask.querySelector('#standAloneResizeHandle');
-        const bgWrap = adjusterMask.querySelector('#standAloneBgTransformWrap');
-        const modeLabel = adjusterMask.querySelector('#targetModeLabel');
-        const modeDot = adjusterMask.querySelector('#targetModeDot');
-        const hudHint = adjusterMask.querySelector('#standAloneAdjustHudHint');
-        const btnToggle = adjusterMask.querySelector('#btnToggleAdjustTarget');
+        const box = adjusterMask.querySelector('#standAloneTransformBox');
+        const handle = adjusterMask.querySelector('#standAloneResizeHandle');
 
-        const applySpriteTransform = () => {
-            spriteBox.style.transform = `translate(${prof.position.x}px, ${prof.position.y}px) scale(${prof.position.scale})`;
+        const applyTransform = () => {
+            box.style.transform = `translate(${prof.position.x}px, ${prof.position.y}px) scale(${prof.position.scale})`;
         };
-        const applyBgTransform = () => {
-            bgWrap.style.transform = `translate(${prof.bgPosition.x}px, ${prof.bgPosition.y}px) scale(${prof.bgPosition.scale})`;
-        };
+        applyTransform();
 
-        applySpriteTransform();
-        applyBgTransform();
+        let startX = 0, startY = 0;
+        let initPosX = prof.position.x;
+        let initPosY = prof.position.y;
+        let isDragging = false;
 
-        function syncModeUI() {
-            if (editTarget === 'sprite') {
-                modeLabel.textContent = '正在编辑: 角色立绘';
-                modeDot.style.background = '#07c160';
-                spriteBox.style.border = '1.5px dashed #07c160';
-                spriteBox.style.background = 'rgba(7,193,96,0.08)';
-                spriteHandle.style.display = 'block';
-                spriteBox.style.pointerEvents = 'auto';
-
-                bgWrap.style.border = 'none';
-                hudHint.textContent = '【立绘模式】单指按住立绘方框拖动位移 · 按住绿点缩放';
-            } else {
-                modeLabel.textContent = '正在编辑: 舞台背景';
-                modeDot.style.background = '#38bdf8';
-                spriteBox.style.border = 'none';
-                spriteBox.style.background = 'transparent';
-                spriteHandle.style.display = 'none';
-                spriteBox.style.pointerEvents = 'none';
-
-                bgWrap.style.border = '2px dashed #38bdf8';
-                hudHint.textContent = '【背景模式】双指缩放或单指在任意背景处拖动，可视裁剪构图';
-            }
-        }
-
-        btnToggle.onclick = () => {
-            editTarget = (editTarget === 'sprite') ? 'background' : 'sprite';
-            syncModeUI();
-        };
-
-        // 🌟 1. 立绘手势位移与缩放
-        let isDraggingSprite = false;
-        let sStartX = 0, sStartY = 0;
-        let sInitX = prof.position.x, sInitY = prof.position.y;
-
-        spriteBox.addEventListener('touchstart', (e) => {
-            if (editTarget !== 'sprite' || e.target === spriteHandle) return;
+        box.addEventListener('touchstart', (e) => {
+            if (e.target === handle) return;
             const touch = e.touches[0];
-            sStartX = touch.clientX;
-            sStartY = touch.clientY;
-            sInitX = prof.position.x;
-            sInitY = prof.position.y;
-            isDraggingSprite = true;
+            startX = touch.clientX;
+            startY = touch.clientY;
+            initPosX = prof.position.x;
+            initPosY = prof.position.y;
+            isDragging = true;
             e.stopPropagation();
         }, { passive: false });
 
         window.addEventListener('touchmove', (e) => {
-            if (!isDraggingSprite) return;
+            if (!isDragging) return;
             const touch = e.touches[0];
-            prof.position.x = sInitX + (touch.clientX - sStartX);
-            prof.position.y = sInitY + (touch.clientY - sStartY);
-            applySpriteTransform();
+            prof.position.x = initPosX + (touch.clientX - startX);
+            prof.position.y = initPosY + (touch.clientY - startY);
+            applyTransform();
             e.preventDefault();
         }, { passive: false });
 
-        window.addEventListener('touchend', () => { isDraggingSprite = false; });
+        window.addEventListener('touchend', () => { isDragging = false; });
 
-        let isResizingSprite = false;
-        let sResizeStartX = 0;
-        let sInitScale = prof.position.scale;
+        let resizeStartX = 0;
+        let initScale = prof.position.scale;
+        let isResizing = false;
 
-        spriteHandle.addEventListener('touchstart', (e) => {
-            if (editTarget !== 'sprite') return;
+        handle.addEventListener('touchstart', (e) => {
             const touch = e.touches[0];
-            sResizeStartX = touch.clientX;
-            sInitScale = prof.position.scale;
-            isResizingSprite = true;
+            resizeStartX = touch.clientX;
+            initScale = prof.position.scale;
+            isResizing = true;
             e.stopPropagation();
         }, { passive: false });
 
         window.addEventListener('touchmove', (e) => {
-            if (!isResizingSprite) return;
+            if (!isResizing) return;
             const touch = e.touches[0];
-            const dx = touch.clientX - sResizeStartX;
-            prof.position.scale = parseFloat(Math.min(2.8, Math.max(0.3, sInitScale + (dx / 180))).toFixed(2));
-            applySpriteTransform();
+            const dx = touch.clientX - resizeStartX;
+            prof.position.scale = parseFloat(Math.min(2.5, Math.max(0.4, initScale + (dx / 180))).toFixed(2));
+            applyTransform();
             e.preventDefault();
         }, { passive: false });
 
-        window.addEventListener('touchend', () => { isResizingSprite = false; });
+        window.addEventListener('touchend', () => { isResizing = false; });
 
-        // 🌟 2. 背景手势平移与双指缩放（背景裁剪模式）
-        let isDraggingBg = false;
-        let bgStartX = 0, bgStartY = 0;
-        let bgInitX = prof.bgPosition.x, bgInitY = prof.bgPosition.y;
-        let initialPinchDist = 0;
-        let bgPinchStartScale = prof.bgPosition.scale;
-
-        bgWrap.addEventListener('touchstart', (e) => {
-            if (editTarget !== 'background') return;
-            if (e.touches.length === 1) {
-                isDraggingBg = true;
-                bgStartX = e.touches[0].clientX;
-                bgStartY = e.touches[0].clientY;
-                bgInitX = prof.bgPosition.x;
-                bgInitY = prof.bgPosition.y;
-            } else if (e.touches.length === 2) {
-                isDraggingBg = false;
-                initialPinchDist = Math.hypot(
-                    e.touches[0].clientX - e.touches[1].clientX,
-                    e.touches[0].clientY - e.touches[1].clientY
-                );
-                bgPinchStartScale = prof.bgPosition.scale;
-            }
-            e.preventDefault();
-        }, { passive: false });
-
-        window.addEventListener('touchmove', (e) => {
-            if (editTarget !== 'background') return;
-            if (isDraggingBg && e.touches.length === 1) {
-                const dx = e.touches[0].clientX - bgStartX;
-                const dy = e.touches[0].clientY - bgStartY;
-                prof.bgPosition.x = bgInitX + dx;
-                prof.bgPosition.y = bgInitY + dy;
-                applyBgTransform();
-                e.preventDefault();
-            } else if (e.touches.length === 2 && initialPinchDist > 0) {
-                const currentDist = Math.hypot(
-                    e.touches[0].clientX - e.touches[1].clientX,
-                    e.touches[0].clientY - e.touches[1].clientY
-                );
-                const scaleFactor = currentDist / initialPinchDist;
-                prof.bgPosition.scale = parseFloat(Math.min(4.0, Math.max(0.5, bgPinchStartScale * scaleFactor)).toFixed(2));
-                applyBgTransform();
-                e.preventDefault();
-            }
-        }, { passive: false });
-
-        window.addEventListener('touchend', () => {
-            isDraggingBg = false;
-            initialPinchDist = 0;
-        });
-
-        // 完成保存
         adjusterMask.querySelector('#btnFinishStandAloneAdjust').onclick = () => {
             if (typeof window.syncCustomNpcsToLocalBackup === 'function') window.syncCustomNpcsToLocalBackup();
             if (typeof window.autoSaveGame === 'function') window.autoSaveGame();
             adjusterMask.remove();
-            if (typeof showToast === 'function') showToast('舞台位置与背景构图已保存', 'success', 1000);
+            if (typeof showToast === 'function') showToast('舞台位置已保存', 'success', 1000);
         };
     }
 
@@ -1047,7 +1180,6 @@
     function exportSingleStageProfile(profile, charName) {
         try {
             const dataStr = JSON.stringify(profile, null, 2);
-            // 将 UTF-8 字符串转换为 Base64，规避安卓 WebView blob: 协议静默丢失
             const base64Data = window.btoa(unescape(encodeURIComponent(dataStr)));
             const dataUri = `data:application/json;charset=utf-8;base64,${base64Data}`;
 
@@ -1084,7 +1216,6 @@
                     if (!parsed || typeof parsed !== 'object') throw new Error('无效的方案配置');
                     if (!parsed.sprites) parsed.sprites = {};
                     if (!parsed.position) parsed.position = { x: 0, y: 0, scale: 1.0 };
-                    if (!parsed.bgPosition) parsed.bgPosition = { x: 0, y: 0, scale: 1.0 };
                     if (!parsed.name) parsed.name = '导入方案';
                     onSuccess(parsed);
                 } catch (err) {
@@ -1544,6 +1675,7 @@
                         bgType: 'image',
                         sprites: { default: '' },
                         customExpressions: [],
+                        deletedCoreExprs: [],
                         position: { x: 0, y: 0, scale: 1.0 },
                         bgPosition: { x: 0, y: 0, scale: 1.0 }
                     }]
@@ -1623,6 +1755,7 @@
                                     bgType: 'image',
                                     sprites: { default: '' },
                                     customExpressions: [],
+                                    deletedCoreExprs: [],
                                     position: { x: 0, y: 0, scale: 1.0 },
                                     bgPosition: { x: 0, y: 0, scale: 1.0 }
                                 }]

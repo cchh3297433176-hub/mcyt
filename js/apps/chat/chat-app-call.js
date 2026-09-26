@@ -1,15 +1,14 @@
 /**
  * js/apps/chat/chat-app-call.js
- * 📞 主播掌机 · 微信原生音视频实时通话独立中枢（顶部微胶囊 · 5大情绪识别 · 底部防重叠纯红键 · 背景立绘双模调位 · 流式切句极速TTS版）
+ * 📞 主播掌机 · 微信原生音视频实时通话独立中枢（纯净语音免相机 · 视频全能视讯 · 流式切句极速TTS · 底部防重叠版）
  * 🛡️ 微信原生极简质感，消灭多余打字框与廉价元素，100% 纯粹全双工对讲体验。
  * 🌟 核心升级：
- *  1. 底部防重叠设计：底部彻底清空，仅保留独立挂断大红键，安全内边距彻底消除与手机手势白条的挤压；
- *  2. 辅助按键移至顶部：识图模式、画中画显隐、摄像头静默、手势调位、翻转镜头缩小为精致 34px 毛玻璃微胶囊；
- *  3. 精准对齐 5 大核心表情：默认(default)、开心(smile)、伤心(sad)、生气(angry)、害羞(shy)；
- *  4. 调位静音安全锁 + 背景立绘双模调位：调位时麦克风安全暂挂，支持在通话中一键切换【编辑立绘】与【编辑背景】，支持超大背景手势拖拽裁剪与缩放！
+ *  1. 纯语音彻底纯净化：语音通话模式严格只调麦克风，彻底不请求摄像头硬件，移除一切视觉与按键冗余，仅保留绿水波纹与大头像；
+ *  2. 视频通话全能舞台：仅在视频通话时挂载摄像头、自拍画中画、外挂识图与 5 大表情差分立绘；
+ *  3. 底部防重叠设计：底部彻底清空，仅保留独立挂断大红键，安全内边距彻底消除与手机手势白条的挤压；
+ *  4. 标点流式切句预合成机制（Sentence Streaming TTS）：流式吐字遇到首个标点毫秒级抢先发音，首字延迟压进 1 秒之内；
  *  5. 完备抗噪滤波与全双工闭环：50 人声门限、连续 5 帧校验、0.8 秒出声门限、1.5 秒接通免疫；
- *  6. 🌟 标点流式切句预合成机制（Sentence Streaming TTS）：大模型流式生成碰到首个标点立刻抢先发音，首字延迟压至 1 秒以内，告别漫长等待！
- *  7. 异步 TTS 序列锁防串音，支持 IndexedDB 客观具名记录持久化与长按彻底删除。
+ *  6. 异步 TTS 序列锁防串音，支持 IndexedDB 客观具名记录持久化与长按彻底删除。
  */
 
 (function() {
@@ -68,7 +67,7 @@
         }, 3000);
     }
 
-    // 检查首次使用视频电话隐私协议
+    // 仅在视频电话时检查隐私协议
     function checkVideoPrivacyPermission(onApproved) {
         const agreed = localStorage.getItem(PRIVACY_STORAGE_KEY);
         if (agreed === 'true') {
@@ -120,7 +119,7 @@
                 <ol style="margin:0;padding-left:18px;font-size:12px;color:#555;">
                     <li>打开手机系统【设置】›【应用管理】；</li>
                     <li>找到【主播掌机】应用；</li>
-                    <li>点击【权限管理】，将【相机】与【麦克风】设置为“允许”后返回重试。</li>
+                    <li>点击【权限管理】，将【麦克风】${mediaType.includes('摄像头') ? '与【相机】' : ''}设置为“允许”后返回重试。</li>
                 </ol>
             </div>
         `;
@@ -140,7 +139,6 @@
         if (!Array.isArray(vs.profiles) || vs.profiles.length === 0) return null;
         const prof = vs.profiles.find(p => p.id === vs.activeProfileId) || vs.profiles[0];
         if (!prof.position) prof.position = { x: 0, y: 0, scale: 1.0 };
-        if (!prof.bgPosition) prof.bgPosition = { x: 0, y: 0, scale: 1.0 };
         return prof;
     }
 
@@ -162,6 +160,7 @@
                 initCallSession(npcId, 'video');
             });
         } else {
+            // 纯语音直接初始化，不走视频隐私协议
             initCallSession(npcId, 'voice');
         }
     };
@@ -172,6 +171,7 @@
         const currentFacing = 'user';
 
         try {
+            // 🌟 纯语音通话严格只请求纯音频约束，彻底不调用摄像头硬件
             const constraints = {
                 audio: {
                     echoCancellation: true,
@@ -192,7 +192,9 @@
         }
 
         _globalCallTtsSequence++;
-        const currentVisionMode = localStorage.getItem(VISION_MODE_STORAGE_KEY) || 'external';
+        const currentVisionMode = (mode === 'video')
+            ? (localStorage.getItem(VISION_MODE_STORAGE_KEY) || 'external')
+            : 'off'; // 纯语音通话强制关闭识图视觉模式
 
         window._activeCallSession = {
             npcId,
@@ -208,11 +210,10 @@
             isAiReplying: false,
             currentAbortController: null,
             activeTtsSequenceId: _globalCallTtsSequence,
-            // 运行态隐私与调位状态
-            isPipWindowVisible: true,
+            // 运行态状态（视频特有）
+            isPipWindowVisible: (mode === 'video'),
             isCameraMuted: false,
             isAdjustingStage: false,
-            adjustTarget: 'sprite', // 'sprite' | 'background'
             currentExpression: 'default',
             // 🌟 流式切句 TTS 播放队列
             ttsQueue: [],
@@ -289,7 +290,7 @@
 
                 updateCallWaveBars(avgVolume);
 
-                // 🌟 调位安全锁：若处于手势调位模式，暂挂出声判定，不打扰调位
+                // 调位安全锁：若处于手势调位模式，暂挂出声判定，不打扰调位
                 if (window._activeCallSession.isAdjustingStage) {
                     window._activeCallSession.animFrameId = requestAnimationFrame(checkAudioLoop);
                     return;
@@ -444,6 +445,7 @@
         let visualInsight = '';
         let base64DirectImg = null;
 
+        // 仅在视频通话且未静音时允许抓帧识别
         if (session.mode === 'video' && session.visionMode !== 'off' && !session.isCameraMuted) {
             setCallStatusText('正在感知视频画面...', '#38bdf8');
             const base64Img = captureVideoFrameBase64();
@@ -512,7 +514,7 @@
         if (statusVideoEl) { statusVideoEl.textContent = text; statusVideoEl.style.color = color; }
     }
 
-    // 翻转前后摄像头
+    // 翻转前后摄像头（视频通话特有）
     async function flipCallCamera() {
         const session = window._activeCallSession;
         if (!session || session.mode !== 'video') return;
@@ -562,7 +564,7 @@
         }
     }
 
-    // 视觉模式循环切换
+    // 视觉模式循环切换（视频通话特有）
     function toggleCallVisionMode() {
         const session = window._activeCallSession;
         if (!session || session.mode !== 'video') return;
@@ -599,7 +601,7 @@
         }
     }
 
-    // 画中画自拍浮窗显隐
+    // 画中画自拍浮窗显隐（视频通话特有）
     function toggleCallPipWindow() {
         const session = window._activeCallSession;
         if (!session || session.mode !== 'video') return;
@@ -618,7 +620,7 @@
         showCallHudTip(session.isPipWindowVisible ? '自拍视窗已开启' : '自拍视窗已隐藏');
     }
 
-    // 摄像头流静默切换
+    // 摄像头流静默切换（视频通话特有）
     function toggleCallCameraMute() {
         const session = window._activeCallSession;
         if (!session || session.mode !== 'video' || !session.stream) return;
@@ -646,7 +648,7 @@
         showCallHudTip(session.isCameraMuted ? '摄像头已关闭，画面已静默' : '摄像头已恢复');
     }
 
-    // 🌟 精准识别 5 大核心表情：default, smile, sad, angry, shy
+    // 精准识别 5 大核心表情：default, smile, sad, angry, shy
     function detectEmotionFromText(text) {
         if (!text) return 'default';
         const t = text.toLowerCase();
@@ -688,7 +690,7 @@
         }, 150);
     }
 
-    // 🌟 手势舞台调位开关（带安全静音防护锁与双模式切换）
+    // 视频通话立绘调位开关（带安全静音防护锁）
     function toggleStageAdjustMode() {
         const session = window._activeCallSession;
         if (!session || session.mode !== 'video') return;
@@ -697,141 +699,95 @@
         const box = document.getElementById('wechatCallSpriteTransformBox');
         const handle = document.getElementById('wechatCallResizeHandle');
         const btnAdjust = document.getElementById('btnCallToggleAdjustStage');
-        const toggleCapsule = document.getElementById('callAdjustTargetCapsule');
-        const bgContainer = document.getElementById('wechatCallStageBgContainer');
 
         if (!box) return;
 
         if (session.isAdjustingStage) {
-            session.adjustTarget = 'sprite'; // 默认从立绘开始
+            box.style.border = '1.5px dashed #07c160';
+            box.style.background = 'rgba(7, 193, 96, 0.08)';
+            box.style.pointerEvents = 'auto';
+            if (handle) handle.style.display = 'block';
             if (btnAdjust) {
                 btnAdjust.style.background = '#07c160';
                 btnAdjust.style.borderColor = '#07c160';
             }
-            if (toggleCapsule) toggleCapsule.style.display = 'flex';
-            syncCallAdjustTargetUI();
-            showCallHudTip('调位中（麦克风已暂挂）：点击右上角可切立绘/背景');
+            showCallHudTip('调位中（麦克风已暂挂）：单指拖动，绿点缩放');
         } else {
             box.style.border = 'none';
             box.style.background = 'transparent';
             box.style.pointerEvents = 'none';
             if (handle) handle.style.display = 'none';
-            if (bgContainer) {
-                bgContainer.style.border = 'none';
-                bgContainer.style.pointerEvents = 'none';
-            }
             if (btnAdjust) {
                 btnAdjust.style.background = 'rgba(0,0,0,0.45)';
                 btnAdjust.style.borderColor = 'rgba(255,255,255,0.18)';
             }
-            if (toggleCapsule) toggleCapsule.style.display = 'none';
-
             saveStageProfileTransform();
-            showCallHudTip('舞台位置与背景裁剪已保存，恢复对讲');
+            showCallHudTip('舞台立绘位置已保存，恢复对讲');
         }
     }
 
-    function syncCallAdjustTargetUI() {
-        const session = window._activeCallSession;
-        if (!session) return;
-
-        const box = document.getElementById('wechatCallSpriteTransformBox');
-        const handle = document.getElementById('wechatCallResizeHandle');
-        const bgContainer = document.getElementById('wechatCallStageBgContainer');
-        const label = document.getElementById('callAdjustTargetLabel');
-        const dot = document.getElementById('callAdjustTargetDot');
-
-        if (session.adjustTarget === 'sprite') {
-            if (label) label.textContent = '立绘';
-            if (dot) dot.style.background = '#07c160';
-            if (box) {
-                box.style.border = '1.5px dashed #07c160';
-                box.style.background = 'rgba(7, 193, 96, 0.08)';
-                box.style.pointerEvents = 'auto';
-            }
-            if (handle) handle.style.display = 'block';
-            if (bgContainer) {
-                bgContainer.style.border = 'none';
-                bgContainer.style.pointerEvents = 'none';
-            }
-        } else {
-            if (label) label.textContent = '背景';
-            if (dot) dot.style.background = '#38bdf8';
-            if (box) {
-                box.style.border = 'none';
-                box.style.background = 'transparent';
-                box.style.pointerEvents = 'none';
-            }
-            if (handle) handle.style.display = 'none';
-            if (bgContainer) {
-                bgContainer.style.border = '2px dashed #38bdf8';
-                bgContainer.style.pointerEvents = 'auto';
-            }
-        }
-    }
-
-    // 🌟 触控手势核心（绑定立绘与背景双模平移与缩放）
-    function initTouchGestureControls(box, handle, bgWrap, prof) {
+    function initTouchGestureControls(box, handle, prof) {
         if (!box || !prof) return;
 
-        // 1. 立绘移动
-        let sStartX = 0, sStartY = 0;
-        let sInitX = prof.position.x || 0;
-        let sInitY = prof.position.y || 0;
-        let isDraggingSprite = false;
+        let startX = 0, startY = 0;
+        let initPosX = prof.position.x || 0;
+        let initPosY = prof.position.y || 0;
+        let isDragging = false;
 
         box.addEventListener('touchstart', (e) => {
             const session = window._activeCallSession;
-            if (!session || !session.isAdjustingStage || session.adjustTarget !== 'sprite') return;
+            if (!session || !session.isAdjustingStage) return;
             if (e.target === handle) return;
 
             const touch = e.touches[0];
-            sStartX = touch.clientX;
-            sStartY = touch.clientY;
-            sInitX = prof.position.x || 0;
-            sInitY = prof.position.y || 0;
-            isDraggingSprite = true;
+            startX = touch.clientX;
+            startY = touch.clientY;
+            initPosX = prof.position.x || 0;
+            initPosY = prof.position.y || 0;
+            isDragging = true;
             e.stopPropagation();
         }, { passive: false });
 
         window.addEventListener('touchmove', (e) => {
-            if (!isDraggingSprite) return;
+            if (!isDragging) return;
             const touch = e.touches[0];
-            prof.position.x = sInitX + (touch.clientX - sStartX);
-            prof.position.y = sInitY + (touch.clientY - sStartY);
+            const dx = touch.clientX - startX;
+            const dy = touch.clientY - startY;
+
+            prof.position.x = initPosX + dx;
+            prof.position.y = initPosY + dy;
 
             applySpriteTransform(box, prof.position);
             e.preventDefault();
         }, { passive: false });
 
         window.addEventListener('touchend', () => {
-            if (isDraggingSprite) {
-                isDraggingSprite = false;
+            if (isDragging) {
+                isDragging = false;
                 saveStageProfileTransform();
             }
         });
 
-        // 2. 立绘右下角缩放手柄
         if (handle) {
-            let rStartX = 0;
+            let resizeStartX = 0;
             let initScale = prof.position.scale || 1.0;
-            let isResizingSprite = false;
+            let isResizing = false;
 
             handle.addEventListener('touchstart', (e) => {
                 const session = window._activeCallSession;
-                if (!session || !session.isAdjustingStage || session.adjustTarget !== 'sprite') return;
+                if (!session || !session.isAdjustingStage) return;
 
                 const touch = e.touches[0];
-                rStartX = touch.clientX;
+                resizeStartX = touch.clientX;
                 initScale = prof.position.scale || 1.0;
-                isResizingSprite = true;
+                isResizing = true;
                 e.stopPropagation();
             }, { passive: false });
 
             window.addEventListener('touchmove', (e) => {
-                if (!isResizingSprite) return;
+                if (!isResizing) return;
                 const touch = e.touches[0];
-                const dx = touch.clientX - rStartX;
+                const dx = touch.clientX - resizeStartX;
                 const newScale = Math.min(2.8, Math.max(0.3, initScale + (dx / 200)));
 
                 prof.position.scale = parseFloat(newScale.toFixed(2));
@@ -840,68 +796,8 @@
             }, { passive: false });
 
             window.addEventListener('touchend', () => {
-                if (isResizingSprite) {
-                    isResizingSprite = false;
-                    saveStageProfileTransform();
-                }
-            });
-        }
-
-        // 3. 背景拖拽平移与双指缩放裁剪
-        if (bgWrap) {
-            let bgStartX = 0, bgStartY = 0;
-            let bgInitX = prof.bgPosition.x || 0;
-            let bgInitY = prof.bgPosition.y || 0;
-            let isDraggingBg = false;
-            let initialPinchDist = 0;
-            let bgPinchStartScale = prof.bgPosition.scale || 1.0;
-
-            bgWrap.addEventListener('touchstart', (e) => {
-                const session = window._activeCallSession;
-                if (!session || !session.isAdjustingStage || session.adjustTarget !== 'background') return;
-
-                if (e.touches.length === 1) {
-                    isDraggingBg = true;
-                    bgStartX = e.touches[0].clientX;
-                    bgStartY = e.touches[0].clientY;
-                    bgInitX = prof.bgPosition.x || 0;
-                    bgInitY = prof.bgPosition.y || 0;
-                } else if (e.touches.length === 2) {
-                    isDraggingBg = false;
-                    initialPinchDist = Math.hypot(
-                        e.touches[0].clientX - e.touches[1].clientX,
-                        e.touches[0].clientY - e.touches[1].clientY
-                    );
-                    bgPinchStartScale = prof.bgPosition.scale || 1.0;
-                }
-                e.preventDefault();
-            }, { passive: false });
-
-            window.addEventListener('touchmove', (e) => {
-                const session = window._activeCallSession;
-                if (!session || !session.isAdjustingStage || session.adjustTarget !== 'background') return;
-
-                if (isDraggingBg && e.touches.length === 1) {
-                    prof.bgPosition.x = bgInitX + (e.touches[0].clientX - bgStartX);
-                    prof.bgPosition.y = bgInitY + (e.touches[0].clientY - bgStartY);
-                    applySpriteTransform(bgWrap, prof.bgPosition);
-                    e.preventDefault();
-                } else if (e.touches.length === 2 && initialPinchDist > 0) {
-                    const currentDist = Math.hypot(
-                        e.touches[0].clientX - e.touches[1].clientX,
-                        e.touches[0].clientY - e.touches[1].clientY
-                    );
-                    const scaleFactor = currentDist / initialPinchDist;
-                    prof.bgPosition.scale = parseFloat(Math.min(4.0, Math.max(0.5, bgPinchStartScale * scaleFactor)).toFixed(2));
-                    applySpriteTransform(bgWrap, prof.bgPosition);
-                    e.preventDefault();
-                }
-            }, { passive: false });
-
-            window.addEventListener('touchend', () => {
-                if (isDraggingBg || initialPinchDist > 0) {
-                    isDraggingBg = false;
-                    initialPinchDist = 0;
+                if (isResizing) {
+                    isResizing = false;
                     saveStageProfileTransform();
                 }
             });
@@ -927,7 +823,7 @@
         }
     }
 
-    // 渲染全屏通话界面（顶部微胶囊群 · 底部防重叠红键）
+    // 渲染全屏通话界面（纯语音彻底拔除一切摄像头组件）
     function renderCallOverlay(npcId, mode, stream) {
         document.getElementById('wechatCallOverlayModal')?.remove();
 
@@ -953,15 +849,15 @@
         overlay.innerHTML = `
             <style>
                 @keyframes wechatCallFadeIn { from { opacity: 0; transform: scale(1.01); } to { opacity: 1; transform: scale(1); } }
-                @keyframes wechatCallWave { 0% { transform: scale(0.96); opacity: 0.7; } 50% { transform: scale(1.12); opacity: 0.15; } 100% { transform: scale(0.96); opacity: 0.7; } }
+                @keyframes wechatCallWave { 0% { transform: scale(0.96); opacity: 0.7; } 50% { transform: scale(1.15); opacity: 0.12; } 100% { transform: scale(0.96); opacity: 0.7; } }
                 .call-subtitle-item { transition: opacity 0.25s ease, transform 0.25s ease; }
                 .call-subtitle-item.faded { opacity: 0.28 !important; }
             </style>
 
-            <!-- 🌟 顶部导航条（全功能轻量微胶囊化） -->
+            <!-- 顶栏状态 -->
             <div style="position: absolute; top: 14px; left: 14px; right: 14px; z-index: 25; display: flex; justify-content: space-between; align-items: center; pointer-events: none;">
                 
-                <!-- 左上：状态指示 + 视觉感知模式 -->
+                <!-- 左上：状态指示 -->
                 <div style="display: flex; align-items: center; gap: 6px; pointer-events: auto;">
                     <div style="display: flex; align-items: center; gap: 6px; padding: 4px 9px; border-radius: 17px; background: rgba(0,0,0,0.48); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); border: 0.5px solid rgba(255,255,255,0.15); box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
                         <span style="display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #07c160;"></span>
@@ -971,7 +867,7 @@
                     </div>
 
                     ${mode === 'video' ? `
-                        <!-- 视觉模式切换胶囊 -->
+                        <!-- 视频特有：视觉模式切换胶囊 -->
                         <button type="button" id="btnCallToggleVisionMode" title="切换视觉感知模式" style="border: 0.5px solid rgba(255,255,255,0.18); background: rgba(0,0,0,0.48); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); color: #ffffff; padding: 0 8px; height: 26px; border-radius: 13px; display: flex; align-items: center; gap: 4px; cursor: pointer; -webkit-tap-highlight-color: transparent;">
                             <div id="callVisionModeIconWrap" style="width: 8px; height: 8px; border-radius: 50%; border: 1.5px solid #07c160; color: #07c160; display: flex; align-items: center; justify-content: center; font-size: 7px; font-weight: bold;">●</div>
                             <span id="callVisionModeText" style="font-size: 10.5px; font-weight: 500; color: #ffffff;">外挂识图</span>
@@ -979,15 +875,9 @@
                     ` : ''}
                 </div>
 
-                <!-- 右上：五个辅助微胶囊（调位模式切换 + 四个白描纯图标按键） -->
+                <!-- 右上：视频特有 4 个微胶囊按键（纯语音彻底拔除，右上为空） -->
                 ${mode === 'video' ? `
                     <div style="display: flex; align-items: center; gap: 6px; pointer-events: auto;">
-                        <!-- 调位模式切换胶囊（调位时露出） -->
-                        <div id="callAdjustTargetCapsule" style="display: none; align-items: center; gap: 4px; background: rgba(0,0,0,0.65); padding: 3px 8px; border-radius: 14px; border: 0.5px solid rgba(255,255,255,0.2); cursor: pointer;" title="点击切换调位对象">
-                            <span id="callAdjustTargetDot" style="width: 6px; height: 6px; border-radius: 50%; background: #07c160;"></span>
-                            <span id="callAdjustTargetLabel" style="font-size: 10.5px; color: #fff; font-weight: 600;">立绘</span>
-                        </div>
-
                         <!-- 1. 显隐自拍画中画 -->
                         <button type="button" id="btnCallTogglePip" title="自拍窗口显隐" style="border: 0.5px solid rgba(255,255,255,0.18); background: rgba(0,0,0,0.45); backdrop-filter: blur(12px); color: #ffffff; width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; -webkit-tap-highlight-color: transparent;">
                             <svg viewBox="0 0 24 24" style="width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round;"><rect x="2" y="3" width="20" height="14" rx="2"/><rect x="12" y="9" width="8" height="6" rx="1"/></svg>
@@ -1014,8 +904,8 @@
             <!-- 主舞台视觉呈现 -->
             <div style="flex: 1; position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; overflow: hidden;">
                 ${mode === 'video' ? `
-                    <!-- 视频背景舞台（支持独立缩放位移与裁剪） -->
-                    <div id="wechatCallStageBgContainer" style="position: absolute; inset: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; z-index: 1; transform-origin: center center; cursor: move; pointer-events: none;">
+                    <!-- 视频特有：背景与立绘容器 -->
+                    <div id="wechatCallStageBgContainer" style="position: absolute; inset: 0; overflow: hidden; display: flex; align-items: center; justify-content: center; z-index: 1;">
                         ${hasCustomBg ? `
                             ${stageProf.bgType === 'video' ? `
                                 <video src="${stageProf.backgroundUrl}" muted loop autoplay playsinline style="width: 100%; height: 100%; object-fit: cover; pointer-events: none;"></video>
@@ -1027,13 +917,9 @@
                         `}
                     </div>
 
-                    <!-- 角色立绘手势触控容器（5大表情差分） -->
                     ${hasCustomSprite ? `
                         <div id="wechatCallSpriteTransformBox" style="position: absolute; width: 280px; height: 380px; z-index: 4; display: flex; align-items: center; justify-content: center; transform-origin: center center; cursor: move; touch-action: none; transition: transform 0.05s linear; pointer-events: none;">
-                            <div id="wechatCallSpriteDisplayWrap" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; pointer-events: none;">
-                                <!-- 差分立绘动态载入 -->
-                            </div>
-                            <!-- 缩放触控手柄 -->
+                            <div id="wechatCallSpriteDisplayWrap" style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; pointer-events: none;"></div>
                             <div id="wechatCallResizeHandle" style="display: none; position: absolute; right: -8px; bottom: -8px; width: 22px; height: 22px; border-radius: 50%; background: #07c160; border: 2px solid #ffffff; box-shadow: 0 2px 8px rgba(0,0,0,0.5); cursor: nwse-resize; touch-action: none; pointer-events: auto;"></div>
                         </div>
                     ` : `
@@ -1043,7 +929,7 @@
                         </div>
                     `}
 
-                    <!-- 状态与动态声波（微型化居中悬浮） -->
+                    <!-- 状态与动态声波（视频微型化） -->
                     <div style="position: absolute; top: 54px; z-index: 6; display: flex; flex-direction: column; align-items: center;">
                         <div id="callAiStatusTextVideo" style="font-size: 11px; color: #07c160; background: rgba(0,0,0,0.35); padding: 2px 10px; border-radius: 10px; backdrop-filter: blur(8px);">通话连接稳定</div>
                         <div id="callSpeakingWaveWrapVideo" style="display: flex; align-items: center; gap: 4px; height: 22px; margin-top: 6px; padding: 0 10px; border-radius: 12px; background: rgba(0,0,0,0.4); backdrop-filter: blur(8px); opacity: 0.35; transition: opacity 0.2s ease; border: 0.5px solid rgba(255,255,255,0.08);">
@@ -1055,12 +941,12 @@
                         </div>
                     </div>
 
-                    <!-- 本地画中画视窗（右上角） -->
+                    <!-- 视频特有：自拍画中画 -->
                     <div id="wechatCallPipContainer" style="position: absolute; top: 56px; right: 14px; width: 90px; height: 130px; border-radius: 10px; overflow: hidden; border: 1px solid rgba(255,255,255,0.25); box-shadow: 0 8px 24px rgba(0,0,0,0.6); z-index: 10; background: #000000; transition: all 0.2s ease;">
                         <video id="wechatCallLocalVideo" autoplay playsinline muted style="width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1);"></video>
                     </div>
                 ` : `
-                    <!-- 纯语音通话界面 -->
+                    <!-- 🌟 纯语音通话界面：极致纯粹，绿水波纹声浪与大头像，彻底无摄像头组件 -->
                     <div style="position: relative; display: flex; flex-direction: column; align-items: center; z-index: 5;">
                         <div style="position: absolute; width: 140px; height: 140px; border-radius: 50%; background: rgba(7, 193, 96, 0.18); animation: wechatCallWave 3.2s infinite ease-in-out;"></div>
                         <img src="${npcAvatar}" style="position: relative; width: 106px; height: 106px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.85); object-fit: cover; box-shadow: 0 12px 35px rgba(0,0,0,0.65);">
@@ -1092,7 +978,7 @@
                 </div>
             </div>
 
-            <!-- 🌟 底部纯粹居中挂断大红键（消除所有侧边按钮，增加底部安全内边距杜绝与手机小白条重叠） -->
+            <!-- 🌟 底部纯粹居中挂断大红键（消除侧边按钮，杜绝与手机小白条重叠） -->
             <div style="padding: 14px 20px calc(24px + env(safe-area-inset-bottom, 12px)); display: flex; justify-content: center; align-items: center; position: relative; z-index: 20;">
                 <button type="button" id="btnCallHangup" title="挂断" style="border: none; background: #fa5151; color: #ffffff; width: 64px; height: 64px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: pointer; box-shadow: 0 6px 20px rgba(250, 81, 81, 0.45); -webkit-tap-highlight-color: transparent;">
                     <svg viewBox="0 0 24 24" style="width: 28px; height: 28px; fill: currentColor;"><path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08a.996.996 0 0 1 0-1.41C3.28 8.84 7.42 7 12 7c4.58 0 8.72 1.84 11.71 4.67.39.39.39 1.02 0 1.41l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/></svg>
@@ -1113,19 +999,12 @@
                 }
             }
 
-            const box = document.getElementById('wechatCallSpriteTransformBox');
-            const handle = document.getElementById('wechatCallResizeHandle');
-            const bgContainer = document.getElementById('wechatCallStageBgContainer');
-
-            if (stageProf) {
-                if (hasCustomSprite && box) {
-                    applySpriteTransform(box, stageProf.position);
-                    updateLiveSpriteExpression('default');
-                }
-                if (bgContainer && stageProf.bgPosition) {
-                    applySpriteTransform(bgContainer, stageProf.bgPosition);
-                }
-                initTouchGestureControls(box, handle, bgContainer, stageProf);
+            if (hasCustomSprite && stageProf) {
+                const box = document.getElementById('wechatCallSpriteTransformBox');
+                const handle = document.getElementById('wechatCallResizeHandle');
+                applySpriteTransform(box, stageProf.position);
+                initTouchGestureControls(box, handle, stageProf);
+                updateLiveSpriteExpression('default');
             }
         }
 
@@ -1149,11 +1028,6 @@
             });
             overlay.querySelector('#btnCallToggleAdjustStage')?.addEventListener('click', () => {
                 toggleStageAdjustMode();
-            });
-            overlay.querySelector('#callAdjustTargetCapsule')?.addEventListener('click', () => {
-                if (!window._activeCallSession) return;
-                window._activeCallSession.adjustTarget = (window._activeCallSession.adjustTarget === 'sprite') ? 'background' : 'sprite';
-                syncCallAdjustTargetUI();
             });
         }
     }
@@ -1392,7 +1266,7 @@
             const baseUrl = (aiConfig.baseUrl || 'https://api.deepseek.com/v1').replace(/\/+$/, '');
             const model = aiConfig.model || 'deepseek-chat';
 
-            // 🌟 发起流式 SSE 请求，碰标点立刻切句
+            // 发起流式 SSE 请求，碰标点立刻切句
             const resp = await fetch(`${baseUrl}/chat/completions`, {
                 method: 'POST',
                 signal: abortCtrl.signal,
@@ -1439,7 +1313,7 @@
                         fullText += delta;
                         currentSentenceBuffer += delta;
 
-                        // 首次获取到关键词，优先驱动表情切换
+                        // 首次获取到关键词，优先驱动视频表情切换
                         if (!hasDetectedFirstEmotion && session.mode === 'video' && fullText.length >= 4) {
                             const emo = detectEmotionFromText(fullText);
                             if (emo !== 'default') {
@@ -1448,7 +1322,7 @@
                             }
                         }
 
-                        // 🌟 标点检测：遇到句号、问号、叹号、换行或稍长逗号，立刻切句送 TTS
+                        // 标点检测：遇到句号、问号、叹号、换行或稍长逗号，立刻切句送 TTS
                         const splitMatch = currentSentenceBuffer.match(/([。！？!?~\n]|(?<=[^0-9]),|，)/);
                         if (splitMatch && splitMatch.index !== undefined) {
                             const cutIdx = splitMatch.index + splitMatch[0].length;
@@ -1485,7 +1359,7 @@
 
         session.isAiReplying = false;
 
-        // 驱动 5 大核心表情差分切换
+        // 仅在视频通话下驱动表情切换
         if (session.mode === 'video') {
             const emotion = detectEmotionFromText(text);
             updateLiveSpriteExpression(emotion);
