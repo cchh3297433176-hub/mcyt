@@ -301,7 +301,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
                         <div class="agent-profile-select-card" data-val="${escapeHtml(opt.name)}" style="background:${isSelected ? '#f0f9eb' : '#ffffff'};border:1px solid ${isSelected ? '#07c160' : '#eeeeee'};padding:10px 12px;border-radius:8px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;">
                             <div style="display:flex;flex-direction:column;gap:2px;">
                                 <span style="font-size:12.5px;font-weight:${isSelected ? '600' : 'normal'};color:${isSelected ? '#07c160' : '#222222'};">${escapeHtml(opt.label)}</span>
-                                <span style="font-size:11px;color:#888;">${escapeHtml(opt.desc)}</span>
+                                <span style="font-size:10.5px;color:#888;">${escapeHtml(opt.desc)}</span>
                             </div>
                             <div style="width:16px;height:16px;border-radius:50%;border:1.5px solid ${isSelected ? '#07c160' : '#cccccc'};display:flex;align-items:center;justify-content:center;background:#fff;">
                                 ${isSelected ? `<div style="width:8px;height:8px;border-radius:50%;background:#07c160;"></div>` : ''}
@@ -327,7 +327,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
     }
 
     // ============================================================
-    // PNG 底层 tEXt 块编码与 CRC32 校验工具（与角色卡相同规范）
+    // PNG 底层 tEXt 块编码与 CRC32 校验工具（修复 tEtt 错误为标准 tEXt）
     // ============================================================
     function calculateCrc32(buf) {
         let table = window._mcytCrcTable;
@@ -357,7 +357,8 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
 
         const view = new DataView(chunk.buffer);
         view.setUint32(0, dataLen);
-        chunk[4] = 0x74; chunk[5] = 0x45; chunk[6] = 0x74; chunk[7] = 0x74; // 'tEXt'
+        // 🌟 核心修复：必须是严格的 'tEXt' (0x74, 0x45, 0x58, 0x74) 格式！
+        chunk[4] = 0x74; chunk[5] = 0x45; chunk[6] = 0x58; chunk[7] = 0x74;
 
         let offset = 8;
         chunk.set(keyBytes, offset);
@@ -588,14 +589,15 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
             fileInput.accept = 'image/png,.png,.json';
             fileInput.style.display = 'none';
             document.body.appendChild(fileInput);
-
-            fileInput.onchange = (e) => {
-                const file = e.target.files && e.target.files[0];
-                if (!file) return;
-                _executeMemoryCardFileRestore(file);
-                fileInput.value = '';
-            };
         }
+        
+        fileInput.value = '';
+        fileInput.onchange = (e) => {
+            const file = e.target.files && e.target.files[0];
+            if (!file) return;
+            _executeMemoryCardFileRestore(file);
+            fileInput.value = '';
+        };
         fileInput.click();
     }
 
@@ -628,7 +630,8 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
                         ].join('');
 
                         const dataOffset = offset + 8;
-                        if (type === 'tEXt' && dataOffset + length <= buf.byteLength) {
+                        // 🌟 自愈兼顾：同时兼容标准 tEXt 以及此前手滑生成的历史 tEtt 数据块！
+                        if ((type === 'tEXt' || type === 'tEtt') && dataOffset + length <= buf.byteLength) {
                             const bytes = new Uint8Array(buf, dataOffset, length);
                             let nullIdx = -1;
                             for (let i = 0; i < bytes.length; i++) {
@@ -699,6 +702,20 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
                         applyDeserializedGameState(stateData);
                     } else if (window.G) {
                         Object.assign(window.G, stateData);
+                    }
+
+                    // 🛡️ 强制把恢复的数据同步落盘至 IndexedDB 权威存储中
+                    if (typeof window.syncChatHistoryToLocalBackup === 'function') {
+                        window.syncChatHistoryToLocalBackup();
+                    }
+                    if (typeof window.syncCustomNpcsToLocalBackup === 'function') {
+                        window.syncCustomNpcsToLocalBackup();
+                    }
+                    if (typeof window.syncMomentsFeedToLocalBackup === 'function') {
+                        window.syncMomentsFeedToLocalBackup();
+                    }
+                    if (typeof window.syncGroupChatsToLocalBackup === 'function') {
+                        window.syncGroupChatsToLocalBackup();
                     }
 
                     if (typeof autoSaveGame === 'function') {
@@ -943,7 +960,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
                         </div>
                     </div>
 
-                    <!-- 👁️ 独立视觉与识图 API 凭据卡片（专为无识图能力的AI外挂眼睛） -->
+                    <!-- 👁️ 独立视觉与识图 API 凭据卡片 -->
                     <div style="background:#ffffff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 1px 3px rgba(0,0,0,0.04);border:1px solid #eeeeee;">
                         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
                             <div style="display:flex;align-items:center;gap:6px;">
@@ -1472,7 +1489,7 @@ window.CURRENT_APP_VERSION = CURRENT_APP_VERSION;
         }
 
         // ============================================================
-        // 👁️ 独立视觉与识图 API 事件绑定（问号结构化弹窗 + 相册真图实测）
+        // 👁️ 独立视觉与识图 API 事件绑定
         // ============================================================
         const visionHelpBtn = document.getElementById('openVisionHelpModalBtn');
         if (visionHelpBtn) {
