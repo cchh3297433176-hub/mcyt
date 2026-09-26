@@ -1246,6 +1246,7 @@
                 minMsgs: 1,
                 maxMsgs: 3,
                 voiceFreq: 'rare',
+                stickerFreq: 'normal',
                 disableTimezone: false,
                 disableBilingual: false,
                 enableInnerVoice: true, // 🌟 默认开启心声
@@ -1255,6 +1256,7 @@
         const minMsgs = Math.max(1, parseInt(npc.chatSettings.minMsgs) || 1);
         const maxMsgs = Math.max(minMsgs, parseInt(npc.chatSettings.maxMsgs) || 3);
         const voiceFreq = npc.chatSettings.voiceFreq || 'rare';
+        const stickerFreq = npc.chatSettings.stickerFreq || 'normal';
         const disableTimezone = !!npc.chatSettings.disableTimezone;
         const disableBilingual = !!npc.chatSettings.disableBilingual;
         const enableInnerVoice = (npc.chatSettings.enableInnerVoice !== undefined) ? !!npc.chatSettings.enableInnerVoice : true;
@@ -1311,6 +1313,16 @@
                                 <button type="button" class="voice-freq-btn" data-val="voice_only" style="padding:5px 0;border-radius:5px;font-size:11.5px;cursor:pointer;border:1px solid ${voiceFreq === 'voice_only' ? '#07c160' : '#e0e0e0'};background:${voiceFreq === 'voice_only' ? '#f0f9eb' : '#fff'};color:${voiceFreq === 'voice_only' ? '#07c160' : '#444'};font-weight:${voiceFreq === 'voice_only' ? '600' : 'normal'};">全语音</button>
                             </div>
                             <input type="hidden" id="wcleanSetVoiceFreqVal" value="${voiceFreq}">
+                        </div>
+
+                        <div>
+                            <div style="font-size:11.5px;color:#666;margin-bottom:5px;">表情包发送频率</div>
+                            <div style="display:grid;grid-template-columns:repeat(3, 1fr);gap:6px;" id="stickerFreqSelectorGroup">
+                                <button type="button" class="sticker-freq-btn" data-val="rare" style="padding:5px 0;border-radius:5px;font-size:11.5px;cursor:pointer;border:1px solid ${stickerFreq === 'rare' ? '#07c160' : '#e0e0e0'};background:${stickerFreq === 'rare' ? '#f0f9eb' : '#fff'};color:${stickerFreq === 'rare' ? '#07c160' : '#444'};font-weight:${stickerFreq === 'rare' ? '600' : 'normal'};">稀有</button>
+                                <button type="button" class="sticker-freq-btn" data-val="normal" style="padding:5px 0;border-radius:5px;font-size:11.5px;cursor:pointer;border:1px solid ${stickerFreq === 'normal' ? '#07c160' : '#e0e0e0'};background:${stickerFreq === 'normal' ? '#f0f9eb' : '#fff'};color:${stickerFreq === 'normal' ? '#07c160' : '#444'};font-weight:${stickerFreq === 'normal' ? '600' : 'normal'};">正常</button>
+                                <button type="button" class="sticker-freq-btn" data-val="often" style="padding:5px 0;border-radius:5px;font-size:11.5px;cursor:pointer;border:1px solid ${stickerFreq === 'often' ? '#07c160' : '#e0e0e0'};background:${stickerFreq === 'often' ? '#f0f9eb' : '#fff'};color:${stickerFreq === 'often' ? '#07c160' : '#444'};font-weight:${stickerFreq === 'often' ? '600' : 'normal'};">频繁</button>
+                            </div>
+                            <input type="hidden" id="wcleanSetStickerFreqVal" value="${stickerFreq}">
                         </div>
 
                         <!-- 🌟 角色内心心声独立开关 -->
@@ -1397,6 +1409,7 @@
                 const curMax = parseInt(document.getElementById('wcleanMaxMsgsRange')?.value) || 3;
                 const finalMax = Math.max(curMin, curMax);
                 const curVoiceFreq = document.getElementById('wcleanSetVoiceFreqVal')?.value || 'rare';
+                const curStickerFreq = document.getElementById('wcleanSetStickerFreqVal')?.value || 'normal';
 
                 const curDisableTimezone = !!document.getElementById('wcleanSetDisableTimezone')?.checked;
                 const curDisableBilingual = !!document.getElementById('wcleanSetDisableBilingual')?.checked;
@@ -1420,6 +1433,7 @@
                     minMsgs: curMin,
                     maxMsgs: finalMax,
                     voiceFreq: curVoiceFreq,
+                    stickerFreq: curStickerFreq,
                     disableTimezone: curDisableTimezone,
                     disableBilingual: curDisableBilingual,
                     enableInnerVoice: curEnableInnerVoice,
@@ -1488,6 +1502,24 @@
                         btn.style.color = '#07c160';
                         btn.style.fontWeight = '600';
                         if (freqHidden) freqHidden.value = btn.getAttribute('data-val');
+                    };
+                });
+
+                const stickerFreqBtns = document.querySelectorAll('.sticker-freq-btn');
+                const stickerFreqHidden = document.getElementById('wcleanSetStickerFreqVal');
+                stickerFreqBtns.forEach(btn => {
+                    btn.onclick = () => {
+                        stickerFreqBtns.forEach(b => {
+                            b.style.border = '1px solid #e0e0e0';
+                            b.style.background = '#fff';
+                            b.style.color = '#444';
+                            b.style.fontWeight = 'normal';
+                        });
+                        btn.style.border = '1px solid #07c160';
+                        btn.style.background = '#f0f9eb';
+                        btn.style.color = '#07c160';
+                        btn.style.fontWeight = '600';
+                        if (stickerFreqHidden) stickerFreqHidden.value = btn.getAttribute('data-val');
                     };
                 });
 
@@ -1679,6 +1711,7 @@
                 minMsgs: 1,
                 maxMsgs: 3,
                 voiceFreq: 'rare',
+                stickerFreq: 'normal',
                 disableTimezone: false,
                 disableBilingual: false,
                 enableInnerVoice: true,
@@ -1760,6 +1793,7 @@
                             minMsgs: 1,
                             maxMsgs: 3,
                             voiceFreq: 'rare',
+                            stickerFreq: 'normal',
                             disableTimezone: false,
                             disableBilingual: false,
                             enableInnerVoice: (profile.chatSettings && profile.chatSettings.enableInnerVoice !== undefined) ? !!profile.chatSettings.enableInnerVoice : true,

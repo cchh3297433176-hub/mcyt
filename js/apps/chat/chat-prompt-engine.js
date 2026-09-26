@@ -214,8 +214,16 @@
     /**
      * 模块一：主体通用规范（日常纯净版，彻底拔除同人文多余提示）
      */
-    function getModule1Prompt(isBilingualEnabled, npcRegion, detectedLanguage) {
+    function getModule1Prompt(isBilingualEnabled, npcRegion, detectedLanguage, stickerFreq = 'normal') {
         const stickersSummary = getAvailableStickersSummary();
+        const stickerFreqTextMap = {
+            rare: '频率控制：你很少发表情包，平均 10~15 轮对话才偶发 1 次，绝大多数时候纯文字交流。',
+            normal: '频率控制：真人不会每句话都配图，平均 5~8 轮才偶发 1 次，或者单独只发一个表情包表达情绪。',
+            often: '频率控制：你很喜欢用表情包表达情绪，平均 2~3 轮就可能自然出现 1 次，但依然不要每句话都配图。'
+        };
+        const stickerFreqText = stickerFreqTextMap[stickerFreq] || stickerFreqTextMap.normal;
+        // 示例分组动态取自实际已加载的表情库，避免分组被删空后示例仍指向不存在的分组
+        const exampleStickerCat = (window.G && Array.isArray(window.G.stickerLibrary) && window.G.stickerLibrary[0] && window.G.stickerLibrary[0].category) || '豆米乌卡';
 
         return `
 【底层人格与微信打字铁律】
@@ -241,9 +249,9 @@
      ${stickersSummary}
    - 当你想发表情包时，【绝对不要】自己在正文里打[表情: 描述]，必须严格使用系统专用标签输出：
      [STICKER category="分组名" desc="关键词"]
-   - 示例：[STICKER category="猪猪" desc="开心"]
+   - 示例：[STICKER category="${exampleStickerCat}" desc="开心"]
    - 【⚠️ 绝对独立，禁止嵌套】：[STICKER ...] 必须与 [MSG] 并列独立输出，【绝对严厉禁止】把 [STICKER ...] 塞进 [MSG]...[/MSG] 标签内部或文字末尾！[MSG] 只能包含纯文字！
-   - 频率控制：真人不会每句话都配图，平均 5~8 轮才偶发 1 次，或者单独只发一个表情包表达情绪。
+   - ${stickerFreqText}
 ${isBilingualEnabled ? `
 6. 【跨国母语双语对话】：
    - 你常驻「${npcRegion}」，日常第一母语为「${detectedLanguage}」。
@@ -438,7 +446,7 @@ ${isBilingualEnabled ? `
         }
 
         // 注入主体通用打字规范（日常纯净，无任何同人文赘述）
-        assembledSysPrompt += getModule1Prompt(isBilingualEnabled, nRegion, detectedLanguage);
+        assembledSysPrompt += getModule1Prompt(isBilingualEnabled, nRegion, detectedLanguage, chatSettings.stickerFreq || 'normal');
 
         // 🌟 核心侦测：仅在最近聊天记录中【真真切切包含同人文卡片】时，才精准动态挂载！日常聊天 100% 绝不注入！
         const hasRecentAo3Share = !!(recentDialogueText && (
