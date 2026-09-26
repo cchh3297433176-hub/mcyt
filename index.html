@@ -282,6 +282,8 @@
     <script src="js/system/tts-engine.js"></script>
     <!-- 🎙️ 离线语音识别 (ASR) transformers.js + ONNX 中枢引擎 -->
     <script src="js/system/asr-engine.js"></script>
+    <!-- 🛡️ 主播掌机·QQ群白名单验证与反盗用风控引擎 -->
+    <script src="js/system/auth-engine.js"></script>
     <script src="js/09-events-init.js"></script>
 
     <!-- 2. 硬件外壳系统与原生驱动 -->
@@ -318,18 +320,21 @@
     <script src="js/apps/chat/chat-app-panels.js"></script>
     <script src="js/apps/chat/chat-app-media.js"></script>
 
-    <!-- 冷启动异步加载守护：确保 IndexedDB 数据 100% 装入运行内存后再渲染界面，彻底终结延迟闪烁与丢记录 Bug -->
+    <!-- 冷启动异步加载守护：优先执行 QQ 白名单鉴权门禁，保障未放行与封禁用户绝对无法触碰掌机底层 -->
     <script>
         document.addEventListener('DOMContentLoaded', function() {
             setTimeout(async function() {
                 try {
-                    if (typeof OtomeSecurityGuard !== 'undefined' && OtomeSecurityGuard.isDeviceBanned()) {
-                        if (typeof showDeviceBanLockScreen === 'function') {
-                            showDeviceBanLockScreen();
+                    // 1. 🛡️ 优先进入 QQ 白名单与风控死锁门禁校验
+                    if (window.OtomeSecurityGuard && typeof window.OtomeSecurityGuard.checkGate === 'function') {
+                        var pass = await window.OtomeSecurityGuard.checkGate();
+                        if (!pass) {
+                            console.warn('[Security]: 权限门禁未放行或处于封禁状态，暂停冷启动');
                             return;
                         }
                     }
 
+                    // 2. 存档引擎冷启动异步装载
                     var autoInfo = null;
                     if (typeof getAutoSaveInfo === 'function') {
                         autoInfo = await getAutoSaveInfo();
