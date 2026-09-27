@@ -45,17 +45,15 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'pnpm'
-          cache-dependency-path: 'temp_lobby/pnpm-lock.yaml'
 
       - name: Build Game-Lobby Web Assets
         run: |
           mkdir -p assets/lobby-web
           cd temp_lobby
-          pnpm install --frozen-lockfile || pnpm install
-          # 编译前端应用
+          # 禁用严格锁校验，防止 worker 的 lockfile 不一致导致中断
+          pnpm install --no-frozen-lockfile
+          # 仅编译前端棋盘视口
           pnpm --filter web build || pnpm run build
-          # 将编译好的静态产物输出至掌机本地目录
           if [ -d "apps/web/dist" ]; then
             cp -r apps/web/dist/* ../assets/lobby-web/
           elif [ -d "dist" ]; then
@@ -67,7 +65,6 @@ jobs:
 
       - name: Inject Secure Server Configs (Secrets to APK)
         run: |
-          # 方案 A 核心：如果配置了 Secrets，只在构建 APK 时静默注入真实地址，公网源码永远零暴露！
           if [ -n "${{ secrets.MCYT_LOBBY_SERVER_URL }}" ]; then
             sed -i "s|const DEFAULT_SERVER_URL = '';|const DEFAULT_SERVER_URL = '${{ secrets.MCYT_LOBBY_SERVER_URL }}';|g" js/apps/lobby/lobby-app.js
             echo "🔒 已安全注入私有游戏裁判服务节点"
@@ -80,7 +77,6 @@ jobs:
 
       - name: Deploy Subprojects & Clean Git Cache
         run: |
-          # 1. 部署 Rememori 独立 App
           mkdir -p rememori
           if [ -d "temp_rememori/site" ]; then
             cp -r temp_rememori/site/* rememori/
@@ -89,7 +85,6 @@ jobs:
           fi
           rm -rf temp_rememori
 
-          # 2. 清理各子工程的 Git 缓存文件
           rm -rf tarot/.git
           rm -rf image_repo/.git
 
@@ -146,7 +141,6 @@ jobs:
       - name: Create Android Project
         run: |
           mkdir -p proj/app/src/main/assets proj/app/src/main/res/values proj/app/src/main/res/xml proj/app/src/main/res/mipmap proj/app/src/main/java/com/mcyt/simulator
-          # index.html、style.css、js、assets、tarot、rememori 完整打包入 assets
           cp -r index.html style.css js assets tarot rememori icon.png proj/app/src/main/assets/ 2>/dev/null || cp -r * proj/app/src/main/assets/
 
           if [ -f "icon.png" ]; then
