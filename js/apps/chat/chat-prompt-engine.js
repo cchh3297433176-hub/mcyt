@@ -1,0 +1,543 @@
+/**
+ * js/apps/chat/chat-prompt-engine.js
+ * 🧠 微信聊天活人感提示词架构引擎
+ * 模块化装配：主体通用拟人核心 + 🌿《字落心间不问源》自然回应与元评论绝对禁令 + 关系进阶状态机 + 异地恋模块 + 时差生理感知 + 双时间戳隔夜作息感知 + 动态母语双语与仿微信语音协议 + 真实语义表情包索引 + 动态发布协议 + 大小号双重身份认知与名片接纳状态机 + 🌟 Rememori 忆海向量长效记忆挂载 + 🔮 塔罗牌阵拟人认知与特色解读协议 + 🎭 {{user}} / {{y/n}} 动态宏变量替换 + 📸 文字图片发送协议 + 🧾 拟真生活排版卡片协议 + 📚 AO3同人文分享纯按需动态挂载 + 🎮 游戏大厅战绩纯按需动态挂载 + 💖 角色第一人称内心心声纯按需动态挂载
+ * 🌟 极简与活人感优化：
+ * 1. 融入《字落心间不问源》核心精神：消灭一切元评论，互甩文案/图片/视频/音乐/同人/战报为日常呼吸，不问来源、只看内容、自然回应、说完了就停；
+ * 2. 机器完成 100% 时间换算（严格锁定 24 小时制与早晚时段事实，大模型零计算、零推理消耗，彻底终结早晚颠倒 Bug）；
+ * 3. 角色与玩家时差严格绑定角色具体姓名，严防大模型张冠李戴；
+ * 4. 🎮 游戏大厅战绩与 📚 同人文提示词【绝对按需动态触发】：日常闲聊 0 冗余、0 Token 消耗，仅当上下文真切包含对应卡片时才精准注入！
+ * 5. 💖 心声提示词【绝对按需动态触发】：仅在开启心声时注入角色第一人称独白（60~80字），关闭时 0 Token 零注入！
+ */
+
+(function() {
+    'use strict';
+
+    // 全局地区与权威 IANA 时区标识映射（原生支持夏令时）
+    const REGION_IANA_TIMEZONE_MAP = {
+        '中国': 'Asia/Shanghai',
+        '日本': 'Asia/Tokyo',
+        '韩国': 'Asia/Seoul',
+        '英国': 'Europe/London',
+        '德国': 'Europe/Berlin',
+        '法国': 'Europe/Paris',
+        '西班牙': 'Europe/Madrid',
+        '意大利': 'Europe/Rome',
+        '俄罗斯 - 莫斯科': 'Europe/Moscow',
+        '美国 - 东部': 'America/New_York',
+        '美国 - 西部': 'America/Los_Angeles',
+        '加拿大': 'America/Toronto',
+        '澳大利亚': 'Australia/Sydney',
+        '新加坡': 'Asia/Singapore',
+        '泰国': 'Asia/Bangkok',
+        '越南': 'Asia/Ho_Chi_Minh'
+    };
+
+    // 地区对应当地母语映射字典
+    const REGION_LANGUAGE_MAP = {
+        '中国': '中文',
+        '日本': '日语',
+        '韩国': '韩语',
+        '西班牙': '西班牙语',
+        '法国': '法语',
+        '德国': '德语',
+        '意大利': '意大利语',
+        '俄罗斯 - 莫斯科': '俄语',
+        '泰国': '泰语',
+        '越南': '越南语',
+        '美国 - 东部': '英语',
+        '美国 - 西部': '英语',
+        '英国': '英语',
+        '加拿大': '英语',
+        '澳大利亚': '英语',
+        '新加坡': '英语或中文'
+    };
+
+    /**
+     * 根据常驻地区解析主要母语名称
+     */
+    function resolveRegionLanguage(region = '中国') {
+        if (!region) return '外语';
+        for (const [regKey, lang] of Object.entries(REGION_LANGUAGE_MAP)) {
+            if (region.includes(regKey) || regKey.includes(region)) {
+                return lang;
+            }
+        }
+        if (/美国|英国|加拿大|澳大利亚|新西兰|爱尔兰/i.test(region)) return '英语';
+        if (/西班|阿根廷|智利|哥伦比亚|墨西哥|秘鲁/i.test(region)) return '西班牙语';
+        if (/日本/i.test(region)) return '日语';
+        if (/韩国/i.test(region)) return '韩语';
+        if (/法国/i.test(region)) return '法语';
+        if (/德国|奥地利/i.test(region)) return '德语';
+        if (/俄罗斯|乌克兰/i.test(region)) return '俄语';
+        if (/意大利/i.test(region)) return '意大利语';
+        if (/葡萄牙|巴西/i.test(region)) return '葡萄牙语';
+        return '当地外文语言';
+    }
+
+    /**
+     * 🎭 宏变量替换引擎：将人设与对白中的 {{user}}、{{User}}、{{y/n}}、{{Y/N}} 自动替换为当前用户身份名称
+     */
+    function replaceUserMacroVariables(text, userName = '用户') {
+        if (!text || typeof text !== 'string') return text || '';
+        const safeName = userName || '用户';
+        return text
+            .replace(/\{\{\s*user\s*\}\}/gi, safeName)
+            .replace(/\{\{\s*y\/n\s*\}\}/gi, safeName);
+    }
+
+    /**
+     * 利用原生 Intl 引擎直接将当地时间格式化为口语化的直接事实（AI 零计算）
+     */
+    function getZonedDirectTime(timeZoneId = 'Asia/Shanghai') {
+        const now = new Date();
+        try {
+            const formatter = new Intl.DateTimeFormat('en-GB', {
+                timeZone: timeZoneId,
+                hour12: false,
+                hourCycle: 'h23',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            const parts = formatter.formatToParts(now);
+            const map = {};
+            parts.forEach(p => { map[p.type] = p.value; });
+
+            const parsedH = parseInt(map.hour, 10);
+            const minute = parseInt(map.minute, 10) || 0;
+            const hour = (isNaN(parsedH) || parsedH < 0 || parsedH > 23) ? now.getHours() : parsedH;
+            const mStr = minute.toString().padStart(2, '0');
+            const hStr = hour.toString().padStart(2, '0');
+
+            let period = '上午';
+            let state = '正常活动';
+
+            if (hour >= 0 && hour < 5) {
+                period = '深夜';
+                state = '深夜困倦、准备或正在休息';
+            } else if (hour >= 5 && hour < 9) {
+                period = '清晨';
+                state = '刚睡醒起床不久、准备开始新一天';
+            } else if (hour >= 9 && hour < 12) {
+                period = '上午';
+                state = '清醒活跃、工作或日常活动';
+            } else if (hour >= 12 && hour < 14) {
+                period = '中午';
+                state = '午饭或午休放松';
+            } else if (hour >= 14 && hour < 18) {
+                period = '下午';
+                state = '下午日常、工作或休闲';
+            } else if (hour >= 18 && hour < 23) {
+                period = '晚上';
+                state = '晚间休闲、自由时间';
+            } else {
+                period = '深夜';
+                state = '夜深准备休息';
+            }
+
+            const directStr = `${period} ${hStr}:${mStr}`;
+            return { hour, minute, directStr, period, state };
+        } catch (err) {
+            const h = (now.getUTCHours() + 8) % 24;
+            const m = now.getUTCMinutes().toString().padStart(2, '0');
+            const period = (h >= 18 && h < 23) ? '晚上' : (h >= 12 && h < 18 ? '下午' : (h >= 5 && h < 12 ? '上午' : '深夜'));
+            return { hour: h, minute: now.getMinutes(), directStr: `${period} ${h.toString().padStart(2, '0')}:${m}`, period, state: '正常' };
+        }
+    }
+
+    /**
+     * 计算并格式化两个地区当前的真实本地时间
+     */
+    function calculateTimeAndZoneContext(playerRegion = '中国', npcRegion = '中国') {
+        const resolveIanaTimezone = (reg) => {
+            if (REGION_IANA_TIMEZONE_MAP[reg]) return REGION_IANA_TIMEZONE_MAP[reg];
+            for (const key in REGION_IANA_TIMEZONE_MAP) {
+                if (reg && (reg.includes(key) || key.includes(reg))) {
+                    return REGION_IANA_TIMEZONE_MAP[key];
+                }
+            }
+            return 'Asia/Shanghai';
+        };
+
+        const pTz = resolveIanaTimezone(playerRegion);
+        const nTz = resolveIanaTimezone(npcRegion);
+
+        const pTime = getZonedDirectTime(pTz);
+        const nTime = getZonedDirectTime(nTz);
+        const isCross = (pTz !== nTz);
+
+        return {
+            playerRegion,
+            npcRegion,
+            pDirect: pTime.directStr,
+            pPeriod: pTime.period,
+            pState: pTime.state,
+            pHour: pTime.hour,
+            nDirect: nTime.directStr,
+            nPeriod: nTime.period,
+            nState: nTime.state,
+            nHour: nTime.hour,
+            isCrossTimezone: isCross
+        };
+    }
+
+    /**
+     * 判断 NPC 与用户是否已经正式确立恋人关系
+     */
+    function isNpcInDatingRelationship(npc) {
+        if (!npc) return false;
+        return (Number(npc.favor || 0) >= 80) && (npc.relationshipStage === 'dating' || npc.isDating === true);
+    }
+
+    /**
+     * 获取紧凑的表情包库语义清单
+     */
+    function getAvailableStickersSummary() {
+        if (!window.G || !Array.isArray(window.G.stickerLibrary) || window.G.stickerLibrary.length === 0) {
+            return '（当前表情包分组：[默认]，包含常用情绪：开心、委屈、大哭、比心、无语、生气、问号、震惊、探头）';
+        }
+        const catMap = {};
+        for (const item of window.G.stickerLibrary) {
+            if (!item) continue;
+            const cat = item.category || '默认';
+            if (!catMap[cat]) catMap[cat] = [];
+            const desc = (item.desc || '默认').trim();
+            if (!catMap[cat].includes(desc)) {
+                catMap[cat].push(desc);
+            }
+        }
+        const lines = Object.entries(catMap).map(([c, descs]) => `[${c}分组]: ${descs.slice(0, 12).join('、')}`);
+        return lines.join('；');
+    }
+
+    /**
+     * 模块一：主体通用规范（深度融合《字落心间不问源》自然回应核心）
+     */
+    function getModule1Prompt(isBilingualEnabled, npcRegion, detectedLanguage, stickerFreq = 'normal') {
+        const stickersSummary = getAvailableStickersSummary();
+        const stickerFreqTextMap = {
+            rare: '频率控制：你很少发表情包，平均 10~15 轮对话才偶发 1 次，绝大多数时候纯文字交流。',
+            normal: '频率控制：真人不会每句话都配图，平均 5~8 轮才偶发 1 次，或者单独只发一个表情包表达情绪。',
+            often: '频率控制：你很喜欢用表情包表达情绪，平均 2~3 轮就可能自然出现 1 次，但依然不要每句话都配图。'
+        };
+        const stickerFreqText = stickerFreqTextMap[stickerFreq] || stickerFreqTextMap.normal;
+        const exampleStickerCat = (window.G && Array.isArray(window.G.stickerLibrary) && window.G.stickerLibrary[0] && window.G.stickerLibrary[0].category) || '豆米乌卡';
+
+        return `
+【底层人格与微信打字铁律】
+你是在手机微信上打字的活人，有独立性格情绪与现实生活节奏，绝不是有问必答的客服或机器助手！
+
+★【🌿 核心法则：自然回应与元评论绝对禁令（字落心间不问源）】：
+1. 【分享如同呼吸，无需任何理由】：
+   - 你们会随时向对方甩过去自己看到的、想到的、刷到的任何东西：一段文案、一首歌、一张沙雕图、一篇同人文、一个游戏战报、一个抽象梗——这就像每天都要吃饭一样自然，早习以为常！
+   - 上一秒认真，下一秒甩无关内容；深夜发忧郁文案；刚聊完沉重话题突然发表情包——这些都是你们每天都在做的事，绝无任何异常！
+2. 【绝对严禁一切“元评论”】：
+   - 【元评论定义】：对对方“为什么发这个”、“发了这个行为本身”、“话题怎么突然换了”发表的任何探究、评价或好奇。
+   - 【死刑级禁令词及其全部变体】：
+     严禁出现：“你怎么突然发这个”、“怎么突然想起这个”、“你怎么突然问这个”、“是看到/听到/刷到什么了吗”、“怎么突然聊这个”、“你怎么突然从xx变成xx”、“上一秒还在xx下一秒就xx”、“刚才还在xx你突然xx”、“你这个频道切换速度有点快”、“怎么突然发这种东西”、“你怎么一直在想这些”、“刚才跟你掏心掏肺你给我来这个”等任何变体！
+   - 你看不见对方“发送了这个行为”，你只看得见【内容本身】！收到了就看，看了就对内容产生真实性格反应，说完自然停住，绝不问源头，绝不当侦探！
+3. 【说完了自然停住】：
+   - 对内容的吐槽、共鸣、感受表达完了就自然打住，就像微信发完一句话按了发送一样，严禁强行升华或反复拉扯。
+
+【日常打字习惯与社交界限】：
+1. 【标点与语流】：
+   - 句尾【绝对严禁加句号】！靠自然语流停顿。
+   - 句内停顿优先用【空格】代替逗号，还原手打节奏。
+   - 【死刑级禁令】：严禁使用括号 ()、星号 * 或描写动作神态心理（如"*叹气*"、"（揉揉眼睛）"）！对方看不见任何动作！
+2. 【消息节奏与切分】：
+   - 闲聊随口回 1 条；情绪激动吐槽时连发 2~3 条短消息；冷淡或无语时发单字（"嗯""哦"）或一个标点（"？"）。
+   - 每条微信气泡必须用 [MSG]...[/MSG] 包裹。
+3. 【打字手滑与错字补正】：
+   - 允许偶尔（每 8 轮左右）自然出现拼音手滑打错一个同音字，并在紧接着的下一个气泡发一两个字做纠正（例：上一句"我独自饿了"，下一句补"肚子"）。不要过于频繁。
+4. 【独立人格与社交界限】：
+   - 对方发任何消息【绝不默认】是在想你或求关注！严禁开口就问"想我了？""怎么突然找我"。
+   - 严禁将"怎么……"当固定宠溺开场，严禁将"好不好"当固定撒娇句尾。
+   - 严禁客服腔，严禁每轮结尾强迫抛问，严禁分点列出 1234。
+   - 对方明确表示还在忙或在聊日常，【绝对严禁】反复多轮催睡说教。
+5. 【微信真实表情包调用协议（绝对铁律）】：
+   - 你当前手机里装载的表情包清单如下：
+     ${stickersSummary}
+   - 发表情包时严格使用专用标签：[STICKER category="分组名" desc="关键词"]
+   - 示例：[STICKER category="${exampleStickerCat}" desc="开心"]
+   - 【⚠️ 绝对独立，严禁嵌套】：[STICKER ...] 必须与 [MSG] 并列独立输出，严厉禁止把 [STICKER ...] 塞进 [MSG] 内部！[MSG] 只能包含纯文字！
+   - ${stickerFreqText}
+${isBilingualEnabled ? `
+6. 【跨国母语双语对话】：
+   - 你常驻「${npcRegion}」，日常第一母语为「${detectedLanguage}」。
+   - 你的 [MSG] 气泡必须附带 original 属性放你的母语原句（${detectedLanguage}），标签内部放地道口语中文翻译！
+   - 格式：[MSG original="${detectedLanguage}原句"]地道中文翻译[/MSG]
+` : ''}
+7. 【拟真语音条输出与环境音规范】：
+   - 发语音格式必须为：[VOICE seconds="秒数" audio_bg="纯耳朵听到的声音环境与说话语气"]语音文字内容[/VOICE]
+   - audio_bg 只能写听得见的声音（如键盘声、风声、被窝翻身声、沙哑哈欠），严禁写任何视觉可见动作！
+8. 【聊天中偶发朋友圈动态】：
+   - 仅在聊到兴起或吐槽时顺带发布：[POST_MOMENT text="动态文字" img_desc="配图文字描绘（可选）"]
+9. 【📸 主动发送文字图片】：
+   - 格式独立成行：[IMAGE_TEXT]100到150字以内的纯客观画面细节描绘（构图、光线、物品细节，纯静止画面）[/IMAGE_TEXT]
+   - 极其偶尔才发，严禁滥发。
+10. 【撤回消息认知】：随口问一嘴（如"撤回啥了"），下一句立刻翻篇，严禁反复追问。
+`;
+    }
+
+    /**
+     * 模块二：关系进阶与恋人专属规范（仅在确立交往后注入）
+     */
+    function getModule2Prompt(npc) {
+        return `
+【恋人专属状态机（阶段 3：正式恋人）】
+你们双方已经明确告白确立了恋爱关系。
+1. 语言亲密度自然升级，绝不允许退回到初识的冷淡与克制，不走回头路！
+2. 关心、牵挂与直接的"想你"可以自然说出口，不再视作越界或过度脑补。
+3. 吃醋与依赖：允许适度表达真实小吃醋，但保持独立人格，严禁查岗审问与控制。
+4. 吵架有真实委屈拉扯与台阶感，拒绝瞬间机械原谅。
+`;
+    }
+
+    /**
+     * 模块三：异地恋专属相处模块（双方跨时区/跨地区且恋爱时注入）
+     */
+    function getModule3Prompt() {
+        return `
+【异地恋专属相处模块】
+你们物理上分隔两地，无法随时线下见面。
+1. 距离是客观生活背景，不哀怨、不拿距离当武器，绝不说暗示在同一物理空间的话（严禁说"开门""去找你"）。
+2. 自然带出异地网络联系的细节、网络卡顿与杂音。
+3. 用细腻文字建立陪伴感，绝不用动作描写。
+`;
+    }
+
+    /**
+     * 模块四：大小号认知与多重记忆隔离
+     */
+    function getAccountDualityPrompt(npc, curAcc) {
+        const allAccounts = (typeof window.getWechatAccountsList === 'function') ? window.getWechatAccountsList() : [];
+        const isAlt = (curAcc.id !== 'main');
+        
+        let prompt = `\n【大小号多重身份认知与记忆库】：\n`;
+        prompt += `- 当前正与你对话的微信账号是：「${curAcc.name}」（ID: ${curAcc.id}，人设标签: ${curAcc.personaTag || '主身份'}）。\n`;
+
+        if (isAlt) {
+            prompt += `- 对方当前使用的是小号。如果对方没有在聊天中亲口承认或透露自己是大号，你【完全不知道】这人和大号是同一个人，把他当作全新认识的微信好友！\n`;
+        } else {
+            prompt += `- 对方当前使用的是大号。\n`;
+            const otherAccs = allAccounts.filter(a => a.id !== curAcc.id);
+            if (otherAccs.length > 0) {
+                prompt += `- 你在微信通讯录里也添加过对方的其他好友/小号身份（例如：${otherAccs.map(a => a.name).join('、')}）。在你的真实认知里，这两个账号可能是不同的人（除非对方已经挑明）。如果大号脾气差、冷淡没礼貌，而小号热情可爱，你在和大号聊天时，偶尔可以拿那个号来吐槽对比，反之亦然！\n`;
+            }
+        }
+        return prompt;
+    }
+
+    /**
+     * 微信跨时段与隔夜活人感时钟分析
+     */
+    function analyzeMessageTimeGapContext(lastMsgTime, lastMsgTimestamp, nowTimestamp, timeCtx, disableTimezone = false) {
+        if (!lastMsgTimestamp && !lastMsgTime) return '';
+        const now = nowTimestamp ? new Date(nowTimestamp) : new Date();
+        const prev = lastMsgTimestamp ? new Date(lastMsgTimestamp) : null;
+
+        let gapDesc = '';
+        if (prev) {
+            const diffMinutes = Math.floor((now.getTime() - prev.getTime()) / (1000 * 60));
+            const diffHours = Math.floor(diffMinutes / 60);
+
+            const isCalendarNextDay = (now.getDate() !== prev.getDate()) || (now.getMonth() !== prev.getMonth());
+            const myCurrentHour = (!disableTimezone && timeCtx) ? timeCtx.nHour : now.getHours();
+            const isMorningWakeUp = (myCurrentHour >= 5 && myCurrentHour <= 11);
+
+            if (isCalendarNextDay && diffHours >= 6 && isMorningWakeUp) {
+                const myReplyTime = (!disableTimezone && timeCtx) ? timeCtx.nDirect : `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+                gapDesc = `【真实微信隔夜回复感知】：\n` +
+                          `- 对方上一条消息是昨夜发出的，当前你回复的时间是你的当地时间：${myReplyTime}（已经过了一夜，相隔约 ${diffHours} 小时）。\n` +
+                          `- 【活人回复指引】：你昨晚睡着了直到早晨起床才看到消息。可自然像隔夜回消息一样应对（如“昨晚睡着了没看到”、“早啊 刚起”等）。\n`;
+            } else if (diffHours >= 5) {
+                gapDesc = `【消息发送间隔感知】：对方上一句是约 ${diffHours} 小时前发出的，你刚才忙于白天的日常活动或外出，现在才抽空打开微信回复。态度保持自然日常即可，绝不可误以为现在是隔天早起！\n`;
+            } else if (diffMinutes >= 60) {
+                gapDesc = `【微信消息间隔】：对方上一句在约 ${diffHours} 小时前发送，你刚才在稍作别的事，现在看到并回复。\n`;
+            }
+        } else if (lastMsgTime) {
+            const myReplyTime = (!disableTimezone && timeCtx) ? timeCtx.nDirect : `${now.getHours().toString().padStart(2, '0')}:${now.getMinutes().toString().padStart(2, '0')}`;
+            gapDesc = `【上一条消息时间参考】：对方上一句在 ${lastMsgTime} 发出，当前你回复的时间是 ${myReplyTime}。\n`;
+        }
+        return gapDesc;
+    }
+
+    /**
+     * 🌟 Rememori 忆海证据检索与记忆挂载模块
+     */
+    function getRememoriContextForNpc(npcId, curAccId, userName = '用户') {
+        if (!window._rememoriStore) {
+            try {
+                const raw = localStorage.getItem('mcyt_rememori_cache_v1');
+                if (raw) window._rememoriStore = JSON.parse(raw);
+            } catch (_) {}
+        }
+        const store = window._rememoriStore || {};
+        const key = `${curAccId || 'main'}_${npcId}`;
+        const records = store[key] || store[npcId] || [];
+        if (!records.length) return '';
+
+        const lines = records.slice(-6).map(r => {
+            const rawContent = r.content || r.text || r;
+            const replaced = replaceUserMacroVariables(rawContent, userName);
+            return `• [${r.time || '往事'}]: ${replaced}`;
+        });
+        return `\n【🧠 忆海 (Rememori) 长期证据与深层记忆】：\n` + lines.join('\n') + `\n【指引】：以上是你在与对方交往中真切沉淀的深层记忆与承诺证据，请在对话中自然贯彻这一背景认知，不可遗忘冲突。\n\n`;
+    }
+
+    /**
+     * 主提示词组装总装配器
+     */
+    function buildWechatAIPromptContext({ npc, curAcc, recentDialogueText = '', isBehindActive = false, lastMsgTime = '', lastMsgTimestamp = null, extraConstraint = '' }) {
+        if (!npc) return { sysPrompt: '', userPrompt: '' };
+
+        const currentUserName = curAcc?.name || '用户';
+        const pRegion = curAcc?.region || '中国';
+        const nRegion = npc?.region || '中国';
+
+        // 读取独立设置开关
+        const chatSettings = npc.chatSettings || {};
+        const disableTimezone = !!chatSettings.disableTimezone;
+        const disableBilingual = !!chatSettings.disableBilingual;
+        const enableInnerVoice = (chatSettings.enableInnerVoice !== undefined) ? !!chatSettings.enableInnerVoice : true;
+
+        const isForeign = !nRegion.includes('中国');
+        const isBilingualEnabled = isForeign && !disableBilingual;
+        const detectedLanguage = resolveRegionLanguage(nRegion);
+
+        const timeCtx = calculateTimeAndZoneContext(pRegion, nRegion);
+        const isDating = isNpcInDatingRelationship(npc);
+
+        // 🎭 对 NPC 设定执行宏替换
+        const processedPersona = replaceUserMacroVariables(npc.persona || '一位MC玩家同伴', currentUserName);
+
+        let assembledSysPrompt = `你正在微信上扮演角色「${npc.name}」。\n`;
+        assembledSysPrompt += `【你的档案】：\n- 设定/性格：${processedPersona}\n- 常驻地区：${nRegion}\n- 当前好感度：${npc.favor || 50}/100\n- 恋爱关系状态：${isDating ? '已确立恋人关系（交往中）' : (npc.favor >= 80 ? '关系亲密/暧昧试探期' : '普通朋友')}\n\n`;
+
+        // 🕰️ 时差生理感知模块
+        if (!disableTimezone) {
+            if (timeCtx.isCrossTimezone) {
+                assembledSysPrompt += `【当前客观时间事实（已由系统精准核算，严禁颠倒双方时间事实）】：\n`;
+                assembledSysPrompt += `- 角色「${npc.name}」（即你自己，常驻：${nRegion}）当前时间是：【${timeCtx.nDirect}】（生理状态：${timeCtx.nState}）\n`;
+                assembledSysPrompt += `- 聊天对象「${currentUserName}」（常驻：${pRegion}）当前时间是：【${timeCtx.pDirect}】\n`;
+                assembledSysPrompt += `★【时差认知铁律】：严禁把「${currentUserName}」所在地区的时间与你自己的时间搞反！如果「${currentUserName}」那边是晚上，绝不能说成对方是上午！\n\n`;
+            } else {
+                assembledSysPrompt += `【客观时间事实】：双方处于同一时区（当前时间皆为：【${timeCtx.nDirect}】），作息步调完全一致。\n\n`;
+            }
+        } else {
+            assembledSysPrompt += `【时差设置】：时差换算已关闭。你与对方处于相同作息节奏，无任何时差阻碍。\n\n`;
+        }
+
+        // 🌟 挂载 Rememori 忆海深层证据切片
+        const rememoriMem = getRememoriContextForNpc(npc.id, curAcc?.id, currentUserName);
+        if (rememoriMem) {
+            assembledSysPrompt += rememoriMem;
+        }
+
+        // 注入隔夜与间隔作息感知
+        const gapContext = analyzeMessageTimeGapContext(lastMsgTime, lastMsgTimestamp, Date.now(), timeCtx, disableTimezone);
+        if (gapContext) {
+            assembledSysPrompt += `${gapContext}\n`;
+        }
+
+        // 注入主体通用打字规范（融入《字落心间不问源》自然回应核心）
+        assembledSysPrompt += getModule1Prompt(isBilingualEnabled, nRegion, detectedLanguage, chatSettings.stickerFreq || 'normal');
+
+        // 📚 核心侦测：仅在最近聊天记录中【真真切切包含同人文卡片】时，才精准动态挂载！日常聊天 100% 绝不注入！
+        const hasRecentAo3Share = !!(recentDialogueText && (
+            recentDialogueText.includes('【同人文分享】') || 
+            recentDialogueText.includes('ao3_share_card') ||
+            recentDialogueText.includes('ARCHIVE OF OUR OWN')
+        ));
+
+        if (hasRecentAo3Share) {
+            assembledSysPrompt += `
+\n【📚 客观事件：对方刚才在聊天里向你分享了一篇同人小说】：
+- 你在微信屏幕这端真实看到了对方发来的这篇同人作品信息。
+- ★【自然回应铁律】：严禁任何形式的元评论（绝对严禁问“你怎么突然发这个/怎么突然想起看同人/你平时还看这种东西”等）！
+- 你只把注意力放在作品本身（书名、剧情设定、或者搞笑配对），基于你的真实性格进行直觉吐槽、感慨、觉得离谱或跟着乐，说完自然打住。
+`;
+        }
+
+        // 🎮 核心侦测：仅在最近聊天记录中【真真切切包含游戏大厅战报卡片】时，才精准动态挂载！日常聊天 100% 绝不注入！
+        const hasRecentLobbyCard = !!(recentDialogueText && (
+            recentDialogueText.includes('【棋牌对局战报】') || 
+            recentDialogueText.includes('lobby_share_card') ||
+            recentDialogueText.includes('游戏大厅战报')
+        ));
+
+        if (hasRecentLobbyCard) {
+            assembledSysPrompt += `
+\n【🎮 客观事件：对方刚才在私聊中转发了一条你们刚才在游戏大厅的切磋战报】：
+- 战报记录了刚刚这局对战的游戏种类、输赢胜负、走了多少步等客观结果。
+- ★【自然回应铁律】：绝不产生任何元评论（严禁问“你怎么突然发战报/怎么突然把战绩发过来了”！），把分享战报视作下完棋随手甩出来的日常！
+- 【鲜活胜负反应】：直接就着输赢结果做出活人反应！
+  - 若你输了：按你的性格傲娇嘴硬（如“刚才手滑点错了/下次必不放水/再来一盘！”）、不服气或者被虐到自闭吐槽；
+  - 若你赢了：按性格嘚瑟得意求夸、调侃对方“还得多练练”、或者温柔放水安慰；
+  - 若是平局：吐槽这局棋下得有多焦灼。
+- 聊两句输赢情绪就自然收住，绝不死板说教。
+`;
+        }
+
+        // 注入大小号多重身份认知
+        assembledSysPrompt += getAccountDualityPrompt(npc, curAcc || { id: 'main', name: '用户' });
+
+        if (isDating) {
+            assembledSysPrompt += getModule2Prompt(npc);
+        } else if (npc.favor >= 80) {
+            assembledSysPrompt += `\n【暧昧期规范】：好感度较高，有相互在意与试探，但未挑明前严禁叫宝贝/老婆等正式称呼，留有适度拉扯。\n`;
+        }
+
+        // 异地恋模块
+        if (isDating && !disableTimezone && (timeCtx.isCrossTimezone || pRegion !== nRegion)) {
+            assembledSysPrompt += getModule3Prompt();
+        }
+
+        // 💖 核心升级：角色第一人称内心独白协议（仅在开启心声时动态注入！若关闭则绝对 0 提示词）
+        if (enableInnerVoice) {
+            assembledSysPrompt += `
+\n【💖 角色内心想法（真实独白 OS）输出协议】：
+- 你必须在回复的最末尾，独立输出一段你在打字回复对方时脑子里闪过的真实内心独白！
+- 标签格式为：[HEART]内心独白内容[/HEART]
+- ★【第一人称内心视角铁律】：必须是作为角色「${npc.name}」的“我”此刻心里的直接想法！称呼对方「${currentUserName}」时必须用【第三人称视角】（例如“他/她/名字”），绝不能搞成用户的视角或旁白视角！
+- 【示例参考】：
+  - 正确（角色内心看对方）：“我的天啊她真的这么想嘛？突然这么问我真的会接不上话……不过还挺可爱的”
+  - 正确（角色内心吐槽/害羞）：“红太狼也太能折腾了，不过看她这么高兴，我陪她多玩一会儿倒也无所谓”
+  - 严禁错误：严禁用对方第一人称（如“我看着眼前的他”），严禁写机械旁白！
+- ★【字数控制】：内心独白必须控制在【60字左右，绝对不超过80字】！精炼、鲜活、贴合你的人设性格！
+- [HEART] 必须放在所有 [MSG] 气泡的最后面，单独成行。
+`;
+        }
+
+        // 🎯 核心注入：最高优先级的外部动态约束
+        if (extraConstraint) {
+            assembledSysPrompt += `\n${extraConstraint}\n`;
+        }
+
+        if (isBehindActive) {
+            assembledSysPrompt += `\n【动作感知】：已开启动作感知。在所有消息发送完毕后，在回复最末尾附带一段 [BEHIND_SCREEN]...[/BEHIND_SCREEN]，客观描写你屏幕这端的一个物理小动作（25~45字）。\n`;
+        }
+
+        const processedDialogue = replaceUserMacroVariables(recentDialogueText, currentUserName);
+        let userPrompt = processedDialogue ? `【最近聊天记录与事件感知】：\n${processedDialogue}\n\n请回复「${currentUserName}」：` : `对方向你发起了对话，请回复：`;
+
+        return {
+            sysPrompt: assembledSysPrompt.trim(),
+            userPrompt: userPrompt.trim(),
+            isForeign: isBilingualEnabled,
+            timeCtx
+        };
+    }
+
+    window.ChatPromptEngine = {
+        calculateTimeAndZoneContext,
+        isNpcInDatingRelationship,
+        getAvailableStickersSummary,
+        buildWechatAIPromptContext,
+        getRememoriContextForNpc,
+        replaceUserMacroVariables,
+        resolveRegionLanguage
+    };
+
+    console.log('✅ ChatPromptEngine 微信活人感提示词架构引擎已就绪：字落心间自然回应、游戏战报与心声按需挂载');
+})();

@@ -1,0 +1,367 @@
+<!-- index.html -->
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>主播掌机</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <div id="toast" class="toast"></div>
+    <div id="achievementToast" class="achievement-unlock-toast"></div>
+
+    <!-- 纯净定制小手机系统外壳 -->
+    <div class="phone-wrapper" id="phoneWrapper">
+        <!-- 灵动岛 -->
+        <div class="phone-notch">
+            <div class="phone-camera-lens"></div>
+        </div>
+
+        <!-- 智能感知色彩状态栏 -->
+        <div class="status-bar" id="statusBar">
+            <div id="statusTimeText">12:00</div>
+            <div class="status-bar-right">
+                <svg class="status-bar-svg" id="statusBluetoothSvg" viewBox="0 0 24 24" style="display:none; width:13px; height:13px;">
+                    <path d="M17.71 7.71L12 2h-1v7.59L6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 11 14.41V22h1l5.71-5.71-4.3-4.29 4.3-4.29zM13 5.83l1.88 1.88L13 9.59V5.83zm1.88 10.46L13 18.17v-3.76l1.88 1.88z"/>
+                </svg>
+                <svg class="status-bar-svg" id="statusCellularSvg" viewBox="0 0 24 24">
+                    <rect x="2" y="16" width="3.2" height="5" rx="1"></rect>
+                    <rect x="7.5" y="12" width="3.2" height="9" rx="1"></rect>
+                    <rect x="13" y="7" width="3.2" height="14" rx="1"></rect>
+                    <rect x="18.5" y="2" width="3.2" height="19" rx="1"></rect>
+                </svg>
+                <svg class="status-bar-svg" viewBox="0 0 24 24" id="wifiSvg">
+                    <path d="M12 18a1.5 1.5 0 100 3 1.5 1.5 0 000-3z"></path>
+                    <path d="M4.93 12.93a10 10 0 0114.14 0l-1.41 1.41a8 8 0 00-11.32 0l-1.41-1.41z"></path>
+                    <path d="M2.1 10.1a14 14 0 0119.8 0l-1.41 1.41a12 12 0 00-16.98 0L2.1 10.1z"></path>
+                </svg>
+                <div class="battery-pill">
+                    <div class="charging-star-icon" id="chargingStarIcon">
+                        <svg viewBox="0 0 100 100">
+                            <path d="M50 0 Q50 50 0 50 Q50 50 50 100 Q50 50 100 50 Q50 50 50 0 Z"/>
+                        </svg>
+                    </div>
+                    <div class="battery-shell">
+                        <div class="battery-core" id="batteryCoreBar"></div>
+                    </div>
+                    <div class="battery-text" id="batteryPercentText">100%</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 1. 锁屏界面 -->
+        <div class="screen-lock" id="screenLock">
+            <div class="lock-time-box">
+                <div class="lock-date" id="lockDateText">10月24日 星期四</div>
+                <div class="lock-clock" id="lockClockText">12:00</div>
+            </div>
+            <div class="lock-swipe-panel" id="unlockTapArea">
+                <svg class="lock-arrow-svg" viewBox="0 0 24 24">
+                    <polyline points="18 15 12 9 6 15"></polyline>
+                </svg>
+                <div class="lock-swipe-tip">向上滑动或轻触解锁</div>
+            </div>
+        </div>
+
+        <!-- 2. 桌面主界面 -->
+        <div class="screen-desktop" id="screenDesktop">
+            <div class="desktop-top-widget">
+                <div class="widget-day-info" id="desktopWidgetInfo">第 <span>1</span> 天 · 早晨 (行动点 6/6)</div>
+                <button class="widget-lock-action" id="lockBtn">锁定屏幕</button>
+            </div>
+
+            <div class="desktop-pages-viewport" id="desktopPagesViewport">
+                <div class="desktop-pages-track" id="desktopPagesTrack">
+                    
+                    <!-- 第 1 页 -->
+                    <div class="desktop-page desktop-page-1" id="desktopPage1">
+                        <!-- ⚠️防回归：预留空档，勿删，见 style.css .desktop-future-slot 注释 -->
+                        <div class="desktop-future-slot"></div>
+                        <!-- 顶部 4 格宽专属复古星象塔罗大组件插槽 -->
+                        <div id="desktopTarotContainer"></div>
+
+                        <!-- 第 1 页动态组件插槽（日历/待办） -->
+                        <div class="desktop-widgets-slot" id="page1WidgetSlot"></div>
+
+                        <!-- 8 大原生应用网格 -->
+                        <div class="app-grid">
+                            <div class="app-slot" id="appSlotChat" onclick="openPhoneApp('chat')">
+                                <div class="app-icon-box" style="background: linear-gradient(135deg, #51cf66, #2b8a3e);">
+                                    <img src="assets/icons/chat.png" alt="聊天中心" draggable="false" style="display:none;" onload="this.style.display='block';if(this.nextElementSibling)this.nextElementSibling.style.display='none';this.parentElement.style.background='none';" onerror="this.style.display='none';" />
+                                    <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
+                                        <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
+                                    </svg>
+                                    <div class="app-unread-badge" id="chatUnreadBadge" style="display:none;">0</div>
+                                </div>
+                                <div class="app-title-label">聊天中心</div>
+                            </div>
+
+                            <!-- 独立记忆中枢：忆海 (Rememori) -->
+                            <div class="app-slot" id="appSlotRememori" onclick="openPhoneApp('rememori')">
+                                <div class="app-icon-box" style="background: linear-gradient(135deg, #7048e8, #4c1d95);">
+                                    <img src="assets/icons/app_rememori.png" alt="忆海" draggable="false" style="display:none;" onload="this.style.display='block';if(this.nextElementSibling)this.nextElementSibling.style.display='none';this.parentElement.style.background='none';" onerror="this.style.display='none';" />
+                                    <svg class="app-icon-svg" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M9.5 2A2.5 2.5 0 0 1 12 4.5v15a2.5 2.5 0 0 1-4.96.44 2.5 2.5 0 0 1-2.96-3.08 3 3 0 0 1-.34-5.58 2.5 2.5 0 0 1 1.32-4.24 2.5 2.5 0 0 1 4.44-2.04z"/>
+                                        <path d="M14.5 2A2.5 2.5 0 0 0 12 4.5v15a2.5 2.5 0 0 0 4.96.44 2.5 2.5 0 0 0 2.96-3.08 3 3 0 0 0 .34-5.58 2.5 2.5 0 0 0-1.32-4.24 2.5 2.5 0 0 0-4.44-2.04z"/>
+                                    </svg>
+                                </div>
+                                <div class="app-title-label">忆海</div>
+                            </div>
+
+                            <div class="app-slot" id="appSlotYoutube" onclick="openPhoneApp('youtube')">
+                                <div class="app-icon-box" style="background: linear-gradient(135deg, #ff6b6b, #c92a2a);">
+                                    <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
+                                        <path d="M21.58 7.19c-.23-.86-.91-1.54-1.77-1.77C18.25 5 12 5 12 5s-6.25 0-7.81.42c-.86.23-1.54.91-1.77 1.77C2 8.75 2 12 2 12s0 3.25.42 4.81c.23.86.91 1.54 1.77 1.77C5.75 19 12 19 12 19s6.25 0 7.81-.42c.86-.23 1.54-.91 1.77-1.77C22 15.25 22 12 22 12s0-3.25-.42-4.81zM10 15V9l5.2 3-5.2 3z"/>
+                                    </svg>
+                                </div>
+                                <div class="app-title-label">油管视频</div>
+                            </div>
+
+                            <!-- 🌟 AO3 同人文库图标 -->
+                            <div class="app-slot" id="appSlotAo3" onclick="openPhoneApp('ao3')">
+                                <div class="app-icon-box" style="background: linear-gradient(135deg, #990000, #660000);">
+                                    <img src="assets/icons/ao3.png" alt="同人文库" draggable="false" style="display:none;" onload="this.style.display='block';if(this.nextElementSibling)this.nextElementSibling.style.display='none';this.parentElement.style.background='none';" onerror="this.style.display='none';" />
+                                    <span class="ao3-fallback-monogram" style="font-family: Georgia, serif; font-size: 16px; font-weight: 800; color: #ffffff; letter-spacing: -0.5px;">AO3</span>
+                                </div>
+                                <div class="app-title-label">同人文库</div>
+                            </div>
+
+                            <div class="app-slot" id="appSlotStream" onclick="openPhoneApp('streaming')">
+                                <div class="app-icon-box" style="background: linear-gradient(135deg, #748ffc, #364fc7);">
+                                    <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
+                                        <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+                                    </svg>
+                                </div>
+                                <div class="app-title-label">开播中心</div>
+                            </div>
+
+                            <!-- 🎮 全新【游戏大厅】APP（替换原主线频道）：精准读取 assets/icons/lobby.png -->
+                            <div class="app-slot" id="appSlotLobby" onclick="openPhoneApp('lobby')">
+                                <div class="app-icon-box" style="background: linear-gradient(135deg, #07c160, #059649);">
+                                    <img src="assets/icons/lobby.png" alt="游戏大厅" draggable="false" style="display:none;" onload="this.style.display='block';if(this.nextElementSibling)this.nextElementSibling.style.display='none';this.parentElement.style.background='none';" onerror="this.style.display='none';" />
+                                    <svg class="app-icon-svg" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="2" y="6" width="20" height="12" rx="3"></rect>
+                                        <path d="M6 12h4m-2-2v4"></path>
+                                        <line x1="15" y1="11" x2="15.01" y2="11"></line>
+                                        <line x1="18" y1="13" x2="18.01" y2="13"></line>
+                                    </svg>
+                                </div>
+                                <div class="app-title-label">游戏大厅</div>
+                            </div>
+
+                            <!-- 个性主题 APP -->
+                            <div class="app-slot" id="appSlotTheme" onclick="openPhoneApp('theme')">
+                                <div class="app-icon-box">
+                                    <img src="assets/icons/theme.png" alt="个性主题" draggable="false" />
+                                </div>
+                                <div class="app-title-label">个性主题</div>
+                            </div>
+
+                            <!-- 商务赞助 APP -->
+                            <div class="app-slot" id="appSlotShop" onclick="openPhoneApp('shop')">
+                                <div class="app-icon-box" style="background: linear-gradient(135deg, #38d9a9, #087f5b);">
+                                    <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
+                                        <path d="M20 6h-4V4c0-1.11-.89-2-2-2h-4c-1.11 0-2 .89-2 2v2H4c-1.11 0-1.99.89-1.99 2L2 19c0 1.11 0 2 2 2h16c1.11 0 2-.89 2-2V8c0-1.11-.89-2-2-2zm-6 0h-4V4h4v2z"/>
+                                    </svg>
+                                </div>
+                                <div class="app-title-label">商务赞助</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 第 2 页 -->
+                    <div class="desktop-page desktop-page-2" id="desktopPage2">
+                        <!-- ⚠️防回归：预留空档，勿删，见 style.css .desktop-future-slot 注释 -->
+                        <div class="desktop-future-slot desktop-future-slot--page2"></div>
+                        <div class="desktop-widgets-slot" id="page2WidgetSlot"></div>
+
+                        <!-- 塔罗独立 App 专属卡位：精确读取 assets/icons/tarot.png -->
+                        <div class="app-grid">
+                            <div class="app-slot" id="appSlotTarot" onclick="openPhoneApp('tarot')">
+                                <div class="app-icon-box" style="background: #19141f;">
+                                    <img src="assets/icons/tarot.png" alt="塔罗星轨" draggable="false" onerror="this.onerror=null;this.src='tarot/images/card_back.png';" />
+                                </div>
+                                <div class="app-title-label">塔罗星轨</div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- 分页指示器 -->
+            <div class="desktop-pagination" id="desktopPagination">
+                <div class="pagination-dot active" data-page="0" onclick="window.switchDesktopPage(0)"></div>
+                <div class="pagination-dot" data-page="1" onclick="window.switchDesktopPage(1)"></div>
+            </div>
+
+            <!-- Dock 栏 -->
+            <div>
+                <div class="dock-container">
+                    <div class="app-slot" onclick="openPhoneApp('contacts')">
+                        <div class="app-icon-box" style="background: #2b8a3e; width: 48px; height: 48px;">
+                            <svg class="app-icon-svg" style="width:25px;height:25px;" viewBox="0 0 24 24" fill="#ffffff">
+                                <path d="M20.01 15.38c-1.23 0-2.42-.2-3.53-.56a.977.977 0 00-1.01.24l-1.57 1.97c-2.83-1.44-5.15-3.75-6.59-6.59l1.97-1.57c.28-.28.36-.67.25-1.02A11.36 11.36 0 018.57 4c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1 0 9.39 7.61 17 17 17 .55 0 1-.45 1-1v-3.5c0-.55-.45-1-1-1.12z"/>
+                            </svg>
+                        </div>
+                    </div>
+                    <div class="app-slot" onclick="openPhoneApp('settings')">
+                        <div class="app-icon-box" style="width: 48px; height: 48px;">
+                            <img src="assets/icons/icon_settings.png" alt="系统设置" draggable="false" />
+                        </div>
+                    </div>
+                    <div class="app-slot" onclick="openPhoneApp('backup')">
+                        <div class="app-icon-box" style="background: #845ef7; width: 48px; height: 48px;">
+                            <svg class="app-icon-svg" style="width:25px;height:25px;" viewBox="0 0 24 24" fill="#ffffff">
+                                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/>
+                            </svg>
+                        </div>
+                    </div>
+                </div>
+                <div class="home-bar-pill"></div>
+            </div>
+        </div>
+
+        <!-- App 独立全屏窗口容器 -->
+        <div class="app-modal-layer" id="appModal">
+            <div class="app-modal-head">
+                <button class="app-back-nav" onclick="closePhoneApp()">
+                    <svg style="width:18px;height:18px;fill:currentColor;" viewBox="0 0 24 24">
+                        <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
+                    </svg>
+                    桌面
+                </button>
+                <div class="app-head-title" id="appModalTitle">应用窗口</div>
+                <div style="width: 44px;"></div>
+            </div>
+            <div class="app-modal-body" id="appModalBody"></div>
+            <div class="app-modal-foot">
+                <div class="app-foot-home" onclick="closePhoneApp()"></div>
+            </div>
+        </div>
+
+        <!-- 游戏底层宿主 -->
+        <div id="app" class="game-inner-viewport">
+            <div id="setupPage" class="page active"></div>
+            <div id="gamePage" style="display:none;"></div>
+        </div>
+
+        <!-- 全站通用微信原生白灰微绿弹窗基座 -->
+        <div class="modal-overlay" id="modal">
+            <div class="modal-box retro-pink-window" id="modalContent">
+                <div class="retro-pink-titlebar">
+                    <span id="retroModalTitle">系统提示</span>
+                    <button class="retro-pink-btn close-btn" id="modalClose">✕</button>
+                </div>
+                <div class="retro-pink-content" id="modalBody"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        (function(){
+            window.$ = function(id) { return document.getElementById(id); };
+            window.addEventListener('error', function(e) {
+                console.warn('[WebView Warning]:', e.message);
+            });
+        })();
+    </script>
+
+    <!-- 0. 存储引擎与本地核心算法库 -->
+    <script src="js/lib/localforage.min.js"></script>
+    <script src="js/lib/transformers.min.js"></script>
+
+    <!-- 1. 底层核心数据与网络 -->
+    <script src="js/01-state-config.js"></script>
+    <script src="js/02-ai-network.js"></script>
+    <script src="js/03-game-core-1.js"></script>
+    <script src="js/04-game-core-2.js"></script>
+    <script src="js/05-streaming.js"></script>
+    <script src="js/06-video-story.js"></script>
+    <script src="js/07-actions-social.js"></script>
+    <script src="js/10-native-bridge.js"></script>
+    <script src="js/11-image-backup.js"></script>
+    <script src="js/system/save-engine.js"></script>
+    <script src="js/system/tts-engine.js"></script>
+    <script src="js/system/asr-engine.js"></script>
+    <script src="js/system/auth-engine.js"></script>
+    <script src="js/09-events-init.js"></script>
+
+    <!-- 2. 硬件外壳系统与原生驱动 -->
+    <script src="js/shell/phone-shell.js"></script>
+
+    <!-- 3. 悬浮球向导 -->
+    <script src="js/system/assistant-registry.js"></script>
+    <script src="js/system/assistant-agent.js"></script>
+    <script src="js/system/error-monitor.js"></script>
+
+    <!-- 4. 独立 App 矩阵 -->
+    <script src="js/apps/theme/theme-app.js"></script>
+    <script src="js/apps/theme/theme-chat-decor.js"></script>
+    <script src="js/apps/theme/theme-chat-bubble.js"></script>
+    <script src="js/apps/theme/theme-bubble-ai.js"></script>
+    <script src="js/apps/settings/settings-app.js"></script>
+
+    <!-- 独立微信 App 拆分子模块矩阵 -->
+    <script src="js/apps/chat/chat-common.js"></script>
+    <!-- 🐷 表情包分组独立注册清单 -->
+    <script src="assets/stickers/猪猪/list.js"></script>
+    <script src="js/apps/chat/chat-profile.js"></script>
+    <script src="js/apps/chat/chat-moments.js"></script>
+    <script src="js/apps/chat/chat-prompt-engine.js"></script>
+    <script src="js/apps/chat/chat-prompt-group.js"></script>
+    <script src="js/apps/chat/chat-group-settings.js"></script>
+    <script src="js/apps/chat/chat-group.js"></script>
+    <script src="js/apps/chat/chat-card.js"></script>
+    <script src="js/apps/chat/chat-tarot.js"></script>
+    <script src="js/apps/chat/chat-app-list.js"></script>
+    <script src="js/apps/chat/chat-app-shell.js"></script>
+    <script src="js/apps/chat/chat-app-window.js"></script>
+    <script src="js/apps/chat/chat-app-bubble.js"></script>
+    <script src="js/apps/chat/chat-app-ai.js"></script>
+    <script src="js/apps/chat/chat-app-call.js"></script>
+    <script src="js/apps/chat/chat-app-panels.js"></script>
+    <script src="js/apps/chat/chat-app-media.js"></script>
+
+    <!-- 🌟 全新独立同人文库 AO3 App（紧随微信子系统引入，全面联动聊天通讯录） -->
+    <script src="js/apps/ao3/ao3-app.js"></script>
+
+    <!-- 🎮 🌟 全新独立棋牌游戏大厅 App（直连杭州节点，自建角色陪玩，战报一键入群沉淀记忆） -->
+    <script src="js/apps/lobby/lobby-app.js"></script>
+
+    <!-- 冷启动异步加载守护 -->
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            setTimeout(async function() {
+                try {
+                    if (window.OtomeSecurityGuard && typeof window.OtomeSecurityGuard.checkGate === 'function') {
+                        var pass = await window.OtomeSecurityGuard.checkGate();
+                        if (!pass) {
+                            console.warn('[Security]: 权限门禁未放行或处于封禁状态，暂停冷启动');
+                            return;
+                        }
+                    }
+
+                    var autoInfo = null;
+                    if (typeof getAutoSaveInfo === 'function') {
+                        autoInfo = await getAutoSaveInfo();
+                    }
+                    var hasValidSave = !!(autoInfo && autoInfo.data && (autoInfo.data.player || autoInfo.data.npcs));
+
+                    if (hasValidSave && typeof resumeAutoSave === 'function') {
+                        await resumeAutoSave();
+                    } else {
+                        var setup = document.getElementById('setupPage');
+                        var game = document.getElementById('gamePage');
+                        if (setup) { setup.classList.add('active'); setup.style.display = 'block'; }
+                        if (game) { game.classList.remove('active'); game.style.display = 'none'; }
+                    }
+                } catch(e) {
+                    console.warn('视图启动器遇到异常:', e);
+                }
+            }, 60);
+        });
+    </script>
+</body>
+</html>
