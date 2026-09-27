@@ -46,14 +46,14 @@ jobs:
         with:
           node-version: 20
 
-      - name: Build Game-Lobby Web Assets
+      - name: Build Game-Lobby Web Assets (Relative Path & Anti-WhiteScreen)
         run: |
           mkdir -p assets/lobby-web
           cd temp_lobby
           # 1. 禁用严格锁校验，防止依赖冲突
           pnpm install --no-frozen-lockfile
 
-          # 2. 自动修补缺失的 Sandbox / Connect 占位文件，同时提供具名导出与默认导出，彻底消灭未导出成员报错
+          # 2. 自动修补缺失的 Sandbox / Connect 占位文件，彻底消除模块缺失
           WEB_PAGES="apps/web/src/pages"
           if [ -d "$WEB_PAGES" ]; then
             cat << 'EOF' > "$WEB_PAGES/Sandbox.tsx"
@@ -68,9 +68,9 @@ jobs:
           EOF
           fi
 
-          # 3. 绕过严格的 tsc 报错，直接使用 vite 打包出纯静态资源
+          # 3. 强制使用相对基准路径 --base=./ 进行 Vite 打包，杜绝 WebView 根路径 404 白屏！
           cd apps/web
-          npx vite build || pnpm run build
+          npx vite build --base=./ || pnpm run build -- --base=./ || npx vite build
           cd ../..
 
           # 4. 部署构建产物至掌机本地资源库
@@ -81,11 +81,19 @@ jobs:
           fi
           cd ..
           rm -rf temp_lobby
+
+          # 5. 后置安全加固：将 index.html 中的潜在绝对路径强行矫正为纯相对路径
+          if [ -f "assets/lobby-web/index.html" ]; then
+            sed -i 's|src="/assets/|src="./assets/|g' assets/lobby-web/index.html
+            sed -i 's|href="/assets/|href="./assets/|g' assets/lobby-web/index.html
+            sed -i 's|src="/|src="./|g' assets/lobby-web/index.html
+            sed -i 's|href="/|href="./|g' assets/lobby-web/index.html
+            echo "🔧 已成功将 Game-Lobby 的 index.html 资源索引完全转换为纯相对路径 (./)"
+          fi
           echo "✅ Game-Lobby 棋盘视口已成功构建并打包进 assets/lobby-web/"
 
       - name: Inject Secure Server Configs (Anti-Duplicate Protocol & Masking)
         run: |
-          # 智能安全清洗逻辑：自动抹去重复 http(s):// 与末尾斜杠，彻底消灭 http://http:// 恶性拼接
           if [ -n "${{ secrets.MCYT_LOBBY_SERVER_URL }}" ]; then
             RAW_LOBBY="${{ secrets.MCYT_LOBBY_SERVER_URL }}"
             CLEAN_LOBBY=$(echo "$RAW_LOBBY" | sed -E 's#^(https?://)+##I' | sed 's#/*$##')
