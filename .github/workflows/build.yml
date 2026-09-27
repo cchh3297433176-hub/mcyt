@@ -83,16 +83,24 @@ jobs:
           rm -rf temp_lobby
           echo "✅ Game-Lobby 棋盘视口已成功构建并打包进 assets/lobby-web/"
 
-      - name: Inject Secure Server Configs (Secrets to APK)
+      - name: Inject Secure Server Configs (Anti-Duplicate Protocol & Masking)
         run: |
+          # 智能安全清洗逻辑：自动抹去重复 http(s):// 与末尾斜杠，彻底消灭 http://http:// 恶性拼接
           if [ -n "${{ secrets.MCYT_LOBBY_SERVER_URL }}" ]; then
-            sed -i "s|const DEFAULT_SERVER_URL = '';|const DEFAULT_SERVER_URL = '${{ secrets.MCYT_LOBBY_SERVER_URL }}';|g" js/apps/lobby/lobby-app.js
-            echo "🔒 已安全注入私有游戏裁判服务节点"
+            RAW_LOBBY="${{ secrets.MCYT_LOBBY_SERVER_URL }}"
+            CLEAN_LOBBY=$(echo "$RAW_LOBBY" | sed -E 's#^(https?://)+##I' | sed 's#/*$##')
+            SAFE_LOBBY_URL="http://$CLEAN_LOBBY"
+            sed -i "s|const DEFAULT_SERVER_URL = '.*';|const DEFAULT_SERVER_URL = '$SAFE_LOBBY_URL';|g" js/apps/lobby/lobby-app.js
+            echo "🔒 已安全规范化注入私有游戏裁判服务节点 (已过滤重复协议)"
           fi
+
           if [ -n "${{ secrets.MCYT_ASR_SERVER_URL }}" ]; then
-            sed -i "s|serverUrl: '.*'|serverUrl: '${{ secrets.MCYT_ASR_SERVER_URL }}'|g" js/system/asr-engine.js 2>/dev/null || true
-            sed -i "s|121.43.122.253:8000|${{ secrets.MCYT_ASR_SERVER_URL }}|g" js/system/asr-engine.js 2>/dev/null || true
-            echo "🔒 已安全注入私有 ASR 语音识别服务节点"
+            RAW_ASR="${{ secrets.MCYT_ASR_SERVER_URL }}"
+            CLEAN_ASR=$(echo "$RAW_ASR" | sed -E 's#^(https?://)+##I' | sed 's#/*$##')
+            SAFE_ASR_URL="http://$CLEAN_ASR"
+            sed -i "s|const DEFAULT_REMOTE_ASR_URL = '.*';|const DEFAULT_REMOTE_ASR_URL = '$SAFE_ASR_URL';|g" js/system/asr-engine.js
+            sed -i "s|serverUrl: '.*'|serverUrl: '$SAFE_ASR_URL'|g" js/system/asr-engine.js
+            echo "🔒 已安全规范化注入私有 ASR 语音识别服务节点 (已过滤重复协议)"
           fi
 
       - name: Deploy Subprojects & Clean Git Cache
