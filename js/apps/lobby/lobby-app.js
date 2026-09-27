@@ -4,7 +4,7 @@
  * 核心特性：
  * 1. 微信原生极简质感：纯白卡片、极浅灰底色（#f7f7f7）、原生微绿高亮（#07c160），全站消灭 Emoji，改用极简 SVG；
  * 2. 状态栏顶部安全区适配：完美避让灵动岛与电量/时间顶栏，不重合不遮挡；
- * 3. 隐私与安全防护：彻底移除硬编码 VPS IP，默认启用掌机本地离线对战引擎，防扫描防攻击；
+ * 3. 隐私与安全防护：界面绝对不回显内置服务器真实 IP，保护 VPS 隐私，留空默认安全保活；
  * 4. 多角色自由联机：自适应双人单选 / 多人（斗地主、大富翁、飞行棋）多选联系人入座；
  * 5. AI 调度模式自由切换：支持【独立思考模式（单独调用）】与【合并思考模式（一轮推理完成全员）】，额度灵活可控；
  * 6. 战报与羁绊记忆沉淀：对局结束后可自主选择【转发战报到聊天】，生成专属战报卡片（lobby_share_card），落盘单聊历史！
@@ -13,22 +13,27 @@
 (function () {
     'use strict';
 
-    // 本地内置引擎缺省标识（不暴露任何真实 VPS IP）
-    const DEFAULT_SERVER_URL = '';
+    // 默认内置云端裁判服务地址（后台静默连接，界面上绝不向用户回显展示）
+    const DEFAULT_SERVER_URL = 'http://121.43.122.253:8787';
 
     function getLobbyServerUrl() {
         return localStorage.getItem('mcyt_lobby_server_url') || DEFAULT_SERVER_URL;
     }
 
+    // 仅获取用户自定义输入的地址，未自定义则返回空字符串，防止输入框暴露真实默认 IP
+    function getDisplayCustomServerUrl() {
+        return localStorage.getItem('mcyt_lobby_server_url') || '';
+    }
+
     function setLobbyServerUrl(url) {
-        if (!url) {
+        if (!url || !url.trim()) {
             localStorage.removeItem('mcyt_lobby_server_url');
         } else {
-            localStorage.setItem('mcyt_lobby_server_url', url.trim().replace(/\/+$/, ''));
+            let clean = url.trim().replace(/^(https?:\/\/)+/i, '').replace(/\/+$/, '');
+            localStorage.setItem('mcyt_lobby_server_url', 'http://' + clean);
         }
     }
 
-    // AI 思考模式：true 为每个角色单独调用一次，false 为一轮合并思考全部代替
     function isLobbyIndividualAiThinking() {
         return localStorage.getItem('mcyt_lobby_individual_ai') === 'true';
     }
@@ -37,7 +42,7 @@
         localStorage.setItem('mcyt_lobby_individual_ai', val ? 'true' : 'false');
     }
 
-    // 10 款已支持的游戏清单配置（完全对齐纯规则层引擎，无 Emoji，全 SVG）
+    // 10 款已支持的游戏清单配置（完全对齐纯规则层引擎，无 Emoji，全极简 SVG）
     const GAME_LIST = [
         {
             kind: 'gomoku',
@@ -131,15 +136,11 @@
         }
     ];
 
-    // 当前活跃对局与房间状态
     window._activeLobbyMatch = null;
     window._activeLobbySeatToken = null;
     window._activeLobbySelectedNpcs = [];
     window._lobbyMessageListenerAttached = false;
 
-    /**
-     * 辅助防 XSS 工具函数
-     */
     function safeHtml(str) {
         if (!str) return '';
         return String(str)
@@ -150,9 +151,6 @@
             .replace(/'/g, '&#39;');
     }
 
-    /**
-     * 获取用户所有自建联系人池（唯一真实角色源）
-     */
     function getAvailableNpcList() {
         let npcs = [];
         if (window.G && window.G.npcs) {
@@ -167,9 +165,6 @@
         return npcs.filter(n => n && (n.name || n.id));
     }
 
-    /**
-     * 注入游戏大厅专属纯净微信白灰微绿样式
-     */
     function ensureLobbyStyles() {
         if (document.getElementById('mcyt-lobby-custom-style')) return;
         const style = document.createElement('style');
@@ -318,7 +313,6 @@
         container.innerHTML = `
             <div id="lobbyAppViewport" style="background:#f7f7f7;height:100%;min-height:100%;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;box-sizing:border-box;overflow:hidden;${statusBarPad}">
                 
-                <!-- 微信原生白灰微绿顶栏 -->
                 <div style="background:#ffffff;height:48px;border-bottom:0.5px solid #e5e5e5;display:flex;align-items:center;justify-content:space-between;padding:0 14px;flex-shrink:0;box-sizing:border-box;user-select:none;">
                     <div style="display:flex;align-items:center;gap:6px;">
                         <button onclick="window.closePhoneApp()" style="border:none;background:none;font-size:15px;color:#181818;cursor:pointer;padding:4px 6px;display:flex;align-items:center;gap:2px;font-weight:500;">
@@ -327,7 +321,6 @@
                         <span style="font-size:16px;font-weight:600;color:#181818;margin-left:4px;">游戏大厅</span>
                     </div>
 
-                    <!-- 右上角：对局设置（替换原先暴露IP的按钮） -->
                     <button onclick="window.openLobbySettingsModal()" title="对局设置" style="border:none;background:#f2f2f2;border-radius:14px;padding:5px 10px;font-size:12px;color:#444;cursor:pointer;display:flex;align-items:center;gap:5px;">
                         <svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:none;stroke:#555;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;">
                             <circle cx="12" cy="12" r="3"></circle>
@@ -337,10 +330,7 @@
                     </button>
                 </div>
 
-                <!-- 游戏大厅内容区 -->
                 <div style="flex:1;overflow-y:auto;padding:12px 14px 28px;box-sizing:border-box;scroll-behavior:smooth;">
-                    
-                    <!-- 顶部特色标语卡片 -->
                     <div style="background:#ffffff;border-radius:10px;padding:14px;margin-bottom:12px;border:0.5px solid #eaeaea;box-shadow:0 1px 3px rgba(0,0,0,0.03);">
                         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
                             <div style="width:26px;height:26px;border-radius:6px;background:rgba(7,193,96,0.12);display:flex;align-items:center;justify-content:center;color:#07c160;">
@@ -353,10 +343,8 @@
                         </div>
                     </div>
 
-                    <!-- 游戏列表标题 -->
                     <div style="font-size:12px;font-weight:600;color:#888;margin:10px 4px 8px;letter-spacing:0.5px;">全部收录棋牌 (${GAME_LIST.length})</div>
 
-                    <!-- 游戏卡片网格流 -->
                     <div style="display:flex;flex-direction:column;gap:10px;">
                         ${GAME_LIST.map(game => `
                             <div style="background:#ffffff;border-radius:10px;padding:13px 14px;border:0.5px solid #eaeaea;box-shadow:0 1px 4px rgba(0,0,0,0.03);display:flex;align-items:center;justify-content:space-between;gap:10px;">
@@ -389,7 +377,7 @@
     };
 
     /**
-     * 弹窗：选择自建角色开桌（支持单人/多人自由勾选）
+     * 弹窗：选择自建角色开桌
      */
     window.openCreateMatchModal = function (gameKind) {
         ensureLobbyStyles();
@@ -490,11 +478,11 @@
     };
 
     /**
-     * 发起开局请求并进入对战棋盘（支持单人/多同伴联机）
+     * 发起开局请求并进入对战棋盘
      */
     window.startMatchWithNpcs = async function (kind, selectedNpcs) {
         window._activeLobbySelectedNpcs = selectedNpcs;
-        window._activeLobbySelectedNpc = selectedNpcs[0]; // 兼容主要单人沉淀
+        window._activeLobbySelectedNpc = selectedNpcs[0];
         const serverUrl = getLobbyServerUrl();
 
         const names = selectedNpcs.map(n => n.name).join('、');
@@ -503,7 +491,6 @@
         let matchData = null;
         let seatToken = null;
 
-        // 构造入座席位：玩家 + 多个 AI 同伴
         const seats = [
             { kind: 'human', name: '我', me: true }
         ];
@@ -529,12 +516,11 @@
                     matchData = data.match;
                     seatToken = data.token;
                 }
-            } catch (netErr) {
-                console.warn('[Lobby Server]: 节点未就绪或未配置，自动无缝启动掌机本地内置引擎');
+            } catch (_) {
+                console.warn('[Lobby Server]: 远端裁判未连接，掌机本地内置引擎无缝托管');
             }
         }
 
-        // 掌机内置引擎离线兜底
         if (!matchData) {
             matchData = {
                 id: 'local_match_' + Date.now(),
@@ -554,16 +540,10 @@
         renderActiveGameBoard(kind, matchData, selectedNpcs, seatToken, serverUrl);
     };
 
-    /**
-     * 兼容单同伴旧调用
-     */
     window.startMatchWithNpc = async function (kind, npc) {
         return window.startMatchWithNpcs(kind, [npc]);
     };
 
-    /**
-     * 绑定视口消息通信
-     */
     function ensureLobbyMessageListener() {
         if (window._lobbyMessageListenerAttached) return;
         window._lobbyMessageListenerAttached = true;
@@ -584,9 +564,6 @@
         });
     }
 
-    /**
-     * 渲染正在进行的对局棋盘界面
-     */
     function renderActiveGameBoard(kind, match, selectedNpcs, token, serverUrl) {
         ensureLobbyMessageListener();
 
@@ -675,14 +652,13 @@
     }
 
     /**
-     * 胜负结算与【战报转发】弹窗（极简纯 SVG 风格，彻底移除 Emoji）
+     * 胜负结算与【战报转发】弹窗（极简纯 SVG 风格）
      */
     window.completeMockMatch = function (resultType, kind, customMoves) {
         ensureLobbyStyles();
         const npcs = window._activeLobbySelectedNpcs && window._activeLobbySelectedNpcs.length ? window._activeLobbySelectedNpcs : [window._activeLobbySelectedNpc];
         if (!npcs.length || !npcs[0]) return;
 
-        const mainNpc = npcs[0];
         const allNames = npcs.map(n => n.name).join('、');
         const game = GAME_LIST.find(g => g.kind === kind) || { name: '棋牌切磋' };
         const movesCount = customMoves || Math.floor(Math.random() * 20 + 15);
@@ -695,7 +671,6 @@
         mask.id = 'lobbyActiveDialog';
         mask.className = 'lobby-clean-modal-mask';
 
-        // 极简 SVG 胜负图标
         const resultIconSvg = (resultType === '胜')
             ? `<svg viewBox="0 0 24 24" style="width:28px;height:28px;fill:none;stroke:#07c160;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path><path d="M4 22h16"></path><path d="M10 14.66V17c0 .55-.45 1-1 1H7v4h10v-4h-2c-.55 0-1-.45-1-1v-2.34"></path><path d="M18 4H6v7a6 6 0 0 0 12 0V4z"></path></svg>`
             : `<svg viewBox="0 0 24 24" style="width:28px;height:28px;fill:none;stroke:#fa5151;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>`;
@@ -760,9 +735,6 @@
         };
     };
 
-    /**
-     * 将战报作为 lobby_share_card 消息写入单聊历史
-     */
     window.sendMatchReportToChat = async function (npc, gameName, resultText, moves) {
         if (!npc || !npc.id) return;
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
@@ -797,11 +769,11 @@
     };
 
     /**
-     * 对局设置弹窗（含同伴思考模式开关与问号说明、私密节点配置，全极简 SVG）
+     * 对局设置弹窗（防泄密安全设计：输入框不展示默认私密 IP，留空代表使用默认托管）
      */
     window.openLobbySettingsModal = function () {
         ensureLobbyStyles();
-        const curUrl = getLobbyServerUrl();
+        const curCustomUrl = getDisplayCustomServerUrl();
         const isIndividual = isLobbyIndividualAiThinking();
 
         const oldModal = document.getElementById('lobbyActiveDialog');
@@ -819,7 +791,6 @@
                 </div>
                 <div class="lobby-clean-modal-body">
                     
-                    <!-- 同伴思考调度模式 -->
                     <div style="background:#f9f9f9;border:0.5px solid #eaeaea;border-radius:8px;padding:12px;margin-bottom:14px;">
                         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
                             <div style="display:flex;align-items:center;gap:6px;">
@@ -835,13 +806,12 @@
                         </div>
                     </div>
 
-                    <!-- 裁判节点网络配置 -->
                     <div style="margin-bottom:14px;">
                         <div style="font-size:12.5px;color:#555;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;">
-                            <span>裁判节点地址</span>
-                            <span style="font-size:11px;color:#888;">留空则使用内置离线引擎</span>
+                            <span>裁判节点配置</span>
+                            <span style="font-size:11px;color:#07c160;">默认已开启云端保活</span>
                         </div>
-                        <input type="text" id="iptLobbyServerUrl" placeholder="本地内置引擎 (离线保活)" value="${safeHtml(curUrl)}" style="width:100%;box-sizing:border-box;border:0.5px solid #dcdcdc;border-radius:6px;padding:9px 10px;font-size:13px;outline:none;" />
+                        <input type="text" id="iptLobbyServerUrl" placeholder="官方默认托管节点 (留空即使用)" value="${safeHtml(curCustomUrl)}" style="width:100%;box-sizing:border-box;border:0.5px solid #dcdcdc;border-radius:6px;padding:9px 10px;font-size:13px;outline:none;" />
                     </div>
 
                     <div style="display:flex;gap:8px;">
@@ -864,7 +834,6 @@
         document.getElementById('btnServerSetClose').onclick = closeModal;
         document.getElementById('btnCancelServerSet').onclick = closeModal;
 
-        // 点击 ? 问号弹出极简说明
         document.getElementById('btnExplainAiMode').onclick = () => {
             window.openLobbyAiModeHelpModal();
         };
@@ -881,9 +850,6 @@
         };
     };
 
-    /**
-     * 思考模式详细说明弹窗
-     */
     window.openLobbyAiModeHelpModal = function () {
         const mask = document.createElement('div');
         mask.className = 'lobby-clean-modal-mask';
@@ -919,8 +885,7 @@
         document.getElementById('btnGotItHelp').onclick = closeHelp;
     };
 
-    // 兼容旧接口名
     window.openLobbyServerSettingsModal = window.openLobbySettingsModal;
 
-    console.log('LobbyApp 游戏大厅已装载：本地离线引擎就绪、多同伴联机就绪、调度设置就绪');
+    console.log('LobbyApp 游戏大厅已装载：本地离线引擎就绪、多同伴联机就绪、隐私防泄密就绪');
 })();
