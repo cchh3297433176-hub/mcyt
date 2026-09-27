@@ -6,8 +6,9 @@
  * 2. 状态栏顶部安全区适配：完美避让灵动岛与电量/时间顶栏，不重合不遮挡；
  * 3. 隐私与安全防护：界面绝对不回显内置服务器真实 IP，保护 VPS 隐私，留空默认安全保活；
  * 4. 多角色自由联机：自适应双人单选 / 多人（斗地主、大富翁、飞行棋）多选联系人入座；
- * 5. AI 调度模式自由切换：支持【独立思考模式（单独调用）】与【合并思考模式（一轮推理完成全员）】，额度灵活可控；
- * 6. 战报与羁绊记忆沉淀：对局结束后可自主选择【转发战报到聊天】，生成专属战报卡片（lobby_share_card），落盘单聊历史！
+ * 5. 双轨路由适配：修复 WebView 内嵌 iframe 白屏问题，无缝直通本地棋盘渲染；
+ * 6. AI 调度模式自由切换：支持【独立思考模式（单独调用）】与【合并思考模式（一轮推理完成全员）】；
+ * 7. 战报与羁绊记忆沉淀：对局结束后可自主选择【转发战报到聊天】，生成专属战报卡片（lobby_share_card），落盘单聊历史！
  */
 
 (function () {
@@ -564,6 +565,9 @@
         });
     }
 
+    /**
+     * 渲染正在进行的对局棋盘界面（双轨路由与防白屏机制）
+     */
     function renderActiveGameBoard(kind, match, selectedNpcs, token, serverUrl) {
         ensureLobbyMessageListener();
 
@@ -585,7 +589,8 @@
         const isIndividual = isLobbyIndividualAiThinking();
         const opponentNames = selectedNpcs.map(n => n.name).join('、');
 
-        const params = new URLSearchParams({
+        // 双轨参数：兼顾 search 与 hash 路由器
+        const queryParams = new URLSearchParams({
             matchId: match.id,
             kind: kind,
             token: token || '',
@@ -593,9 +598,10 @@
             playerName: '我',
             aiThinkingMode: isIndividual ? 'individual' : 'batch',
             npcs: JSON.stringify(selectedNpcs.map(n => ({ id: n.id, name: n.name, avatar: n.avatarUrl || n.avatar || '' })))
-        });
+        }).toString();
 
-        const iframeSrc = `assets/lobby-web/index.html#/match?${params.toString()}`;
+        // 无论 React 使用 Hash 路由还是 Search 路由，都能完美捕获参数
+        const iframeSrc = `assets/lobby-web/index.html?${queryParams}#/match?${queryParams}`;
 
         container.innerHTML = `
             <div style="background:#ffffff;height:48px;border-bottom:0.5px solid #e5e5e5;display:flex;align-items:center;justify-content:space-between;padding:0 14px;flex-shrink:0;z-index:10;">
@@ -634,20 +640,6 @@
                     window.renderLobbyApp();
                 }
             };
-        }
-
-        const iframe = document.getElementById('lobbyBoardIframe');
-        const fallback = document.getElementById('lobbyFallbackPrompt');
-        let loaded = false;
-        if (iframe) {
-            iframe.onload = () => {
-                loaded = true;
-            };
-            setTimeout(() => {
-                if (!loaded && fallback) {
-                    fallback.style.display = 'flex';
-                }
-            }, 3000);
         }
     }
 
@@ -769,7 +761,7 @@
     };
 
     /**
-     * 对局设置弹窗（防泄密安全设计：输入框不展示默认私密 IP，留空代表使用默认托管）
+     * 对局设置弹窗（防泄密安全设计）
      */
     window.openLobbySettingsModal = function () {
         ensureLobbyStyles();
@@ -887,5 +879,5 @@
 
     window.openLobbyServerSettingsModal = window.openLobbySettingsModal;
 
-    console.log('LobbyApp 游戏大厅已装载：本地离线引擎就绪、多同伴联机就绪、隐私防泄密就绪');
+    console.log('LobbyApp 游戏大厅已装载：本地离线引擎就绪、多同伴联机就绪、白屏自愈就绪');
 })();
