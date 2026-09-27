@@ -2,7 +2,8 @@
  * js/apps/chat/chat-common.js
  * 💬 微信基础公共库：头像池加载 · 持久化双轨防丢备份（防空冲刷保护） · 微信通用样式注入 · 原生对话框/操作表 · Token监控池 · 
  *    🌟 表情包全量自愈装载底座（内置四大黄金分组：【豆米乌卡】40张 + 【小狗】94张 + 【抽象】42张 + 【猪猪】，老存档无缝穿透激活） · 
- *    AI实体解析器 · 酒馆 PNG 人设卡封装与导入解析引擎（内置高清头像 128x128 纳米级智能压缩，彻底终结存储超限与随机头像反噬 Bug） ·
+ *    AI实体解析器（🌟 增强智能纠错：捕获 [表情描述] 格式自动识别为真实表情包，杜绝文字裸奔） · 
+ *    酒馆 PNG 人设卡封装与导入解析引擎（内置高清头像 128x128 纳米级智能压缩，彻底终结存储超限与随机头像反噬 Bug） ·
  *    🌟 用户多马甲安全头像提取管道 window.getPlayerAvatarSafe()（彻底修复装扮切换导致头像掉回默认图标的 Bug）
  * 🌟 存储架构升级（Phase 3）：
  * 单聊历史对白（mcyt_wechat_chathistory_v2）已平滑迁移至 IndexedDB (via localforage)！
@@ -281,7 +282,7 @@
             { desc: '白狗伴舞开心跳跃', url: 'https://pic1.imgdb.cn/item/69c0c60f45b603369a3da304.gif' },
             { desc: '拿小戳子戳生气狗', url: 'https://pic1.imgdb.cn/item/69c0bc9545b603369a3d972b.gif' },
             { desc: '网兜一网捞出爱心', url: 'https://pic1.imgdb.cn/item/69c0bc9545b603369a3d972c.gif' },
-            { desc: '乖乖坐着冒爱心', url: 'https://pic1.imgdb.cn/item/69c0bd6945b603369a3d9726.gif' },
+            { desc: '乖乖坐着冒爱心', url: 'https://pic1.imgdb.cn/item/69c0bd6945b603369a3d9b7a.gif' },
             { desc: '拼命用力点头赞同', url: 'https://pic1.imgdb.cn/item/69c0bd8845b603369a3d9c1e.gif' },
             { desc: '信件里源源不断冒爱心', url: 'https://pic1.imgdb.cn/item/69c0c1eb45b603369a3da2ca.gif' },
             { desc: '背后发条累瘫在地', url: 'https://pic1.imgdb.cn/item/69c0c1eb45b603369a3da2cb.gif' },
@@ -355,6 +356,24 @@
             { desc: '我这么可爱叫两声咋了', url: 'https://i.imgant.com/v2/6sBbjgo.jpeg' },
             { desc: '见钱眼开', url: 'https://i.imgant.com/v2/eKP4Na8.jpeg' },
             { desc: '哈士奇害羞', url: 'https://i.imgant.com/v2/MeWtWNE.jpeg' }
+        ],
+        '猪猪': [
+            { desc: '这只可爱的小猪就是我呀', url: 'https://imgbed.heliar.top/i/QZNPVIKLzB8DiDL-.jpg' },
+            { desc: '你给我老实点', url: 'https://imgbed.heliar.top/i/KpiF2iLAUzHVDvjD.jpg' },
+            { desc: '骂我的人看到我这样还忍心骂吗', url: 'https://imgbed.heliar.top/i/TnIT9ii2FOss4Fke.jpg' },
+            { desc: '这两只小猪就是我们呀', url: 'https://imgbed.heliar.top/i/K0UZOCq2MYES8vga.jpg' },
+            { desc: '悲愤离开', url: 'https://imgbed.heliar.top/i/O7E9kWjlYBDg59W-.jpg' },
+            { desc: '猪是必须要爱惜的', url: 'https://imgbed.heliar.top/i/tiUgP49B0Tez99eI.jpg' },
+            { desc: '而我只是一个QQ肠', url: 'https://imgbed.heliar.top/i/G4YYaUbHaS62Acf-.jpg' },
+            { desc: '小猪魔法', url: 'https://imgbed.heliar.top/i/nEe02eA-RY7p7Ehl.jpg' },
+            { desc: 'wink一下', url: 'https://imgbed.heliar.top/i/PSfpaNyQU1Pe2Qvm.jpg' },
+            { desc: '再睡拱死你', url: 'https://imgbed.heliar.top/i/2IqW2TDCBMsl81T9.jpg' },
+            { desc: '忙着玩手机', url: 'https://imgbed.heliar.top/i/AKsZ0ADV1nbpN6Xh.jpg' },
+            { desc: '饶了这一次呗', url: 'https://imgbed.heliar.top/i/cAIQytv_7rGo92is.jpg' },
+            { desc: '气疯了你满意了吗！', url: 'https://imgbed.heliar.top/i/ST0SkhSSAT0tNcJ7.jpg' },
+            { desc: '熟睡中', url: 'https://imgbed.heliar.top/i/pa6PWuk1W2T9sM_i.jpg' },
+            { desc: '突然出现', url: 'https://imgbed.heliar.top/i/rH-ZeZBzySvEydf1.jpg' },
+            { desc: '你这样对我我会哭的呀', url: 'https://imgbed.heliar.top/i/JVjz3snh4bQPeJPB.jpg' }
         ]
     };
 
@@ -370,9 +389,31 @@
         const goldenPacks = ['豆米乌卡', '小狗', '抽象', '猪猪'];
         goldenPacks.forEach(packName => {
             if (!window.G.stickerCategories.includes(packName)) {
-                window.G.stickerCategories.unshift(packName);
+                window.G.stickerCategories.push(packName);
             }
         });
+
+        // 检查是否有先于公共库加载的待注册包（如各个 list.js 中的待注入列表）
+        if (window._MCYT_PENDING_STICKERS && typeof window._MCYT_PENDING_STICKERS === 'object') {
+            for (const [pName, pList] of Object.entries(window._MCYT_PENDING_STICKERS)) {
+                if (Array.isArray(pList) && pList.length > 0) {
+                    if (!window.G.stickerCategories.includes(pName)) {
+                        window.G.stickerCategories.push(pName);
+                    }
+                    const exUrls = new Set(window.G.stickerLibrary.filter(s => s && s.category === pName).map(s => s.url));
+                    pList.forEach(item => {
+                        if (item && item.url && !exUrls.has(item.url)) {
+                            window.G.stickerLibrary.push({
+                                category: pName,
+                                desc: item.desc || pName,
+                                url: item.url
+                            });
+                            exUrls.add(item.url);
+                        }
+                    });
+                }
+            }
+        }
 
         for (const [catName, packList] of Object.entries(BUILTIN_STICKER_PRESETS)) {
             const existingUrls = new Set(
@@ -403,7 +444,7 @@
         if (!categoryName || !Array.isArray(stickerList)) return;
         ensureStickersLoaded();
         if (!window.G.stickerCategories.includes(categoryName)) {
-            window.G.stickerCategories.unshift(categoryName);
+            window.G.stickerCategories.push(categoryName);
         }
         const existingUrls = new Set(
             window.G.stickerLibrary
@@ -446,7 +487,7 @@
     }
     window.recordTokenHistoryEntry = recordTokenHistoryEntry;
 
-    // 💾 硬核防丢保护引擎（彻底剔除粗暴抹杀头像为 assets/icons/chat.png 的降级逻辑！）
+    // 💾 硬核防丢保护引擎
     function syncCustomNpcsToLocalBackup() {
         try {
             if (!window.G || !window.G.npcs || typeof window.G.npcs !== 'object') return;
@@ -492,7 +533,7 @@
                         window.G.npcs[id] = npc;
                     } else {
                         for (const key of Object.keys(npc)) {
-                            // 🌟 头像防覆盖护甲：如果当前内存中已有头像，绝不允许被旧数据或空值覆盖
+                            // 🌟 头像防覆盖护甲
                             if (key === 'avatarUrl' || key === 'avatar') {
                                 if (!window.G.npcs[id][key] && npc[key]) {
                                     window.G.npcs[id][key] = npc[key];
@@ -512,7 +553,7 @@
     }
     window.restoreCustomNpcsFromLocalBackup = restoreCustomNpcsFromLocalBackup;
 
-    // 💾 单聊历史持久化落盘（全面迁移至 IndexedDB，兜底兼容 localStorage）
+    // 💾 单聊历史持久化落盘（全面迁移至 IndexedDB）
     async function syncChatHistoryToLocalBackup() {
         try {
             if (!window.G || !window.G.chatHistory || typeof window.G.chatHistory !== 'object') return;
@@ -946,7 +987,7 @@
     }
     window.openWechatCleanModal = openWechatCleanModal;
 
-    // 🌟 统一群聊消息安全存取管道（就地操作内存数组，彻底终结指针断裂）
+    // 🌟 统一群聊消息安全存取管道
     window.getGroupChatHistorySafe = function(gid) {
         if (!window.G) window.G = {};
         if (!window.G.groupChatHistory) window.G.groupChatHistory = {};
@@ -1078,6 +1119,26 @@
     }
     window.formatTokenString = formatTokenString;
 
+    // 🌟 辅助：在表情包库中进行模糊与精确匹配
+    function findStickerByText(text) {
+        if (!text || typeof text !== 'string') return null;
+        const clean = text.trim().replace(/^\[|\]$/g, '');
+        if (!clean || clean.length > 40) return null;
+
+        ensureStickersLoaded();
+        const lib = window.G.stickerLibrary || [];
+
+        // 1. 完全一致匹配
+        let match = lib.find(s => s && s.desc && s.desc.trim() === clean);
+        if (match) return match;
+
+        // 2. 包含匹配（描述包含该词，或者该词包含描述，且字符数相近）
+        match = lib.find(s => s && s.desc && (s.desc.includes(clean) || clean.includes(s.desc)));
+        if (match) return match;
+
+        return null;
+    }
+
     function parseAIReplyEntities(rawText, npcName) {
         if (!rawText) return [];
         let clean = (typeof stripThought === 'function') ? stripThought(rawText).trim() : rawText.trim();
@@ -1177,6 +1238,20 @@
                         });
                     }
                 } else {
+                    // 🌟 检查 innerText 是否为纯 [表情包描述] 兜底
+                    const inlineBracketMatch = /^\[([^\[\]]+)\]$/.exec(innerText.trim());
+                    if (inlineBracketMatch) {
+                        const matchedSticker = findStickerByText(inlineBracketMatch[1]);
+                        if (matchedSticker) {
+                            entities.push({
+                                type: 'sticker_entity',
+                                category: matchedSticker.category,
+                                desc: matchedSticker.desc
+                            });
+                            continue;
+                        }
+                    }
+
                     innerText = innerText.replace(/\[STICKER[^\]]*\]/gi, '').trim();
                     if (innerText || original) {
                         entities.push({
@@ -1200,6 +1275,14 @@
             const orig = (looseMatch[1] || looseMatch[2] || looseMatch[3] || '').trim();
             const body = (looseMatch[4] || '').replace(/\[\/MSG\]/gi, '').trim();
             if (body || orig) {
+                const inlineB = /^\[([^\[\]]+)\]$/.exec(body.trim());
+                if (inlineB) {
+                    const st = findStickerByText(inlineB[1]);
+                    if (st) {
+                        entities.push({ type: 'sticker_entity', category: st.category, desc: st.desc });
+                        continue;
+                    }
+                }
                 entities.push({
                     type: 'text',
                     text: body || orig,
@@ -1210,6 +1293,33 @@
 
         if (entities.length > 0) {
             return entities.slice(0, 8);
+        }
+
+        // 🌟 智能兜底：如果 AI 直接发了类似 [这个就是我呀，会不会有点营养不良了]
+        const nakedBracketRegex = /\[([^\[\]\n]{2,35})\]/g;
+        if (nakedBracketRegex.test(sanitized)) {
+            let lastIdx = 0;
+            nakedBracketRegex.lastIndex = 0;
+            let nbMatch;
+            while ((nbMatch = nakedBracketRegex.exec(sanitized)) !== null) {
+                const candText = nbMatch[1].trim();
+                const matchedSt = findStickerByText(candText);
+                if (matchedSt) {
+                    const before = sanitized.substring(lastIdx, nbMatch.index).trim();
+                    if (before) entities.push({ type: 'text', text: before });
+                    entities.push({
+                        type: 'sticker_entity',
+                        category: matchedSt.category,
+                        desc: matchedSt.desc
+                    });
+                    lastIdx = nakedBracketRegex.lastIndex;
+                }
+            }
+            const tail = sanitized.substring(lastIdx).trim();
+            if (tail) {
+                entities.push({ type: 'text', text: tail });
+            }
+            if (entities.length > 0) return entities.slice(0, 8);
         }
 
         const nakedStickerRegex = /\[STICKER(?:\s+category=["']?([^"'\]\s]*)["']?)?(?:\s+desc=["']?([^"'\]\s]*)["']?)?\s*\]/gi;
@@ -1242,7 +1352,14 @@
 
         const lines = pureText.split(/\n+/).map(l => l.trim()).filter(Boolean);
         if (lines.length > 0) {
-            return lines.slice(0, 5).map(l => ({ type: 'text', text: l }));
+            return lines.slice(0, 5).map(l => {
+                const bMatch = /^\[([^\[\]]+)\]$/.exec(l);
+                if (bMatch) {
+                    const st = findStickerByText(bMatch[1]);
+                    if (st) return { type: 'sticker_entity', category: st.category, desc: st.desc };
+                }
+                return { type: 'text', text: l };
+            });
         }
 
         return [{ type: 'text', text: pureText || '在呢' }];
@@ -1310,7 +1427,6 @@
 
         const view = new DataView(chunk.buffer);
         view.setUint32(0, dataLen);
-        // 🌟 修复关键：PNG 标准文本数据块格式为 'tEXt' (0x74, 0x45, 0x58, 0x74)
         chunk[4] = 0x74; chunk[5] = 0x45; chunk[6] = 0x58; chunk[7] = 0x74;
 
         let offset = 8;
@@ -1504,7 +1620,6 @@
             const chunkDataOffset = offset + 8;
             if (chunkDataOffset + length > arrayBuffer.byteLength) break;
 
-            // 🌟 兼容标准 tEXt 与此前手滑误写的 tEtt（实现平滑自愈历史导出卡片）
             if (typeCode === 'tEXt' || typeCode === 'tEtt') {
                 const dataBytes = new Uint8Array(arrayBuffer, chunkDataOffset, length);
                 let nullIdx = -1;
@@ -1550,7 +1665,6 @@
                 throw new Error('不是标准的 PNG 格式图片');
             }
 
-            // 🌟 兼容主流 Tavern 关键字：chara, character, ccv3
             let rawDataStr = chunks['chara'] || chunks['character'] || chunks['ccv3'];
             if (!rawDataStr) {
                 throw new Error('未在图片中检测到酒馆角色卡数据');
