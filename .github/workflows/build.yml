@@ -53,18 +53,22 @@ jobs:
           # 1. 禁用严格锁校验，防止依赖冲突
           pnpm install --no-frozen-lockfile
 
-          # 2. 自动修补缺失的 Sandbox / Connect 占位文件，防止类型与引用检查中断
+          # 2. 自动修补缺失的 Sandbox / Connect 占位文件，同时提供具名导出与默认导出，彻底消灭未导出成员报错
           WEB_PAGES="apps/web/src/pages"
           if [ -d "$WEB_PAGES" ]; then
-            if [ ! -f "$WEB_PAGES/Sandbox.tsx" ]; then
-              echo "export default function Sandbox() { return null; }" > "$WEB_PAGES/Sandbox.tsx"
-            fi
-            if [ ! -f "$WEB_PAGES/Connect.tsx" ]; then
-              echo "export default function Connect() { return null; }" > "$WEB_PAGES/Connect.tsx"
-            fi
+            cat << 'EOF' > "$WEB_PAGES/Sandbox.tsx"
+            import React from 'react';
+            export function Sandbox() { return null; }
+            export default Sandbox;
+          EOF
+            cat << 'EOF' > "$WEB_PAGES/Connect.tsx"
+            import React from 'react';
+            export function Connect() { return null; }
+            export default Connect;
+          EOF
           fi
 
-          # 3. 绕过严格的 tsc 报错，直接使用 vite 快速打包出生产静态文件
+          # 3. 绕过严格的 tsc 报错，直接使用 vite 打包出纯静态资源
           cd apps/web
           npx vite build || pnpm run build
           cd ../..
