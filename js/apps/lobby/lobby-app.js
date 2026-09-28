@@ -5,11 +5,11 @@
  * 1. 微信原生极简质感：纯白卡片、极浅灰底色（#f7f7f7）、原生微绿高亮（#07c160），全站消灭 Emoji，改用极简 SVG；
  * 2. 状态栏顶部安全区适配：避让灵动岛与状态栏顶栏，不重合不遮挡；
  * 3. 隐私与安全防护：界面绝不回显私有 VPS 真实 IP，掩码脱敏防泄密；
- * 4. 多角色自由联机：自适应双人单选 / 多人（斗地主、大富翁、飞行棋）多选联系人入座，自建头像 100% 真实提取；
+ * 4. 多角色自由联机：自适应双人单选 / 多人（斗地主、大富翁、飞行棋）多选联系人入座，自建头像与人设 100% 真实提取；
  * 5. 端内纯规则离线引擎保底：离线秒开，对局走子零 Token 消耗；
  * 6. OpenAI 兼容协议独立多方案管理中心：支持自定义 BaseURL、ApiKey，无虚假假模型列表，真实抓取远程模型并支持关键词实时过滤，多方案备注保存与一键切换；
- * 7. Whisper 活人对话联动调度中枢：局内发消息时，结合角色人设与当前客观对局局面，调起大模型生成性格回复回填！
- * 8. 战报与羁绊记忆沉淀：对局结算后自主选择【转发战报到聊天】，落盘单聊历史！
+ * 7. Whisper 戳一戳与对话中枢：支持局内“戳一戳”角色呼唤回复，结合完整双方人设与棋局局面生成活人回复并回推到棋盘聊天窗！
+ * 8. 战报带角色署名全员广播：对局结算后，转发战报到每个参战角色的私聊，局内对白严格带【角色名：内容】前缀防混乱！
  */
 
 (function () {
@@ -87,6 +87,30 @@
             } catch (_) {}
         }
         return cur || null;
+    }
+
+    // 获取玩家自己的设定与昵称
+    function getPlayerProfileSafe() {
+        let playerName = '我';
+        let playerPersona = '无特殊设定，随和的游戏玩家';
+        try {
+            if (typeof window.getPlayerName === 'function') {
+                playerName = window.getPlayerName() || playerName;
+            } else if (window.G && window.G.player && window.G.player.name) {
+                playerName = window.G.player.name;
+            }
+            if (window.G && window.G.player && window.G.player.persona) {
+                playerPersona = window.G.player.persona;
+            } else {
+                const saved = localStorage.getItem('mcyt_player_profile');
+                if (saved) {
+                    const p = JSON.parse(saved);
+                    if (p.name) playerName = p.name;
+                    if (p.persona) playerPersona = p.persona;
+                }
+            }
+        } catch (_) {}
+        return { name: playerName, persona: playerPersona };
     }
 
     // 10 款已支持的游戏清单配置
@@ -415,7 +439,7 @@
                             <span style="font-size:14px;font-weight:600;color:#181818;">掌机棋牌切磋中枢</span>
                         </div>
                         <div style="font-size:12px;color:#777;line-height:1.5;">
-                            下棋出招由端内规则引擎毫秒级驱动，对局内说话与情绪互动通过你配置的独立模型生成，对局后一键转发胜负战报落盘单聊！
+                            下棋出招由端内规则引擎毫秒级驱动，对局内说话与“戳一戳”互动通过你配置的独立模型生成，对局后一键转发胜负战报落盘单聊！
                         </div>
                     </div>
 
@@ -561,16 +585,14 @@
         const names = selectedNpcs.map(n => n.name).join('、');
         showLobbyLoading(`正在为 ${names} 分配座位并准备棋局...`);
 
-        let matchData = null;
-        let seatToken = null;
+        const pProf = getPlayerProfileSafe();
 
-        const seats = [{ kind: 'human', name: '我', me: true }];
+        const seats = [{ kind: 'human', name: pProf.name || '我', me: true }];
         selectedNpcs.forEach(n => {
             seats.push({ kind: 'bot', name: n.name, npcId: n.id });
         });
 
-        // 统一使用本地纯规则引擎快速秒开，若配置了远程服务则同时尝试远端同步
-        matchData = {
+        const matchData = {
             id: 'local_match_' + Date.now(),
             kind: kind,
             seats: seats,
@@ -578,7 +600,7 @@
             status: 'playing',
             turn: 'me'
         };
-        seatToken = 'local_token_' + Math.random().toString(36).slice(2);
+        const seatToken = 'local_token_' + Math.random().toString(36).slice(2);
 
         window._activeLobbyMatch = matchData;
         window._activeLobbySeatToken = seatToken;
@@ -592,32 +614,44 @@
     };
 
     /**
-     * Whisper 局内对话调用 OpenAI 兼容模型
+     * 响应 Whisper 局内说话或【戳一戳】呼唤：生成活人对话
      */
-    async function handleWhisperSpoken(spokenText, kind) {
+    async function handleWhisperSpoken(spokenText, kind, targetNpcName, actionType = 'say') {
         const npcs = window._activeLobbySelectedNpcs || [];
         if (!npcs.length) return;
-        const targetNpc = npcs[0];
-        const activeCfg = getActiveApiConfig();
 
+        // 若指定了戳的目标则找到目标，否则默认找第一个或正在说话的对象
+        let targetNpc = npcs[0];
+        if (targetNpcName) {
+            const found = npcs.find(n => n.name === targetNpcName);
+            if (found) targetNpc = found;
+        }
+
+        const activeCfg = getActiveApiConfig();
         if (!activeCfg || !activeCfg.baseUrl || !activeCfg.apiKey) {
             console.log('[Lobby Whisper]: 未配置大模型 API，跳过同伴发言回复');
             return;
         }
 
+        const pProf = getPlayerProfileSafe();
         const game = GAME_LIST.find(g => g.kind === kind) || { name: '棋牌' };
         let cleanBase = activeCfg.baseUrl.trim().replace(/\/+$/, '');
         if (!/\/v1$/i.test(cleanBase) && !cleanBase.includes('/v1/')) {
             cleanBase += '/v1';
         }
 
-        const systemPrompt = `你现在正在与玩家进行「${game.name}」切磋对弈。
-你的名字是：${targetNpc.name}
-你的性格与人设：${targetNpc.persona || targetNpc.personaTag || '活泼热情的同伴'}
+        const systemPrompt = `你现在正在与玩家「${pProf.name}」切磋进行「${game.name}」对弈。
+你的角色名字：${targetNpc.name}
+你的性格设定：${targetNpc.persona || targetNpc.personaTag || '活泼生动的好友'}
+玩家（你的对手）设定：${pProf.persona || '普通玩家'}
 【对话规则】：
-1. 你的回答必须完全符合你的性格人设，带有生动的活人情绪；
-2. 围绕当前的对弈展开互动（可以吐槽对手走法、自信挑衅、撒娇、感叹棋局紧张等）；
-3. 字数控制在 15~40 字左右，短小精悍，口语化，严禁长篇大论，严禁使用任何系统 Emoji！`;
+1. 你的回答必须100%符合你的人设特点与性格口吻，带有强烈的活人情绪；
+2. ${actionType === 'poke' ? '玩家刚才在对局中戳了戳你的头像催促或调戏你，请对被戳做出本能性格反应！' : '针对玩家刚才说的话或当前局势做出反应（吐槽、傲娇、自信挑衅、撒娇或认输等）！'}
+3. 控制在 15~40 字以内，口语化自然打住，严禁长篇大论，严禁使用任何系统 Emoji！`;
+
+        const userPrompt = (actionType === 'poke')
+            ? `（玩家 ${pProf.name} 在牌桌上轻轻戳了戳你的头像）`
+            : `${pProf.name} 对你说：“${spokenText}”`;
 
         try {
             const resp = await fetch(`${cleanBase}/chat/completions`, {
@@ -630,10 +664,10 @@
                     model: activeCfg.model || 'gpt-3.5-turbo',
                     messages: [
                         { role: 'system', content: systemPrompt },
-                        { role: 'user', content: spokenText }
+                        { role: 'user', content: userPrompt }
                     ],
-                    max_tokens: 80,
-                    temperature: 0.8
+                    max_tokens: 90,
+                    temperature: 0.82
                 })
             });
 
@@ -643,10 +677,11 @@
                 if (reply) {
                     const iframe = document.getElementById('lobbyBoardIframe');
                     if (iframe && iframe.contentWindow) {
+                        const seatIndex = npcs.findIndex(n => n.name === targetNpc.name) + 1;
                         iframe.contentWindow.postMessage(
                             {
                                 type: 'MCYT_LOBBY_INJECT_CHAT',
-                                seat: 1,
+                                seat: seatIndex > 0 ? seatIndex : 1,
                                 name: targetNpc.name,
                                 text: reply
                             },
@@ -672,13 +707,19 @@
                 const resultType = data.resultType || (data.winner === 'me' ? '胜' : '负');
                 const movesCount = data.movesCount || data.moves || 20;
                 const kind = data.kind || (window._activeLobbyMatch && window._activeLobbyMatch.kind);
-                window.completeMockMatch(resultType, kind, movesCount);
+                const chatLog = data.chat || [];
+                window.completeMockMatch(resultType, kind, movesCount, chatLog);
             }
             if (data.type === 'MCYT_LOBBY_EXIT') {
                 window.renderLobbyApp();
             }
+            // 局内说话调度
             if (data.type === 'MCYT_LOBBY_CHAT_SPOKEN') {
-                handleWhisperSpoken(data.text, data.kind);
+                handleWhisperSpoken(data.text, data.kind, data.targetName, 'say');
+            }
+            // 局内【戳一戳】呼唤调度
+            if (data.type === 'MCYT_LOBBY_POKE_NPC') {
+                handleWhisperSpoken('', data.kind, data.targetName, 'poke');
             }
         });
     }
@@ -706,12 +747,14 @@
 
         const isIndividual = isLobbyIndividualAiThinking();
         const opponentNames = selectedNpcs.map(n => n.name).join('、');
+        const pProf = getPlayerProfileSafe();
 
-        // 提取自建角色真实头像，精准传入
+        // 提取自建角色真实头像与深度人设
         const safeNpcData = selectedNpcs.map(n => ({
             id: n.id,
             name: n.name,
-            avatar: getSafeAvatar(n)
+            avatar: getSafeAvatar(n),
+            persona: n.persona || n.personaTag || ''
         }));
 
         const queryParams = new URLSearchParams({
@@ -719,7 +762,8 @@
             kind: kind,
             token: token || '',
             serverUrl: serverUrl || '',
-            playerName: '我',
+            playerName: pProf.name,
+            playerPersona: pProf.persona,
             aiThinkingMode: isIndividual ? 'individual' : 'batch',
             npcs: JSON.stringify(safeNpcData)
         }).toString();
@@ -754,9 +798,9 @@
     }
 
     /**
-     * 胜负结算与【战报转发】弹窗
+     * 胜负结算与【战报转发】弹窗（严格对齐多人广播 + 局内对话带角色名前缀）
      */
-    window.completeMockMatch = function (resultType, kind, customMoves) {
+    window.completeMockMatch = function (resultType, kind, customMoves, chatLog = []) {
         ensureLobbyStyles();
         const npcs = window._activeLobbySelectedNpcs && window._activeLobbySelectedNpcs.length ? window._activeLobbySelectedNpcs : [window._activeLobbySelectedNpc];
         if (!npcs.length || !npcs[0]) return;
@@ -764,7 +808,18 @@
         const allNames = npcs.map(n => n.name).join('、');
         const game = GAME_LIST.find(g => g.kind === kind) || { name: '棋牌切磋' };
         const movesCount = customMoves || Math.floor(Math.random() * 20 + 15);
-        const resultText = (resultType === '胜') ? '玩家获胜' : `${allNames} 获胜`;
+        const pProf = getPlayerProfileSafe();
+        const resultText = (resultType === '胜') ? `${pProf.name} 获胜` : `${allNames} 获胜`;
+
+        // 处理对话日志：严格加上【发言人：内容】前缀
+        let formattedChatSnippet = '';
+        if (Array.isArray(chatLog) && chatLog.length > 0) {
+            const lines = chatLog.slice(-5).map(c => {
+                const speaker = c.speaker || (c.seat === 0 ? pProf.name : (npcs[c.seat - 1]?.name || '同伴'));
+                return `${speaker}：${c.text}`;
+            });
+            formattedChatSnippet = lines.join('\n');
+        }
 
         const oldModal = document.getElementById('lobbyActiveDialog');
         if (oldModal) oldModal.remove();
@@ -792,15 +847,15 @@
                         ${resultText}
                     </div>
                     <div style="font-size:12px;color:#888;margin-bottom:14px;">
-                        在「${safeHtml(game.name)}」中双方共对弈 ${movesCount} 回合
+                        参与同伴：${safeHtml(allNames)} · 历经 ${movesCount} 回合
                     </div>
 
                     <div style="background:#f7f7f7;border:0.5px solid #eaeaea;border-radius:8px;padding:10px 12px;font-size:12px;color:#555;text-align:left;line-height:1.5;margin-bottom:16px;">
                         <div style="display:flex;align-items:center;gap:5px;font-weight:600;color:#181818;margin-bottom:3px;">
                             <svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:none;stroke:#07c160;stroke-width:2;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-                            <span>战报分享提示</span>
+                            <span>战报全员广播</span>
                         </div>
-                        点击【转发战报到聊天】，战果将同步至你与参与同伴的私聊中，TA 们会在随后的对白里自然复盘，成为深层活人记忆！
+                        点击【转发战报到聊天】，战果与带有署名的对弈对话将**同时发送到桌上每一位同伴的私聊中**，成为双方真实共同记忆！
                     </div>
 
                     <div style="display:flex;gap:8px;">
@@ -827,16 +882,23 @@
 
         document.getElementById('btnShareMatchToChat').onclick = async () => {
             closeModal();
+            // 广播到所有参战角色的私聊
             for (const n of npcs) {
-                await window.sendMatchReportToChat(n, game.name, resultText, movesCount);
+                await window.sendMatchReportToChat(n, game.name, resultText, movesCount, formattedChatSnippet);
             }
             window.renderLobbyApp();
         };
     };
 
-    window.sendMatchReportToChat = async function (npc, gameName, resultText, moves) {
+    window.sendMatchReportToChat = async function (npc, gameName, resultText, moves, chatSnippet = '') {
         if (!npc || !npc.id) return;
         const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { id: 'main' };
+        const pProf = getPlayerProfileSafe();
+
+        let summaryText = `${pProf.name} 与你在「${gameName}」完成了一局切磋对战，最终结果：【${resultText}】（历经 ${moves} 步）。`;
+        if (chatSnippet) {
+            summaryText += `\n【局内精彩对话】：\n${chatSnippet}`;
+        }
 
         const cardMsg = {
             _id: 'lobby_card_' + Date.now() + '_' + Math.floor(Math.random() * 899 + 100),
@@ -845,7 +907,8 @@
             gameName: gameName,
             resultText: resultText,
             moves: moves,
-            summary: `我与你在「${gameName}」完成了一局切磋对战，最终结果：【${resultText}】（历经 ${moves} 步）。`,
+            chatSnippet: chatSnippet,
+            summary: summaryText,
             time: new Date().toLocaleTimeString().slice(0, 5),
             timestamp: Date.now()
         };
@@ -863,12 +926,12 @@
         if (typeof autoSaveGame === 'function') autoSaveGame();
 
         if (typeof showToast === 'function') {
-            showToast('战报已同步至同伴私聊，已成为双方羁绊记忆！', 'success', 2000);
+            showToast(`战报已同步至「${npc.name}」等所有参战同伴私聊！`, 'success', 2000);
         }
     };
 
     /**
-     * API 模型方案配置中心（拒绝虚假模型，真实请求并实时筛选，支持多方案与备注）
+     * API 模型方案配置中心
      */
     window.openLobbyApiManageModal = function () {
         ensureLobbyStyles();
@@ -882,7 +945,6 @@
         mask.id = 'lobbyActiveDialog';
         mask.className = 'lobby-clean-modal-mask';
 
-        // 默认新建草稿或取当前激活配置
         let cur = profiles.find(p => p.id === activeId) || profiles[0] || {
             id: 'prof_' + Date.now(),
             remark: '默认方案',
@@ -1125,7 +1187,7 @@
     };
 
     /**
-     * 对局设置弹窗（防泄密安全设计）
+     * 对局设置弹窗
      */
     window.openLobbySettingsModal = function () {
         ensureLobbyStyles();
@@ -1240,5 +1302,5 @@
 
     window.openLobbyServerSettingsModal = window.openLobbySettingsModal;
 
-    console.log('LobbyApp 游戏大厅已装载：本地离线引擎就绪、多同伴联机就绪、API方案中枢就绪');
+    console.log('LobbyApp 游戏大厅已装载：本地离线引擎就绪、多同伴联机就绪、API方案中枢就绪、戳一戳与全员战报就绪');
 })();
