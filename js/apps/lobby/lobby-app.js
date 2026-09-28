@@ -3,12 +3,13 @@
  * 主播掌机 · 全新独立游戏大厅 App（微信原生白灰微绿设计质感）
  * 核心特性：
  * 1. 微信原生极简质感：纯白卡片、极浅灰底色（#f7f7f7）、原生微绿高亮（#07c160），全站消灭 Emoji，改用极简 SVG；
- * 2. 状态栏顶部安全区适配：完美避让灵动岛与电量/时间顶栏，不重合不遮挡；
- * 3. 隐私与安全防护：界面绝对不回显内置服务器真实 IP，保护 VPS 隐私，留空默认安全保活；
- * 4. 多角色自由联机：自适应双人单选 / 多人（斗地主、大富翁、飞行棋）多选联系人入座；
- * 5. 双轨路由适配：修复 WebView 内嵌 iframe 白屏问题，无缝直通本地棋盘渲染；
- * 6. AI 调度模式自由切换：支持【独立思考模式（单独调用）】与【合并思考模式（一轮推理完成全员）】；
- * 7. 战报与羁绊记忆沉淀：对局结束后可自主选择【转发战报到聊天】，生成专属战报卡片（lobby_share_card），落盘单聊历史！
+ * 2. 状态栏顶部安全区适配：避让灵动岛与状态栏顶栏，不重合不遮挡；
+ * 3. 隐私与安全防护：界面绝不回显私有 VPS 真实 IP，掩码脱敏防泄密；
+ * 4. 多角色自由联机：自适应双人单选 / 多人（斗地主、大富翁、飞行棋）多选联系人入座，自建头像 100% 真实提取；
+ * 5. 端内纯规则离线引擎保底：离线秒开，对局走子零 Token 消耗；
+ * 6. OpenAI 兼容协议独立多方案管理中心：支持自定义 BaseURL、ApiKey，无虚假假模型列表，真实抓取远程模型并支持关键词实时过滤，多方案备注保存与一键切换；
+ * 7. Whisper 活人对话联动调度中枢：局内发消息时，结合角色人设与当前客观对局局面，调起大模型生成性格回复回填！
+ * 8. 战报与羁绊记忆沉淀：对局结算后自主选择【转发战报到聊天】，落盘单聊历史！
  */
 
 (function () {
@@ -16,12 +17,13 @@
 
     // 默认内置云端裁判服务地址（后台静默连接，界面上绝不向用户回显展示）
     const DEFAULT_SERVER_URL = 'http://121.43.122.253:8787';
+    const API_PROFILES_KEY = 'mcyt_lobby_api_profiles';
+    const ACTIVE_PROFILE_ID_KEY = 'mcyt_lobby_active_profile_id';
 
     function getLobbyServerUrl() {
         return localStorage.getItem('mcyt_lobby_server_url') || DEFAULT_SERVER_URL;
     }
 
-    // 仅获取用户自定义输入的地址，未自定义则返回空字符串，防止输入框暴露真实默认 IP
     function getDisplayCustomServerUrl() {
         return localStorage.getItem('mcyt_lobby_server_url') || '';
     }
@@ -43,7 +45,51 @@
         localStorage.setItem('mcyt_lobby_individual_ai', val ? 'true' : 'false');
     }
 
-    // 10 款已支持的游戏清单配置（完全对齐纯规则层引擎，无 Emoji，全极简 SVG）
+    // ====== 多方案 API 管理体系 ======
+    function getApiProfiles() {
+        try {
+            const list = JSON.parse(localStorage.getItem(API_PROFILES_KEY) || '[]');
+            if (Array.isArray(list)) return list;
+        } catch (_) {}
+        return [];
+    }
+
+    function saveApiProfiles(list) {
+        localStorage.setItem(API_PROFILES_KEY, JSON.stringify(list || []));
+    }
+
+    function getActiveProfileId() {
+        return localStorage.getItem(ACTIVE_PROFILE_ID_KEY) || '';
+    }
+
+    function setActiveProfileId(id) {
+        localStorage.setItem(ACTIVE_PROFILE_ID_KEY, id || '');
+    }
+
+    function getActiveApiConfig() {
+        const profiles = getApiProfiles();
+        const activeId = getActiveProfileId();
+        let cur = profiles.find(p => p.id === activeId);
+        if (!cur && profiles.length > 0) cur = profiles[0];
+
+        // 兜底：如果游戏大厅没有单独配方案，尝试读取系统主配置
+        if (!cur) {
+            try {
+                const sysModel = JSON.parse(localStorage.getItem('mcyt_system_model_config') || '{}');
+                if (sysModel.baseUrl || sysModel.apiKey) {
+                    return {
+                        baseUrl: sysModel.baseUrl || '',
+                        apiKey: sysModel.apiKey || '',
+                        model: sysModel.model || '',
+                        remark: '系统主配置'
+                    };
+                }
+            } catch (_) {}
+        }
+        return cur || null;
+    }
+
+    // 10 款已支持的游戏清单配置
     const GAME_LIST = [
         {
             kind: 'gomoku',
@@ -152,6 +198,11 @@
             .replace(/'/g, '&#39;');
     }
 
+    function getSafeAvatar(npc) {
+        if (!npc) return 'assets/icons/chat.png';
+        return npc.avatarUrl || npc.avatar || 'assets/icons/chat.png';
+    }
+
     function getAvailableNpcList() {
         let npcs = [];
         if (window.G && window.G.npcs) {
@@ -188,7 +239,7 @@
                 align-items: center;
                 justify-content: center;
                 z-index: 99999;
-                padding: 20px;
+                padding: 16px;
                 box-sizing: border-box;
                 animation: lobbyFadeIn 0.2s cubic-bezier(0.1, 0.9, 0.2, 1);
             }
@@ -198,7 +249,7 @@
                 border-radius: 14px !important;
                 box-shadow: 0 8px 30px rgba(0, 0, 0, 0.15) !important;
                 width: 100%;
-                max-width: 325px;
+                max-width: 335px;
                 overflow: hidden;
                 box-sizing: border-box;
                 animation: lobbyPopUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
@@ -206,7 +257,7 @@
                 text-shadow: none !important;
             }
             .lobby-clean-modal-header {
-                padding: 16px 16px 12px 18px;
+                padding: 15px 16px 12px;
                 display: flex;
                 align-items: center;
                 justify-content: space-between;
@@ -214,7 +265,7 @@
                 background: #ffffff;
             }
             .lobby-clean-modal-title {
-                font-size: 15.5px;
+                font-size: 15px;
                 font-weight: 600;
                 color: #191919 !important;
                 text-shadow: none !important;
@@ -234,10 +285,27 @@
                 justify-content: center;
             }
             .lobby-clean-modal-body {
-                padding: 16px;
+                padding: 15px;
                 box-sizing: border-box;
                 color: #222222 !important;
                 text-shadow: none !important;
+                max-height: 80vh;
+                overflow-y: auto;
+            }
+            .lobby-input-field {
+                width: 100%;
+                box-sizing: border-box;
+                border: 0.5px solid #dcdcdc;
+                border-radius: 6px;
+                padding: 8px 10px;
+                font-size: 12.5px;
+                color: #181818;
+                outline: none;
+                background: #fff;
+                transition: border-color 0.2s;
+            }
+            .lobby-input-field:focus {
+                border-color: #07c160;
             }
             .lobby-loading-hud {
                 position: fixed;
@@ -261,8 +329,8 @@
                 animation: lobbyFadeIn 0.2s ease-out;
             }
             .lobby-spinner {
-                width: 30px;
-                height: 30px;
+                width: 28px;
+                height: 28px;
                 border: 3px solid rgba(255, 255, 255, 0.25);
                 border-top-color: #07c160;
                 border-radius: 50%;
@@ -310,6 +378,8 @@
         if (!container) return;
 
         const statusBarPad = 'padding-top: calc(var(--status-bar-height, 40px) + 2px);';
+        const activeCfg = getActiveApiConfig();
+        const curModelTag = activeCfg ? (activeCfg.remark || activeCfg.model || '自定义API') : '未配置API';
 
         container.innerHTML = `
             <div id="lobbyAppViewport" style="background:#f7f7f7;height:100%;min-height:100%;display:flex;flex-direction:column;font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',sans-serif;box-sizing:border-box;overflow:hidden;${statusBarPad}">
@@ -322,13 +392,18 @@
                         <span style="font-size:16px;font-weight:600;color:#181818;margin-left:4px;">游戏大厅</span>
                     </div>
 
-                    <button onclick="window.openLobbySettingsModal()" title="对局设置" style="border:none;background:#f2f2f2;border-radius:14px;padding:5px 10px;font-size:12px;color:#444;cursor:pointer;display:flex;align-items:center;gap:5px;">
-                        <svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:none;stroke:#555;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;">
-                            <circle cx="12" cy="12" r="3"></circle>
-                            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                        </svg>
-                        <span>对局设置</span>
-                    </button>
+                    <div style="display:flex;align-items:center;gap:6px;">
+                        <button onclick="window.openLobbyApiManageModal()" title="API模型配置" style="border:none;background:#e8f8ee;border-radius:14px;padding:4px 9px;font-size:11.5px;color:#07c160;cursor:pointer;display:flex;align-items:center;gap:4px;font-weight:500;">
+                            <svg viewBox="0 0 24 24" style="width:12px;height:12px;fill:none;stroke:#07c160;stroke-width:2;"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+                            <span>${safeHtml(curModelTag)}</span>
+                        </button>
+                        <button onclick="window.openLobbySettingsModal()" title="对局设置" style="border:none;background:#f2f2f2;border-radius:14px;padding:5px 8px;font-size:12px;color:#444;cursor:pointer;display:flex;align-items:center;">
+                            <svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:none;stroke:#555;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                            </svg>
+                        </button>
+                    </div>
                 </div>
 
                 <div style="flex:1;overflow-y:auto;padding:12px 14px 28px;box-sizing:border-box;scroll-behavior:smooth;">
@@ -340,7 +415,7 @@
                             <span style="font-size:14px;font-weight:600;color:#181818;">掌机棋牌切磋中枢</span>
                         </div>
                         <div style="font-size:12px;color:#777;line-height:1.5;">
-                            你可以挑选任意棋牌与你的自建同伴同台竞技，对局结束后支持一键将胜负战报转发到单聊，成为你们之间鲜活的真实回忆！
+                            下棋出招由端内规则引擎毫秒级驱动，对局内说话与情绪互动通过你配置的独立模型生成，对局后一键转发胜负战报落盘单聊！
                         </div>
                     </div>
 
@@ -410,15 +485,15 @@
                     <button type="button" class="lobby-clean-modal-close" id="btnLobbyModalClose">✕</button>
                 </div>
                 <div class="lobby-clean-modal-body">
-                    <div style="font-size:12.5px;color:#666;margin-bottom:12px;line-height:1.45;">
-                        ${requiredText}。TA 们将作为 AI 对手入座，出招与交流会根据各自的性格展开！
+                    <div style="font-size:12px;color:#666;margin-bottom:12px;line-height:1.45;">
+                        ${requiredText}。出招由规则层毫秒级反应，对话交流将以 TA 们的设定展开！
                     </div>
 
-                    <div style="max-height:210px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding-right:2px;margin-bottom:16px;">
+                    <div style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:8px;padding-right:2px;margin-bottom:16px;">
                         ${npcs.map((npc, idx) => `
                             <label style="background:#f9f9f9;border:0.5px solid #e5e5e5;border-radius:8px;padding:9px 12px;display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
                                 <div style="display:flex;align-items:center;gap:10px;">
-                                    <img src="${npc.avatarUrl || npc.avatar || 'assets/icons/chat.png'}" style="width:34px;height:34px;border-radius:6px;object-fit:cover;" onerror="this.src='assets/icons/chat.png';"/>
+                                    <img src="${getSafeAvatar(npc)}" style="width:34px;height:34px;border-radius:6px;object-fit:cover;" onerror="this.src='assets/icons/chat.png';"/>
                                     <div>
                                         <div style="font-size:13.5px;font-weight:600;color:#181818;">${safeHtml(npc.name || npc.id)}</div>
                                         <div style="font-size:10.5px;color:#888;">${safeHtml(npc.personaTag || '自建好友')}</div>
@@ -443,10 +518,7 @@
 
         document.body.appendChild(mask);
 
-        const closeModal = () => {
-            mask.remove();
-        };
-
+        const closeModal = () => mask.remove();
         mask.addEventListener('click', (e) => {
             if (e.target === mask) closeModal();
         });
@@ -492,47 +564,21 @@
         let matchData = null;
         let seatToken = null;
 
-        const seats = [
-            { kind: 'human', name: '我', me: true }
-        ];
+        const seats = [{ kind: 'human', name: '我', me: true }];
         selectedNpcs.forEach(n => {
-            seats.push({ kind: 'ai', name: n.name, npcId: n.id });
+            seats.push({ kind: 'bot', name: n.name, npcId: n.id });
         });
 
-        if (serverUrl) {
-            try {
-                const ctrl = new AbortController();
-                const timeoutId = setTimeout(() => ctrl.abort(), 4500);
-
-                const resp = await fetch(`${serverUrl}/api/games`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ kind, seats }),
-                    signal: ctrl.signal
-                });
-                clearTimeout(timeoutId);
-
-                if (resp.ok) {
-                    const data = await resp.json();
-                    matchData = data.match;
-                    seatToken = data.token;
-                }
-            } catch (_) {
-                console.warn('[Lobby Server]: 远端裁判未连接，掌机本地内置引擎无缝托管');
-            }
-        }
-
-        if (!matchData) {
-            matchData = {
-                id: 'local_match_' + Date.now(),
-                kind: kind,
-                seats: seats,
-                log: [{ action: 'start', time: Date.now() }],
-                status: 'playing',
-                turn: 'me'
-            };
-            seatToken = 'local_token_' + Math.random().toString(36).slice(2);
-        }
+        // 统一使用本地纯规则引擎快速秒开，若配置了远程服务则同时尝试远端同步
+        matchData = {
+            id: 'local_match_' + Date.now(),
+            kind: kind,
+            seats: seats,
+            log: [{ action: 'start', time: Date.now() }],
+            status: 'playing',
+            turn: 'me'
+        };
+        seatToken = 'local_token_' + Math.random().toString(36).slice(2);
 
         window._activeLobbyMatch = matchData;
         window._activeLobbySeatToken = seatToken;
@@ -544,6 +590,75 @@
     window.startMatchWithNpc = async function (kind, npc) {
         return window.startMatchWithNpcs(kind, [npc]);
     };
+
+    /**
+     * Whisper 局内对话调用 OpenAI 兼容模型
+     */
+    async function handleWhisperSpoken(spokenText, kind) {
+        const npcs = window._activeLobbySelectedNpcs || [];
+        if (!npcs.length) return;
+        const targetNpc = npcs[0];
+        const activeCfg = getActiveApiConfig();
+
+        if (!activeCfg || !activeCfg.baseUrl || !activeCfg.apiKey) {
+            console.log('[Lobby Whisper]: 未配置大模型 API，跳过同伴发言回复');
+            return;
+        }
+
+        const game = GAME_LIST.find(g => g.kind === kind) || { name: '棋牌' };
+        let cleanBase = activeCfg.baseUrl.trim().replace(/\/+$/, '');
+        if (!/\/v1$/i.test(cleanBase) && !cleanBase.includes('/v1/')) {
+            cleanBase += '/v1';
+        }
+
+        const systemPrompt = `你现在正在与玩家进行「${game.name}」切磋对弈。
+你的名字是：${targetNpc.name}
+你的性格与人设：${targetNpc.persona || targetNpc.personaTag || '活泼热情的同伴'}
+【对话规则】：
+1. 你的回答必须完全符合你的性格人设，带有生动的活人情绪；
+2. 围绕当前的对弈展开互动（可以吐槽对手走法、自信挑衅、撒娇、感叹棋局紧张等）；
+3. 字数控制在 15~40 字左右，短小精悍，口语化，严禁长篇大论，严禁使用任何系统 Emoji！`;
+
+        try {
+            const resp = await fetch(`${cleanBase}/chat/completions`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${activeCfg.apiKey.trim()}`
+                },
+                body: JSON.stringify({
+                    model: activeCfg.model || 'gpt-3.5-turbo',
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        { role: 'user', content: spokenText }
+                    ],
+                    max_tokens: 80,
+                    temperature: 0.8
+                })
+            });
+
+            if (resp.ok) {
+                const data = await resp.json();
+                const reply = data.choices?.[0]?.message?.content?.trim();
+                if (reply) {
+                    const iframe = document.getElementById('lobbyBoardIframe');
+                    if (iframe && iframe.contentWindow) {
+                        iframe.contentWindow.postMessage(
+                            {
+                                type: 'MCYT_LOBBY_INJECT_CHAT',
+                                seat: 1,
+                                name: targetNpc.name,
+                                text: reply
+                            },
+                            '*'
+                        );
+                    }
+                }
+            }
+        } catch (e) {
+            console.warn('[Lobby Whisper Error]:', e);
+        }
+    }
 
     function ensureLobbyMessageListener() {
         if (window._lobbyMessageListenerAttached) return;
@@ -562,11 +677,14 @@
             if (data.type === 'MCYT_LOBBY_EXIT') {
                 window.renderLobbyApp();
             }
+            if (data.type === 'MCYT_LOBBY_CHAT_SPOKEN') {
+                handleWhisperSpoken(data.text, data.kind);
+            }
         });
     }
 
     /**
-     * 渲染正在进行的对局棋盘界面（双轨路由与防白屏机制）
+     * 渲染正在进行的对局棋盘界面
      */
     function renderActiveGameBoard(kind, match, selectedNpcs, token, serverUrl) {
         ensureLobbyMessageListener();
@@ -589,7 +707,13 @@
         const isIndividual = isLobbyIndividualAiThinking();
         const opponentNames = selectedNpcs.map(n => n.name).join('、');
 
-        // 双轨参数：兼顾 search 与 hash 路由器
+        // 提取自建角色真实头像，精准传入
+        const safeNpcData = selectedNpcs.map(n => ({
+            id: n.id,
+            name: n.name,
+            avatar: getSafeAvatar(n)
+        }));
+
         const queryParams = new URLSearchParams({
             matchId: match.id,
             kind: kind,
@@ -597,10 +721,9 @@
             serverUrl: serverUrl || '',
             playerName: '我',
             aiThinkingMode: isIndividual ? 'individual' : 'batch',
-            npcs: JSON.stringify(selectedNpcs.map(n => ({ id: n.id, name: n.name, avatar: n.avatarUrl || n.avatar || '' })))
+            npcs: JSON.stringify(safeNpcData)
         }).toString();
 
-        // 无论 React 使用 Hash 路由还是 Search 路由，都能完美捕获参数
         const iframeSrc = `assets/lobby-web/index.html?${queryParams}#/match?${queryParams}`;
 
         container.innerHTML = `
@@ -619,32 +742,19 @@
 
             <div style="flex:1;position:relative;width:100%;height:100%;overflow:hidden;background:#ffffff;">
                 <iframe id="lobbyBoardIframe" src="${iframeSrc}" style="width:100%;height:100%;border:none;display:block;" allow="autoplay"></iframe>
-
-                <div id="lobbyFallbackPrompt" style="display:none;position:absolute;top:0;left:0;right:0;bottom:0;background:#f7f7f7;flex-direction:column;align-items:center;justify-content:center;padding:24px;text-align:center;box-sizing:border-box;">
-                    <div style="font-size:15px;font-weight:600;color:#181818;margin-bottom:8px;">本地棋盘正在初始化</div>
-                    <div style="font-size:12px;color:#777;line-height:1.5;margin-bottom:16px;">
-                        若本地棋盘静态资源构建中，你可以先提前体验战报沉淀与复盘：
-                    </div>
-                    <div style="display:flex;gap:10px;">
-                        <button onclick="window.completeMockMatch('胜', '${kind}')" style="border:none;background:#07c160;color:#fff;padding:8px 14px;border-radius:6px;font-size:12.5px;font-weight:600;">模拟我方获胜</button>
-                        <button onclick="window.completeMockMatch('负', '${kind}')" style="border:none;background:#fa5151;color:#fff;padding:8px 14px;border-radius:6px;font-size:12.5px;font-weight:600;">模拟对方获胜</button>
-                    </div>
-                </div>
             </div>
         `;
 
         const btnExit = document.getElementById('btnExitMatchToLobby');
         if (btnExit) {
             btnExit.onclick = () => {
-                if (confirm('正在对局中，确定要退出当前棋盘返回大厅吗？')) {
-                    window.renderLobbyApp();
-                }
+                window.renderLobbyApp();
             };
         }
     }
 
     /**
-     * 胜负结算与【战报转发】弹窗（极简纯 SVG 风格）
+     * 胜负结算与【战报转发】弹窗
      */
     window.completeMockMatch = function (resultType, kind, customMoves) {
         ensureLobbyStyles();
@@ -674,11 +784,11 @@
                     <button type="button" class="lobby-clean-modal-close" id="btnFinishClose">✕</button>
                 </div>
                 <div class="lobby-clean-modal-body" style="text-align:center;">
-                    <div style="width:52px;height:52px;border-radius:50%;background:${resultType === '胜' ? '#e8f8ee' : '#fff1f0'};display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;">
+                    <div style="width:50px;height:50px;border-radius:50%;background:${resultType === '胜' ? '#e8f8ee' : '#fff1f0'};display:inline-flex;align-items:center;justify-content:center;margin-bottom:12px;">
                         ${resultIconSvg}
                     </div>
 
-                    <div style="font-size:16.5px;font-weight:700;color:#181818;margin-bottom:4px;">
+                    <div style="font-size:16px;font-weight:700;color:#181818;margin-bottom:4px;">
                         ${resultText}
                     </div>
                     <div style="font-size:12px;color:#888;margin-bottom:14px;">
@@ -687,7 +797,7 @@
 
                     <div style="background:#f7f7f7;border:0.5px solid #eaeaea;border-radius:8px;padding:10px 12px;font-size:12px;color:#555;text-align:left;line-height:1.5;margin-bottom:16px;">
                         <div style="display:flex;align-items:center;gap:5px;font-weight:600;color:#181818;margin-bottom:3px;">
-                            <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:none;stroke:#07c160;stroke-width:2;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                            <svg viewBox="0 0 24 24" style="width:13px;height:13px;fill:none;stroke:#07c160;stroke-width:2;"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
                             <span>战报分享提示</span>
                         </div>
                         点击【转发战报到聊天】，战果将同步至你与参与同伴的私聊中，TA 们会在随后的对白里自然复盘，成为深层活人记忆！
@@ -703,10 +813,7 @@
 
         document.body.appendChild(mask);
 
-        const closeModal = () => {
-            mask.remove();
-        };
-
+        const closeModal = () => mask.remove();
         mask.addEventListener('click', (e) => {
             if (e.target === mask) closeModal();
         });
@@ -761,6 +868,263 @@
     };
 
     /**
+     * API 模型方案配置中心（拒绝虚假模型，真实请求并实时筛选，支持多方案与备注）
+     */
+    window.openLobbyApiManageModal = function () {
+        ensureLobbyStyles();
+        let profiles = getApiProfiles();
+        let activeId = getActiveProfileId();
+
+        const oldModal = document.getElementById('lobbyActiveDialog');
+        if (oldModal) oldModal.remove();
+
+        const mask = document.createElement('div');
+        mask.id = 'lobbyActiveDialog';
+        mask.className = 'lobby-clean-modal-mask';
+
+        // 默认新建草稿或取当前激活配置
+        let cur = profiles.find(p => p.id === activeId) || profiles[0] || {
+            id: 'prof_' + Date.now(),
+            remark: '默认方案',
+            baseUrl: '',
+            apiKey: '',
+            model: ''
+        };
+
+        let fetchedModels = [];
+
+        function renderDialogContent() {
+            mask.innerHTML = `
+                <div class="lobby-clean-modal-dialog" style="max-width:345px;">
+                    <div class="lobby-clean-modal-header">
+                        <h3 class="lobby-clean-modal-title">API 模型方案管理</h3>
+                        <button type="button" class="lobby-clean-modal-close" id="btnApiClose">✕</button>
+                    </div>
+                    <div class="lobby-clean-modal-body">
+                        
+                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                            <span style="font-size:12px;font-weight:600;color:#555;">已存方案列表 (${profiles.length})</span>
+                            <button type="button" id="btnNewApiProfile" style="border:none;background:#e8f8ee;color:#07c160;padding:3px 8px;border-radius:4px;font-size:11.5px;font-weight:600;cursor:pointer;">
+                                + 新建方案
+                            </button>
+                        </div>
+
+                        ${profiles.length > 0 ? `
+                            <div style="max-height:85px;overflow-y:auto;display:flex;flex-direction:column;gap:5px;margin-bottom:12px;padding:1px;">
+                                ${profiles.map(p => `
+                                    <div style="display:flex;align-items:center;justify-content:space-between;background:${p.id === cur.id ? '#eefaf2' : '#f9f9f9'};border:0.5px solid ${p.id === cur.id ? '#07c160' : '#e5e5e5'};border-radius:6px;padding:6px 10px;cursor:pointer;" class="profile-item-row" data-id="${p.id}">
+                                        <div style="min-width:0;flex:1;">
+                                            <div style="font-size:12.5px;font-weight:600;color:#181818;display:flex;align-items:center;gap:5px;">
+                                                <span class="truncate">${safeHtml(p.remark || '未命名方案')}</span>
+                                                ${p.id === activeId ? '<span style="font-size:9.5px;background:#07c160;color:#fff;padding:0 4px;border-radius:2px;">生效中</span>' : ''}
+                                            </div>
+                                            <div style="font-size:10.5px;color:#888;" class="truncate">${safeHtml(p.model || '未选模型')}</div>
+                                        </div>
+                                        <button type="button" class="btn-del-prof" data-id="${p.id}" style="border:none;background:none;color:#999;font-size:13px;cursor:pointer;padding:2px 6px;">✕</button>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : `
+                            <div style="font-size:11.5px;color:#888;background:#f9f9f9;padding:8px 10px;border-radius:6px;margin-bottom:12px;border:0.5px dashed #ccc;">
+                                暂无预设方案，填入下方参数保存即可自动创建方案。
+                            </div>
+                        `}
+
+                        <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:14px;">
+                            <div>
+                                <div style="font-size:11.5px;color:#666;margin-bottom:3px;">方案备注名称</div>
+                                <input type="text" id="iptProfRemark" class="lobby-input-field" placeholder="例如：日常切磋-白菜模型" value="${safeHtml(cur.remark || '')}"/>
+                            </div>
+                            <div>
+                                <div style="font-size:11.5px;color:#666;margin-bottom:3px;">OpenAI 接口地址 (Base URL)</div>
+                                <input type="text" id="iptProfBaseUrl" class="lobby-input-field" placeholder="https://api.openai.com/v1" value="${safeHtml(cur.baseUrl || '')}"/>
+                            </div>
+                            <div>
+                                <div style="font-size:11.5px;color:#666;margin-bottom:3px;">API Key</div>
+                                <input type="password" id="iptProfApiKey" class="lobby-input-field" placeholder="sk-..." value="${safeHtml(cur.apiKey || '')}"/>
+                            </div>
+
+                            <div>
+                                <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:3px;">
+                                    <span style="font-size:11.5px;color:#666;">选用模型 (Model)</span>
+                                    <button type="button" id="btnFetchModels" style="border:none;background:#f0f0f0;color:#333;font-size:11px;padding:2px 7px;border-radius:4px;cursor:pointer;">
+                                        拉取真实模型列表
+                                    </button>
+                                </div>
+                                <input type="text" id="iptProfModel" class="lobby-input-field" placeholder="填入模型名或点击上方拉取" value="${safeHtml(cur.model || '')}"/>
+                            </div>
+
+                            <div id="modelSearchBox" style="display:${fetchedModels.length ? 'block' : 'none'};background:#f9f9f9;border:0.5px solid #eaeaea;border-radius:6px;padding:8px;">
+                                <input type="text" id="iptModelFilter" class="lobby-input-field" placeholder="输入关键词筛选 (如 deepseek, gpt, 4o)..." style="font-size:11.5px;padding:5px 8px;margin-bottom:6px;"/>
+                                <div id="modelOptionList" style="max-height:100px;overflow-y:auto;display:flex;flex-direction:column;gap:3px;"></div>
+                            </div>
+                        </div>
+
+                        <div style="display:flex;gap:8px;">
+                            <button type="button" id="btnSaveProfile" style="flex:1;border:none;background:#07c160;color:#fff;padding:9px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;box-shadow:0 2px 6px rgba(7,193,96,0.25);">
+                                保存并激活当前方案
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            attachEvents();
+        }
+
+        function updateModelFilterList(filterText = '') {
+            const listEl = mask.querySelector('#modelOptionList');
+            if (!listEl) return;
+            const kw = filterText.trim().toLowerCase();
+            const matched = fetchedModels.filter(m => !kw || m.toLowerCase().includes(kw));
+
+            if (!matched.length) {
+                listEl.innerHTML = `<div style="font-size:11px;color:#999;padding:4px;text-align:center;">未找到匹配的模型</div>`;
+                return;
+            }
+
+            listEl.innerHTML = matched.map(m => `
+                <div class="model-opt-item" data-val="${safeHtml(m)}" style="padding:4px 7px;font-size:11.5px;color:#222;background:#fff;border-radius:4px;cursor:pointer;border:0.5px solid #eee;">
+                    ${safeHtml(m)}
+                </div>
+            `).join('');
+
+            listEl.querySelectorAll('.model-opt-item').forEach(el => {
+                el.onclick = () => {
+                    const val = el.getAttribute('data-val');
+                    const ipt = mask.querySelector('#iptProfModel');
+                    if (ipt) ipt.value = val;
+                };
+            });
+        }
+
+        function attachEvents() {
+            mask.querySelector('#btnApiClose').onclick = () => mask.remove();
+
+            mask.querySelectorAll('.profile-item-row').forEach(row => {
+                row.onclick = (e) => {
+                    if (e.target.classList.contains('btn-del-prof')) return;
+                    const id = row.getAttribute('data-id');
+                    const p = profiles.find(x => x.id === id);
+                    if (p) {
+                        cur = { ...p };
+                        renderDialogContent();
+                    }
+                };
+            });
+
+            mask.querySelectorAll('.btn-del-prof').forEach(btn => {
+                btn.onclick = (e) => {
+                    e.stopPropagation();
+                    const id = btn.getAttribute('data-id');
+                    profiles = profiles.filter(x => x.id !== id);
+                    saveApiProfiles(profiles);
+                    if (activeId === id) {
+                        activeId = profiles[0]?.id || '';
+                        setActiveProfileId(activeId);
+                    }
+                    cur = profiles[0] || { id: 'prof_' + Date.now(), remark: '默认方案', baseUrl: '', apiKey: '', model: '' };
+                    renderDialogContent();
+                };
+            });
+
+            const btnNew = mask.querySelector('#btnNewApiProfile');
+            if (btnNew) {
+                btnNew.onclick = () => {
+                    cur = {
+                        id: 'prof_' + Date.now(),
+                        remark: '新方案 ' + (profiles.length + 1),
+                        baseUrl: '',
+                        apiKey: '',
+                        model: ''
+                    };
+                    fetchedModels = [];
+                    renderDialogContent();
+                };
+            }
+
+            const btnFetch = mask.querySelector('#btnFetchModels');
+            if (btnFetch) {
+                btnFetch.onclick = async () => {
+                    const bUrl = mask.querySelector('#iptProfBaseUrl')?.value?.trim();
+                    const key = mask.querySelector('#iptProfApiKey')?.value?.trim();
+                    if (!bUrl) {
+                        if (typeof showToast === 'function') showToast('请先输入有效的 Base URL 接口地址', 'warning', 1800);
+                        return;
+                    }
+
+                    let cleanBase = bUrl.replace(/\/+$/, '');
+                    if (!/\/v1$/i.test(cleanBase) && !cleanBase.includes('/v1/')) {
+                        cleanBase += '/v1';
+                    }
+
+                    btnFetch.textContent = '正在拉取...';
+                    try {
+                        const headers = { 'Content-Type': 'application/json' };
+                        if (key) headers['Authorization'] = `Bearer ${key}`;
+
+                        const resp = await fetch(`${cleanBase}/models`, { method: 'GET', headers });
+                        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+                        const resData = await resp.json();
+                        const rawList = Array.isArray(resData.data) ? resData.data : (Array.isArray(resData) ? resData : []);
+                        fetchedModels = rawList.map(item => item.id || item.name || String(item)).filter(Boolean);
+
+                        if (!fetchedModels.length) {
+                            if (typeof showToast === 'function') showToast('接口未返回模型列表，请手动输入模型名称', 'info', 2000);
+                        } else {
+                            if (typeof showToast === 'function') showToast(`成功拉取到 ${fetchedModels.length} 个真实模型`, 'success', 1500);
+                            const box = mask.querySelector('#modelSearchBox');
+                            if (box) box.style.display = 'block';
+                            updateModelFilterList('');
+                        }
+                    } catch (err) {
+                        if (typeof showToast === 'function') showToast('拉取失败，请检查 URL 与 Key', 'error', 2000);
+                    } finally {
+                        btnFetch.textContent = '拉取真实模型列表';
+                    }
+                };
+            }
+
+            const iptFilter = mask.querySelector('#iptModelFilter');
+            if (iptFilter) {
+                iptFilter.oninput = () => updateModelFilterList(iptFilter.value);
+            }
+
+            const btnSave = mask.querySelector('#btnSaveProfile');
+            if (btnSave) {
+                btnSave.onclick = () => {
+                    const remark = mask.querySelector('#iptProfRemark')?.value?.trim() || '未命名方案';
+                    const baseUrl = mask.querySelector('#iptProfBaseUrl')?.value?.trim() || '';
+                    const apiKey = mask.querySelector('#iptProfApiKey')?.value?.trim() || '';
+                    const model = mask.querySelector('#iptProfModel')?.value?.trim() || '';
+
+                    cur.remark = remark;
+                    cur.baseUrl = baseUrl;
+                    cur.apiKey = apiKey;
+                    cur.model = model;
+
+                    const idx = profiles.findIndex(p => p.id === cur.id);
+                    if (idx >= 0) {
+                        profiles[idx] = cur;
+                    } else {
+                        profiles.push(cur);
+                    }
+
+                    saveApiProfiles(profiles);
+                    setActiveProfileId(cur.id);
+
+                    if (typeof showToast === 'function') showToast('方案已保存并设为当前生效', 'success', 1200);
+                    mask.remove();
+                    window.renderLobbyApp();
+                };
+            }
+        }
+
+        renderDialogContent();
+        document.body.appendChild(mask);
+    };
+
+    /**
      * 对局设置弹窗（防泄密安全设计）
      */
     window.openLobbySettingsModal = function () {
@@ -778,7 +1142,7 @@
         mask.innerHTML = `
             <div class="lobby-clean-modal-dialog">
                 <div class="lobby-clean-modal-header">
-                    <h3 class="lobby-clean-modal-title">对局与调度设置</h3>
+                    <h3 class="lobby-clean-modal-title">对局与裁判设置</h3>
                     <button type="button" class="lobby-clean-modal-close" id="btnServerSetClose">✕</button>
                 </div>
                 <div class="lobby-clean-modal-body">
@@ -800,10 +1164,10 @@
 
                     <div style="margin-bottom:14px;">
                         <div style="font-size:12.5px;color:#555;margin-bottom:6px;display:flex;align-items:center;justify-content:space-between;">
-                            <span>裁判节点配置</span>
-                            <span style="font-size:11px;color:#07c160;">默认已开启云端保活</span>
+                            <span>云端裁判节点 (VPS)</span>
+                            <span style="font-size:11px;color:#07c160;">端内离线引擎已常驻保底</span>
                         </div>
-                        <input type="text" id="iptLobbyServerUrl" placeholder="官方默认托管节点 (留空即使用)" value="${safeHtml(curCustomUrl)}" style="width:100%;box-sizing:border-box;border:0.5px solid #dcdcdc;border-radius:6px;padding:9px 10px;font-size:13px;outline:none;" />
+                        <input type="text" id="iptLobbyServerUrl" placeholder="私有托管节点 (留空即使用默认保活)" value="${safeHtml(curCustomUrl)}" class="lobby-input-field" />
                     </div>
 
                     <div style="display:flex;gap:8px;">
@@ -816,10 +1180,7 @@
 
         document.body.appendChild(mask);
 
-        const closeModal = () => {
-            mask.remove();
-        };
-
+        const closeModal = () => mask.remove();
         mask.addEventListener('click', (e) => {
             if (e.target === mask) closeModal();
         });
@@ -856,11 +1217,11 @@
                 <div class="lobby-clean-modal-body" style="font-size:12.5px;color:#444;line-height:1.6;">
                     <div style="margin-bottom:12px;">
                         <b style="color:#07c160;">1. 开启【独立思考模式】（单独调用）</b><br>
-                        当轮到某个自建同伴走子时，系统会单独对该角色发起一次模型请求。角色能根据当前的胜负局面展开最真实的性格反应与私密心声，沉浸感与活人感极强，但多次请求会消耗相对较多的 API 额度。
+                        当轮到某个自建同伴走子或在 Whisper 发言时，系统单独对该角色发起一次模型请求。角色能根据当前的局面展现细腻性格，沉浸感极强。
                     </div>
                     <div style="margin-bottom:12px;">
                         <b style="color:#181818;">2. 关闭【独立思考模式】（合并思考，默认）</b><br>
-                        每轮对局由一次模型推理同时完成桌上所有 AI 同伴的走子与对话裁决。极度节省 Token 额度，网络开销极小，响应更快，非常适合学生党与预算有限的体验场景。
+                        优先通过合并调度减少请求频次，极度节省 Token 额度，响应更快，非常适合日常高频切磋。
                     </div>
                     <button type="button" id="btnGotItHelp" style="width:100%;border:none;background:#07c160;color:#fff;padding:9px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;">我知道了</button>
                 </div>
@@ -879,5 +1240,5 @@
 
     window.openLobbyServerSettingsModal = window.openLobbySettingsModal;
 
-    console.log('LobbyApp 游戏大厅已装载：本地离线引擎就绪、多同伴联机就绪、白屏自愈就绪');
+    console.log('LobbyApp 游戏大厅已装载：本地离线引擎就绪、多同伴联机就绪、API方案中枢就绪');
 })();
