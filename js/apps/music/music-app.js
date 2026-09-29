@@ -1,12 +1,12 @@
 /**
  * js/apps/music/music-app.js
- * 🎵 独立微音音乐中枢 (WeMusic) 全功能重构
+ * 🎵 独立微音音乐中枢 (WeMusic) 视图与交互中心
  * 职责：
- * 1. 首页推荐（参考网易云日推卡片、热门私人雷达、自建角色每日私享）。
- * 2. 推荐歌单（一键刷新、联动通讯录 NPC 动态生成角色专属歌单、点击头像进入角色听歌主页）。
- * 3. 沉浸播放视口（黑胶唱片自转、实时滚动歌词、中英翻译切换、转发到私聊/群聊卡片）。
- * 4. 全局悬浮音乐黑胶球与胶囊控制条（跨 App、跨界面播放与保活唤起）。
- * 5. 我的界面（用户资料编辑、网易云账号绑定、自建歌单管理、收藏列表）。
+ * 1. 首页推荐（网易云日推卡片、热门私人雷达）。
+ * 2. 推荐歌单展示（联动 music-npc-playlists.js，支持每次刷新1~3人，多歌单轮询）。
+ * 3. 沉浸播放视口（黑胶自转、歌词滚动与翻译、转发到私聊/群聊卡片）。
+ * 4. 全局悬浮音乐黑胶球与胶囊控制条。
+ * 5. 我的界面（用户资料编辑、网易云直连握手卡片、红心收藏）。
  */
 
 (function () {
@@ -281,7 +281,7 @@
     }
 
     // ============================================================
-    // 🌐 全局音乐悬浮球驱动系统（多 App 穿透、拖拽与跨界保活）
+    // 🌐 全局音乐悬浮球驱动系统
     // ============================================================
     window._isMusicCapsuleExpanded = false;
 
@@ -346,76 +346,7 @@
     };
 
     // ============================================================
-    // 🎭 角色专属人设歌单动态生成中枢
-    // ============================================================
-    window.getNpcMusicPlaylists = function () {
-        let npcs = [];
-        try {
-            if (window.G && window.G.customNpcs && typeof window.G.customNpcs === 'object') {
-                npcs = Object.values(window.G.customNpcs);
-            } else {
-                const raw = localStorage.getItem('mcyt_wechat_custom_npcs');
-                if (raw) npcs = Object.values(JSON.parse(raw));
-            }
-        } catch (_) {}
-
-        if (!npcs || npcs.length === 0) {
-            npcs = [
-                { id: 'npc_1', name: '李敏的知心同伴', avatar: 'assets/system/default_lock.jpg', persona: '温柔、体贴、喜欢在雨天听安静的治愈民谣与纯音乐。' },
-                { id: 'npc_2', name: '拉莱耶的守望者', avatar: 'tarot/images/slot_bg.png', persona: '神秘、清冷、沉浸于深海后摇与轻灵的星空低语。' }
-            ];
-        }
-
-        return npcs.map((npc, idx) => {
-            const personaText = npc.persona || '';
-            let styleTags = ['治愈', '独处', '夜间心事'];
-            if (personaText.includes('阳光') || personaText.includes('开朗')) styleTags = ['活力', '晨光', '轻快节奏'];
-            if (personaText.includes('神秘') || personaText.includes('高冷')) styleTags = ['后摇', '幽静', '深海氛围'];
-
-            return {
-                npcId: npc.id,
-                npcName: npc.name,
-                npcAvatar: npc.avatar || 'assets/system/default_desktop.jpg',
-                playlistTitle: `「${npc.name}」的私享独白音轨`,
-                desc: `${npc.name} 亲手挑选的 ${styleTags.join(' · ')} 精选歌单，带着 ta 此时此刻的心境。`,
-                tags: styleTags,
-                tracks: [
-                    {
-                        id: `npc_track_${npc.id}_1`,
-                        title: `${npc.name}的午后微风`,
-                        artist: npc.name,
-                        album: '心声私藏',
-                        url: DEFAULT_PLAYLIST[idx % DEFAULT_PLAYLIST.length].url,
-                        cover: npc.avatar || 'assets/system/default_desktop.jpg',
-                        duration: 198,
-                        lyrics: [
-                            { time: 0, text: `（这是属于 ${npc.name} 的特别旋律）`, trans: `(A special melody belonging to ${npc.name})` },
-                            { time: 10, text: '旋律流淌在安静的午后', trans: 'The melody flows gently through a quiet afternoon' },
-                            { time: 25, text: '就像与你每一次默契的对视', trans: 'Just like every tacit glance shared with you' },
-                            { time: 45, text: '把想对你说的心意，都藏进这首歌里', trans: 'Hiding every thought I have for you within this song' }
-                        ]
-                    },
-                    {
-                        id: `npc_track_${npc.id}_2`,
-                        title: '与你同频的波形',
-                        artist: npc.name,
-                        album: '双向羁绊',
-                        url: DEFAULT_PLAYLIST[(idx + 1) % DEFAULT_PLAYLIST.length].url,
-                        cover: npc.avatar || 'assets/system/default_desktop.jpg',
-                        duration: 215,
-                        lyrics: [
-                            { time: 0, text: '夜深的时候，总会想起你', trans: 'When the night deepens, you always come to mind' },
-                            { time: 18, text: '耳机里循环的每一个音节', trans: 'Every syllable looping in the headphones' },
-                            { time: 38, text: '都在期待下一次与你重逢', trans: 'Is quietly awaiting our next encounter' }
-                        ]
-                    }
-                ]
-            };
-        });
-    };
-
-    // ============================================================
-    // 🎨 微音 App 主界面渲染（Tab：推荐、歌单、我的）
+    // 🎨 微音 App 主界面渲染
     // ============================================================
     window._weMusicCurrentTab = 'explore';
 
@@ -511,11 +442,10 @@
         if (modalBody) window.renderMusicApp(modalBody);
     };
 
-    // 1. 首页推荐视口（网易云式雷达与日推卡片）
+    // 1. 首页推荐视口
     window._renderMusicTabExplore = function (state) {
         return `
             <div style="display: flex; flex-direction: column; gap: 14px;">
-                <!-- 每日推荐大横幅卡片 -->
                 <div style="
                     background: linear-gradient(135deg, #07c160, #059649); border-radius: 16px; padding: 18px;
                     color: #ffffff; box-shadow: 0 4px 16px rgba(7,193,96,0.25); position: relative; overflow: hidden;
@@ -529,7 +459,6 @@
                     ">▶ 立即播放日推</button>
                 </div>
 
-                <!-- 歌曲推荐列表 -->
                 <div style="background: #ffffff; border-radius: 14px; padding: 14px; border: 0.5px solid #eaeaea;">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
                         <div style="font-size: 14px; font-weight: bold; color: #111;">热门私藏推荐</div>
@@ -563,9 +492,9 @@
         `;
     };
 
-    // 2. 角色专属歌单视口（一键刷新生成、点击头像进角色主页）
+    // 2. 角色专属歌单视口（联动 music-npc-playlists.js）
     window._renderMusicTabPlaylists = function (state) {
-        const playlists = window.getNpcMusicPlaylists();
+        const playlists = (typeof window.getNpcMusicPlaylists === 'function') ? window.getNpcMusicPlaylists() : [];
 
         return `
             <div style="display: flex; flex-direction: column; gap: 14px;">
@@ -576,14 +505,13 @@
                         background: #eef9f2; padding: 4px 10px; border-radius: 12px; cursor: pointer;
                     " onclick="window.refreshNpcMusicPlaylists()">
                         <svg viewBox="0 0 24 24" style="width: 13px; height: 13px; fill: currentColor;"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
-                        <span>刷新角色歌单</span>
+                        <span>刷新 1~3 位角色歌单</span>
                     </div>
                 </div>
 
                 <div style="display: flex; flex-direction: column; gap: 12px;">
                     ${playlists.map((pl, pIdx) => `
                         <div style="background: #ffffff; border-radius: 14px; padding: 14px; border: 0.5px solid #eaeaea;">
-                            <!-- 角色头部主页卡 -->
                             <div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; border-bottom: 0.5px solid #f2f2f2;">
                                 <div style="display: flex; align-items: center; gap: 10px; cursor: pointer;" onclick="window.openNpcMusicProfileModal('${pl.npcId}')">
                                     <div style="width: 44px; height: 44px; border-radius: 50%; overflow: hidden; border: 1.5px solid #07c160;">
@@ -600,7 +528,6 @@
                                 ">播放全部</button>
                             </div>
 
-                            <!-- 歌单信息 -->
                             <div style="margin-top: 10px;">
                                 <div style="font-size: 13px; font-weight: 600; color: #222;">${pl.playlistTitle}</div>
                                 <div style="font-size: 11.5px; color: #777; margin-top: 3px; line-height: 1.4;">${pl.desc}</div>
@@ -609,7 +536,6 @@
                                 </div>
                             </div>
 
-                            <!-- 音轨微缩列表 -->
                             <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 12px;">
                                 ${pl.tracks.map((track) => `
                                     <div style="
@@ -628,12 +554,6 @@
         `;
     };
 
-    window.refreshNpcMusicPlaylists = function () {
-        if (typeof showToast === 'function') showToast('已根据最新角色羁绊重新刷新生成歌单！');
-        const modalBody = document.getElementById('appModalBody');
-        if (modalBody) window.renderMusicApp(modalBody);
-    };
-
     window.playSpecificTrackDirectly = function (track) {
         window._weMusicEngine.playSpecificTrack(track);
         if (typeof showToast === 'function') showToast(`正在播放：${track.title}`);
@@ -641,7 +561,7 @@
     };
 
     window.playNpcEntirePlaylist = function (playlistIdx) {
-        const playlists = window.getNpcMusicPlaylists();
+        const playlists = (typeof window.getNpcMusicPlaylists === 'function') ? window.getNpcMusicPlaylists() : [];
         const pl = playlists[playlistIdx];
         if (pl && pl.tracks && pl.tracks.length) {
             window._weMusicEngine.playSpecificTrack(pl.tracks[0]);
@@ -652,7 +572,7 @@
 
     // 角色音乐专属主页弹窗
     window.openNpcMusicProfileModal = function (npcId) {
-        const playlists = window.getNpcMusicPlaylists();
+        const playlists = (typeof window.getNpcMusicPlaylists === 'function') ? window.getNpcMusicPlaylists() : [];
         const pl = playlists.find(p => p.npcId === npcId) || playlists[0];
 
         const modal = document.getElementById('modal');
@@ -689,7 +609,7 @@
         if (modalClose) modalClose.onclick = () => modal.classList.remove('open');
     };
 
-    // 3. 我的界面（用户资料、自建歌单、网易云绑定与收藏）
+    // 3. 我的界面
     window._renderMusicTabMine = function (state) {
         let userName = '主播李敏';
         let userSign = '记录日常与每个心动的旋律';
@@ -701,7 +621,6 @@
 
         return `
             <div style="display: flex; flex-direction: column; gap: 14px;">
-                <!-- 个人名片白卡 -->
                 <div style="background: #ffffff; border-radius: 14px; padding: 16px; border: 0.5px solid #eaeaea; display: flex; align-items: center; justify-content: space-between;">
                     <div style="display: flex; align-items: center; gap: 12px;">
                         <div style="width: 52px; height: 52px; border-radius: 50%; overflow: hidden; background: #eee;">
@@ -717,7 +636,6 @@
                     ">编辑</button>
                 </div>
 
-                <!-- 网易云账号直连绑定卡片 -->
                 <div style="background: #ffffff; border-radius: 14px; padding: 14px; border: 0.5px solid #eaeaea;">
                     <div style="display: flex; align-items: center; justify-content: space-between;">
                         <div style="display: flex; align-items: center; gap: 8px;">
@@ -733,7 +651,6 @@
                     </div>
                 </div>
 
-                <!-- 我喜欢的音乐卡片 -->
                 <div style="background: #ffffff; border-radius: 14px; padding: 14px; border: 0.5px solid #eaeaea;">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
                         <div style="display: flex; align-items: center; gap: 6px;">
@@ -792,7 +709,7 @@
     };
 
     // ============================================================
-    // 🎧 沉浸全屏黑胶播放页（含滚动歌词、中英翻译、转发卡片）
+    // 🎧 沉浸全屏黑胶播放页
     // ============================================================
     window.openMusicPlayerModal = function () {
         const modal = document.getElementById('modal');
@@ -807,8 +724,6 @@
         if (modalTitle) modalTitle.textContent = `${track.title}`;
         modalBody.innerHTML = `
             <div style="display: flex; flex-direction: column; align-items: center; padding: 6px 0; max-height: 72vh; overflow-y: auto;">
-                
-                <!-- 黑胶唱片主体卡片 -->
                 <div style="
                     width: 170px; height: 170px; border-radius: 50%;
                     background: radial-gradient(circle, #2a2a2a 0%, #151515 65%, #050505 100%);
@@ -826,13 +741,11 @@
                     </div>
                 </div>
 
-                <!-- 歌曲与作者 -->
                 <div style="text-align: center; margin-top: 14px;">
                     <div style="font-size: 15px; font-weight: bold; color: #111;">${track.title}</div>
                     <div style="font-size: 12px; color: #888; margin-top: 2px;">${track.artist}</div>
                 </div>
 
-                <!-- 歌词滚动展示框 -->
                 <div id="wemusicLyricBox" style="
                     width: 100%; min-height: 90px; max-height: 120px; overflow-y: auto;
                     background: #f9f9f9; border-radius: 12px; padding: 12px 14px; margin-top: 12px;
@@ -846,26 +759,21 @@
                     `).join('') : '<div style="font-size: 11.5px; color: #aaa;">纯音乐，静心聆听</div>'}
                 </div>
 
-                <!-- 控制动作条（爱心收藏、翻译切换、转发到私聊） -->
                 <div style="display: flex; align-items: center; justify-content: space-around; width: 100%; margin-top: 14px; padding: 0 10px;">
-                    <!-- 爱心收藏 -->
                     <div onclick="window._weMusicEngine.toggleFavorite(window._weMusicEngine.currentTrack); window.openMusicPlayerModal();" style="cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 11.5px; color: ${state.isFav ? '#ff4757' : '#777'};">
                         <span>${state.isFav ? '❤️ 已收藏' : '🤍 收藏'}</span>
                     </div>
 
-                    <!-- 翻译切换键 -->
                     <div onclick="window.toggleMusicTranslation()" style="cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 11.5px; color: #07c160; background: #eef9f2; padding: 3px 8px; border-radius: 10px;">
                         <span>译 ${state.showTranslation ? '开' : '关'}</span>
                     </div>
 
-                    <!-- 转发到聊天 -->
                     <div onclick="window.shareCurrentMusicToChat()" style="cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 11.5px; color: #555;">
                         <svg viewBox="0 0 24 24" style="width: 14px; height: 14px; fill: currentColor;"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.04-.47-.09-.7l7.05-4.11c.54.5 1.25.81 2.04.81 1.66 0 3-1.34 3-3s-1.34-3-3-3-3 1.34-3 3c0 .24.04.47.09.7L8.04 9.81C7.5 9.31 6.79 9 6 9c-1.66 0-3 1.34-3 3s1.34 3 3 3c.79 0 1.5-.31 2.04-.81l7.12 4.16c-.05.21-.08.43-.08.65 0 1.61 1.31 2.92 2.92 2.92 1.61 0 2.92-1.31 2.92-2.92s-1.31-2.92-2.92-2.92z"/></svg>
                         <span>分享到私聊</span>
                     </div>
                 </div>
 
-                <!-- 进度条 -->
                 <div style="width: 90%; margin-top: 14px;">
                     <div style="display: flex; justify-content: space-between; font-size: 11px; color: #999; margin-bottom: 4px;">
                         <span>${formatTime(state.currentTime)}</span>
@@ -876,7 +784,6 @@
                     </div>
                 </div>
 
-                <!-- 核心切歌控制 -->
                 <div style="display: flex; align-items: center; justify-content: center; gap: 24px; margin-top: 16px;">
                     <div onclick="window._weMusicEngine.prev(); window.openMusicPlayerModal();" style="cursor: pointer; color: #444;">
                         <svg viewBox="0 0 24 24" style="width: 24px; height: 24px; fill: currentColor;"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
