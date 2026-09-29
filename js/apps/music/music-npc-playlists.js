@@ -1,16 +1,11 @@
 /**
  * js/apps/music/music-npc-playlists.js
  * 🎭 角色专属人设歌单动态生成中枢
- * 职责：
- * 1. 批量/单人动态刷新歌单（每次挑选 1~3 名角色进行增量刷新）。
- * 2. 支持每个角色独立调用或批量一次性生成，歌单数量过多时轮询随机丰富曲库。
- * 3. 严格读取通讯录真实自建角色（G.customNpcs / mcyt_wechat_custom_npcs）。
  */
 
 (function () {
     'use strict';
 
-    // 默认备选音轨池
     const DEFAULT_AUDIO_POOL = [
         { url: 'https://music.163.com/song/media/outer/url?id=1413585838.mp3', duration: 198 },
         { url: 'https://music.163.com/song/media/outer/url?id=1384026889.mp3', duration: 215 },
@@ -32,7 +27,6 @@
         } catch (_) {}
     };
 
-    // 获取通讯录里的真实 NPC 列表
     function getAvailableNpcs() {
         let npcs = [];
         try {
@@ -53,7 +47,6 @@
         return npcs;
     }
 
-    // 为单个角色构建个性歌单
     function generatePlaylistForNpc(npc, variantIndex = 1) {
         const personaText = npc.persona || '';
         let styleTags = ['治愈', '独处', '夜间心事'];
@@ -105,7 +98,6 @@
         };
     }
 
-    // 初始化或获取全局角色歌单（支持分批增量刷新）
     window.getNpcMusicPlaylists = function () {
         let stored = window.getStoredNpcPlaylists();
         if (!stored || stored.length === 0) {
@@ -116,25 +108,17 @@
         return stored;
     };
 
-    /**
-     * 增量刷新角色歌单：
-     * 1. 每次挑选 1~3 位角色刷新；
-     * 2. 若所有人都有歌单，则随机挑选角色追加创建全新 Vol.2 风格歌单。
-     */
     window.refreshNpcMusicPlaylists = function () {
         const allNpcs = getAvailableNpcs();
         let stored = window.getStoredNpcPlaylists();
 
-        // 查找还没有生成过歌单的角色
         const existingNpcIds = new Set(stored.map(p => p.npcId));
         const ungeneratedNpcs = allNpcs.filter(n => !existingNpcIds.has(n.id));
 
         let pickedNpcs = [];
         if (ungeneratedNpcs.length > 0) {
-            // 优先补充未生成过的 1~3 位角色
             pickedNpcs = ungeneratedNpcs.slice(0, Math.min(3, ungeneratedNpcs.length));
         } else {
-            // 所有人都有歌单后，随机抽取 1~2 位角色追加生成更多不同主题的歌单
             const shuffled = [...allNpcs].sort(() => Math.random() - 0.5);
             pickedNpcs = shuffled.slice(0, Math.min(2, shuffled.length));
         }
@@ -145,7 +129,6 @@
             stored.unshift(newPl);
         });
 
-        // 保持最多保留 15 个角色歌单
         if (stored.length > 15) stored = stored.slice(0, 15);
         window.saveStoredNpcPlaylists(stored);
 
