@@ -366,7 +366,6 @@
             ];
         }
 
-        // 根据角色人设生成专属个性歌单
         return npcs.map((npc, idx) => {
             const personaText = npc.persona || '';
             let styleTags = ['治愈', '独处', '夜间心事'];
@@ -418,8 +417,7 @@
     // ============================================================
     // 🎨 微音 App 主界面渲染（Tab：推荐、歌单、我的）
     // ============================================================
-    window._weMusicCurrentTab = 'explore'; // explore | playlists | mine
-    window._weMusicSelectedNpcPlaylist = null; // 当前正在查看的角色歌单详情
+    window._weMusicCurrentTab = 'explore';
 
     window.renderMusicApp = function (container) {
         if (!container) return;
@@ -914,13 +912,6 @@
         const track = window._weMusicEngine.currentTrack;
         const modal = document.getElementById('modal');
         if (modal) modal.classList.remove('open');
-
-        let npcs = [];
-        try {
-            if (window.G && window.G.customNpcs && typeof window.G.customNpcs === 'object') {
-                npcs = Object.values(window.G.customNpcs);
-            }
-        } catch (_) {}
 
         if (typeof showToast === 'function') {
             showToast(`已生成「${track.title}」音乐卡片，快去私聊发给同伴一起听吧！`);
