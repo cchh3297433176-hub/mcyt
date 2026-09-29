@@ -226,12 +226,72 @@
                     <div class="app-slot" onclick="openPhoneApp('backup')">
                         <div class="app-icon-box" style="background: #845ef7; width: 48px; height: 48px;">
                             <svg class="app-icon-svg" style="width:25px;height:25px;" viewBox="0 0 24 24" fill="#ffffff">
-                                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h12c1.1 0 2-.89 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/>
+                                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/>
                             </svg>
                         </div>
                     </div>
                 </div>
                 <div class="home-bar-pill"></div>
+            </div>
+        </div>
+
+        <!-- 🎵 全局常驻微音音乐悬浮球与胶囊控制条（跨 App、跨界面保活，支持拖拽移动与快速展开收起） -->
+        <div id="wemusicFloatingWidget" style="
+            position: fixed; right: 14px; top: 38%; z-index: 999998;
+            display: none; align-items: center; gap: 8px; touch-action: none;
+            user-select: none; -webkit-user-select: none;
+        ">
+            <!-- 胶囊控制条（类似 QQ/网易云悬浮微控器） -->
+            <div id="wemusicFloatingCapsule" style="
+                background: rgba(255, 255, 255, 0.94); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+                border: 0.5px solid rgba(0,0,0,0.08); border-radius: 20px; padding: 6px 12px;
+                box-shadow: 0 4px 18px rgba(0,0,0,0.12); display: flex; align-items: center; gap: 10px;
+                opacity: 0; transform: scale(0.85) translateX(15px); pointer-events: none;
+                transition: all 0.22s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+            ">
+                <!-- 跳动频谱声波 -->
+                <div style="display: flex; align-items: flex-end; gap: 2px; height: 12px;" id="wemusicFloatBars">
+                    <div style="width: 2px; height: 6px; background: #07c160; border-radius: 1px;"></div>
+                    <div style="width: 2px; height: 10px; background: #07c160; border-radius: 1px;"></div>
+                    <div style="width: 2px; height: 4px; background: #07c160; border-radius: 1px;"></div>
+                </div>
+                <!-- 歌名截断 -->
+                <div id="wemusicFloatTitle" style="
+                    font-size: 11.5px; font-weight: 600; color: #222; max-width: 90px;
+                    white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer;
+                " onclick="window.openPhoneApp('music')">海风与微光</div>
+                <!-- 播放/暂停 -->
+                <div id="wemusicFloatPlayBtn" style="cursor: pointer; color: #333; display: flex; align-items: center;" onclick="window._weMusicEngine && window._weMusicEngine.togglePlay()">
+                    <svg viewBox="0 0 24 24" style="width: 15px; height: 15px; fill: currentColor;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                </div>
+                <!-- 物理关闭悬浮球 -->
+                <div style="cursor: pointer; color: #999; display: flex; align-items: center; font-size: 14px; padding-left: 2px;" onclick="window.hideMusicFloatingWidget(event)">✕</div>
+            </div>
+
+            <!-- 黑胶圆形悬浮钮（唱针+慢转唱片） -->
+            <div id="wemusicFloatingDisc" style="
+                width: 48px; height: 48px; border-radius: 50%;
+                background: radial-gradient(circle, #2a2a2a 0%, #151515 70%, #050505 100%);
+                box-shadow: 0 4px 16px rgba(0,0,0,0.22), inset 0 0 0 2px rgba(255,255,255,0.1);
+                display: flex; align-items: center; justify-content: center; position: relative;
+                cursor: pointer;
+            " onclick="window.toggleMusicFloatingCapsule()">
+                <div id="wemusicFloatDiscInner" style="
+                    width: 100%; height: 100%; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+                    animation: wemusicSpin 14s linear infinite; animation-play-state: paused;
+                ">
+                    <div style="width: 22px; height: 22px; border-radius: 50%; overflow: hidden; border: 1.5px solid #111;">
+                        <img id="wemusicFloatCover" src="assets/system/default_desktop.jpg" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='tarot/images/slot_bg.png';" />
+                    </div>
+                </div>
+                <!-- 唱片白描光圈徽标 -->
+                <div style="
+                    position: absolute; right: -2px; top: -2px; width: 14px; height: 14px;
+                    border-radius: 50%; background: #07c160; display: flex; align-items: center; justify-content: center;
+                    box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+                ">
+                    <svg viewBox="0 0 24 24" style="width: 8px; height: 8px; fill: #ffffff;"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+                </div>
             </div>
         </div>
 
