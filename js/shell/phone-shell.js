@@ -753,7 +753,7 @@
     }
 
     // ============================================================
-    // 🎵 桌面原生黑胶与音频小组件 (参考小红书素材图设计)
+    // 🎵 桌面原生黑胶与音频小组件（支持点击封面切换本地图片）
     // ============================================================
     window.renderDesktopMusicWidget = function () {
         const musicState = window._weMusicEngine ? window._weMusicEngine.getState() : {
@@ -764,6 +764,9 @@
             progress: 0
         };
 
+        const customCover = localStorage.getItem('mcyt_widget_music_cover');
+        const activeCover = customCover || musicState.track.cover;
+
         return `
             <div class="desktop-music-widget-card" id="desktopMusicWidget" data-widget-type="music" style="
                 background: #ffffff; border-radius: 18px; padding: 12px 14px;
@@ -771,20 +774,22 @@
                 display: flex; align-items: center; justify-content: space-between; gap: 12px;
                 cursor: pointer; position: relative; overflow: hidden; box-sizing: border-box;
             " onclick="window.handleDesktopMusicWidgetClick(event)">
-                <!-- 左侧纯代码黑胶唱片 -->
+                <input type="file" id="widgetMusicCoverPicker" accept="image/*" style="display:none;" onchange="window.handleWidgetMusicCoverChange(event)" />
+                
+                <!-- 左侧纯代码黑胶唱片（轻触中心直接更换本地图片） -->
                 <div style="
                     width: 52px; height: 52px; border-radius: 50%; flex-shrink: 0;
                     background: radial-gradient(circle, #2a2a2a 0%, #151515 70%, #050505 100%);
                     display: flex; align-items: center; justify-content: center; position: relative;
                     box-shadow: 0 3px 8px rgba(0,0,0,0.15);
-                ">
+                " onclick="window.triggerWidgetMusicCoverPicker(event)">
                     <div id="widgetVinylDisc" style="
                         width: 100%; height: 100%; border-radius: 50%; display: flex; align-items: center; justify-content: center;
                         animation: wemusicSpin 14s linear infinite; ${musicState.isPlaying ? 'animation-play-state: running;' : 'animation-play-state: paused;'}
                     ">
                         <div style="position: absolute; width: 42px; height: 42px; border-radius: 50%; border: 0.5px solid rgba(255,255,255,0.08);"></div>
                         <div style="width: 22px; height: 22px; border-radius: 50%; overflow: hidden; border: 1.5px solid #111;">
-                            <img id="widgetVinylCover" src="${musicState.track.cover}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='tarot/images/slot_bg.png';" />
+                            <img id="widgetVinylCover" src="${activeCover}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='tarot/images/slot_bg.png';" />
                         </div>
                     </div>
                 </div>
@@ -797,7 +802,6 @@
                     <div style="font-size: 11px; color: #888; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" id="widgetTrackArtist">
                         ${musicState.track.artist}
                     </div>
-                    <!-- 动态声波条 -->
                     <div style="display: flex; align-items: flex-end; gap: 2.5px; height: 12px; margin-top: 5px;" id="widgetWaveBars">
                         ${[4, 8, 11, 7, 10, 5, 9, 6].map((h, i) => `
                             <div style="width: 2px; border-radius: 1px; background: #07c160; height: ${musicState.isPlaying ? h : 3}px; transition: height 0.2s ease;"></div>
@@ -829,6 +833,29 @@
         `;
     };
 
+    window.triggerWidgetMusicCoverPicker = function (e) {
+        if (e) e.stopPropagation();
+        if (window._isWidgetEditMode || window._isDesktopBlockAdjustMode) return;
+        const picker = document.getElementById('widgetMusicCoverPicker');
+        if (picker) picker.click();
+    };
+
+    window.handleWidgetMusicCoverChange = function (e) {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function (evt) {
+            const base64 = evt.target.result;
+            try {
+                localStorage.setItem('mcyt_widget_music_cover', base64);
+            } catch (_) {}
+            const img = document.getElementById('widgetVinylCover');
+            if (img) img.src = base64;
+            if (typeof showToast === 'function') showToast('桌面黑胶封面已更换为自定义本地图片！');
+        };
+        reader.readAsDataURL(file);
+    };
+
     window.handleDesktopMusicWidgetClick = function (e) {
         if (window._isWidgetEditMode || window._isDesktopBlockAdjustMode) return;
         window.openPhoneApp('music');
@@ -844,7 +871,10 @@
 
         if (titleEl) titleEl.textContent = state.track.title;
         if (artistEl) artistEl.textContent = state.track.artist;
-        if (coverEl && coverEl.src !== state.track.cover) coverEl.src = state.track.cover;
+        
+        const customCover = localStorage.getItem('mcyt_widget_music_cover');
+        const targetCover = customCover || state.track.cover;
+        if (coverEl && coverEl.src !== targetCover) coverEl.src = targetCover;
 
         if (discEl) {
             discEl.style.animationPlayState = state.isPlaying ? 'running' : 'paused';
@@ -877,7 +907,7 @@
         const todoEnabled = localStorage.getItem('mcyt_widget_todo_enabled') !== 'false';
         const todoPage = parseInt(localStorage.getItem('mcyt_widget_todo_page') || '1', 10);
         const musicEnabled = localStorage.getItem('mcyt_widget_music_enabled') !== 'false';
-        const musicPage = parseInt(localStorage.getItem('mcyt_widget_music_page') || '2', 10); // 默认在第二页
+        const musicPage = parseInt(localStorage.getItem('mcyt_widget_music_page') || '2', 10);
 
         const calendarHTML = `
             <div class="calendar-widget-card" id="desktopCalendarWidget" data-widget-type="calendar">
@@ -1303,7 +1333,7 @@
     };
 
     // ============================================================
-    // 🛡️ 原生全屏沉浸沙盒容器（零白屏、零闪烁、秒级保活唤起）
+    // 🛡️ 原生全屏沉浸沙盒容器
     // ============================================================
     let _activeSandboxUrl = null;
 
@@ -1419,7 +1449,7 @@
     };
 
     // ============================================================
-    // 🌟 独立 App 路由调度中枢（接通微信、AO3、游戏大厅与🎵全新微音）
+    // 🌟 独立 App 路由调度中枢
     // ============================================================
     window.openPhoneApp = function (appKey) {
         if (window._isWidgetEditMode || window._isDesktopBlockAdjustMode) return;
@@ -1428,12 +1458,10 @@
         const appModalBody = document.getElementById('appModalBody');
         if (!appModal || !appModalTitle || !appModalBody) return;
 
-        // 默认移除无缝沉浸模式，仅在 chat、ao3、lobby 与 music 时开启
         if (appKey !== 'chat' && appKey !== 'ao3' && appKey !== 'lobby' && appKey !== 'music') {
             appModal.classList.remove('wechat-seamless-shell');
         }
 
-        // 💬 微信/聊天 App（全屏无缝沉浸）
         if (appKey === 'chat' && typeof window.renderChatApp === 'function') {
             appModal.classList.add('wechat-seamless-shell');
             appModalTitle.textContent = "💬 聊天中心";
@@ -1442,7 +1470,6 @@
             return;
         }
 
-        // 📚 AO3 同人文库 App（全屏无缝沉浸）
         if (appKey === 'ao3' && typeof window.renderAo3App === 'function') {
             appModal.classList.add('wechat-seamless-shell');
             appModalTitle.textContent = "Archive of Our Own (AO3)";
@@ -1451,34 +1478,16 @@
             return;
         }
 
-        // 🎮 全新【游戏大厅】App（替换原主线频道，全屏无缝沉浸）
         if (appKey === 'lobby' || appKey === 'story') {
             appModal.classList.add('wechat-seamless-shell');
             appModalTitle.textContent = "🎮 游戏大厅";
             if (typeof window.renderLobbyApp === 'function') {
                 window.renderLobbyApp(appModalBody);
-            } else {
-                appModalBody.innerHTML = `
-                    <div style="background:#ededed;height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:-apple-system,sans-serif;padding:24px;box-sizing:border-box;">
-                        <div style="width:58px;height:58px;border-radius:14px;background:#07c160;display:flex;align-items:center;justify-content:center;margin-bottom:14px;box-shadow:0 4px 14px rgba(7,193,96,0.25);">
-                            <svg viewBox="0 0 24 24" style="width:32px;height:32px;fill:none;stroke:#ffffff;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;">
-                                <rect x="2" y="6" width="20" height="12" rx="3"></rect>
-                                <path d="M6 12h4m-2-2v4"></path>
-                                <line x1="15" y1="11" x2="15.01" y2="11"></line>
-                                <line x1="18" y1="13" x2="18.01" y2="13"></line>
-                            </svg>
-                        </div>
-                        <div style="font-size:16px;font-weight:600;color:#181818;margin-bottom:6px;">游戏大厅正在启动</div>
-                        <div style="font-size:12px;color:#888;text-align:center;line-height:1.5;">正在连接至杭州本地对局裁判服务...</div>
-                        <button onclick="window.closePhoneApp()" style="margin-top:20px;border:none;background:#ffffff;color:#555;padding:8px 18px;border-radius:6px;font-size:12.5px;box-shadow:0 1px 3px rgba(0,0,0,0.06);cursor:pointer;">返回桌面</button>
-                    </div>
-                `;
             }
             appModal.classList.add('opened');
             return;
         }
 
-        // 🎵 全新【微音】App（全屏无缝沉浸）
         if (appKey === 'music') {
             appModal.classList.add('wechat-seamless-shell');
             appModalTitle.textContent = "微音";
@@ -1489,7 +1498,6 @@
             return;
         }
 
-        // 🎀 个性主题
         if (appKey === 'theme' && typeof window.renderThemeApp === 'function') {
             appModalTitle.textContent = "🎀 个性化与主题";
             window.renderThemeApp(appModalBody);
@@ -1497,26 +1505,22 @@
             return;
         }
 
-        // ⚙️ 系统设置
         if (appKey === 'settings' && typeof window.renderSettingsApp === 'function') {
             window.renderSettingsApp();
             appModal.classList.add('opened');
             return;
         }
 
-        // 🔮 塔罗牌占卜
         if (appKey === 'tarot') {
             window.openInAppSandbox('tarot/index.html', '🔮 塔罗牌占卜');
             return;
         }
 
-        // 🧠 忆海 (Rememori)
         if (appKey === 'rememori') {
             window.openInAppSandbox('rememori/index.html', '🧠 忆海 (Rememori)');
             return;
         }
 
-        // 📺 YouTube 油管
         if (appKey === 'youtube' && typeof window.renderYouTubePanel === 'function') {
             appModalTitle.textContent = "▶️ YouTube 视频";
             appModalBody.innerHTML = '<div id="youtubeTab" style="width:100%;height:100%;"></div>';
