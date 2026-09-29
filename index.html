@@ -176,13 +176,25 @@
                         <div class="desktop-future-slot desktop-future-slot--page2"></div>
                         <div class="desktop-widgets-slot" id="page2WidgetSlot"></div>
 
-                        <!-- 塔罗独立 App 专属卡位：精确读取 assets/icons/tarot.png -->
+                        <!-- 独立 App 卡位网格 -->
                         <div class="app-grid">
+                            <!-- 塔罗独立 App 专属卡位：精确读取 assets/icons/tarot.png -->
                             <div class="app-slot" id="appSlotTarot" onclick="openPhoneApp('tarot')">
                                 <div class="app-icon-box" style="background: #19141f;">
                                     <img src="assets/icons/tarot.png" alt="塔罗星轨" draggable="false" onerror="this.onerror=null;this.src='tarot/images/card_back.png';" />
                                 </div>
                                 <div class="app-title-label">塔罗星轨</div>
+                            </div>
+
+                            <!-- 🎵 独立音乐 App：微音 (WeMusic) 精准读取 assets/icons/music.png -->
+                            <div class="app-slot" id="appSlotMusic" onclick="openPhoneApp('music')">
+                                <div class="app-icon-box" style="background: linear-gradient(135deg, #07c160, #059649);">
+                                    <img src="assets/icons/music.png" alt="微音" draggable="false" style="display:none;" onload="this.style.display='block';if(this.nextElementSibling)this.nextElementSibling.style.display='none';this.parentElement.style.background='none';" onerror="this.style.display='none';" />
+                                    <svg class="app-icon-svg" viewBox="0 0 24 24" fill="#ffffff">
+                                        <path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/>
+                                    </svg>
+                                </div>
+                                <div class="app-title-label">微音</div>
                             </div>
                         </div>
                     </div>
@@ -214,7 +226,7 @@
                     <div class="app-slot" onclick="openPhoneApp('backup')">
                         <div class="app-icon-box" style="background: #845ef7; width: 48px; height: 48px;">
                             <svg class="app-icon-svg" style="width:25px;height:25px;" viewBox="0 0 24 24" fill="#ffffff">
-                                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/>
+                                <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h12c1.1 0 2-.89 2-2V5c0-1.1-.9-2-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z"/>
                             </svg>
                         </div>
                     </div>
@@ -329,6 +341,9 @@
 
     <!-- 🎮 🌟 全新独立棋牌游戏大厅 App（直连杭州节点，自建角色陪玩，战报一键入群沉淀记忆） -->
     <script src="js/apps/lobby/lobby-app.js"></script>
+
+    <!-- 🎵 🌟 全新独立音乐 App：微音（白灰微绿黑胶播放器、桌面小组件联动、后台保活） -->
+    <script src="js/apps/music/music-app.js"></script>
 
     <!-- 冷启动异步加载守护 -->
     <script>
