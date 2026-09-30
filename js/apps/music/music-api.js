@@ -11,8 +11,10 @@
 (function () {
     'use strict';
 
-    // 默认高可用网易云 API 镜像节点池（支持端侧手机直连握手）
-    const DEFAULT_API_BASE = 'https://music.cyrilstudio.top';
+    // 默认节点：优先使用我们自己的服务器自建网关（100% 免跨域 CORS、免外部受制）
+    // 兼顾多环境容错：支持外部代理/自建节点池
+    const DEFAULT_API_BASE = 'http://121.43.122.253:3000';
+    const FALLBACK_API_BASE = 'https://sullymeow.ccwu.cc/netease';
 
     const STORAGE_KEY_COOKIE = 'mcyt_wemusic_cookie';
     const STORAGE_KEY_USER = 'mcyt_wemusic_user_info';
@@ -70,6 +72,27 @@
             localStorage.removeItem(STORAGE_KEY_LOGIN_PROMPT);
         }
 
+        async _fetchWithFallback(pathAndQuery) {
+            const cleanPath = pathAndQuery.startsWith('/') ? pathAndQuery : `/${pathAndQuery}`;
+            try {
+                const url = `${this.apiBase}${cleanPath}`;
+                const res = await fetch(url, { mode: 'cors' });
+                if (res.ok) return await res.json();
+            } catch (err) {
+                console.warn('[WeMusic] 自建节点通信微调，尝试备选安全路由:', err);
+            }
+
+            // 备用兜底管道
+            try {
+                const fallbackUrl = `${FALLBACK_API_BASE}${cleanPath}`;
+                const resFallback = await fetch(fallbackUrl, { mode: 'cors' });
+                return await resFallback.json();
+            } catch (fallbackErr) {
+                console.error('[WeMusic] 网关网络请求失败:', fallbackErr);
+                throw fallbackErr;
+            }
+        }
+
         /**
          * 1. 发送手机验证码
          * @param {string} phone 手机号
@@ -80,9 +103,7 @@
                 throw new Error('请输入有效的11位中国大陆手机号码');
             }
             const ts = Date.now();
-            const url = `${this.apiBase}/captcha/sent?phone=${encodeURIComponent(phone)}&ctcode=${ctcode}&timestamp=${ts}`;
-            const res = await fetch(url);
-            const data = await res.json();
+            const data = await this._fetchWithFallback(`/captcha/sent?phone=${encodeURIComponent(phone)}&ctcode=${ctcode}&timestamp=${ts}`);
             if (data.code === 200 || data.data === true) {
                 return { success: true, message: '验证码已发送至手机，请查收' };
             }
@@ -101,17 +122,13 @@
             }
             const ts = Date.now();
             // 先校验验证码
-            const verifyUrl = `${this.apiBase}/captcha/verify?phone=${encodeURIComponent(phone)}&captcha=${encodeURIComponent(captcha)}&ctcode=${ctcode}&timestamp=${ts}`;
-            const verifyRes = await fetch(verifyUrl);
-            const verifyData = await verifyRes.json();
+            const verifyData = await this._fetchWithFallback(`/captcha/verify?phone=${encodeURIComponent(phone)}&captcha=${encodeURIComponent(captcha)}&ctcode=${ctcode}&timestamp=${ts}`);
             if (verifyData.code !== 200 && verifyData.data !== true) {
                 throw new Error(verifyData.message || verifyData.msg || '验证码错误或已过期');
             }
 
             // 执行手机登录并拉取 Cookie
-            const loginUrl = `${this.apiBase}/login/cellphone?phone=${encodeURIComponent(phone)}&captcha=${encodeURIComponent(captcha)}&countrycode=${ctcode}&timestamp=${ts}`;
-            const loginRes = await fetch(loginUrl);
-            const loginData = await loginRes.json();
+            const loginData = await this._fetchWithFallback(`/login/cellphone?phone=${encodeURIComponent(phone)}&captcha=${encodeURIComponent(captcha)}&countrycode=${ctcode}&timestamp=${ts}`);
 
             if (loginData.code === 200 && (loginData.cookie || loginData.token)) {
                 this.cookie = loginData.cookie || '';
@@ -122,7 +139,7 @@
                 this.userInfo = {
                     userId: profile.userId || loginData.account?.id || '',
                     nickname: profile.nickname || '云音乐听友',
-                    avatarUrl: profile.avatarUrl || 'assets/system/default_desktop.jpg',
+                    avatarUrl: profile.avatarUrl || 'https://p1.music.126.net/6y-5Y0C15jKEP4AET0BiDA==/109951164587635678.jpg?param=300y300',
                     signature: profile.signature || '静听每一个治愈的心动瞬间'
                 };
                 localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(this.userInfo));
@@ -141,9 +158,7 @@
                 // 随机抽取一个大分类榜单
                 const randomPlaylistId = HOT_PLAYLIST_IDS[Math.floor(Math.random() * HOT_PLAYLIST_IDS.length)];
                 const ts = Date.now();
-                const url = `${this.apiBase}/playlist/detail?id=${randomPlaylistId}&timestamp=${ts}`;
-                const res = await fetch(url);
-                const data = await res.json();
+                const data = await this._fetchWithFallback(`/playlist/detail?id=${randomPlaylistId}&timestamp=${ts}`);
 
                 if (data.code === 200 && data.playlist && Array.isArray(data.playlist.tracks) && data.playlist.tracks.length > 0) {
                     const rawTracks = data.playlist.tracks;
@@ -156,9 +171,11 @@
 
                     const picked = shuffled.slice(0, count);
                     return picked.map(t => {
-                        const rawCover = t.al?.picUrl || t.album?.picUrl || '';
-                        // 网易云无防盗链 CDN，拼接 ?param=300y300 获得轻量高清图
-                        const cdnCover = rawCover ? `${rawCover}?param=300y300` : 'assets/system/default_desktop.jpg';
+                        let rawCover = t.al?.picUrl || t.album?.picUrl || '';
+                        if (rawCover && rawCover.startsWith('http://')) {
+                            rawCover = rawCover.replace('http://', 'https://');
+                        }
+                        const cdnCover = rawCover ? `${rawCover}?param=300y300` : 'https://p1.music.126.net/6y-5Y0C15jKEP4AET0BiDA==/109951164587635678.jpg?param=300y300';
                         const artistName = (t.ar && t.ar[0]?.name) || (t.artists && t.artists[0]?.name) || '网易云音乐人';
                         const albumName = t.al?.name || t.album?.name || '热门精选';
 
@@ -192,7 +209,7 @@
                 {
                     id: 'netease_1413585838',
                     neteaseId: 1413585838,
-                    title: '海风与微光',
+                    title: '海风与微光 (Sea Breeze)',
                     artist: '主播掌机精选',
                     album: '白昼流光',
                     url: 'https://music.163.com/song/media/outer/url?id=1413585838.mp3',
@@ -206,7 +223,7 @@
                 {
                     id: 'netease_1384026889',
                     neteaseId: 1384026889,
-                    title: '午后雨落',
+                    title: '午后雨落 (Afternoon Rain)',
                     artist: '主播掌机精选',
                     album: '独处时刻',
                     url: 'https://music.163.com/song/media/outer/url?id=1384026889.mp3',
@@ -220,7 +237,7 @@
                 {
                     id: 'netease_1824045033',
                     neteaseId: 1824045033,
-                    title: '星夜低语',
+                    title: '星夜低语 (Whisper of Stars)',
                     artist: '主播掌机精选',
                     album: '深海共鸣',
                     url: 'https://music.163.com/song/media/outer/url?id=1824045033.mp3',
