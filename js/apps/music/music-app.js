@@ -1,14 +1,15 @@
 /**
  * js/apps/music/music-app.js
  * 🎵 独立微音音乐中枢 (WeMusic) 视图与交互中心
+ * 风格：网易云红黑质感 (#ec4141 标志云红、黑白灰纯净卡片、沉浸封面流、黑胶自转)
  * 职责：
  * 1. 首页推荐（真·随机网易云热门分类换一批、网易云 CDN 高清原图直连）。
- * 2. 进门优先检测网易云登录并弹出微绿提示卡片（支持快速跳过体验游客模式）。
+ * 2. 进门优先检测网易云登录并弹出云红提示卡片（支持快速跳过体验游客模式）。
  * 3. 手机验证码登录弹窗（输入手机号、获取验证码、一键登录换取Cookie与真实资料）。
  * 4. 推荐歌单展示（联动 music-npc-playlists.js，支持每次刷新1~3人，多歌单轮询）。
  * 5. 沉浸播放视口（黑胶自转、歌词滚动与翻译、转发到私聊/群聊卡片）。
- * 6. 全局悬浮音乐黑胶球与胶囊控制条。
- * 7. 我的界面（用户资料编辑、网易云直连握手卡片、红心收藏）。
+ * 6. 全局常驻微音黑胶悬浮球：支持全屏幕任意位置触摸/鼠标自由拖动、贴边吸附，悬浮球封面 100% 同步当前歌曲！
+ * 7. 我的主页（网易云红色大卡片、自定义主页背景图、无缝调用主题装扮头像框换装池、个人签名编辑）。
  */
 
 (function () {
@@ -240,7 +241,7 @@
                 navigator.mediaSession.metadata = new MediaMetadata({
                     title: track.title,
                     artist: track.artist,
-                    album: track.album || '微音',
+                    album: track.album || '网易云音乐',
                     artwork: [
                         { src: track.cover, sizes: '512x512', type: 'image/png' }
                     ]
@@ -315,14 +316,116 @@
     }
 
     // ============================================================
-    // 🌐 全局音乐悬浮球驱动系统
+    // 🌐 全局音乐悬浮球驱动系统（支持自由全屏幕手势拖动与智能贴边）
     // ============================================================
     window._isMusicCapsuleExpanded = false;
+    let _floatPos = { x: null, y: null };
+
+    window.initMusicFloatingDragEngine = function () {
+        const floatEl = document.getElementById('wemusicFloatingWidget');
+        if (!floatEl || floatEl._dragBound) return;
+        floatEl._dragBound = true;
+
+        let startX = 0, startY = 0;
+        let initialX = 0, initialY = 0;
+        let isDragging = false;
+        let hasMoved = false;
+
+        const onTouchStart = (e) => {
+            const touch = (e.touches && e.touches[0]) || e;
+            startX = touch.clientX;
+            startY = touch.clientY;
+            const rect = floatEl.getBoundingClientRect();
+            initialX = rect.left;
+            initialY = rect.top;
+            isDragging = true;
+            hasMoved = false;
+            floatEl.style.transition = 'none';
+        };
+
+        const onTouchMove = (e) => {
+            if (!isDragging) return;
+            const touch = (e.touches && e.touches[0]) || e;
+            const dx = touch.clientX - startX;
+            const dy = touch.clientY - startY;
+
+            if (Math.hypot(dx, dy) > 5) {
+                hasMoved = true;
+            }
+
+            let newX = initialX + dx;
+            let newY = initialY + dy;
+
+            // 限制在视口边界内
+            const maxW = window.innerWidth - floatEl.offsetWidth - 6;
+            const maxH = window.innerHeight - floatEl.offsetHeight - 40;
+            newX = Math.max(6, Math.min(maxW, newX));
+            newY = Math.max(40, Math.min(maxH, newY));
+
+            floatEl.style.left = `${newX}px`;
+            floatEl.style.top = `${newY}px`;
+            floatEl.style.right = 'auto';
+
+            if (e.cancelable) e.preventDefault();
+        };
+
+        const onTouchEnd = () => {
+            if (!isDragging) return;
+            isDragging = false;
+            floatEl.style.transition = 'all 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28)';
+
+            // 松手后自动吸附到左侧或右侧边缘
+            const rect = floatEl.getBoundingClientRect();
+            const winW = window.innerWidth;
+            const snapLeft = (rect.left + rect.width / 2) < (winW / 2);
+
+            const finalX = snapLeft ? 10 : (winW - rect.width - 10);
+            floatEl.style.left = `${finalX}px`;
+
+            try {
+                localStorage.setItem('mcyt_wemusic_float_pos', JSON.stringify({ x: finalX, y: rect.top }));
+            } catch (_) {}
+        };
+
+        // 仅在圆形黑胶上绑定点击防穿透
+        const discEl = document.getElementById('wemusicFloatingDisc');
+        if (discEl) {
+            discEl.addEventListener('click', (e) => {
+                if (hasMoved) {
+                    e.stopPropagation();
+                    return;
+                }
+                window.toggleMusicFloatingCapsule();
+            });
+        }
+
+        floatEl.addEventListener('touchstart', onTouchStart, { passive: false });
+        window.addEventListener('touchmove', onTouchMove, { passive: false });
+        window.addEventListener('touchend', onTouchEnd);
+
+        floatEl.addEventListener('mousedown', onTouchStart);
+        window.addEventListener('mousemove', onTouchMove);
+        window.addEventListener('mouseup', onTouchEnd);
+
+        // 恢复持久化保存的坐标
+        try {
+            const raw = localStorage.getItem('mcyt_wemusic_float_pos');
+            if (raw) {
+                const pos = JSON.parse(raw);
+                if (pos && typeof pos.y === 'number') {
+                    floatEl.style.left = `${pos.x}px`;
+                    floatEl.style.top = `${pos.y}px`;
+                    floatEl.style.right = 'auto';
+                }
+            }
+        } catch (_) {}
+    };
 
     window.showMusicFloatingWidget = function () {
         const floatEl = document.getElementById('wemusicFloatingWidget');
         if (floatEl) {
             floatEl.style.display = 'flex';
+            window.initMusicFloatingDragEngine();
             window.syncMusicFloatingState(window._weMusicEngine.getState());
         }
     };
@@ -357,7 +460,10 @@
         const playBtn = document.getElementById('wemusicFloatPlayBtn');
         const bars = document.querySelectorAll('#wemusicFloatBars div');
 
-        if (coverEl && coverEl.src !== state.track.cover) coverEl.src = state.track.cover;
+        // 悬浮球封面 100% 同步当前曲目
+        if (coverEl && coverEl.src !== state.track.cover) {
+            coverEl.src = state.track.cover;
+        }
         if (titleEl) titleEl.textContent = state.track.title;
 
         if (discInner) {
@@ -366,23 +472,43 @@
 
         if (playBtn) {
             playBtn.innerHTML = state.isPlaying ? `
-                <svg viewBox="0 0 24 24" style="width: 15px; height: 15px; fill: currentColor;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                <svg viewBox="0 0 24 24" style="width: 15px; height: 15px; fill: #ec4141;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
             ` : `
-                <svg viewBox="0 0 24 24" style="width: 15px; height: 15px; fill: currentColor;"><path d="M8 5v14l11-7z"/></svg>
+                <svg viewBox="0 0 24 24" style="width: 15px; height: 15px; fill: #ec4141;"><path d="M8 5v14l11-7z"/></svg>
             `;
         }
 
         if (bars && bars.length) {
             bars.forEach(b => {
+                b.style.background = '#ec4141';
                 b.style.height = state.isPlaying ? `${Math.floor(Math.random() * 9 + 3)}px` : '3px';
             });
         }
     };
 
     // ============================================================
-    // 🎨 微音 App 主界面渲染
+    // 🎨 网易云官方红黑视觉与装扮中心联动
     // ============================================================
     window._weMusicCurrentTab = 'explore';
+
+    // 获取当前用户装扮头像框（联动主题中心）
+    function getEquippedFrameUrl() {
+        try {
+            if (typeof window.getStoredDecorFrames === 'function') {
+                const pool = window.getStoredDecorFrames();
+                const active = pool.find(f => f.equipped);
+                if (active) return active.img;
+            }
+            const saved = localStorage.getItem('mcyt_decor_cur_frame');
+            if (saved) return saved;
+        } catch (_) {}
+        return '';
+    }
+
+    // 获取网易云主页自定义背景图
+    function getMusicProfileBanner() {
+        return localStorage.getItem('mcyt_wemusic_profile_banner') || 'assets/system/default_desktop.jpg';
+    }
 
     window.renderMusicApp = function (container) {
         if (!container) return;
@@ -401,28 +527,28 @@
 
         container.innerHTML = `
             <div class="wemusic-container" style="
-                background: #f7f7f7; height: 100%; display: flex; flex-direction: column;
+                background: #f8f9fa; height: 100%; display: flex; flex-direction: column;
                 font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
                 box-sizing: border-box; overflow: hidden; color: #222;
                 padding-top: calc(var(--status-bar-height, 40px) + 2px);
             ">
-                <!-- 顶栏与原生微信白灰微绿分段器 -->
-                <div style="height: 48px; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; background: #ffffff; border-bottom: 0.5px solid #eeeeee;">
-                    <div onclick="window.closePhoneApp()" style="display: flex; align-items: center; gap: 4px; font-size: 14px; color: #333; cursor: pointer;">
+                <!-- 网易云标志顶栏：云红点缀与流线药丸分段器 -->
+                <div style="height: 50px; display: flex; align-items: center; justify-content: space-between; padding: 0 14px; background: #ffffff; border-bottom: 0.5px solid #f0f0f0;">
+                    <div onclick="window.closePhoneApp()" style="display: flex; align-items: center; gap: 4px; font-size: 13.5px; color: #333; cursor: pointer; font-weight: 500;">
                         <svg viewBox="0 0 24 24" style="width: 20px; height: 20px; fill: currentColor;"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
                         <span>返回</span>
                     </div>
 
-                    <!-- 三段导航药丸 -->
-                    <div style="display: flex; background: #f0f0f0; border-radius: 16px; padding: 2px;">
-                        <div onclick="window.switchMusicTab('explore')" style="padding: 4px 12px; font-size: 12px; font-weight: 600; border-radius: 14px; cursor: pointer; ${tab === 'explore' ? 'background:#07c160; color:#fff;' : 'color:#666;'}">推荐</div>
-                        <div onclick="window.switchMusicTab('playlists')" style="padding: 4px 12px; font-size: 12px; font-weight: 600; border-radius: 14px; cursor: pointer; ${tab === 'playlists' ? 'background:#07c160; color:#fff;' : 'color:#666;'}">角色歌单</div>
-                        <div onclick="window.switchMusicTab('mine')" style="padding: 4px 12px; font-size: 12px; font-weight: 600; border-radius: 14px; cursor: pointer; ${tab === 'mine' ? 'background:#07c160; color:#fff;' : 'color:#666;'}">我的</div>
+                    <!-- 网易云标志性红黑药丸导航条 -->
+                    <div style="display: flex; background: #f2f3f5; border-radius: 20px; padding: 3px;">
+                        <div onclick="window.switchMusicTab('explore')" style="padding: 4px 14px; font-size: 12px; font-weight: 600; border-radius: 16px; cursor: pointer; transition: all 0.2s ease; ${tab === 'explore' ? 'background:#ec4141; color:#fff; box-shadow: 0 2px 6px rgba(236,65,65,0.3);' : 'color:#666;'}">发现</div>
+                        <div onclick="window.switchMusicTab('playlists')" style="padding: 4px 14px; font-size: 12px; font-weight: 600; border-radius: 16px; cursor: pointer; transition: all 0.2s ease; ${tab === 'playlists' ? 'background:#ec4141; color:#fff; box-shadow: 0 2px 6px rgba(236,65,65,0.3);' : 'color:#666;'}">角色歌单</div>
+                        <div onclick="window.switchMusicTab('mine')" style="padding: 4px 14px; font-size: 12px; font-weight: 600; border-radius: 16px; cursor: pointer; transition: all 0.2s ease; ${tab === 'mine' ? 'background:#ec4141; color:#fff; box-shadow: 0 2px 6px rgba(236,65,65,0.3);' : 'color:#666;'}">我的</div>
                     </div>
 
-                    <!-- 快速打开全屏播放沉浸页 -->
-                    <div onclick="window.openMusicPlayerModal()" style="cursor: pointer; color: #07c160; display: flex; align-items: center;">
-                        <svg viewBox="0 0 24 24" style="width: 22px; height: 22px; fill: currentColor;"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
+                    <!-- 快速打开全屏黑胶播放页 -->
+                    <div onclick="window.openMusicPlayerModal()" style="cursor: pointer; color: #ec4141; display: flex; align-items: center;">
+                        <svg viewBox="0 0 24 24" style="width: 24px; height: 24px; fill: currentColor;"><path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h4V3h-6z"/></svg>
                     </div>
                 </div>
 
@@ -431,14 +557,14 @@
                     ${contentHTML}
                 </div>
 
-                <!-- 底部吸底微信原生微缩播放条 -->
+                <!-- 底部吸底网易云极简微缩播放条 -->
                 <div style="
-                    height: 52px; background: #ffffff; border-top: 0.5px solid #eaeaea;
+                    height: 54px; background: rgba(255,255,255,0.98); border-top: 0.5px solid #ececec;
                     display: flex; align-items: center; justify-content: space-between; padding: 0 16px;
-                    box-shadow: 0 -2px 10px rgba(0,0,0,0.03); cursor: pointer;
+                    box-shadow: 0 -3px 12px rgba(0,0,0,0.04); cursor: pointer; backdrop-filter: blur(10px);
                 " onclick="window.openMusicPlayerModal()">
                     <div style="display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1;">
-                        <div style="width: 36px; height: 36px; border-radius: 50%; overflow: hidden; background: #111; flex-shrink: 0;">
+                        <div style="width: 38px; height: 38px; border-radius: 50%; overflow: hidden; background: #222; flex-shrink: 0; border: 1.5px solid #333;">
                             <img src="${state.track.cover}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://p1.music.126.net/6y-5Y0C15jKEP4AET0BiDA==/109951164587635678.jpg?param=300y300';" />
                         </div>
                         <div style="min-width: 0; flex: 1;">
@@ -448,20 +574,21 @@
                     </div>
 
                     <div style="display: flex; align-items: center; gap: 14px;" onclick="event.stopPropagation()">
-                        <div onclick="window._weMusicEngine.prev()" style="cursor: pointer; color: #555;">
+                        <div onclick="window._weMusicEngine.prev()" style="cursor: pointer; color: #444;">
                             <svg viewBox="0 0 24 24" style="width: 20px; height: 20px; fill: currentColor;"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
                         </div>
                         <div onclick="window._weMusicEngine.togglePlay()" style="
-                            width: 32px; height: 32px; border-radius: 50%; background: #07c160;
+                            width: 34px; height: 34px; border-radius: 50%; background: #ec4141;
                             display: flex; align-items: center; justify-content: center; color: #fff; cursor: pointer;
+                            box-shadow: 0 2px 8px rgba(236,65,65,0.35);
                         ">
                             ${state.isPlaying ? `
-                                <svg viewBox="0 0 24 24" style="width: 16px; height: 16px; fill: currentColor;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                                <svg viewBox="0 0 24 24" style="width: 17px; height: 17px; fill: currentColor;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
                             ` : `
-                                <svg viewBox="0 0 24 24" style="width: 16px; height: 16px; fill: currentColor; margin-left: 1.5px;"><path d="M8 5v14l11-7z"/></svg>
+                                <svg viewBox="0 0 24 24" style="width: 17px; height: 17px; fill: currentColor; margin-left: 2px;"><path d="M8 5v14l11-7z"/></svg>
                             `}
                         </div>
-                        <div onclick="window._weMusicEngine.next()" style="cursor: pointer; color: #555;">
+                        <div onclick="window._weMusicEngine.next()" style="cursor: pointer; color: #444;">
                             <svg viewBox="0 0 24 24" style="width: 20px; height: 20px; fill: currentColor;"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
                         </div>
                     </div>
@@ -476,33 +603,32 @@
         if (modalBody) window.renderMusicApp(modalBody);
     };
 
-    // 1. 首页推荐视口（含进门登录提醒卡片 + 真随机热门）
+    // 1. 首页发现视口（网易云红色雷达 + 真随机换一批）
     window._renderMusicTabExplore = function (state) {
         const isLogged = window.weMusicApi && window.weMusicApi.isLoggedIn();
         const dismissed = window.weMusicApi && window.weMusicApi.hasDismissedLoginPrompt();
 
-        // 进门原生提醒卡片（如果尚未登录且未主动点击暂不登录）
         let loginNoticeHTML = '';
         if (!isLogged && !dismissed) {
             loginNoticeHTML = `
                 <div id="wemusicLoginBanner" style="
-                    background: #ffffff; border-radius: 14px; padding: 14px; border: 0.5px solid #d5edd9;
-                    box-shadow: 0 2px 10px rgba(7,193,96,0.08); display: flex; flex-direction: column; gap: 8px;
-                    border-left: 4px solid #07c160;
+                    background: #ffffff; border-radius: 14px; padding: 14px; border: 0.5px solid #ffd0d0;
+                    box-shadow: 0 2px 10px rgba(236,65,65,0.08); display: flex; flex-direction: column; gap: 8px;
+                    border-left: 4px solid #ec4141;
                 ">
                     <div style="display: flex; align-items: center; justify-content: space-between;">
                         <div style="font-size: 13.5px; font-weight: bold; color: #111; display: flex; align-items: center; gap: 6px;">
-                            <span>🎵</span>
-                            <span>开启你的网易云听歌生态</span>
+                            <span style="color:#ec4141;">🎵</span>
+                            <span>开启你的网易云音乐生态</span>
                         </div>
                         <span onclick="window.dismissMusicLoginBanner()" style="font-size: 12px; color: #999; cursor: pointer; padding: 2px 4px;">✕</span>
                     </div>
                     <div style="font-size: 11.5px; color: #666; line-height: 1.5;">
-                        使用手机验证码直接登录网易云，同步每日私享推荐、专属歌单与红心收藏。
+                        使用手机验证码直接连接网易云，同步每日私享推荐、专属角色心境歌单与红心收藏。
                     </div>
                     <div style="display: flex; align-items: center; gap: 8px; margin-top: 4px;">
                         <button onclick="window.openNeteaseLoginModal()" style="
-                            background: #07c160; color: #fff; border: none; border-radius: 14px;
+                            background: #ec4141; color: #fff; border: none; border-radius: 14px;
                             padding: 5px 14px; font-size: 11.5px; font-weight: bold; cursor: pointer;
                         ">手机号登录</button>
                         <button onclick="window.dismissMusicLoginBanner()" style="
@@ -518,25 +644,26 @@
             <div style="display: flex; flex-direction: column; gap: 14px;">
                 ${loginNoticeHTML}
 
+                <!-- 网易云标志性红黑流光大横幅 -->
                 <div style="
-                    background: linear-gradient(135deg, #07c160, #059649); border-radius: 16px; padding: 18px;
-                    color: #ffffff; box-shadow: 0 4px 16px rgba(7,193,96,0.25); position: relative; overflow: hidden;
+                    background: linear-gradient(135deg, #ec4141, #c20c0c); border-radius: 16px; padding: 18px;
+                    color: #ffffff; box-shadow: 0 4px 16px rgba(236,65,65,0.28); position: relative; overflow: hidden;
                 ">
                     <div style="font-size: 11px; opacity: 0.85; letter-spacing: 0.5px;">DAILY RADAR · 每日私享雷达</div>
                     <div style="font-size: 18px; font-weight: bold; margin-top: 4px;">今日专属精选音轨</div>
                     <div style="font-size: 12px; opacity: 0.9; margin-top: 6px;">根据你的喜好与角色的双向羁绊，精选 3 首治愈旋律</div>
                     <button onclick="window._weMusicEngine.play(0)" style="
-                        margin-top: 14px; background: #ffffff; color: #059649; border: none; border-radius: 20px;
-                        padding: 6px 14px; font-size: 12px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+                        margin-top: 14px; background: #ffffff; color: #c20c0c; border: none; border-radius: 20px;
+                        padding: 6px 16px; font-size: 12px; font-weight: bold; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.12);
                     ">▶ 立即播放日推</button>
                 </div>
 
-                <div style="background: #ffffff; border-radius: 14px; padding: 14px; border: 0.5px solid #eaeaea;">
+                <div style="background: #ffffff; border-radius: 14px; padding: 14px; border: 0.5px solid #ececec;">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
                         <div style="font-size: 14px; font-weight: bold; color: #111;">热门私藏推荐</div>
                         <div style="
-                            font-size: 11.5px; color: #07c160; cursor: pointer; display: flex; align-items: center; gap: 3px;
-                            background: #eef9f2; padding: 3px 8px; border-radius: 12px;
+                            font-size: 11.5px; color: #ec4141; cursor: pointer; display: flex; align-items: center; gap: 3px;
+                            background: #fdf1f1; padding: 4px 10px; border-radius: 14px; font-weight: 500;
                         " onclick="window._weMusicEngine.refreshExploreTrulyRandom()">
                             <svg viewBox="0 0 24 24" style="width: 12px; height: 12px; fill: currentColor;"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
                             <span>真·随机换一批</span>
@@ -548,10 +675,10 @@
                             <div style="
                                 display: flex; align-items: center; justify-content: space-between; padding: 8px;
                                 border-radius: 10px; cursor: pointer; transition: background 0.15s ease;
-                                ${state.track.id === track.id ? 'background: #f0fbf4;' : 'background: #fafafa;'}
+                                ${state.track.id === track.id ? 'background: #fff5f5;' : 'background: #fafafa;'}
                             " onclick="window._weMusicEngine.play(${idx})">
                                 <div style="display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1;">
-                                    <div style="width: 40px; height: 40px; border-radius: 8px; overflow: hidden; flex-shrink: 0; background: #eee;">
+                                    <div style="width: 42px; height: 42px; border-radius: 8px; overflow: hidden; flex-shrink: 0; background: #eee;">
                                         <img src="${track.cover}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://p1.music.126.net/6y-5Y0C15jKEP4AET0BiDA==/109951164587635678.jpg?param=300y300';" />
                                     </div>
                                     <div style="min-width: 0; flex: 1;">
@@ -559,7 +686,7 @@
                                         <div style="font-size: 11px; color: #888; margin-top: 2px;">${track.artist} · ${track.album}</div>
                                     </div>
                                 </div>
-                                <div style="color: ${state.track.id === track.id ? '#07c160' : '#bbb'}; padding-left: 8px;">
+                                <div style="color: ${state.track.id === track.id ? '#ec4141' : '#ccc'}; padding-left: 8px;">
                                     <svg viewBox="0 0 24 24" style="width: 18px; height: 18px; fill: currentColor;"><path d="M8 5v14l11-7z"/></svg>
                                 </div>
                             </div>
@@ -585,8 +712,8 @@
                 <div style="display: flex; align-items: center; justify-content: space-between;">
                     <div style="font-size: 14px; font-weight: bold; color: #111;">同伴的专属音轨</div>
                     <div style="
-                        display: flex; align-items: center; gap: 4px; font-size: 11px; color: #07c160;
-                        background: #eef9f2; padding: 4px 10px; border-radius: 12px; cursor: pointer;
+                        display: flex; align-items: center; gap: 4px; font-size: 11px; color: #ec4141;
+                        background: #fdf1f1; padding: 4px 10px; border-radius: 12px; cursor: pointer; font-weight: 500;
                     " onclick="window.refreshNpcMusicPlaylists()">
                         <svg viewBox="0 0 24 24" style="width: 13px; height: 13px; fill: currentColor;"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
                         <span>刷新 1~3 位角色歌单</span>
@@ -595,19 +722,19 @@
 
                 <div style="display: flex; flex-direction: column; gap: 12px;">
                     ${playlists.map((pl, pIdx) => `
-                        <div style="background: #ffffff; border-radius: 14px; padding: 14px; border: 0.5px solid #eaeaea;">
-                            <div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; border-bottom: 0.5px solid #f2f2f2;">
+                        <div style="background: #ffffff; border-radius: 14px; padding: 14px; border: 0.5px solid #ececec;">
+                            <div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; border-bottom: 0.5px solid #f5f5f5;">
                                 <div style="display: flex; align-items: center; gap: 10px; cursor: pointer;" onclick="window.openNpcMusicProfileModal('${pl.npcId}')">
-                                    <div style="width: 44px; height: 44px; border-radius: 50%; overflow: hidden; border: 1.5px solid #07c160;">
+                                    <div style="width: 44px; height: 44px; border-radius: 50%; overflow: hidden; border: 1.5px solid #ec4141;">
                                         <img src="${pl.npcAvatar}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://p1.music.126.net/6y-5Y0C15jKEP4AET0BiDA==/109951164587635678.jpg?param=300y300';" />
                                     </div>
                                     <div>
                                         <div style="font-size: 13.5px; font-weight: bold; color: #111;">${pl.npcName}</div>
-                                        <div style="font-size: 11px; color: #888; margin-top: 2px;">点击进入角色音乐主页 ➔</div>
+                                        <div style="font-size: 11px; color: #888; margin-top: 2px;">进入网易云个人主页 ➔</div>
                                     </div>
                                 </div>
                                 <button onclick="window.playNpcEntirePlaylist(${pIdx})" style="
-                                    background: #07c160; color: #fff; border: none; border-radius: 16px;
+                                    background: #ec4141; color: #fff; border: none; border-radius: 16px;
                                     padding: 5px 12px; font-size: 11px; font-weight: bold; cursor: pointer;
                                 ">播放全部</button>
                             </div>
@@ -616,7 +743,7 @@
                                 <div style="font-size: 13px; font-weight: 600; color: #222;">${pl.playlistTitle}</div>
                                 <div style="font-size: 11.5px; color: #777; margin-top: 3px; line-height: 1.4;">${pl.desc}</div>
                                 <div style="display: flex; gap: 6px; margin-top: 8px;">
-                                    ${pl.tags.map(tag => `<span style="font-size: 10px; background: #f0f0f0; color: #666; padding: 2px 6px; border-radius: 4px;"># ${tag}</span>`).join('')}
+                                    ${pl.tags.map(tag => `<span style="font-size: 10px; background: #f5f5f5; color: #666; padding: 2px 6px; border-radius: 4px;"># ${tag}</span>`).join('')}
                                 </div>
                             </div>
 
@@ -627,7 +754,7 @@
                                         background: #fafafa; border-radius: 8px; padding: 7px 10px; cursor: pointer;
                                     " onclick="window.playSpecificTrackDirectly(${JSON.stringify(track).replace(/"/g, '&quot;')})">
                                         <div style="font-size: 12px; color: #333; font-weight: 500;">🎵 ${track.title}</div>
-                                        <div style="font-size: 11px; color: #07c160; font-weight: 600;">播放</div>
+                                        <div style="font-size: 11px; color: #ec4141; font-weight: 600;">播放</div>
                                     </div>
                                 `).join('')}
                             </div>
@@ -654,7 +781,7 @@
         }
     };
 
-    // 角色音乐专属主页弹窗
+    // 角色网易云主页弹窗
     window.openNpcMusicProfileModal = function (npcId) {
         const playlists = (typeof window.getNpcMusicPlaylists === 'function') ? window.getNpcMusicPlaylists() : [];
         const pl = playlists.find(p => p.npcId === npcId) || playlists[0];
@@ -665,23 +792,23 @@
         const modalClose = document.getElementById('modalClose');
         if (!modal || !modalBody) return;
 
-        if (modalTitle) modalTitle.textContent = `${pl.npcName} · 音乐主页`;
+        if (modalTitle) modalTitle.textContent = `${pl.npcName} 的网易云主页`;
         modalBody.innerHTML = `
             <div style="display: flex; flex-direction: column; align-items: center; padding: 10px 0;">
-                <div style="width: 64px; height: 64px; border-radius: 50%; overflow: hidden; border: 2px solid #07c160; box-shadow: 0 4px 12px rgba(7,193,96,0.25);">
+                <div style="width: 68px; height: 68px; border-radius: 50%; overflow: hidden; border: 2.5px solid #ec4141; box-shadow: 0 4px 14px rgba(236,65,65,0.25);">
                     <img src="${pl.npcAvatar}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://p1.music.126.net/6y-5Y0C15jKEP4AET0BiDA==/109951164587635678.jpg?param=300y300';" />
                 </div>
-                <div style="font-size: 15px; font-weight: bold; color: #111; margin-top: 8px;">${pl.npcName}</div>
+                <div style="font-size: 16px; font-weight: bold; color: #111; margin-top: 8px;">${pl.npcName}</div>
                 <div style="font-size: 11.5px; color: #777; margin-top: 3px; text-align: center; padding: 0 10px;">${pl.desc}</div>
 
                 <div style="width: 100%; margin-top: 16px; border-top: 0.5px solid #eee; padding-top: 12px;">
-                    <div style="font-size: 12.5px; font-weight: bold; color: #333; margin-bottom: 8px;">ta 最近在听：</div>
+                    <div style="font-size: 12.5px; font-weight: bold; color: #333; margin-bottom: 8px;">Ta 最近在听：</div>
                     <div style="display: flex; flex-direction: column; gap: 8px;">
                         ${pl.tracks.map(t => `
                             <div style="display: flex; align-items: center; justify-content: space-between; background: #f8f8f8; padding: 8px 10px; border-radius: 8px;">
                                 <div style="font-size: 12px; color: #222;">${t.title}</div>
                                 <button onclick="window.playSpecificTrackDirectly(${JSON.stringify(t).replace(/"/g, '&quot;')}); document.getElementById('modalClose').click();" style="
-                                    background: #07c160; color: #fff; border: none; border-radius: 12px; padding: 3px 10px; font-size: 11px; cursor: pointer;
+                                    background: #ec4141; color: #fff; border: none; border-radius: 12px; padding: 3px 10px; font-size: 11px; cursor: pointer;
                                 ">听听看</button>
                             </div>
                         `).join('')}
@@ -693,10 +820,10 @@
         if (modalClose) modalClose.onclick = () => modal.classList.remove('open');
     };
 
-    // 3. 我的界面（支持网易云登录态展示）
+    // 3. 我的界面（支持网易云红黑视觉 + 头像框换装池 + 背景图自定义）
     window._renderMusicTabMine = function (state) {
         let userName = '主播李敏';
-        let userSign = '记录日常与每个心动的旋律';
+        let userSign = '静听每一个治愈的心动瞬间';
         let userAvatar = 'https://p1.music.126.net/6y-5Y0C15jKEP4AET0BiDA==/109951164587635678.jpg?param=300y300';
 
         const isLogged = window.weMusicApi && window.weMusicApi.isLoggedIn();
@@ -711,37 +838,78 @@
         }
 
         const favCount = window._weMusicEngine.userFavorites.length;
+        const bannerUrl = getMusicProfileBanner();
+        const frameUrl = getEquippedFrameUrl();
 
         return `
             <div style="display: flex; flex-direction: column; gap: 14px;">
-                <div style="background: #ffffff; border-radius: 14px; padding: 16px; border: 0.5px solid #eaeaea; display: flex; align-items: center; justify-content: space-between;">
-                    <div style="display: flex; align-items: center; gap: 12px;">
-                        <div style="width: 52px; height: 52px; border-radius: 50%; overflow: hidden; background: #eee;">
-                            <img src="${userAvatar}" style="width: 100%; height: 100%; object-fit: cover;" />
-                        </div>
-                        <div>
-                            <div style="font-size: 15px; font-weight: bold; color: #111;">${userName}</div>
-                            <div style="font-size: 11px; color: #888; margin-top: 3px;">${userSign}</div>
+                <input type="file" id="musicBannerPicker" accept="image/*" style="display:none;" onchange="window.handleMusicBannerChange(event)" />
+
+                <!-- 🌟 网易云专属个人主页卡片：支持自定义背景图 + 主题头像框换装 -->
+                <div style="
+                    border-radius: 16px; overflow: hidden; position: relative; border: 0.5px solid #ececec;
+                    background: #ffffff; box-shadow: 0 4px 16px rgba(0,0,0,0.04);
+                ">
+                    <!-- 顶部背景大图（点击直接更换） -->
+                    <div style="
+                        height: 90px; width: 100%; position: relative; cursor: pointer;
+                        background: url('${bannerUrl}') center/cover no-repeat;
+                    " onclick="document.getElementById('musicBannerPicker').click()">
+                        <div style="
+                            position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(0,0,0,0.5));
+                            display: flex; align-items: flex-end; justify-content: flex-end; padding: 8px;
+                        ">
+                            <span style="font-size: 10px; color: #fff; background: rgba(0,0,0,0.4); padding: 2px 8px; border-radius: 10px; backdrop-filter: blur(4px);">📷 更换背景</span>
                         </div>
                     </div>
-                    <button onclick="window.openMusicEditProfileModal()" style="
-                        background: #f0f0f0; border: none; border-radius: 14px; padding: 5px 12px; font-size: 11px; color: #333; cursor: pointer;
-                    ">编辑</button>
+
+                    <!-- 个人资料与头像框层 -->
+                    <div style="padding: 14px; position: relative; margin-top: -30px; display: flex; align-items: flex-end; justify-content: space-between;">
+                        <div style="display: flex; align-items: flex-end; gap: 12px;">
+                            <!-- 头像框容器：精准承载主题装扮中心已佩戴的头像框 -->
+                            <div style="width: 60px; height: 60px; position: relative; flex-shrink: 0; cursor: pointer;" onclick="window.openMusicFrameDressModal()">
+                                <div style="width: 100%; height: 100%; border-radius: 50%; overflow: hidden; background: #eee; border: 2px solid #fff; box-shadow: 0 2px 8px rgba(0,0,0,0.15);">
+                                    <img src="${userAvatar}" style="width: 100%; height: 100%; object-fit: cover;" />
+                                </div>
+                                ${frameUrl ? `
+                                    <img src="${frameUrl}" style="
+                                        position: absolute; top: -14%; left: -14%; width: 128%; height: 128%;
+                                        pointer-events: none; z-index: 2; object-fit: contain;
+                                    " />
+                                ` : ''}
+                            </div>
+                            <div style="margin-bottom: 2px;">
+                                <div style="font-size: 15px; font-weight: bold; color: #111;">${userName}</div>
+                                <div style="font-size: 11px; color: #888; margin-top: 2px;">${userSign}</div>
+                            </div>
+                        </div>
+
+                        <!-- 换装与编辑按键 -->
+                        <div style="display: flex; gap: 6px;">
+                            <button onclick="window.openMusicFrameDressModal()" style="
+                                background: #fdf1f1; border: 0.5px solid #ffd0d0; border-radius: 14px; padding: 4px 10px; font-size: 11px; color: #ec4141; font-weight: 500; cursor: pointer;
+                            ">换装</button>
+                            <button onclick="window.openMusicEditProfileModal()" style="
+                                background: #f0f0f0; border: none; border-radius: 14px; padding: 4px 10px; font-size: 11px; color: #333; cursor: pointer;
+                            ">编辑</button>
+                        </div>
+                    </div>
                 </div>
 
-                <div style="background: #ffffff; border-radius: 14px; padding: 14px; border: 0.5px solid #eaeaea;">
+                <!-- 网易云账号连接卡片 -->
+                <div style="background: #ffffff; border-radius: 14px; padding: 14px; border: 0.5px solid #ececec;">
                     <div style="display: flex; align-items: center; justify-content: space-between;">
                         <div style="display: flex; align-items: center; gap: 8px;">
-                            <div style="width: 24px; height: 24px; border-radius: 50%; background: #e60026; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 12px; font-weight: bold;">网</div>
+                            <div style="width: 26px; height: 26px; border-radius: 50%; background: #ec4141; display: flex; align-items: center; justify-content: center; color: #fff; font-size: 13px; font-weight: bold;">网</div>
                             <div>
-                                <div style="font-size: 13px; font-weight: 600; color: #111;">网易云账号连接 (0服务器负担)</div>
-                                <div style="font-size: 10.5px; color: ${isLogged ? '#07c160' : '#888'}; margin-top: 1px;">
+                                <div style="font-size: 13px; font-weight: 600; color: #111;">网易云账号授权 (本地直连 0 服务器压力)</div>
+                                <div style="font-size: 10.5px; color: ${isLogged ? '#ec4141' : '#888'}; margin-top: 1px;">
                                     ${isLogged ? `已连接：${userName}` : '未连接网易云账号'}
                                 </div>
                             </div>
                         </div>
                         <button onclick="${isLogged ? 'window.logoutNeteaseAccount()' : 'window.openNeteaseLoginModal()'}" style="
-                            background: ${isLogged ? '#ff4757' : '#07c160'}; color: #fff; border: none; border-radius: 14px; padding: 4px 10px; font-size: 11px; font-weight: bold; cursor: pointer;
+                            background: ${isLogged ? '#555' : '#ec4141'}; color: #fff; border: none; border-radius: 14px; padding: 4px 12px; font-size: 11px; font-weight: bold; cursor: pointer;
                         ">${isLogged ? '退出' : '验证码登录'}</button>
                     </div>
                     <div style="font-size: 11px; color: #888; margin-top: 6px; line-height: 1.4;">
@@ -749,10 +917,11 @@
                     </div>
                 </div>
 
-                <div style="background: #ffffff; border-radius: 14px; padding: 14px; border: 0.5px solid #eaeaea;">
+                <!-- 我喜欢的音乐列表 -->
+                <div style="background: #ffffff; border-radius: 14px; padding: 14px; border: 0.5px solid #ececec;">
                     <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px;">
                         <div style="display: flex; align-items: center; gap: 6px;">
-                            <span style="color: #ff4757; font-size: 16px;">❤</span>
+                            <span style="color: #ec4141; font-size: 16px;">❤</span>
                             <span style="font-size: 13.5px; font-weight: bold; color: #111;">我喜欢的音乐 (${favCount}首)</span>
                         </div>
                     </div>
@@ -765,7 +934,7 @@
                                 <div style="display: flex; align-items: center; justify-content: space-between; background: #fafafa; padding: 8px 10px; border-radius: 8px;">
                                     <div style="font-size: 12px; color: #222; font-weight: 500;">${t.title} - ${t.artist}</div>
                                     <button onclick="window.playSpecificTrackDirectly(${JSON.stringify(t).replace(/"/g, '&quot;')})" style="
-                                        background: #07c160; color: #fff; border: none; border-radius: 10px; padding: 2px 8px; font-size: 10.5px; cursor: pointer;
+                                        background: #ec4141; color: #fff; border: none; border-radius: 10px; padding: 2px 8px; font-size: 10.5px; cursor: pointer;
                                     ">播放</button>
                                 </div>
                             `).join('')}
@@ -776,8 +945,101 @@
         `;
     };
 
+    // 更换网易云个人主页背景图
+    window.handleMusicBannerChange = function (e) {
+        const file = e.target.files && e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function (evt) {
+            const base64 = evt.target.result;
+            try {
+                localStorage.setItem('mcyt_wemusic_profile_banner', base64);
+            } catch (_) {}
+            if (typeof showToast === 'function') showToast('已成功更换网易云主页背景！');
+            const modalBody = document.getElementById('appModalBody');
+            if (modalBody) window.renderMusicApp(modalBody);
+        };
+        reader.readAsDataURL(file);
+    };
+
+    // 🌟 头像框换装弹窗：无缝提取主题中心保存的高清原画头像框池
+    window.openMusicFrameDressModal = function () {
+        const modal = document.getElementById('modal');
+        const modalTitle = document.getElementById('retroModalTitle');
+        const modalBody = document.getElementById('modalBody');
+        const modalClose = document.getElementById('modalClose');
+        if (!modal || !modalBody) return;
+
+        let frames = [];
+        try {
+            if (typeof window.getStoredDecorFrames === 'function') {
+                frames = window.getStoredDecorFrames();
+            }
+        } catch (_) {}
+
+        if (modalTitle) modalTitle.textContent = '头像框换装中心';
+        modalBody.innerHTML = `
+            <div style="display: flex; flex-direction: column; padding: 10px 0; gap: 12px;">
+                <div style="font-size: 12px; color: #666; line-height: 1.4;">
+                    选择装扮中心保存的个性头像框，即时装配在网易云主页与聊天中心：
+                </div>
+
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-height: 240px; overflow-y: auto;">
+                    <div onclick="window.equipMusicFrame('')" style="
+                        border: 1px dashed #ccc; border-radius: 10px; padding: 10px 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer;
+                    ">
+                        <span style="font-size: 16px;">🚫</span>
+                        <span style="font-size: 11px; color: #666; margin-top: 4px;">无头像框</span>
+                    </div>
+
+                    ${frames.map(f => `
+                        <div onclick="window.equipMusicFrame('${f.img}')" style="
+                            background: #fafafa; border: 1px solid ${f.equipped ? '#ec4141' : '#eee'}; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; align-items: center; cursor: pointer; position: relative;
+                        ">
+                            <div style="width: 44px; height: 44px; position: relative; margin-bottom: 4px;">
+                                <div style="width: 100%; height: 100%; border-radius: 50%; background: #ddd;"></div>
+                                <img src="${f.img}" style="position: absolute; inset: -10%; width: 120%; height: 120%; object-fit: contain;" />
+                            </div>
+                            <div style="font-size: 10.5px; color: #333; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60px;">${f.name || '头像框'}</div>
+                            ${f.equipped ? '<span style="position: absolute; right: 4px; top: 4px; font-size: 9px; color: #ec4141; font-weight: bold;">✔</span>' : ''}
+                        </div>
+                    `).join('')}
+                </div>
+
+                <button onclick="document.getElementById('modalClose').click()" style="
+                    background: #f5f5f5; color: #666; border: none; border-radius: 14px; padding: 6px 0; font-size: 11.5px; cursor: pointer; margin-top: 6px;
+                ">关闭</button>
+            </div>
+        `;
+        modal.classList.add('open');
+        if (modalClose) modalClose.onclick = () => modal.classList.remove('open');
+    };
+
+    window.equipMusicFrame = function (frameImg) {
+        try {
+            if (typeof window.getStoredDecorFrames === 'function' && typeof window.saveStoredDecorFrames === 'function') {
+                const pool = window.getStoredDecorFrames();
+                pool.forEach(f => {
+                    f.equipped = (f.img === frameImg);
+                });
+                window.saveStoredDecorFrames(pool);
+            }
+            if (frameImg) {
+                localStorage.setItem('mcyt_decor_cur_frame', frameImg);
+            } else {
+                localStorage.removeItem('mcyt_decor_cur_frame');
+            }
+        } catch (_) {}
+
+        if (typeof showToast === 'function') showToast(frameImg ? '已佩戴头像框！' : '已卸下头像框');
+        const modalClose = document.getElementById('modalClose');
+        if (modalClose) modalClose.click();
+        const modalBody = document.getElementById('appModalBody');
+        if (modalBody) window.renderMusicApp(modalBody);
+    };
+
     window.openMusicEditProfileModal = function () {
-        if (typeof showToast === 'function') showToast('已保存个人听歌签名！');
+        if (typeof showToast === 'function') showToast('已保存网易云个人签名！');
     };
 
     // 退出网易云账号
@@ -823,13 +1085,13 @@
                             outline: none; -webkit-appearance: none; box-sizing: border-box;
                         " />
                         <button id="wemusicSendSmsBtn" onclick="window.doSendMusicCaptcha()" style="
-                            background: #f0f0f0; color: #07c160; border: 0.5px solid #07c160; border-radius: 8px;
+                            background: #fdf1f1; color: #ec4141; border: 0.5px solid #ec4141; border-radius: 8px;
                             padding: 8px 12px; font-size: 11.5px; font-weight: bold; cursor: pointer; white-space: nowrap;
                         ">获取验证码</button>
                     </div>
                 </div>
 
-                <div id="wemusicLoginError" style="font-size: 11px; color: #ff4757; display: none;"></div>
+                <div id="wemusicLoginError" style="font-size: 11px; color: #ec4141; display: none;"></div>
 
                 <div style="display: flex; gap: 10px; margin-top: 8px;">
                     <button onclick="document.getElementById('modalClose').click()" style="
@@ -837,7 +1099,7 @@
                         padding: 8px 0; font-size: 12px; cursor: pointer;
                     ">取消</button>
                     <button id="wemusicSubmitLoginBtn" onclick="window.doSubmitMusicLogin()" style="
-                        flex: 2; background: #07c160; color: #fff; border: none; border-radius: 16px;
+                        flex: 2; background: #ec4141; color: #fff; border: none; border-radius: 16px;
                         padding: 8px 0; font-size: 12px; font-weight: bold; cursor: pointer;
                     ">验证并登录</button>
                 </div>
@@ -978,7 +1240,7 @@
                     display: flex; flex-direction: column; align-items: center; gap: 8px; box-sizing: border-box;
                 ">
                     ${(track.lyrics && track.lyrics.length) ? track.lyrics.map((l, lIdx) => `
-                        <div style="text-align: center; font-size: 12px; color: ${lIdx === 0 ? '#07c160; font-weight: bold;' : '#666;'};">
+                        <div style="text-align: center; font-size: 12px; color: ${lIdx === 0 ? '#ec4141; font-weight: bold;' : '#666;'};">
                             <div>${l.text}</div>
                             <div style="font-size: 10.5px; color: #999; margin-top: 2px; ${state.showTranslation ? '' : 'display:none;'}">${l.trans || ''}</div>
                         </div>
@@ -986,11 +1248,11 @@
                 </div>
 
                 <div style="display: flex; align-items: center; justify-content: space-around; width: 100%; margin-top: 14px; padding: 0 10px;">
-                    <div onclick="window._weMusicEngine.toggleFavorite(window._weMusicEngine.currentTrack); window.openMusicPlayerModal();" style="cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 11.5px; color: ${state.isFav ? '#ff4757' : '#777'};">
+                    <div onclick="window._weMusicEngine.toggleFavorite(window._weMusicEngine.currentTrack); window.openMusicPlayerModal();" style="cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 11.5px; color: ${state.isFav ? '#ec4141' : '#777'};">
                         <span>${state.isFav ? '❤️ 已收藏' : '🤍 收藏'}</span>
                     </div>
 
-                    <div onclick="window.toggleMusicTranslation()" style="cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 11.5px; color: #07c160; background: #eef9f2; padding: 3px 8px; border-radius: 10px;">
+                    <div onclick="window.toggleMusicTranslation()" style="cursor: pointer; display: flex; align-items: center; gap: 4px; font-size: 11.5px; color: #ec4141; background: #fdf1f1; padding: 3px 8px; border-radius: 10px;">
                         <span>译 ${state.showTranslation ? '开' : '关'}</span>
                     </div>
 
@@ -1006,7 +1268,7 @@
                         <span>${formatTime(state.duration)}</span>
                     </div>
                     <div style="width: 100%; height: 4px; background: #e5e5e5; border-radius: 2px; position: relative; cursor: pointer;" onclick="window.seekWeMusic(event)">
-                        <div style="width: ${(state.progress * 100).toFixed(2)}%; height: 100%; background: #07c160; border-radius: 2px;"></div>
+                        <div style="width: ${(state.progress * 100).toFixed(2)}%; height: 100%; background: #ec4141; border-radius: 2px;"></div>
                     </div>
                 </div>
 
@@ -1015,9 +1277,9 @@
                         <svg viewBox="0 0 24 24" style="width: 24px; height: 24px; fill: currentColor;"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg>
                     </div>
                     <div onclick="window._weMusicEngine.togglePlay(); window.openMusicPlayerModal();" style="
-                        width: 48px; height: 48px; border-radius: 50%; background: #07c160;
+                        width: 48px; height: 48px; border-radius: 50%; background: #ec4141;
                         display: flex; align-items: center; justify-content: center; color: #ffffff; cursor: pointer;
-                        box-shadow: 0 4px 12px rgba(7,193,96,0.3);
+                        box-shadow: 0 4px 12px rgba(236,65,65,0.35);
                     ">
                         ${state.isPlaying ? `
                             <svg viewBox="0 0 24 24" style="width: 22px; height: 22px; fill: currentColor;"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
