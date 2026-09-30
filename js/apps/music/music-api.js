@@ -4,16 +4,15 @@
  * 职责：
  * 1. 手机验证码登录 (发送验证码、验证码校验、Cookie持久化、登录态同步)。
  * 2. 真实公开曲库与热门歌单真随机抓取 (Fisher-Yates洗牌、多流派榜单轮换)。
- * 3. 网易云高清原图直连（CDN免防盗链裁剪加持）。
+ * 3. 网易云高清原图直连（CDN免防盗链裁剪加持，协议升级 https 防止混合内容报错）。
  * 4. 登录状态与用户信息检查。
  */
 
 (function () {
     'use strict';
 
-    // 默认节点：优先使用我们自己的服务器自建网关（100% 免跨域 CORS、免外部受制）
-    // 兼顾多环境容错：支持外部代理/自建节点池
-    const DEFAULT_API_BASE = 'http://121.43.122.253:3000';
+    // 默认节点：使用我们在阿里云服务器已放行的 8000 端口自建网关（100% 免跨域 CORS、直连我们自己的 Node.js 网易云内核）
+    const DEFAULT_API_BASE = 'http://121.43.122.253:8000/netease';
     const FALLBACK_API_BASE = 'https://sullymeow.ccwu.cc/netease';
 
     const STORAGE_KEY_COOKIE = 'mcyt_wemusic_cookie';
@@ -74,12 +73,16 @@
 
         async _fetchWithFallback(pathAndQuery) {
             const cleanPath = pathAndQuery.startsWith('/') ? pathAndQuery : `/${pathAndQuery}`;
+            // 优先使用我们自己的服务器自建网关
             try {
                 const url = `${this.apiBase}${cleanPath}`;
                 const res = await fetch(url, { mode: 'cors' });
-                if (res.ok) return await res.json();
+                if (res.ok) {
+                    const json = await res.json();
+                    return json;
+                }
             } catch (err) {
-                console.warn('[WeMusic] 自建节点通信微调，尝试备选安全路由:', err);
+                console.warn('[WeMusic] 阿里云自建网关响应异常，切换到备用路由通道:', err);
             }
 
             // 备用兜底管道
@@ -88,7 +91,7 @@
                 const resFallback = await fetch(fallbackUrl, { mode: 'cors' });
                 return await resFallback.json();
             } catch (fallbackErr) {
-                console.error('[WeMusic] 网关网络请求失败:', fallbackErr);
+                console.error('[WeMusic] 网关网络请求全部失败:', fallbackErr);
                 throw fallbackErr;
             }
         }
@@ -172,6 +175,7 @@
                     const picked = shuffled.slice(0, count);
                     return picked.map(t => {
                         let rawCover = t.al?.picUrl || t.album?.picUrl || '';
+                        // 强制转为 HTTPS 协议，防止 Android/WebView 报 mixed content 警告或闪烁
                         if (rawCover && rawCover.startsWith('http://')) {
                             rawCover = rawCover.replace('http://', 'https://');
                         }
