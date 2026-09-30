@@ -2,10 +2,11 @@
  * js/apps/music/music-api.js
  * 🎵 网易云音乐直连中枢与开放数据管道 (Netease Open API Bridge)
  * 职责：
- * 1. 手机验证码登录 (发送验证码、验证码校验、Cookie持久化、登录态同步)。
- * 2. 真实公开曲库与热门歌单真随机抓取 (Fisher-Yates洗牌、多流派榜单轮换)。
- * 3. 网易云高清原图直连（CDN免防盗链裁剪加持，协议升级 https 防止混合内容报错）。
- * 4. 登录状态与用户信息检查。
+ * 1. 登录中枢：支持安全扫码登录（生成二维码、自动轮询状态、拿到 MUSIC_U Cookie）与手机验证码双轨通道。
+ * 2. 真实歌词获取与解析器 (实时从网易云 /lyric 接口拉取并解析为同步带毫秒的时间轴)。
+ * 3. 真实公开曲库与热门歌单真随机抓取 (Fisher-Yates洗牌、多流派榜单轮换)。
+ * 4. 网易云高清原图直连（CDN免防盗链裁剪加持，协议升级 https 防止混合内容报错）。
+ * 5. 登录状态与用户信息检查。
  */
 
 (function () {
@@ -73,7 +74,6 @@
 
         async _fetchWithFallback(pathAndQuery) {
             const cleanPath = pathAndQuery.startsWith('/') ? pathAndQuery : `/${pathAndQuery}`;
-            // 优先使用我们自己的服务器自建网关
             try {
                 const url = `${this.apiBase}${cleanPath}`;
                 const res = await fetch(url, { mode: 'cors' });
@@ -96,11 +96,76 @@
             }
         }
 
+        // ========================================================
+        // 📷 1. 官方扫码登录三部曲（彻底避开手机号二次验证风控！）
+        // ========================================================
+
         /**
-         * 1. 发送手机验证码
-         * @param {string} phone 手机号
-         * @param {string} ctcode 国家码，默认 86
+         * 获取二维码 unikey
          */
+        async getQrKey() {
+            const ts = Date.now();
+            const data = await this._fetchWithFallback(`/login/qr/key?timestamp=${ts}`);
+            const key = data?.data?.unikey || data?.unikey;
+            if (!key) throw new Error('获取扫码密钥失败');
+            return key;
+        }
+
+        /**
+         * 生成二维码图片的 Base64
+         */
+        async createQrImage(key) {
+            const ts = Date.now();
+            const data = await this._fetchWithFallback(`/login/qr/create?key=${encodeURIComponent(key)}&qrimg=true&timestamp=${ts}`);
+            const qrimg = data?.data?.qrimg || data?.qrimg;
+            if (!qrimg) throw new Error('生成二维码图片失败');
+            return qrimg;
+        }
+
+        /**
+         * 轮询二维码扫码状态
+         * code 800: 过期 | 801: 等待扫码 | 802: 待确认 | 803: 授权登录成功
+         */
+        async checkQrStatus(key) {
+            const ts = Date.now();
+            const data = await this._fetchWithFallback(`/login/qr/check?key=${encodeURIComponent(key)}&timestamp=${ts}`);
+            return data;
+        }
+
+        /**
+         * 登录成功后拉取网易云真实账号资料
+         */
+        async syncLoginUserProfile(cookie) {
+            this.cookie = cookie || '';
+            localStorage.setItem(STORAGE_KEY_COOKIE, this.cookie);
+
+            try {
+                const ts = Date.now();
+                const statusRes = await this._fetchWithFallback(`/login/status?timestamp=${ts}&cookie=${encodeURIComponent(this.cookie)}`);
+                const profile = statusRes?.data?.profile || statusRes?.profile || {};
+
+                this.userInfo = {
+                    userId: profile.userId || statusRes?.data?.account?.id || '',
+                    nickname: profile.nickname || '云音乐听友',
+                    avatarUrl: profile.avatarUrl || 'https://p1.music.126.net/6y-5Y0C15jKEP4AET0BiDA==/109951164587635678.jpg?param=300y300',
+                    signature: profile.signature || '静听每一个治愈的心动瞬间'
+                };
+            } catch (_) {
+                this.userInfo = {
+                    userId: 'netease_user',
+                    nickname: '网易云音乐人',
+                    avatarUrl: 'https://p1.music.126.net/6y-5Y0C15jKEP4AET0BiDA==/109951164587635678.jpg?param=300y300',
+                    signature: '静听每一个治愈的心动瞬间'
+                };
+            }
+
+            localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(this.userInfo));
+            return this.userInfo;
+        }
+
+        // ========================================================
+        // 📱 2. 手机验证码登录
+        // ========================================================
         async sendCaptcha(phone, ctcode = '86') {
             if (!phone || !/^1[3-9]\d{9}$/.test(phone)) {
                 throw new Error('请输入有效的11位中国大陆手机号码');
@@ -113,59 +178,104 @@
             throw new Error(data.message || data.msg || '验证码发送失败，请稍后重试');
         }
 
-        /**
-         * 2. 验证手机验证码并执行登录
-         * @param {string} phone 手机号
-         * @param {string} captcha 4位或6位验证码
-         * @param {string} ctcode 国家码
-         */
         async verifyCaptchaAndLogin(phone, captcha, ctcode = '86') {
             if (!phone || !captcha) {
                 throw new Error('手机号与验证码不能为空');
             }
             const ts = Date.now();
-            // 先校验验证码
-            const verifyData = await this._fetchWithFallback(`/captcha/verify?phone=${encodeURIComponent(phone)}&captcha=${encodeURIComponent(captcha)}&ctcode=${ctcode}&timestamp=${ts}`);
-            if (verifyData.code !== 200 && verifyData.data !== true) {
-                throw new Error(verifyData.message || verifyData.msg || '验证码错误或已过期');
-            }
-
-            // 执行手机登录并拉取 Cookie
             const loginData = await this._fetchWithFallback(`/login/cellphone?phone=${encodeURIComponent(phone)}&captcha=${encodeURIComponent(captcha)}&countrycode=${ctcode}&timestamp=${ts}`);
 
             if (loginData.code === 200 && (loginData.cookie || loginData.token)) {
-                this.cookie = loginData.cookie || '';
-                localStorage.setItem(STORAGE_KEY_COOKIE, this.cookie);
+                return await this.syncLoginUserProfile(loginData.cookie || loginData.token);
+            }
 
-                // 保存用户基础资料
-                const profile = loginData.profile || {};
-                this.userInfo = {
-                    userId: profile.userId || loginData.account?.id || '',
-                    nickname: profile.nickname || '云音乐听友',
-                    avatarUrl: profile.avatarUrl || 'https://p1.music.126.net/6y-5Y0C15jKEP4AET0BiDA==/109951164587635678.jpg?param=300y300',
-                    signature: profile.signature || '静听每一个治愈的心动瞬间'
-                };
-                localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(this.userInfo));
-                return { success: true, userInfo: this.userInfo };
+            // 如果网易云风控拦截（code 10004）
+            if (loginData.code === 10004 || loginData.message?.includes('安全风险')) {
+                throw new Error('当前手机号触发了网易云安全风控，请改用上方【扫码登录】通道，免二次风控！');
             }
 
             throw new Error(loginData.message || loginData.msg || '登录授权失败');
         }
 
-        /**
-         * 3. 真实热门推荐抓取（真正做到的随机“换一批”，结合公开热门榜单多流派轮换与 Fisher-Yates 洗牌）
-         * @param {number} count 获取歌曲数量，默认 6 首
-         */
+        // ========================================================
+        // 🎼 3. 真实歌词获取与解析器 (LRC 时间轴转换)
+        // ========================================================
+        async fetchTrackLyrics(neteaseId) {
+            if (!neteaseId) return [];
+            try {
+                const ts = Date.now();
+                const res = await this._fetchWithFallback(`/lyric?id=${neteaseId}&timestamp=${ts}`);
+                const lrcText = res?.lrc?.lyric || '';
+                const tlyricText = res?.tlyric?.lyric || '';
+
+                if (!lrcText) return [];
+
+                return this._parseLrc(lrcText, tlyricText);
+            } catch (err) {
+                console.warn('[WeMusic] 拉取歌词失败:', err);
+                return [];
+            }
+        }
+
+        _parseLrc(lrc, tlyric) {
+            const timeReg = /\[(\d{2}):(\d{2})(?:\.(\d{2,3}))?\]/g;
+            const transMap = new Map();
+
+            // 解析翻译歌词
+            if (tlyric) {
+                const tLines = tlyric.split('\n');
+                for (const line of tLines) {
+                    const match = [...line.matchAll(timeReg)];
+                    const text = line.replace(timeReg, '').trim();
+                    if (match.length && text) {
+                        for (const m of match) {
+                            const min = parseInt(m[1], 10);
+                            const sec = parseInt(m[2], 10);
+                            const ms = m[3] ? parseInt(m[3].padEnd(3, '0').slice(0, 3), 10) : 0;
+                            const totalSec = Math.floor(min * 60 + sec);
+                            transMap.set(totalSec, text);
+                        }
+                    }
+                }
+            }
+
+            // 解析主歌词
+            const lines = lrc.split('\n');
+            const result = [];
+            for (const line of lines) {
+                const match = [...line.matchAll(timeReg)];
+                const text = line.replace(timeReg, '').trim();
+                if (match.length && text) {
+                    for (const m of match) {
+                        const min = parseInt(m[1], 10);
+                        const sec = parseInt(m[2], 10);
+                        const ms = m[3] ? parseInt(m[3].padEnd(3, '0').slice(0, 3), 10) : 0;
+                        const time = min * 60 + sec + (ms / 1000);
+                        const secKey = Math.floor(time);
+                        result.push({
+                            time,
+                            text,
+                            trans: transMap.get(secKey) || ''
+                        });
+                    }
+                }
+            }
+
+            result.sort((a, b) => a.time - b.time);
+            return result;
+        }
+
+        // ========================================================
+        // 🎲 4. 真实热门推荐抓取（Fisher-Yates 真正随机洗牌）
+        // ========================================================
         async fetchTrulyRandomTracks(count = 6) {
             try {
-                // 随机抽取一个大分类榜单
                 const randomPlaylistId = HOT_PLAYLIST_IDS[Math.floor(Math.random() * HOT_PLAYLIST_IDS.length)];
                 const ts = Date.now();
                 const data = await this._fetchWithFallback(`/playlist/detail?id=${randomPlaylistId}&timestamp=${ts}`);
 
                 if (data.code === 200 && data.playlist && Array.isArray(data.playlist.tracks) && data.playlist.tracks.length > 0) {
                     const rawTracks = data.playlist.tracks;
-                    // Fisher-Yates 真正随机洗牌算法
                     const shuffled = [...rawTracks];
                     for (let i = shuffled.length - 1; i > 0; i--) {
                         const j = Math.floor(Math.random() * (i + 1));
@@ -175,7 +285,6 @@
                     const picked = shuffled.slice(0, count);
                     return picked.map(t => {
                         let rawCover = t.al?.picUrl || t.album?.picUrl || '';
-                        // 强制转为 HTTPS 协议，防止 Android/WebView 报 mixed content 警告或闪烁
                         if (rawCover && rawCover.startsWith('http://')) {
                             rawCover = rawCover.replace('http://', 'https://');
                         }
@@ -192,11 +301,7 @@
                             url: `https://music.163.com/song/media/outer/url?id=${t.id}.mp3`,
                             cover: cdnCover,
                             duration: Math.floor((t.dt || 200000) / 1000),
-                            lyrics: [
-                                { time: 0, text: `当前播放：${t.name}`, trans: `Now Playing: ${t.name}` },
-                                { time: 10, text: `歌手：${artistName}`, trans: `Artist: ${artistName}` },
-                                { time: 20, text: '主播掌机与网易云官方直连，音画已同步', trans: 'Synchronized with Netease Cloud Music' }
-                            ]
+                            lyrics: []
                         };
                     });
                 }
@@ -204,7 +309,6 @@
                 console.warn('[WeMusic] 网络请求随机曲目失败，使用高质量安全池:', err);
             }
 
-            // 安全保底：返回丰富且封面真实的预备库
             return this._getFallbackTracks();
         }
 
@@ -214,7 +318,7 @@
                     id: 'netease_1413585838',
                     neteaseId: 1413585838,
                     title: '海风与微光 (Sea Breeze)',
-                    artist: '主播掌机精选',
+                    artist: '张芷芮 / 席雨',
                     album: '白昼流光',
                     url: 'https://music.163.com/song/media/outer/url?id=1413585838.mp3',
                     cover: 'https://p1.music.126.net/6y-5Y0C15jKEP4AET0BiDA==/109951164587635678.jpg?param=300y300',
@@ -228,7 +332,7 @@
                     id: 'netease_1384026889',
                     neteaseId: 1384026889,
                     title: '午后雨落 (Afternoon Rain)',
-                    artist: '主播掌机精选',
+                    artist: '独处心声',
                     album: '独处时刻',
                     url: 'https://music.163.com/song/media/outer/url?id=1384026889.mp3',
                     cover: 'https://p2.music.126.net/1n0Z17T5p4BfW1-bJ3Z1gA==/109951164287349142.jpg?param=300y300',
@@ -242,7 +346,7 @@
                     id: 'netease_1824045033',
                     neteaseId: 1824045033,
                     title: '星夜低语 (Whisper of Stars)',
-                    artist: '主播掌机精选',
+                    artist: '深海共鸣',
                     album: '深海共鸣',
                     url: 'https://music.163.com/song/media/outer/url?id=1824045033.mp3',
                     cover: 'https://p1.music.126.net/vX3nQc1RkG3kGfF6gU8Z5A==/109951165768392104.jpg?param=300y300',
