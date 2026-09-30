@@ -164,6 +164,15 @@
                 }
             } catch (_) {}
             this.audio.src = this.currentTrack.url;
+        const track = this.currentTrack;
+        if (track.neteaseId && window.weMusicApi && (!track.lyrics || track.lyrics.length === 0)) {
+            window.weMusicApi.fetchTrackLyrics(track.neteaseId).then(lyrics => {
+                if (lyrics && lyrics.length) {
+                    track.lyrics = lyrics;
+                    this._notifyUpdate();
+                }
+            }).catch(() => {});
+        }
         }
 
         _saveState() {
@@ -184,10 +193,28 @@
             if (index !== null && index !== this.currentIndex) {
                 this.currentIndex = index;
                 this.audio.src = this.currentTrack.url;
+        const track = this.currentTrack;
+        if (track.neteaseId && window.weMusicApi && (!track.lyrics || track.lyrics.length === 0)) {
+            window.weMusicApi.fetchTrackLyrics(track.neteaseId).then(lyrics => {
+                if (lyrics && lyrics.length) {
+                    track.lyrics = lyrics;
+                    this._notifyUpdate();
+                }
+            }).catch(() => {});
+        }
                 this._saveState();
             }
             if (!this.audio.src || this.audio.src === '' || this.audio.src === window.location.href) {
                 this.audio.src = this.currentTrack.url;
+        const track = this.currentTrack;
+        if (track.neteaseId && window.weMusicApi && (!track.lyrics || track.lyrics.length === 0)) {
+            window.weMusicApi.fetchTrackLyrics(track.neteaseId).then(lyrics => {
+                if (lyrics && lyrics.length) {
+                    track.lyrics = lyrics;
+                    this._notifyUpdate();
+                }
+            }).catch(() => {});
+        }
             }
             const p = this.audio.play();
             if (p && p.catch) {
@@ -218,6 +245,15 @@
         next() {
             this.currentIndex = (this.currentIndex + 1) % this.playlist.length;
             this.audio.src = this.currentTrack.url;
+        const track = this.currentTrack;
+        if (track.neteaseId && window.weMusicApi && (!track.lyrics || track.lyrics.length === 0)) {
+            window.weMusicApi.fetchTrackLyrics(track.neteaseId).then(lyrics => {
+                if (lyrics && lyrics.length) {
+                    track.lyrics = lyrics;
+                    this._notifyUpdate();
+                }
+            }).catch(() => {});
+        }
             this._saveState();
             this.play();
         }
@@ -225,6 +261,15 @@
         prev() {
             this.currentIndex = (this.currentIndex - 1 + this.playlist.length) % this.playlist.length;
             this.audio.src = this.currentTrack.url;
+        const track = this.currentTrack;
+        if (track.neteaseId && window.weMusicApi && (!track.lyrics || track.lyrics.length === 0)) {
+            window.weMusicApi.fetchTrackLyrics(track.neteaseId).then(lyrics => {
+                if (lyrics && lyrics.length) {
+                    track.lyrics = lyrics;
+                    this._notifyUpdate();
+                }
+            }).catch(() => {});
+        }
             this._saveState();
             this.play();
         }
@@ -307,6 +352,43 @@
     }
 
     window._weMusicEngine = new MusicPlayerEngine();
+window.syncMusicAppUI = function (state) {
+        const modalProgress = document.getElementById('wemusicModalProgressBar');
+        const modalCurTime = document.getElementById('wemusicModalCurTime');
+        const modalDurTime = document.getElementById('wemusicModalDurTime');
+        const disc = document.getElementById('wemusicModalVinylDisc');
+
+        if (modalCurTime) modalCurTime.textContent = formatTime(state.currentTime);
+        if (modalDurTime) modalDurTime.textContent = formatTime(state.duration);
+        if (modalProgress) modalProgress.style.width = `${(state.progress * 100).toFixed(2)}%`;
+        if (disc) disc.style.animationPlayState = state.isPlaying ? 'running' : 'paused';
+
+        const lyricBox = document.getElementById('wemusicLyricBox');
+        if (lyricBox && state.track.lyrics && state.track.lyrics.length) {
+            const curTime = state.currentTime;
+            let activeIdx = 0;
+            for (let i = 0; i < state.track.lyrics.length; i++) {
+                if (curTime >= state.track.lyrics[i].time) {
+                    activeIdx = i;
+                } else {
+                    break;
+                }
+            }
+            const lines = lyricBox.querySelectorAll('.wemusic-lyric-line');
+            lines.forEach((l, idx) => {
+                if (idx === activeIdx) {
+                    l.style.color = '#ec4141';
+                    l.style.fontWeight = 'bold';
+                    l.style.transform = 'scale(1.05)';
+                    l.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                } else {
+                    l.style.color = '#666';
+                    l.style.fontWeight = 'normal';
+                    l.style.transform = 'scale(1)';
+                }
+            });
+        }
+    };
 
     function formatTime(sec) {
         if (!sec || isNaN(sec)) return '00:00';
@@ -496,8 +578,8 @@
         try {
             if (typeof window.getStoredDecorFrames === 'function') {
                 const pool = window.getStoredDecorFrames();
-                const active = pool.find(f => f.equipped);
-                if (active) return active.img;
+                const active = pool.find(f => f.equipped || f.url === saved || f.img === saved);
+                if (active) return (active.url || active.img);
             }
             const saved = localStorage.getItem('mcyt_decor_cur_frame');
             if (saved) return saved;
@@ -859,7 +941,7 @@
                             position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(0,0,0,0.5));
                             display: flex; align-items: flex-end; justify-content: flex-end; padding: 8px;
                         ">
-                            <span style="font-size: 10px; color: #fff; background: rgba(0,0,0,0.4); padding: 2px 8px; border-radius: 10px; backdrop-filter: blur(4px);">📷 更换背景</span>
+                            <div style="width: 28px; height: 28px; border-radius: 50%; background: rgba(0,0,0,0.45); backdrop-filter: blur(6px); display: flex; align-items: center; justify-content: center;"><svg viewBox="0 0 24 24" style="width: 15px; height: 15px; fill: #ffffff;"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg></div>
                         </div>
                     </div>
 
@@ -993,12 +1075,12 @@
                     </div>
 
                     ${frames.map(f => `
-                        <div onclick="window.equipMusicFrame('${f.img}')" style="
+                        <div onclick="window.equipMusicFrame('${f.url || f.img}')" style="
                             background: #fafafa; border: 1px solid ${f.equipped ? '#ec4141' : '#eee'}; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; align-items: center; cursor: pointer; position: relative;
                         ">
                             <div style="width: 44px; height: 44px; position: relative; margin-bottom: 4px;">
                                 <div style="width: 100%; height: 100%; border-radius: 50%; background: #ddd;"></div>
-                                <img src="${f.img}" style="position: absolute; inset: -10%; width: 120%; height: 120%; object-fit: contain;" />
+                                <img src="${f.url || f.img}" style="position: absolute; inset: -10%; width: 120%; height: 120%; object-fit: contain;" />
                             </div>
                             <div style="font-size: 10.5px; color: #333; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 60px;">${f.name || '头像框'}</div>
                             ${f.equipped ? '<span style="position: absolute; right: 4px; top: 4px; font-size: 9px; color: #ec4141; font-weight: bold;">✔</span>' : ''}
@@ -1039,7 +1121,60 @@
     };
 
     window.openMusicEditProfileModal = function () {
-        if (typeof showToast === 'function') showToast('已保存网易云个人签名！');
+        const modal = document.getElementById('modal');
+        const modalTitle = document.getElementById('retroModalTitle');
+        const modalBody = document.getElementById('modalBody');
+        const modalClose = document.getElementById('modalClose');
+        if (!modal || !modalBody) return;
+
+        let curName = '主播李敏';
+        let curSign = '静听每一个治愈的心动瞬间';
+        try {
+            if (window.weMusicApi && window.weMusicApi.userInfo) {
+                curName = window.weMusicApi.userInfo.nickname || curName;
+                curSign = window.weMusicApi.userInfo.signature || curSign;
+            } else if (window.G && window.G.player && window.G.player.name) {
+                curName = window.G.player.name;
+            }
+        } catch (_) {}
+
+        if (modalTitle) modalTitle.textContent = '编辑网易云个人名片';
+        modalBody.innerHTML = `
+            <div style="display: flex; flex-direction: column; padding: 10px 0; gap: 12px;">
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <label style="font-size: 12px; font-weight: 600; color: #333;">听歌昵称</label>
+                    <input id="musicEditNameInput" type="text" value="${curName}" style="border: 0.5px solid #ccc; border-radius: 8px; padding: 8px 12px; font-size: 13px; outline: none; width: 100%; box-sizing: border-box;" />
+                </div>
+                <div style="display: flex; flex-direction: column; gap: 6px;">
+                    <label style="font-size: 12px; font-weight: 600; color: #333;">听歌签名</label>
+                    <input id="musicEditSignInput" type="text" value="${curSign}" style="border: 0.5px solid #ccc; border-radius: 8px; padding: 8px 12px; font-size: 13px; outline: none; width: 100%; box-sizing: border-box;" />
+                </div>
+                <div style="display: flex; gap: 10px; margin-top: 8px;">
+                    <button onclick="document.getElementById('modalClose').click()" style="flex: 1; background: #f5f5f5; color: #666; border: none; border-radius: 16px; padding: 8px 0; font-size: 12px; cursor: pointer;">取消</button>
+                    <button onclick="window.saveMusicProfileEdit()" style="flex: 2; background: #ec4141; color: #fff; border: none; border-radius: 16px; padding: 8px 0; font-size: 12px; font-weight: bold; cursor: pointer;">保存</button>
+                </div>
+            </div>
+        `;
+        modal.classList.add('open');
+        if (modalClose) modalClose.onclick = () => modal.classList.remove('open');
+    };
+
+    window.saveMusicProfileEdit = function () {
+        const nameInput = document.getElementById('musicEditNameInput');
+        const signInput = document.getElementById('musicEditSignInput');
+        if (!nameInput || !signInput) return;
+        const newName = nameInput.value.trim() || '云音乐听友';
+        const newSign = signInput.value.trim() || '静听每一个治愈的心动瞬间';
+
+        if (!window.weMusicApi.userInfo) window.weMusicApi.userInfo = {};
+        window.weMusicApi.userInfo.nickname = newName;
+        window.weMusicApi.userInfo.signature = newSign;
+        localStorage.setItem('mcyt_wemusic_user_info', JSON.stringify(window.weMusicApi.userInfo));
+
+        if (typeof showToast === 'function') showToast('已保存网易云个人资料！');
+        document.getElementById('modalClose').click();
+        const modalBody = document.getElementById('appModalBody');
+        if (modalBody) window.renderMusicApp(modalBody);
     };
 
     // 退出网易云账号
@@ -1240,7 +1375,7 @@
                     display: flex; flex-direction: column; align-items: center; gap: 8px; box-sizing: border-box;
                 ">
                     ${(track.lyrics && track.lyrics.length) ? track.lyrics.map((l, lIdx) => `
-                        <div style="text-align: center; font-size: 12px; color: ${lIdx === 0 ? '#ec4141; font-weight: bold;' : '#666;'};">
+                        <div class="wemusic-lyric-line" style="text-align: center; font-size: 12px; transition: all 0.2s ease; color: ${lIdx === 0 ? '#ec4141; font-weight: bold;' : '#666;'};">
                             <div>${l.text}</div>
                             <div style="font-size: 10.5px; color: #999; margin-top: 2px; ${state.showTranslation ? '' : 'display:none;'}">${l.trans || ''}</div>
                         </div>
@@ -1264,11 +1399,11 @@
 
                 <div style="width: 90%; margin-top: 14px;">
                     <div style="display: flex; justify-content: space-between; font-size: 11px; color: #999; margin-bottom: 4px;">
-                        <span>${formatTime(state.currentTime)}</span>
-                        <span>${formatTime(state.duration)}</span>
+                        <span id="wemusicModalCurTime">${formatTime(state.currentTime)}</span>
+                        <span id="wemusicModalDurTime">${formatTime(state.duration)}</span>
                     </div>
                     <div style="width: 100%; height: 4px; background: #e5e5e5; border-radius: 2px; position: relative; cursor: pointer;" onclick="window.seekWeMusic(event)">
-                        <div style="width: ${(state.progress * 100).toFixed(2)}%; height: 100%; background: #ec4141; border-radius: 2px;"></div>
+                        <div id="wemusicModalProgressBar" style="width: ${(state.progress * 100).toFixed(2)}%; height: 100%; background: #ec4141; border-radius: 2px;"></div>
                     </div>
                 </div>
 
@@ -1308,8 +1443,32 @@
         const modal = document.getElementById('modal');
         if (modal) modal.classList.remove('open');
 
-        if (typeof showToast === 'function') {
-            showToast(`已生成「${track.title}」音乐卡片，快去私聊发给同伴一起听吧！`);
+        try {
+            let activeNpcId = window.G?.currentChatNpcId;
+            if (!activeNpcId && window.G?.customNpcs) {
+                const npcs = Object.keys(window.G.customNpcs);
+                if (npcs.length) activeNpcId = npcs[0];
+            }
+            if (activeNpcId && typeof window.pushChatMessageSafe === 'function') {
+                const shareText = `[音乐分享] 🎵 《${track.title}》- ${track.artist}\n一起来听听这首歌吧~`;
+                window.pushChatMessageSafe(activeNpcId, {
+                    sender: 'player',
+                    text: shareText,
+                    type: 'music_card',
+                    musicInfo: {
+                        id: track.id,
+                        title: track.title,
+                        artist: track.artist,
+                        cover: track.cover,
+                        url: track.url
+                    }
+                });
+                if (typeof showToast === 'function') showToast(`已将《${track.title}》分享到聊天私聊！`);
+            } else {
+                if (typeof showToast === 'function') showToast(`已生成《${track.title}》卡片！`);
+            }
+        } catch (e) {
+            console.warn('[ShareMusic] 分享异常:', e);
         }
         window.openPhoneApp('chat');
     };
