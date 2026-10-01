@@ -35,6 +35,7 @@
     class WeMusicApiService {
         constructor() {
             this.apiBase = DEFAULT_API_BASE;
+            this.lastQrRedirectUrl = '';
             this.cookie = localStorage.getItem(STORAGE_KEY_COOKIE) || '';
             this.userInfo = null;
             this._loadUserInfo();
@@ -147,20 +148,33 @@
                 this.userInfo = {
                     userId: profile.userId || statusRes?.data?.account?.id || '',
                     nickname: profile.nickname || '云音乐听友',
-                    avatarUrl: profile.avatarUrl || 'https://p1.music.126.net/6y-5Y0C15jKEP4AET0BiDA==/109951164587635678.jpg?param=300y300',
+                    avatarUrl: profile.avatarUrl || 'assets/system/default_desktop.jpg',
                     signature: profile.signature || '静听每一个治愈的心动瞬间'
                 };
             } catch (_) {
                 this.userInfo = {
                     userId: 'netease_user',
                     nickname: '网易云音乐人',
-                    avatarUrl: 'https://p1.music.126.net/6y-5Y0C15jKEP4AET0BiDA==/109951164587635678.jpg?param=300y300',
+                    avatarUrl: 'assets/system/default_desktop.jpg',
                     signature: '静听每一个治愈的心动瞬间'
                 };
             }
 
             localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(this.userInfo));
             return this.userInfo;
+        }
+
+        async loginByQrStatus(key) {
+            const result = await this.checkQrStatus(key);
+            const code = result?.code;
+            if (code === 803) {
+                const cookie = result.cookie || result.data?.cookie || result.body?.cookie || '';
+                if (!cookie) throw new Error('扫码成功但网关没有返回登录凭证，请检查网关 Cookie 转发');
+                return await this.syncLoginUserProfile(cookie);
+            }
+            if (code === 800) throw new Error('二维码已过期，请重新生成');
+            if (code === 802) return { pending: true, message: '已扫码，请在网易云确认登录' };
+            return { pending: true, message: '等待扫码' };
         }
 
         // ========================================================
@@ -185,8 +199,9 @@
             const ts = Date.now();
             const loginData = await this._fetchWithFallback(`/login/cellphone?phone=${encodeURIComponent(phone)}&captcha=${encodeURIComponent(captcha)}&countrycode=${ctcode}&timestamp=${ts}`);
 
-            if (loginData.code === 200 && (loginData.cookie || loginData.token)) {
-                return await this.syncLoginUserProfile(loginData.cookie || loginData.token);
+            const loginCookie = loginData.cookie || loginData.data?.cookie || loginData.body?.cookie || loginData.token || loginData.data?.token;
+            if (loginData.code === 200 && loginCookie) {
+                return await this.syncLoginUserProfile(loginCookie);
             }
 
             // 如果网易云风控拦截（code 10004）
@@ -194,7 +209,8 @@
                 throw new Error('当前手机号触发了网易云安全风控，请改用上方【扫码登录】通道，免二次风控！');
             }
 
-            throw new Error(loginData.message || loginData.msg || '登录授权失败');
+            const detail = loginData.redirectUrl ? `${loginData.message || loginData.msg || '登录授权失败'}\n请改用扫码登录。` : (loginData.message || loginData.msg || '登录授权失败');
+            throw new Error(detail);
         }
 
         // ========================================================
@@ -288,7 +304,7 @@
                         if (rawCover && rawCover.startsWith('http://')) {
                             rawCover = rawCover.replace('http://', 'https://');
                         }
-                        const cdnCover = rawCover ? `${rawCover}?param=300y300` : 'https://p1.music.126.net/6y-5Y0C15jKEP4AET0BiDA==/109951164587635678.jpg?param=300y300';
+                        const cdnCover = rawCover ? `${rawCover}?param=300y300` : 'assets/system/default_desktop.jpg';
                         const artistName = (t.ar && t.ar[0]?.name) || (t.artists && t.artists[0]?.name) || '网易云音乐人';
                         const albumName = t.al?.name || t.album?.name || '热门精选';
 
@@ -321,7 +337,7 @@
                     artist: '张芷芮 / 席雨',
                     album: '白昼流光',
                     url: 'https://music.163.com/song/media/outer/url?id=1413585838.mp3',
-                    cover: 'https://p1.music.126.net/6y-5Y0C15jKEP4AET0BiDA==/109951164587635678.jpg?param=300y300',
+                    cover: 'assets/system/default_desktop.jpg',
                     duration: 198,
                     lyrics: [
                         { time: 0, text: '海风吹拂过安静的岸礁', trans: 'The sea breeze caresses the quiet shore' },
@@ -335,7 +351,7 @@
                     artist: '独处心声',
                     album: '独处时刻',
                     url: 'https://music.163.com/song/media/outer/url?id=1384026889.mp3',
-                    cover: 'https://p2.music.126.net/1n0Z17T5p4BfW1-bJ3Z1gA==/109951164287349142.jpg?param=300y300',
+                    cover: 'assets/system/default_desktop.jpg',
                     duration: 215,
                     lyrics: [
                         { time: 0, text: '雨滴敲打着窗沿', trans: 'Raindrops tap softly against the windowsill' },
@@ -349,7 +365,7 @@
                     artist: '深海共鸣',
                     album: '深海共鸣',
                     url: 'https://music.163.com/song/media/outer/url?id=1824045033.mp3',
-                    cover: 'https://p1.music.126.net/vX3nQc1RkG3kGfF6gU8Z5A==/109951165768392104.jpg?param=300y300',
+                    cover: 'assets/system/default_desktop.jpg',
                     duration: 184,
                     lyrics: [
                         { time: 0, text: '拉莱耶的星空沉入无垠深海', trans: 'The starry sky sinks deep into Rlyeh ocean' },

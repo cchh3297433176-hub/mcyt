@@ -16,6 +16,11 @@
     'use strict';
 
     // 默认内置演示音轨（全部接入真实网易云 CDN 高清原图）
+    const SAFE_TRACK = {
+        id: 'music_loading', neteaseId: 0, title: '正在加载推荐', artist: '微音', album: '网易云随机推荐',
+        url: '', cover: 'assets/system/default_desktop.jpg', duration: 0, lyrics: []
+    };
+
     const DEFAULT_PLAYLIST = [
         {
             id: 'netease_1413585838',
@@ -24,7 +29,7 @@
             artist: '主播掌机精选',
             album: '白昼流光',
             url: 'https://music.163.com/song/media/outer/url?id=1413585838.mp3',
-            cover: 'https://p1.music.126.net/6y-5Y0C15jKEP4AET0BiDA==/109951164587635678.jpg?param=300y300',
+            cover: 'assets/system/default_desktop.jpg',
             duration: 198,
             lyrics: [
                 { time: 0, text: '海风吹拂过安静的岸礁', trans: 'The sea breeze caresses the quiet shore' },
@@ -41,7 +46,7 @@
             artist: '主播掌机精选',
             album: '独处时刻',
             url: 'https://music.163.com/song/media/outer/url?id=1384026889.mp3',
-            cover: 'https://p2.music.126.net/1n0Z17T5p4BfW1-bJ3Z1gA==/109951164287349142.jpg?param=300y300',
+            cover: 'assets/system/default_desktop.jpg',
             duration: 215,
             lyrics: [
                 { time: 0, text: '雨滴敲打着窗沿', trans: 'Raindrops tap softly against the windowsill' },
@@ -58,7 +63,7 @@
             artist: '主播掌机精选',
             album: '深海共鸣',
             url: 'https://music.163.com/song/media/outer/url?id=1824045033.mp3',
-            cover: 'https://p1.music.126.net/vX3nQc1RkG3kGfF6gU8Z5A==/109951165768392104.jpg?param=300y300',
+            cover: 'assets/system/default_desktop.jpg',
             duration: 184,
             lyrics: [
                 { time: 0, text: '拉莱耶的星空沉入无垠深海', trans: 'The starry sky sinks deep into Rlyeh ocean' },
@@ -72,7 +77,9 @@
 
     class MusicPlayerEngine {
         constructor() {
-            this.playlist = DEFAULT_PLAYLIST;
+            this.playlist = [];
+            this._initialRandomLoaded = false;
+            this._initialRandomLoading = false;
             this.currentIndex = 0;
             this.isPlaying = false;
             this.currentTime = 0;
@@ -82,6 +89,7 @@
             this.audio.crossOrigin = 'anonymous';
             this.userFavorites = [];
             this.showTranslation = true;
+            this.loopMode = localStorage.getItem('mcyt_wemusic_loop_mode') || 'list';
             this.isRefreshingExplore = false;
 
             this._loadFavorites();
@@ -127,7 +135,9 @@
             });
 
             this.audio.addEventListener('ended', () => {
-                this.next();
+                if (this.loopMode === 'one') { this.audio.currentTime = 0; this.play(); }
+                else if (this.loopMode === 'random' && this.playlist.length) { this.play(Math.floor(Math.random() * this.playlist.length)); }
+                else this.next();
             });
 
             this.audio.addEventListener('play', () => {
@@ -152,7 +162,7 @@
         }
 
         get currentTrack() {
-            return this.playlist[this.currentIndex] || this.playlist[0];
+            return this.playlist[this.currentIndex] || this.playlist[0] || SAFE_TRACK;
         }
 
         _loadSavedState() {
@@ -243,6 +253,7 @@
         }
 
         next() {
+            if (!this.playlist.length) return;
             this.currentIndex = (this.currentIndex + 1) % this.playlist.length;
             this.audio.src = this.currentTrack.url;
         const track = this.currentTrack;
@@ -259,6 +270,7 @@
         }
 
         prev() {
+            if (!this.playlist.length) return;
             this.currentIndex = (this.currentIndex - 1 + this.playlist.length) % this.playlist.length;
             this.audio.src = this.currentTrack.url;
         const track = this.currentTrack;
@@ -318,8 +330,30 @@
                 duration: this.duration || this.currentTrack.duration || 0,
                 progress: (this.duration > 0) ? (this.currentTime / this.duration) : 0,
                 isFav: this.isFavorite(this.currentTrack.id),
-                showTranslation: this.showTranslation
+                showTranslation: this.showTranslation,
+                loopMode: this.loopMode
             };
+        }
+
+        async loadInitialRandomTracks() {
+            if (this._initialRandomLoaded || this._initialRandomLoading) return;
+            this._initialRandomLoading = true;
+            try {
+                const tracks = window.weMusicApi && await window.weMusicApi.fetchTrulyRandomTracks(6);
+                if (tracks && tracks.length) {
+                    this.playlist = tracks;
+                    this.currentIndex = 0;
+                    this._saveState();
+                }
+            } catch (err) {
+                console.warn('[WeMusic] 首次随机推荐加载失败:', err);
+            } finally {
+                this._initialRandomLoading = false;
+                this._initialRandomLoaded = true;
+                this._notifyUpdate();
+                const body = document.getElementById('appModalBody');
+                if (body && typeof window.renderMusicApp === 'function') window.renderMusicApp(body);
+            }
         }
 
         /**
@@ -520,6 +554,15 @@ window.syncMusicAppUI = function (state) {
         }
     };
 
+    window.cycleWeMusicLoopMode = function () {
+        const engine = window._weMusicEngine; if (!engine) return;
+        const modes = [['list','列表循环'],['one','单曲循环'],['random','随机播放']];
+        const idx = modes.findIndex(x => x[0] === engine.loopMode);
+        const next = modes[(idx + 1) % modes.length]; engine.loopMode = next[0];
+        localStorage.setItem('mcyt_wemusic_loop_mode', engine.loopMode);
+        const btn = document.getElementById('wemusicFloatModeBtn'); if (btn) btn.textContent = next[1];
+    };
+
     window.toggleMusicFloatingCapsule = function () {
         const capsule = document.getElementById('wemusicFloatingCapsule');
         if (!capsule) return;
@@ -560,6 +603,9 @@ window.syncMusicAppUI = function (state) {
             `;
         }
 
+        const modeEl = document.getElementById('wemusicFloatModeBtn');
+        if (modeEl) modeEl.textContent = state.loopMode === 'one' ? '单曲循环' : (state.loopMode === 'random' ? '随机播放' : '列表循环');
+
         if (bars && bars.length) {
             bars.forEach(b => {
                 b.style.background = '#ec4141';
@@ -576,12 +622,12 @@ window.syncMusicAppUI = function (state) {
     // 获取当前用户装扮头像框（联动主题中心）
     function getEquippedFrameUrl() {
         try {
+            const saved = localStorage.getItem('mcyt_decor_cur_frame');
             if (typeof window.getStoredDecorFrames === 'function') {
                 const pool = window.getStoredDecorFrames();
-                const active = pool.find(f => f.equipped || f.url === saved || f.img === saved);
-                if (active) return (active.url || active.img);
+                const active = pool.find(f => f.equipped || f.url === saved || f.img === saved || f.id === localStorage.getItem('mcyt_active_decor_frame'));
+                if (active) return (active.url || active.img || '');
             }
-            const saved = localStorage.getItem('mcyt_decor_cur_frame');
             if (saved) return saved;
         } catch (_) {}
         return '';
@@ -595,6 +641,7 @@ window.syncMusicAppUI = function (state) {
     window.renderMusicApp = function (container) {
         if (!container) return;
 
+        if (!window._weMusicEngine._initialRandomLoaded) window._weMusicEngine.loadInitialRandomTracks();
         const state = window._weMusicEngine.getState();
         const tab = window._weMusicCurrentTab;
 
@@ -647,7 +694,7 @@ window.syncMusicAppUI = function (state) {
                 " onclick="window.openMusicPlayerModal()">
                     <div style="display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1;">
                         <div style="width: 38px; height: 38px; border-radius: 50%; overflow: hidden; background: #222; flex-shrink: 0; border: 1.5px solid #333;">
-                            <img src="${state.track.cover}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://p1.music.126.net/6y-5Y0C15jKEP4AET0BiDA==/109951164587635678.jpg?param=300y300';" />
+                            <img src="${state.track.cover}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='assets/system/default_desktop.jpg';" />
                         </div>
                         <div style="min-width: 0; flex: 1;">
                             <div style="font-size: 13px; font-weight: 600; color: #111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${state.track.title}</div>
@@ -761,7 +808,7 @@ window.syncMusicAppUI = function (state) {
                             " onclick="window._weMusicEngine.play(${idx})">
                                 <div style="display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1;">
                                     <div style="width: 42px; height: 42px; border-radius: 8px; overflow: hidden; flex-shrink: 0; background: #eee;">
-                                        <img src="${track.cover}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://p1.music.126.net/6y-5Y0C15jKEP4AET0BiDA==/109951164587635678.jpg?param=300y300';" />
+                                        <img src="${track.cover}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='assets/system/default_desktop.jpg';" />
                                     </div>
                                     <div style="min-width: 0; flex: 1;">
                                         <div style="font-size: 13px; font-weight: 600; color: #111; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${track.title}</div>
@@ -808,7 +855,7 @@ window.syncMusicAppUI = function (state) {
                             <div style="display: flex; align-items: center; justify-content: space-between; padding-bottom: 10px; border-bottom: 0.5px solid #f5f5f5;">
                                 <div style="display: flex; align-items: center; gap: 10px; cursor: pointer;" onclick="window.openNpcMusicProfileModal('${pl.npcId}')">
                                     <div style="width: 44px; height: 44px; border-radius: 50%; overflow: hidden; border: 1.5px solid #ec4141;">
-                                        <img src="${pl.npcAvatar}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://p1.music.126.net/6y-5Y0C15jKEP4AET0BiDA==/109951164587635678.jpg?param=300y300';" />
+                                        <img src="${pl.npcAvatar}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='assets/system/default_desktop.jpg';" />
                                     </div>
                                     <div>
                                         <div style="font-size: 13.5px; font-weight: bold; color: #111;">${pl.npcName}</div>
@@ -878,7 +925,7 @@ window.syncMusicAppUI = function (state) {
         modalBody.innerHTML = `
             <div style="display: flex; flex-direction: column; align-items: center; padding: 10px 0;">
                 <div style="width: 68px; height: 68px; border-radius: 50%; overflow: hidden; border: 2.5px solid #ec4141; box-shadow: 0 4px 14px rgba(236,65,65,0.25);">
-                    <img src="${pl.npcAvatar}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://p1.music.126.net/6y-5Y0C15jKEP4AET0BiDA==/109951164587635678.jpg?param=300y300';" />
+                    <img src="${pl.npcAvatar}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='assets/system/default_desktop.jpg';" />
                 </div>
                 <div style="font-size: 16px; font-weight: bold; color: #111; margin-top: 8px;">${pl.npcName}</div>
                 <div style="font-size: 11.5px; color: #777; margin-top: 3px; text-align: center; padding: 0 10px;">${pl.desc}</div>
@@ -906,7 +953,7 @@ window.syncMusicAppUI = function (state) {
     window._renderMusicTabMine = function (state) {
         let userName = '主播李敏';
         let userSign = '静听每一个治愈的心动瞬间';
-        let userAvatar = 'https://p1.music.126.net/6y-5Y0C15jKEP4AET0BiDA==/109951164587635678.jpg?param=300y300';
+        let userAvatar = 'assets/system/default_desktop.jpg';
 
         const isLogged = window.weMusicApi && window.weMusicApi.isLoggedIn();
         if (isLogged && window.weMusicApi.userInfo) {
@@ -936,7 +983,7 @@ window.syncMusicAppUI = function (state) {
                     <div style="
                         height: 90px; width: 100%; position: relative; cursor: pointer;
                         background: url('${bannerUrl}') center/cover no-repeat;
-                    " onclick="document.getElementById('musicBannerPicker').click()">
+                    " onclick="window.openMusicBannerModal()">
                         <div style="
                             position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(0,0,0,0.5));
                             display: flex; align-items: flex-end; justify-content: flex-end; padding: 8px;
@@ -1027,6 +1074,40 @@ window.syncMusicAppUI = function (state) {
         `;
     };
 
+    window.openMusicBannerModal = function () {
+        const modal = document.getElementById('modal');
+        const title = document.getElementById('retroModalTitle');
+        const body = document.getElementById('modalBody');
+        const close = document.getElementById('modalClose');
+        if (!modal || !body) return;
+        if (title) title.textContent = '更换网易云主页背景';
+        body.innerHTML = `<div style="display:flex;flex-direction:column;gap:12px;padding:8px 0;">
+            <input type="file" id="musicBannerModalPicker" accept="image/*" style="display:none" onchange="window.previewMusicBannerChange(event)">
+            <div id="musicBannerPreview" style="height:100px;border-radius:10px;background:url('${getMusicProfileBanner()}') center/cover no-repeat;border:1px solid #eee"></div>
+            <button onclick="document.getElementById('musicBannerModalPicker').click()" style="padding:9px;border:1px solid #ec4141;background:#fdf1f1;color:#ec4141;border-radius:8px;cursor:pointer">选择本地图片</button>
+            <div style="display:flex;gap:8px"><button onclick="document.getElementById('modalClose').click()" style="flex:1;padding:8px;border:0;border-radius:8px">取消</button><button onclick="window.confirmMusicBannerChange()" style="flex:1;padding:8px;border:0;border-radius:8px;background:#ec4141;color:#fff">确定保存</button></div>
+        </div>`;
+        window._pendingMusicBanner = null;
+        modal.classList.add('open');
+        if (close) close.onclick = () => modal.classList.remove('open');
+    };
+    window.previewMusicBannerChange = function (e) {
+        const file = e.target.files && e.target.files[0]; if (!file) return;
+        const reader = new FileReader(); reader.onload = ev => {
+            window._pendingMusicBanner = ev.target.result;
+            const preview = document.getElementById('musicBannerPreview');
+            if (preview) preview.style.backgroundImage = `url('${ev.target.result}')`;
+        }; reader.readAsDataURL(file);
+    };
+    window.confirmMusicBannerChange = function () {
+        if (!window._pendingMusicBanner) { if (typeof showToast === 'function') showToast('请先选择图片'); return; }
+        localStorage.setItem('mcyt_wemusic_profile_banner', window._pendingMusicBanner);
+        window._pendingMusicBanner = null;
+        document.getElementById('modalClose')?.click();
+        const body = document.getElementById('appModalBody'); if (body) window.renderMusicApp(body);
+        if (typeof showToast === 'function') showToast('主页背景已保存');
+    };
+
     // 更换网易云个人主页背景图
     window.handleMusicBannerChange = function (e) {
         const file = e.target.files && e.target.files[0];
@@ -1052,6 +1133,7 @@ window.syncMusicAppUI = function (state) {
         const modalClose = document.getElementById('modalClose');
         if (!modal || !modalBody) return;
 
+        window._pendingMusicFrame = '';
         let frames = [];
         try {
             if (typeof window.getStoredDecorFrames === 'function') {
@@ -1066,8 +1148,10 @@ window.syncMusicAppUI = function (state) {
                     选择装扮中心保存的个性头像框，即时装配在网易云主页与聊天中心：
                 </div>
 
+                <input type="file" id="musicFrameLocalPicker" accept="image/*" style="display:none" onchange="window.importMusicFrameLocal(event)" />
+                <button onclick="document.getElementById('musicFrameLocalPicker').click()" style="padding:8px;border:1px solid #ec4141;background:#fdf1f1;color:#ec4141;border-radius:8px;cursor:pointer">导入本地头像框</button>
                 <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; max-height: 240px; overflow-y: auto;">
-                    <div onclick="window.equipMusicFrame('')" style="
+                    <div onclick="window.selectMusicFramePending('')" style="
                         border: 1px dashed #ccc; border-radius: 10px; padding: 10px 4px; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer;
                     ">
                         <span style="font-size: 16px;">🚫</span>
@@ -1075,7 +1159,7 @@ window.syncMusicAppUI = function (state) {
                     </div>
 
                     ${frames.map(f => `
-                        <div onclick="window.equipMusicFrame('${f.url || f.img}')" style="
+                        <div onclick="window.selectMusicFramePending('${f.url || f.img}')" style="
                             background: #fafafa; border: 1px solid ${f.equipped ? '#ec4141' : '#eee'}; border-radius: 10px; padding: 8px; display: flex; flex-direction: column; align-items: center; cursor: pointer; position: relative;
                         ">
                             <div style="width: 44px; height: 44px; position: relative; margin-bottom: 4px;">
@@ -1088,6 +1172,7 @@ window.syncMusicAppUI = function (state) {
                     `).join('')}
                 </div>
 
+                <button onclick="window.equipMusicFrame(window._pendingMusicFrame || '')" style="background:#ec4141;color:#fff;border:none;border-radius:14px;padding:6px 0;font-size:11.5px;cursor:pointer;margin-top:6px">确定保存</button>
                 <button onclick="document.getElementById('modalClose').click()" style="
                     background: #f5f5f5; color: #666; border: none; border-radius: 14px; padding: 6px 0; font-size: 11.5px; cursor: pointer; margin-top: 6px;
                 ">关闭</button>
@@ -1097,27 +1182,38 @@ window.syncMusicAppUI = function (state) {
         if (modalClose) modalClose.onclick = () => modal.classList.remove('open');
     };
 
-    window.equipMusicFrame = function (frameImg) {
-        try {
-            if (typeof window.getStoredDecorFrames === 'function' && typeof window.saveStoredDecorFrames === 'function') {
-                const pool = window.getStoredDecorFrames();
-                pool.forEach(f => {
-                    f.equipped = (f.img === frameImg);
-                });
-                window.saveStoredDecorFrames(pool);
-            }
-            if (frameImg) {
-                localStorage.setItem('mcyt_decor_cur_frame', frameImg);
-            } else {
-                localStorage.removeItem('mcyt_decor_cur_frame');
-            }
-        } catch (_) {}
+    window.importMusicFrameLocal = function (e) {
+        const file = e.target.files && e.target.files[0]; if (!file) return;
+        const reader = new FileReader(); reader.onload = async ev => {
+            const item = { id: 'frame_music_' + Date.now(), name: file.name.replace(/\.[^/.]+$/, '') || '本地头像框', url: ev.target.result, scale: 1.18, offsetX: 0, offsetY: 0, isBuiltin: false, equipped: false };
+            const list = window.getStoredDecorFrames ? window.getStoredDecorFrames().filter(f => !f.isBuiltin && f.id !== 'frame_none') : [];
+            list.push(item); window._decorFramesCache = [{ id:'frame_none', name:'无头像框', url:'', scale:1.18, offsetX:0, offsetY:0, isBuiltin:true }, ...list];
+            if (window.localforage) await window.localforage.setItem('mcyt_decor_frames', list);
+            window.openMusicFrameDressModal();
+            if (typeof showToast === 'function') showToast('本地头像框已导入，请点击选择后确定');
+        }; reader.readAsDataURL(file);
+    };
 
+    window.selectMusicFramePending = function (frameImg) {
+        window._pendingMusicFrame = frameImg;
+        document.querySelectorAll('[data-music-frame-pending]').forEach(el => el.removeAttribute('data-music-frame-pending'));
+        if (typeof showToast === 'function') showToast('已选择头像框，点击确定后保存');
+    };
+
+    window.equipMusicFrame = async function (frameImg) {
+        try {
+            const pool = typeof window.getStoredDecorFrames === 'function' ? window.getStoredDecorFrames() : [];
+            const active = pool.find(f => (f.url || f.img || '') === frameImg);
+            pool.forEach(f => { f.equipped = !!active && f.id === active.id; });
+            window._decorFramesCache = pool;
+            if (window.localforage) await window.localforage.setItem('mcyt_decor_frames', pool.filter(f => !f.isBuiltin && f.id !== 'frame_none'));
+            localStorage.setItem('mcyt_active_decor_frame', active ? active.id : 'frame_none');
+            if (frameImg) localStorage.setItem('mcyt_decor_cur_frame', frameImg); else localStorage.removeItem('mcyt_decor_cur_frame');
+        } catch (_) {}
+        window._pendingMusicFrame = null;
         if (typeof showToast === 'function') showToast(frameImg ? '已佩戴头像框！' : '已卸下头像框');
-        const modalClose = document.getElementById('modalClose');
-        if (modalClose) modalClose.click();
-        const modalBody = document.getElementById('appModalBody');
-        if (modalBody) window.renderMusicApp(modalBody);
+        document.getElementById('modalClose')?.click();
+        const modalBody = document.getElementById('appModalBody'); if (modalBody) window.renderMusicApp(modalBody);
     };
 
     window.openMusicEditProfileModal = function () {
@@ -1190,6 +1286,32 @@ window.syncMusicAppUI = function (state) {
     // ============================================================
     // 📱 网易云手机验证码登录弹窗
     // ============================================================
+    window.openNeteaseQrLoginModal = async function () {
+        const modal=document.getElementById('modal'), title=document.getElementById('retroModalTitle'), body=document.getElementById('modalBody'), close=document.getElementById('modalClose');
+        if (!modal || !body || !window.weMusicApi) return;
+        if (title) title.textContent='网易云扫码登录';
+        body.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px 0"><div id="wemusicQrStatus" style="font-size:12px;color:#666">正在生成二维码…</div><img id="wemusicQrImage" style="width:190px;height:190px;object-fit:contain;border:1px solid #eee;border-radius:8px;display:none"><button onclick="window.openNeteaseQrLoginModal()" style="padding:7px 16px;border:0;border-radius:14px;background:#fdf1f1;color:#ec4141">刷新二维码</button><button onclick="window.openNeteaseLoginModal()" style="padding:7px 16px;border:0;border-radius:14px;background:#f3f3f3;color:#666">改用验证码登录</button></div>';
+        modal.classList.add('open'); if (close) close.onclick=()=>{ modal.classList.remove('open'); window._wemusicQrCancelled=true; };
+        window._wemusicQrCancelled=false;
+        try {
+            const key=await window.weMusicApi.getQrKey();
+            const img=await window.weMusicApi.createQrImage(key);
+            const qr=document.getElementById('wemusicQrImage'); if(qr){qr.src=img;qr.style.display='block';}
+            const status=document.getElementById('wemusicQrStatus'); let count=0;
+            while(!window._wemusicQrCancelled && count++<120){
+                await new Promise(r=>setTimeout(r,2500));
+                if(window._wemusicQrCancelled) break;
+                const result=await window.weMusicApi.loginByQrStatus(key);
+                if(!result.pending){
+                    if(status) status.textContent='登录成功';
+                    if(typeof showToast==='function') showToast(`网易云登录成功！欢迎，${result.nickname || '云音乐听友'}`);
+                    modal.classList.remove('open'); const appBody=document.getElementById('appModalBody'); if(appBody) window.renderMusicApp(appBody); break;
+                }
+                if(status) status.textContent=result.message || '等待扫码';
+            }
+        } catch(err) { const status=document.getElementById('wemusicQrStatus'); if(status) status.textContent=err.message||'二维码登录失败'; }
+    };
+
     window.openNeteaseLoginModal = function () {
         const modal = document.getElementById('modal');
         const modalTitle = document.getElementById('retroModalTitle');
@@ -1200,8 +1322,9 @@ window.syncMusicAppUI = function (state) {
         if (modalTitle) modalTitle.textContent = `网易云手机登录`;
         modalBody.innerHTML = `
             <div style="display: flex; flex-direction: column; padding: 10px 0; gap: 12px;">
+                <button onclick="window.openNeteaseQrLoginModal()" style="background:#ec4141;color:#fff;border:0;border-radius:16px;padding:8px;font-weight:bold;cursor:pointer">扫码登录（推荐）</button>
                 <div style="font-size: 12px; color: #666; line-height: 1.5;">
-                    请输入网易云绑定的手机号，获取验证码后直接握手完成授权（手机本地直连，0服务器中转）。
+                    推荐使用扫码登录；验证码登录可能触发网易云安全风控。
                 </div>
 
                 <div style="display: flex; flex-direction: column; gap: 6px;">
@@ -1316,7 +1439,7 @@ window.syncMusicAppUI = function (state) {
         try {
             const res = await window.weMusicApi.verifyCaptchaAndLogin(phone, captcha);
             if (typeof showToast === 'function') {
-                showToast(`网易云登录成功！欢迎，${res.userInfo.nickname}`);
+                showToast(`网易云登录成功！欢迎，${res.nickname || '云音乐听友'}`);
             }
             document.getElementById('modalClose').click();
             const modalBody = document.getElementById('appModalBody');
@@ -1359,7 +1482,7 @@ window.syncMusicAppUI = function (state) {
                     ">
                         <div style="position: absolute; width: 140px; height: 140px; border-radius: 50%; border: 0.5px solid rgba(255,255,255,0.06);"></div>
                         <div style="width: 70px; height: 70px; border-radius: 50%; overflow: hidden; border: 2.5px solid #111;">
-                            <img src="${track.cover}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='https://p1.music.126.net/6y-5Y0C15jKEP4AET0BiDA==/109951164587635678.jpg?param=300y300';" />
+                            <img src="${track.cover}" style="width: 100%; height: 100%; object-fit: cover;" onerror="this.src='assets/system/default_desktop.jpg';" />
                         </div>
                     </div>
                 </div>
