@@ -11,7 +11,8 @@
 - **全站严禁 localStorage 存大图/小说**：`localStorage` 硬配额仅 5MB。同人文库、聊天对话记录、头像框池、装扮气泡全面基于 **IndexedDB (localForage)** 异步持久化存储。
 - **自建真实角色准绳**：所有角色歌单、双人游戏大厅入座、同人文库均严格以用户自主创建的真实 NPC（`localStorage.getItem('mcyt_wechat_custom_npcs')`）为准，摒弃预设硬编码 NPC。
 - **全屏 App 安全区避让**：全屏视口顶栏须强制应用 `padding-top: calc(var(--status-bar-height, 40px) + 2px);` 或 `env(safe-area-inset-top)`，避让灵动岛与状态栏。
-- **Git 推送规范**：仓库全面走系统级 SSH 鉴权（`git@github.com:cchh3297433176-hub/mcyt.git`），严禁使用带明文 Token 的 HTTPS URL 造成安全泄露。
+- **设备硬件指纹防漂移**：客户端鉴权优先读取安卓主板原生持久化硬件指纹（`NativeDeviceBridge.getPersistentHardwareId`），杜绝卸载重装因 `localStorage` 被清空而被服务端误判为冒领盗用。
+- **Git 推送规范**：仓库全面走系统级 SSH / 凭证鉴权（`git@github.com:cchh3297433176-hub/mcyt.git`），严禁使用带明文 Token 的提交记录造成安全泄露。
 
 ---
 
@@ -19,11 +20,43 @@
 
 | 应用/功能模块 | 源码路径 | 核心职责与设计要点 |
 | :--- | :--- | :--- |
+| **QQ 白名单与风控中枢** | `js/system/auth-engine.js` | 掌机冷启动门禁守卫；向云端 `8000/api/auth/verify` 上报 QQ 与硬件指纹进行一机一号死锁；支持防盗用冒领阻断、拉黑锁死与解封重试通道。 |
+| **极速语音识别引擎 (ASR)** | `js/system/asr-engine.js` | 云端 faster-whisper 极速转写；全员免密开箱即用；自动清洗 URL 协议防呆；报错脱敏掩码防 VPS 泄密。 |
 | **微音音乐主视口** | `js/apps/music/music-app.js` | 网易云经典红黑视觉(#ec4141)；发现页进入自动向云端拉取真随机热门音轨；沉浸式全屏黑胶播放(歌词居中高亮/双语切换/收藏/私聊分享卡片)；“我的”个人主页支持本地相册换背景(独立弹窗带预览与确定键)；装扮头像框抽屉(支持导入本地头像框图/全向微调/确定保存)；全局常驻微缩黑胶悬浮球(带全屏拖拽吸附/跳动声波/列表循环-单曲循环-随机播放单键切换)。 |
-| **微音网关与认证中枢** | `js/apps/music/music-api.js` | 直连云端 8000 端口 FastAPI 代理内核；全放行 CORS；支持官方扫码登录（`/login/qr/key` ➡️ `/create` ➡️ `/check` 轮询换取凭证）；手机验证码登录遇到 10004 风控时自动引导扫码通道；提供 LRC 时间轴解析器与 Fisher-Yates 真正随机歌单洗牌。 |
+| **微音网关与认证中枢** | `js/apps/music/music-api.js` | 直连云端 8000 端口 FastAPI 代理内核（反代本机 3000 端口 NeteaseCloudMusicApi）；全放行 CORS；支持官方扫码登录与手机验证码双轨通道；提供 LRC 时间轴解析器与 Fisher-Yates 真正随机歌单洗牌。 |
 | **微音角色歌单中枢** | `js/apps/music/music-npc-playlists.js` | 动态读取通讯录真实自建 NPC，依人设标签生成定制音轨，支持 1~3 位增量随机刷新与角色主页。 |
+| **系统设置中心** | `js/apps/settings/settings-app.js` | 全站版本号唯一定义源；OpenAI 兼容模型多方案配置；独立视觉识图 API 凭证与真图实测；ASR 服务连通性测试与语言偏好；小手机 PNG 隐写记忆卡导入导出；版本更新公告展示。 |
 | **手机外壳与硬件驱动** | `js/shell/phone-shell.js` | 系统状态栏时钟/电量/网络图标联动；桌面多页手势滑动切换；桌面第二页常驻黑胶声波小组件（轻触黑胶中心可直接替换本地图片自定义封面）；塔罗专属大组件；App 全局路由分发。 |
 | **装扮中心与头像框池** | `js/apps/theme/theme-chat-decor.js` | 微信化装扮中心，存储管理全局头像框，采用 IndexedDB 承载；兼容 `url / img` 字段。 |
-| **游戏大厅棋牌门户** | `js/apps/lobby/lobby-app.js` | 10 款经典离线/云端棋牌驱动，支持同伴入座陪玩与双向羁绊记忆沉淀。 |
-| **聊天中心系统** | `js/apps/chat/` | 微信原生质感单聊与群聊、朋友圈、图文卡片生成与 AI 对话引擎。 |
+| **游戏大厅棋牌门户** | `js/apps/lobby/lobby-app.js` | 10 款经典离线/云端棋牌驱动，支持多同伴入座陪玩；局内 Whisper 戳一戳与角色活人对白；战报带署名全员私聊广播。 |
+| **聊天中心系统** | `js/apps/chat/` | 微信原生质感单聊与群聊、朋友圈、图文卡片生成、独立识图多模态外挂眼睛与 AI 对话引擎。 |
 
+---
+
+## 2. 云端基础设施与服务拓扑 (Shanghai Node)
+
+- **云服务器节点**：腾讯云轻量服务器（上海机房 · 4核 8G 5Mbps）
+- **核心开放端口与进程分布**：
+  - **`8000` (FastAPI / `asr-server`)**：
+    - `POST /api/auth/verify`：QQ 白名单与硬件 UUID 死锁校验（数据直连 `/root/mcyt_auth_data.json`）。
+    - `POST /api/asr/transcribe`：faster-whisper 极速转写（使用本地 ModelScope 预加载缓存，零外网依赖，免密公开可用）。
+    - `ALL /netease/{path}`：网易云音乐 API 代理通道（CORS 全放行，透明反代本机 3000 端口）。
+  - **`3000` (Node.js / `netease-service`)**：`NeteaseCloudMusicApi` 官方开源微服务，开机自启常驻。
+  - **`5000` (Python / `maruko-mcp`)**：小丸子 FastMCP 代码中枢（SSE 交互协议，承载跨平台开发协同）。
+  - **`8787` (`lobby-server`)**：棋牌游戏大厅云端裁判辅助服务。
+- **后台守护服务 (systemd)**：
+  - `asr-server.service`（语音识别 + 鉴权验证 + 网易云中继代理）
+  - `netease-service.service`（网易云音乐内核 API）
+  - `verity-bot.service`（Verity QQ 群管与审核机器人）
+  - `maruko-mcp.service`（小丸子代码中枢）
+
+---
+
+## 3. QQ 群管机器人指令规范 (`mcyt_auth.py`)
+
+- **审核放行**：`#通过 <QQ号>` 或 `通过 <QQ号>` —— 为该 QQ 赋予内测畅玩资格。
+- **温和换绑**：`#换绑 <QQ号>` 或 `#重置设备 <QQ号>` —— 释放受害者绑定的旧硬件，保留资格，允许在新手机或重装后重新激活，**绝不拉黑设备**。
+- **反盗用惩罚**：`#撤销冒领 <QQ号>` —— 释放受害者账号，并将冒领盗用者的设备硬件永久锁死至 `banned_devices`。
+- **账号封禁**：`#封禁 <QQ号>` 或 `#拉黑 <QQ号>` —— 永久注销过审资格并踢入黑名单。
+- **账号解封**：`#解封 <QQ号>` —— 移出黑名单（需重新发送 `#通过` 重新放行）。
+- **设备解封**：`#解封设备 <设备UUID前缀>` —— 将特定硬件指纹移出黑名单。
