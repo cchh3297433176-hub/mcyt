@@ -16,7 +16,7 @@
     'use strict';
 
     // 默认内置云端裁判服务地址（后台静默连接，界面上绝不向用户回显展示）
-    const DEFAULT_SERVER_URL = 'http://121.43.122.253:8787';
+    const DEFAULT_SERVER_URL = 'http://43.142.9.188:8787';
     const API_PROFILES_KEY = 'mcyt_lobby_api_profiles';
     const ACTIVE_PROFILE_ID_KEY = 'mcyt_lobby_active_profile_id';
 

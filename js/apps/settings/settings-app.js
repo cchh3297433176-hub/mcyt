@@ -846,7 +846,7 @@ window.APP_ANNOUNCEMENT_CONTENT = APP_ANNOUNCEMENT_CONTENT;
             <div style="background:#ffffff;border-radius:8px;border:1px solid #eeeeee;padding:12px;margin-bottom:14px;">
                 <div style="margin-bottom:10px;">
                     <label style="font-size:11.5px;font-weight:600;color:#555;display:block;margin-bottom:4px;">服务中枢地址 (Server URL)</label>
-                    <input type="text" id="asrServerUrlInput" value="${escapeHtml(config.serverUrl || 'http://121.43.122.253:8000')}" placeholder="http://121.43.122.253:8000" style="width:100%;padding:7px 10px;border-radius:6px;border:1px solid #e0e0e0;font-size:11.5px;background:#fcfcfc;outline:none;box-sizing:border-box;">
+                    <input type="text" id="asrServerUrlInput" value="${escapeHtml(config.serverUrl || 'http://43.142.9.188:8000')}" placeholder="http://43.142.9.188:8000" style="width:100%;padding:7px 10px;border-radius:6px;border:1px solid #e0e0e0;font-size:11.5px;background:#fcfcfc;outline:none;box-sizing:border-box;">
                 </div>
 
                 <div style="font-size:11.5px;font-weight:600;color:#555;margin-bottom:6px;">转录语言偏好</div>
@@ -882,7 +882,7 @@ window.APP_ANNOUNCEMENT_CONTENT = APP_ANNOUNCEMENT_CONTENT;
         const saveBtn = document.getElementById('btnSaveAsrConfig');
         if (saveBtn) {
             saveBtn.onclick = async () => {
-                const serverUrl = (document.getElementById('asrServerUrlInput')?.value || '').trim() || 'http://121.43.122.253:8000';
+                const serverUrl = (document.getElementById('asrServerUrlInput')?.value || '').trim() || 'http://43.142.9.188:8000';
                 const selectedLang = document.querySelector('input[name="asrLangRadio"]:checked')?.value || 'zh';
                 await window.mcytAsr.saveConfig({ serverUrl, language: selectedLang });
                 if (typeof showToast === 'function') showToast('已保存语音识别配置', 'success');
@@ -893,7 +893,7 @@ window.APP_ANNOUNCEMENT_CONTENT = APP_ANNOUNCEMENT_CONTENT;
         const testHealthBtn = document.getElementById('btnTestAsrHealth');
         if (testHealthBtn) {
             testHealthBtn.onclick = async () => {
-                const serverUrl = (document.getElementById('asrServerUrlInput')?.value || '').trim() || 'http://121.43.122.253:8000';
+                const serverUrl = (document.getElementById('asrServerUrlInput')?.value || '').trim() || 'http://43.142.9.188:8000';
                 testHealthBtn.disabled = true;
                 testHealthBtn.textContent = '探测中...';
                 try {

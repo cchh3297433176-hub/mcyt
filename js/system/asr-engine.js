@@ -13,7 +13,7 @@
   const STORAGE_KEY_DEVICE_ID = 'mcyt_device_uuid';
 
   // 默认私有服务地址
-  const DEFAULT_REMOTE_ASR_URL = 'http://121.43.122.253:8000';
+  const DEFAULT_REMOTE_ASR_URL = 'http://43.142.9.188:8000';
 
   /**
    * 自动清洗并规范化服务器 URL（彻底杜绝 http://http:// 恶性拼接）

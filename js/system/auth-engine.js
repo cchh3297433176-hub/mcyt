@@ -5,7 +5,7 @@
  * 核心职责：
  * 1. 设备 UUID 生成与持久化保活（localStorage: mcyt_device_uuid）。
  * 2. 仿微信白灰微绿风格的【QQ号激活验证弹窗】。
- * 3. 向私有云鉴权端点 (http://121.43.122.253:8000/api/auth/verify) 上报 QQ 与 UUID 进行死锁绑定。
+ * 3. 向私有云鉴权端点 (http://43.142.9.188:8000/api/auth/verify) 上报 QQ 与 UUID 进行死锁绑定。
  * 4. 软硬件黑名单与冒领反制阻断：展示不可关闭的全屏微绿/告警 HUD，锁死一切操作。
  * 5. 具备解封实时检测通道（重试时主动问询服务器，解除死锁并恢复输入）。
  */
@@ -13,7 +13,7 @@
 (function () {
     'use strict';
 
-    const AUTH_SERVER_URL = 'http://121.43.122.253:8000/api/auth/verify';
+    const AUTH_SERVER_URL = 'http://43.142.9.188:8000/api/auth/verify';
     const KEY_UUID = 'mcyt_device_uuid';
     const KEY_BOUND_QQ = 'mcyt_bound_qq';
     const KEY_AUTH_STATE = 'mcyt_auth_state_cache';

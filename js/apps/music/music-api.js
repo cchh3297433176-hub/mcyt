@@ -13,7 +13,7 @@
     'use strict';
 
     // 默认节点：使用我们在阿里云服务器已放行的 8000 端口自建网关（100% 免跨域 CORS、直连我们自己的 Node.js 网易云内核）
-    const DEFAULT_API_BASE = 'http://121.43.122.253:8000/netease';
+    const DEFAULT_API_BASE = 'http://43.142.9.188:8000/netease';
     const FALLBACK_API_BASE = 'https://sullymeow.ccwu.cc/netease';
 
     const STORAGE_KEY_COOKIE = 'mcyt_wemusic_cookie';
