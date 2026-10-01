@@ -246,7 +246,7 @@
             method: 'POST',
             body: formData
           }),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('云端转录超时(12s)，请检查网络连接')), 12000))
+          new Promise((_, reject) => setTimeout(() => reject(new Error('云端转录超时(25s)，请检查网络连接')), 25000))
         ]);
 
         const data = await resp.json().catch(() => ({}));
