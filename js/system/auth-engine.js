@@ -18,8 +18,19 @@
     const KEY_BOUND_QQ = 'mcyt_bound_qq';
     const KEY_AUTH_STATE = 'mcyt_auth_state_cache';
 
-    // 1. 获取或生成标准硬件 UUID
+    // 1. 获取或生成标准硬件 UUID（优先读取 Android 原生持久化硬件指纹，彻底解决卸载重装被误判为新设备的问题）
     function getOrCreateDeviceUUID() {
+        // 优先尝试读取安卓主板 ANDROID_ID 级别指纹
+        try {
+            if (window.NativeDeviceBridge && typeof window.NativeDeviceBridge.getPersistentHardwareId === 'function') {
+                const hwId = window.NativeDeviceBridge.getPersistentHardwareId();
+                if (hwId && hwId.trim().length >= 6) {
+                    localStorage.setItem(KEY_UUID, hwId.trim());
+                    return hwId.trim();
+                }
+            }
+        } catch (_) {}
+
         let uuid = localStorage.getItem(KEY_UUID);
         if (!uuid || uuid.trim().length < 10) {
             if (typeof crypto !== 'undefined' && crypto.randomUUID) {
