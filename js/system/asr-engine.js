@@ -3,6 +3,7 @@
  * 云端极速语音识别（ASR）中枢引擎
  * 直连私有云端 faster-whisper 极速接口（默认免门禁全员可用），
  * 具备 URL 智能协议纠错防呆与报错脱敏防泄密机制。
+ * 内置历史废弃节点静默热迁移（老玩家无感纠偏至新服务器，无需手动配置）。
  * 无缝对接悬浮球错误雷达（window.recordSystemError）。
  */
 
@@ -12,8 +13,14 @@
   const STORAGE_KEY_CONFIG = 'mcyt_asr_config';
   const STORAGE_KEY_DEVICE_ID = 'mcyt_device_uuid';
 
-  // 默认私有服务地址
+  // 默认私有服务地址（当前最新搬家节点）
   const DEFAULT_REMOTE_ASR_URL = 'http://43.142.9.188:8000';
+
+  // 历史废弃旧服务器特征清单（用于静默无感纠偏迁移）
+  const LEGACY_SERVER_PATTERNS = [
+    '121.43.122.253',
+    '121.43.'
+  ];
 
   /**
    * 自动清洗并规范化服务器 URL（彻底杜绝 http://http:// 恶性拼接）
@@ -77,7 +84,7 @@
     }
 
     /**
-     * 读取引擎配置（自动修正历史缓存中的异常协议）
+     * 读取引擎配置（含历史废弃节点静默热迁移 + 自动修正历史缓存中的异常协议）
      */
     async loadConfig() {
       try {
@@ -86,6 +93,16 @@
           const parsed = JSON.parse(saved);
           if (parsed && parsed.serverUrl) {
             parsed.serverUrl = sanitizeServerUrl(parsed.serverUrl);
+
+            // 🌟 核心静默纠偏：检测是否仍连接已废弃的历史老服务器
+            const isLegacy = LEGACY_SERVER_PATTERNS.some(p => parsed.serverUrl.includes(p));
+            if (isLegacy) {
+              console.log('[ASR Engine] 检测到历史废弃服务器节点，静默热迁移至最新服务中枢...');
+              parsed.serverUrl = DEFAULT_REMOTE_ASR_URL;
+              try {
+                localStorage.setItem(STORAGE_KEY_CONFIG, JSON.stringify(Object.assign({}, parsed)));
+              } catch (_) {}
+            }
           }
           this.config = Object.assign(this.config, parsed);
         }
