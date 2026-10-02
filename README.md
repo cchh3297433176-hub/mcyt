@@ -14,6 +14,10 @@
 - **设备硬件指纹防漂移**：客户端鉴权优先读取安卓主板原生持久化硬件指纹（`NativeDeviceBridge.getPersistentHardwareId`），杜绝卸载重装因 `localStorage` 被清空而被服务端误判为冒领盗用。
 - **Git 推送规范**：仓库全面走系统级 SSH / 凭证鉴权（`git@github.com:cchh3297433176-hub/mcyt.git`），严禁使用带明文 Token 的提交记录造成安全泄露。
 - **国内环境读取外部 GitHub 规范**：由于服务器位于国内节点，直接访问 `github.com` 会存在网络波动或超时，查阅外部 GitHub 仓库代码或 Raw 文件必须使用透明镜像通道（如 `/workspace/fetch_github.py` 或前缀 `https://ghfast.top/`），严禁盲目直接请求官方 GitHub 域名导致工具反复超时重试。
+- **🚨 跨机房/换云服务器迁移铁律（必读排坑）**：
+  - **流水线覆盖机制**：GitHub Actions 打包流水线（`.github/workflows/build.yml`）会在构建 APK 时读取仓库的 Actions Secrets（如 `MCYT_ASR_SERVER_URL`、`MCYT_LOBBY_SERVER_URL`）并静默重写前端配置文件。
+  - **同步更新 Secrets**：一旦后端更换云服务商或服务器 IP，**必须第一时间在 GitHub 仓库的 `Settings -> Secrets and variables -> Actions` 中同步更新对应 Secret**！否则即使本地源码修改为新地址，打包流水线依然会强制用旧 Secret 覆盖写回死掉的旧 IP，导致打包出来的客户端向停机节点发请求引发 `Failed to fetch` 或超时异常。
+  - **客户端配置兜底**：前端代码内置了对已下线旧节点的静默检测与纠偏能力，若发现旧节点特征应自动校正，但最根源的保证仍是维护好 GitHub Actions 密钥。
 
 ---
 
