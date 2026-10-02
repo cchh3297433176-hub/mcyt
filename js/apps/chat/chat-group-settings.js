@@ -7,7 +7,7 @@
  * 3. 完美弹窗层级（z-index: 99999）：修改群名、修改公告、更换头像、解散群聊置于顶层，绝不被底层遮挡。
  * 4. 群主操作全量接入居中小灰字通知（撤回样式提示）：改群名、换头像、改公告、任命/撤销管理员、设置/清除群头衔、增删成员即时生成灰条并落盘。
  * 5. 群头像双轨落盘同步（group.avatar 与 group.avatarUrl），全站会话列表与群聊窗口即时同步更新。
- * 6. 高级设定：群成员网格、群记忆共通深度(0~200条滑条)、接话人数范围、朋友圈轻量 NPC 折叠栏、群管理员任命、群成员专属头衔、群聊真实语音播报（TTS）开关与配置。
+ * 6. 高级设定：群成员网格、群记忆共通开关与展开滑条(10~200条)、接话人数范围、朋友圈轻量 NPC 折叠栏、群管理员任命、群成员专属头衔、群聊真实语音播报（TTS）开关与配置。
  */
 
 (function() {
@@ -26,7 +26,8 @@
             apiMode: 'unified',
             allowMultiMsgs: true,
             syncToRememori: false,
-            sharedMemoryDepth: 20, // 默认群记忆共通深度（0~200条，0为完全隔离）
+            sharedMemoryEnabled: true,
+            sharedMemoryDepth: 20, // 默认群记忆共通深度（10~200条）
             minSpeakers: 1,
             maxSpeakers: 3,
             allowStickers: true,
@@ -168,7 +169,7 @@
     };
 
     /**
-     * ⚙️ 群聊高级设定弹窗（增添 0~200 条群记忆共通滑条 & TTS 开关）
+     * ⚙️ 群聊高级设定弹窗（群记忆共通开关与滑条联动）
      */
     window.openGroupAdvancedSettingsModal = function(gid) {
         document.querySelectorAll('.wechat-clean-modal-mask, .group-info-modal-mask').forEach(el => el.remove());
@@ -251,7 +252,8 @@
             momentNpcCardsHtml = `<div style="text-align:center;color:#aaa;padding:10px 0;font-size:11.5px;">暂未添加朋友圈 NPC，点击右上角【＋】可直接添加</div>`;
         }
 
-        const sharedDepth = (cfg.sharedMemoryDepth !== undefined) ? parseInt(cfg.sharedMemoryDepth) : 20;
+        const isMemEnabled = (cfg.sharedMemoryEnabled !== undefined) ? !!cfg.sharedMemoryEnabled : ((cfg.sharedMemoryDepth || 0) > 0);
+        const sharedDepth = Math.max(10, parseInt(cfg.sharedMemoryDepth) || 20);
 
         window.openWechatCleanModal('群聊高级设定', `
             <div style="display:flex;flex-direction:column;gap:16px;text-align:left;max-height:430px;overflow-y:auto;padding-right:4px;">
@@ -271,17 +273,32 @@
                     </div>
                 </div>
 
-                <!-- 🧠 群记忆共通深度滑条 (0 ~ 200 条) -->
-                <div style="border-bottom:0.5px solid #f0f0f0;padding-bottom:14px;">
-                    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;">
-                        <div style="font-size:14px;font-weight:600;color:#181818;">群记忆共通深度</div>
-                        <span id="labelSharedMemoryDepth" style="font-size:13px;font-weight:600;color:#07c160;background:#eefaf2;padding:2px 8px;border-radius:12px;">${sharedDepth === 0 ? '完全隔离 (0条)' : `${sharedDepth} 条`}</span>
+                <!-- 🧠 群记忆共通开关与展开滑条 -->
+                <div style="border-bottom:0.5px solid #f0f0f0;padding-bottom:12px;">
+                    <div style="display:flex;align-items:center;justify-content:space-between;">
+                        <div>
+                            <div style="font-size:13.5px;font-weight:600;color:#181818;">群记忆共通</div>
+                            <div style="font-size:11px;color:#888;">允许群成员在单人私聊中感知本群对白</div>
+                        </div>
+                        <label style="position:relative;display:inline-block;width:38px;height:22px;">
+                            <input type="checkbox" id="chkSharedMemoryEnabled" ${isMemEnabled ? 'checked' : ''} style="opacity:0;width:0;height:0;">
+                            <span style="position:absolute;cursor:pointer;inset:0;background:${isMemEnabled ? '#07c160' : '#ccc'};border-radius:22px;transition:.3s;">
+                                <span style="position:absolute;height:18px;width:18px;left:${isMemEnabled ? '18px' : '2px'};bottom:2px;background:white;border-radius:50%;transition:.3s;"></span>
+                            </span>
+                        </label>
                     </div>
-                    <div style="font-size:11px;color:#888;margin-bottom:10px;">群成员在私聊中能记住该群聊最近多少条对白（0为完全隔离）：</div>
-                    <div style="display:flex;align-items:center;gap:10px;">
-                        <span style="font-size:11px;color:#999;">0条</span>
-                        <input type="range" id="sliderSharedMemoryDepth" min="0" max="200" step="5" value="${sharedDepth}" style="flex:1;accent-color:#07c160;height:4px;cursor:pointer;">
-                        <span style="font-size:11px;color:#999;">200条</span>
+
+                    <!-- 动态展开滑条区域 -->
+                    <div id="boxSharedMemoryDepthSlider" style="display:${isMemEnabled ? 'block' : 'none'};margin-top:10px;background:#f9f9f9;padding:10px;border-radius:6px;">
+                        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+                            <span style="font-size:12px;color:#555;">私聊感知最近条数：</span>
+                            <span id="labelSharedMemoryDepth" style="font-size:12px;font-weight:600;color:#07c160;">${sharedDepth} 条</span>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <span style="font-size:11px;color:#999;">10条</span>
+                            <input type="range" id="sliderSharedMemoryDepth" min="10" max="200" step="5" value="${sharedDepth}" style="flex:1;accent-color:#07c160;height:4px;cursor:pointer;">
+                            <span style="font-size:11px;color:#999;">200条</span>
+                        </div>
                     </div>
                 </div>
 
@@ -321,7 +338,7 @@
                         </div>
                         <div style="display:flex;align-items:center;gap:12px;">
                             <div onclick="window.openAddGroupMomentNpcModal('${gid}')" title="添加朋友圈NPC" style="width:26px;height:26px;border-radius:4px;border:1px dashed #07c160;background:#f0faf4;color:#07c160;display:flex;align-items:center;justify-content:center;cursor:pointer;">
-                                <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:#07c160;stroke-width:2.2;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="12"/></svg>
+                                <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:none;stroke:#07c160;stroke-width:2.2;"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
                             </div>
                             <div id="btnToggleMomentNpcCollapse" onclick="window.toggleGroupMomentNpcCollapse()" title="展开/收起" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;cursor:pointer;color:#888;">
                                 <svg id="iconMomentNpcArrow" viewBox="0 0 24 24" style="width:15px;height:15px;fill:currentColor;transform:rotate(0deg);transition:transform .2s;"><path d="M7 10l5 5 5-5z"/></svg>
@@ -403,7 +420,9 @@
             const chkMulti = document.getElementById('chkGroupMultiMsgs')?.checked ?? true;
             const chkTts = document.getElementById('chkGroupTtsEnabled')?.checked ?? false;
             const currentSelectedMode = window._tempSelectedGroupApiMode || cfg.apiMode;
-            const sharedMemoryDepthVal = parseInt(document.getElementById('sliderSharedMemoryDepth')?.value) || 0;
+            
+            const isSharedMemOn = !!document.getElementById('chkSharedMemoryEnabled')?.checked;
+            const sharedMemoryDepthVal = parseInt(document.getElementById('sliderSharedMemoryDepth')?.value) || 20;
 
             const curAcc = (typeof getActiveAccountInfo === 'function') ? getActiveAccountInfo() : { name: '我' };
             const oldAdmins = cfg.admins || [];
@@ -439,7 +458,8 @@
                 apiMode: currentSelectedMode,
                 allowMultiMsgs: chkMulti,
                 allowStickers: true,
-                sharedMemoryDepth: sharedMemoryDepthVal,
+                sharedMemoryEnabled: isSharedMemOn,
+                sharedMemoryDepth: isSharedMemOn ? sharedMemoryDepthVal : 0,
                 minSpeakers: minSpk,
                 maxSpeakers: maxSpk,
                 admins: selectedAdmins,
@@ -457,14 +477,33 @@
 
         window._tempSelectedGroupApiMode = cfg.apiMode;
 
-        // 监听滑条实时更新数值胶囊
+        // 联动：开关控制滑条盒子显隐
         setTimeout(() => {
+            const chkMem = document.getElementById('chkSharedMemoryEnabled');
+            const sliderBox = document.getElementById('boxSharedMemoryDepthSlider');
             const slider = document.getElementById('sliderSharedMemoryDepth');
             const lbl = document.getElementById('labelSharedMemoryDepth');
+            
+            if (chkMem && sliderBox) {
+                chkMem.onchange = () => {
+                    const track = chkMem.nextElementSibling;
+                    const thumb = track.firstElementChild;
+                    if (chkMem.checked) {
+                        track.style.background = '#07c160';
+                        thumb.style.left = '18px';
+                        sliderBox.style.display = 'block';
+                    } else {
+                        track.style.background = '#ccc';
+                        thumb.style.left = '2px';
+                        sliderBox.style.display = 'none';
+                    }
+                };
+            }
+
             if (slider && lbl) {
                 slider.oninput = () => {
-                    const v = parseInt(slider.value) || 0;
-                    lbl.textContent = v === 0 ? '完全隔离 (0条)' : `${v} 条`;
+                    const v = parseInt(slider.value) || 20;
+                    lbl.textContent = `${v} 条`;
                 };
             }
         }, 30);
