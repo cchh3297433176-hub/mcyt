@@ -951,7 +951,7 @@ window.syncMusicAppUI = function (state) {
 
     // 3. 我的界面（支持网易云红黑视觉 + 头像框换装池 + 背景图自定义）
     window._renderMusicTabMine = function (state) {
-        let userName = '主播李敏';
+        let userName = '主播咩咩';
         let userSign = '静听每一个治愈的心动瞬间';
         let userAvatar = 'assets/system/default_desktop.jpg';
 
@@ -1223,7 +1223,7 @@ window.syncMusicAppUI = function (state) {
         const modalClose = document.getElementById('modalClose');
         if (!modal || !modalBody) return;
 
-        let curName = '主播李敏';
+        let curName = '主播咩咩';
         let curSign = '静听每一个治愈的心动瞬间';
         try {
             if (window.weMusicApi && window.weMusicApi.userInfo) {

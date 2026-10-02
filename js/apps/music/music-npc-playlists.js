@@ -40,7 +40,7 @@
 
         if (!npcs || npcs.length === 0) {
             npcs = [
-                { id: 'npc_default_1', name: '李敏的知心同伴', avatar: 'assets/system/default_lock.jpg', persona: '温柔、体贴、喜欢在雨天听安静的治愈民谣与纯音乐。' },
+                { id: 'npc_default_1', name: '咩咩的知心同伴', avatar: 'assets/system/default_lock.jpg', persona: '温柔、体贴、喜欢在雨天听安静的治愈民谣与纯音乐。' },
                 { id: 'npc_default_2', name: '拉莱耶的守望者', avatar: 'tarot/images/slot_bg.png', persona: '神秘、清冷、沉浸于深海后摇与轻灵的星空低语。' }
             ];
         }
