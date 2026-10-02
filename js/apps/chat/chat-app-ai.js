@@ -8,7 +8,8 @@
  *    🌟 独立外挂视觉识图：尊重用户发图弹窗勾选，精准调用外部 Vision 接口为纯文本 AI 解析客观画面事实；
  *    🌟 极简优化：机器直接在末尾提供确定的时间事实（精准人名与24小时制锁定，杜绝早晚颠倒），节省 Token 与注意力；
  *    🌟 角色主动发送文字图片（[IMAGE_TEXT]）与拟真生活排版卡片（[UI_CARD]）无损解析与安全消毒；
- *    💖 角色内心想法（[HEART]心声独白[/HEART]）提取与持久化，绝对不污染正文气泡，与顶栏小爱心无缝联动。
+ *    💖 角色内心想法（[HEART]心声独白[/HEART]）提取与持久化，绝对不污染正文气泡，与顶栏小爱心无缝联动；
+ *    🧠 核心升级：总结完自动隐藏过往聊天对白（滑动窗口），以及群聊共通记忆深度按需（0~200条）以上帝视角注入！
  */
 
 (function() {
@@ -209,6 +210,46 @@
         return htmlStr.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
     }
 
+    // 🌟 辅助提取：从当前 NPC 参与的群聊中，以上帝视角格式拉取共通对白
+    function getSharedGroupContextForNpc(npcId, curAccName) {
+        if (!window.G || !window.G.groups || !window.G.groupChatHistory) return '';
+        const groupConfigs = {};
+        try {
+            const raw = localStorage.getItem('mcyt_group_chat_configs');
+            if (raw) Object.assign(groupConfigs, JSON.parse(raw));
+        } catch (_) {}
+
+        const relatedGroups = Object.entries(window.G.groups).filter(([gid, g]) => {
+            return (g.members && g.members.includes(npcId)) || (g.momentNpcs && g.momentNpcs.some(m => m.id === npcId));
+        });
+
+        if (relatedGroups.length === 0) return '';
+
+        let groupContextBlocks = [];
+        for (const [gid, g] of relatedGroups) {
+            const cfg = groupConfigs[gid] || {};
+            const depth = (cfg.sharedMemoryDepth !== undefined) ? parseInt(cfg.sharedMemoryDepth) : 20;
+            if (depth <= 0) continue; // 设为 0 即为完全隔离，不产生共通记忆
+
+            const hist = window.G.groupChatHistory[gid] || [];
+            if (hist.length === 0) continue;
+
+            const slice = hist.slice(-depth);
+            const lines = slice.map(m => {
+                const sName = (m.from === 'player') ? (curAccName || '群主') : (m.senderName || '群成员');
+                let txt = m.text || '';
+                if (m.type === 'voice') txt = `[语音] ${m.text || ''}`;
+                else if (m.type === 'image_flip') txt = `[图片: ${m.imageDesc || '照片'}]`;
+                return `  [${m.time || '最近'}] ${sName}: ${txt}`;
+            });
+
+            groupContextBlocks.push(`【共同群聊「${g.name}」最近发生的客观事件与对白（取最近${depth}条）】：\n` + lines.join('\n'));
+        }
+
+        if (groupContextBlocks.length === 0) return '';
+        return `\n${groupContextBlocks.join('\n\n')}\n【群聊共通指引】：以上是你与对方在同一群聊中共同经历的客观对白。如果对方在私聊中提起群里发生的事，你可以自然以你在群里的在场视角接话、吐槽或八卦，无需刻意装作不知情。\n`;
+    }
+
     // 🤖 单人私聊 AI 回复触发（多语种母语语音条、条数控制、好感度动态铁律、独立视觉识图、文字图片、拟真UI卡片、角色心声独白）
     window.triggerAIReplyForSingle = async function(npcId) {
         const npc = window.G.npcs ? window.G.npcs[npcId] : null;
@@ -300,7 +341,15 @@
         let peekNotice = '';
         let lastRecommendedAltCard = null;
 
-        const recentDialogue = history.slice(-14).map(m => {
+        // 🧠 核心升级：总结完自动隐藏过往聊天记录，严格只拉取滑动窗口最新的有效对白
+        // 这样过往老对白只作为记忆存在忆海中，绝不重复占用实时 Prompt Context
+        const memoryCfg = (typeof window.getNpcMemoryConfig === 'function')
+            ? window.getNpcMemoryConfig(npcId)
+            : { keepRecent: 10 };
+        const windowSize = Math.max(6, Math.min(24, parseInt(memoryCfg.keepRecent) || 12));
+        const activeHistorySlice = history.slice(-windowSize);
+
+        const recentDialogue = activeHistorySlice.map(m => {
             const speaker = (m.from === 'player') ? curAcc.name : (npc.name);
             if (m.from === 'action' && m.recalledWasPeeked && !m.peekHandled && m.recalledText) {
                 peekNotice += `\n【系统单次提醒】：对方刚才撤回了一条消息：“${m.recalledText}”，你在手机通知栏不经意瞄到了一眼。随口调侃一句或吐槽网速即可，严禁在后续多轮对话中反复抓着问。\n`;
@@ -406,11 +455,14 @@
             `- 敷衍、被扫兴或轻微不耐烦，扣除 0.5~1（写 [FAVOR: -0.5] 或 [FAVOR: -1]）；\n` +
             `- 遇到极其恶劣的人身攻击、剧烈争吵或侮辱背叛时，才允许扣除更大数值（写 [FAVOR: -3]）。绝对禁止单次增加超过0.5！`;
 
+        // 🧠 核心挂载：拉取该角色参与的群聊共通对白（上帝视角格式）
+        const sharedGroupContext = getSharedGroupContextForNpc(npcId, curAcc.name);
+
         const promptCtx = (window.ChatPromptEngine && typeof window.ChatPromptEngine.buildWechatAIPromptContext === 'function')
             ? window.ChatPromptEngine.buildWechatAIPromptContext({
                 npc,
                 curAcc,
-                recentDialogueText: recentDialogue + peekNotice + searchContextPrompt,
+                recentDialogueText: recentDialogue + peekNotice + searchContextPrompt + (sharedGroupContext ? `\n\n${sharedGroupContext}` : ''),
                 isBehindActive,
                 lastMsgTime,
                 lastMsgTimestamp,
