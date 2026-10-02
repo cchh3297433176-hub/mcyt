@@ -31,7 +31,7 @@ const APP_ANNOUNCEMENT_CONTENT = `本软件为代入向乙女Airp游戏，禁男
 -Claude帮助了我很多，耐心教导我，聪明能干还温柔，克之伟大无需多言！
 -Chatgpt好像帮了忙，但是好像又没帮……
 起到了一个添乱的作用
-感谢github以及开源项目创作者，愿意开源的创作者们真的是非常伟大啊……解决了我的燃眉之急！
+感谢github以及开源项目创作者，愿意开源的创作者们真的是非常伟大啊……解决了我的燃秘之急！
 以及感谢群友的鼓励和支持，没有大家的鼓励支持我真的不可能有耐心做那么多！
 
 借物表感谢
@@ -813,7 +813,7 @@ window.APP_ANNOUNCEMENT_CONTENT = APP_ANNOUNCEMENT_CONTENT;
     }
 
     // ============================================================
-    // 🎙️ 云端极速语音识别 (ASR) 状态与网络连通性弹窗
+    // 🎙️ 云端极速语音识别 (ASR) 状态与网络连通性弹窗（黑点点遮罩防窥）
     // ============================================================
     async function openAsrSettingsModal() {
         if (!window.mcytAsr) {
@@ -845,8 +845,17 @@ window.APP_ANNOUNCEMENT_CONTENT = APP_ANNOUNCEMENT_CONTENT;
 
             <div style="background:#ffffff;border-radius:8px;border:1px solid #eeeeee;padding:12px;margin-bottom:14px;">
                 <div style="margin-bottom:10px;">
-                    <label style="font-size:11.5px;font-weight:600;color:#555;display:block;margin-bottom:4px;">服务中枢地址 (Server URL)</label>
-                    <input type="text" id="asrServerUrlInput" value="${escapeHtml(config.serverUrl || 'http://43.142.9.188:8000')}" placeholder="http://43.142.9.188:8000" style="width:100%;padding:7px 10px;border-radius:6px;border:1px solid #e0e0e0;font-size:11.5px;background:#fcfcfc;outline:none;box-sizing:border-box;">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+                        <label style="font-size:11.5px;font-weight:600;color:#555;">服务中枢地址 (Server URL)</label>
+                        <span style="font-size:10.5px;color:#888;">密码遮罩防窥</span>
+                    </div>
+                    <div style="position:relative;display:flex;align-items:center;">
+                        <input type="password" id="asrServerUrlInput" value="${escapeHtml(config.serverUrl || 'http://43.142.9.188:8000')}" placeholder="http://***.***.***.***:8000" style="width:100%;padding:7px 34px 7px 10px;border-radius:6px;border:1px solid #e0e0e0;font-size:11.5px;background:#fcfcfc;outline:none;box-sizing:border-box;letter-spacing:1px;">
+                        <button type="button" id="toggleAsrUrlVisibilityBtn" title="切换显示/隐藏" style="position:absolute;right:6px;background:none;border:none;cursor:pointer;padding:4px;display:flex;align-items:center;justify-content:center;color:#888;">
+                            <svg id="eyeIconOpen" style="width:16px;height:16px;display:none;fill:currentColor;" viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+                            <svg id="eyeIconClosed" style="width:16px;height:16px;display:block;fill:currentColor;" viewBox="0 0 24 24"><path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.44-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>
+                        </button>
+                    </div>
                 </div>
 
                 <div style="font-size:11.5px;font-weight:600;color:#555;margin-bottom:6px;">转录语言偏好</div>
@@ -878,6 +887,25 @@ window.APP_ANNOUNCEMENT_CONTENT = APP_ANNOUNCEMENT_CONTENT;
         `;
 
         modal.classList.add('open');
+
+        const urlInput = document.getElementById('asrServerUrlInput');
+        const toggleEyeBtn = document.getElementById('toggleAsrUrlVisibilityBtn');
+        const eyeOpen = document.getElementById('eyeIconOpen');
+        const eyeClosed = document.getElementById('eyeIconClosed');
+
+        if (toggleEyeBtn && urlInput && eyeOpen && eyeClosed) {
+            toggleEyeBtn.onclick = () => {
+                if (urlInput.type === 'password') {
+                    urlInput.type = 'text';
+                    eyeOpen.style.display = 'block';
+                    eyeClosed.style.display = 'none';
+                } else {
+                    urlInput.type = 'password';
+                    eyeOpen.style.display = 'none';
+                    eyeClosed.style.display = 'block';
+                }
+            };
+        }
 
         const saveBtn = document.getElementById('btnSaveAsrConfig');
         if (saveBtn) {
