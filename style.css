@@ -378,9 +378,7 @@ body {
     overflow: hidden;
 }
 
-/* ============================================================
-   ⚠️ 绝对防回归铁律【严禁擅改】：P2 大透气感间距核心控制区！
-   ============================================================ */
+/* 间距插槽 */
 .desktop-future-slot {
     flex: 0 0 auto;
     height: 8px;
@@ -392,7 +390,7 @@ body {
     max-height: 36px;
 }
 
-/* 🔮 1. 桌面复古星象塔罗大组件 */
+/* 塔罗插槽 */
 .desktop-tarot-slot {
     width: 100%;
     height: 148px;
@@ -414,100 +412,7 @@ body {
     justify-content: center;
 }
 
-.tarot-slot-overlay {
-    position: absolute;
-    inset: 0;
-    background: radial-gradient(circle, rgba(0,0,0,0.05) 0%, rgba(14,9,6,0.55) 100%);
-    pointer-events: none;
-    z-index: 1;
-}
-
-.tarot-stage-idle {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    z-index: 2;
-    transition: opacity 0.4s ease;
-}
-.tarot-layer-bg {
-    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none;
-}
-.tarot-ring-galaxy {
-    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; transform-origin: center center;
-}
-.tarot-sun-spark {
-    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none; transform-origin: center center;
-}
-
-@keyframes tarotRingSpin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(720deg); }
-}
-@keyframes tarotSunDoubleSpin {
-    0% { transform: rotate(0deg) scale(1); }
-    50% { transform: rotate(-720deg) scale(1.15); filter: drop-shadow(0 0 12px rgba(255, 215, 0, 0.9)); }
-    100% { transform: rotate(-1440deg) scale(1); filter: drop-shadow(0 0 3px rgba(255, 215, 0, 0.4)); }
-}
-.tarot-spinning .tarot-ring-galaxy { animation: tarotRingSpin 1.8s cubic-bezier(0.35, 0, 0.25, 1) forwards; }
-.tarot-spinning .tarot-sun-spark { animation: tarotSunDoubleSpin 1.8s cubic-bezier(0.35, 0, 0.25, 1) forwards; }
-
-.tarot-stage-result {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    display: none;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    padding: 6px 12px;
-    opacity: 0;
-    z-index: 3;
-    transition: opacity 0.45s ease;
-}
-.tarot-stage-result.active { display: flex; opacity: 1; }
-
-.tarot-result-bg {
-    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; pointer-events: none; z-index: 1;
-}
-.tarot-result-content {
-    position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: center; width: 100%; height: 100%;
-}
-.tarot-status-strip {
-  font-size: 10px; color: #fce8a6; font-weight: 700; letter-spacing: 1.2px; text-shadow: 0 1px 4px rgba(0,0,0,0.9); margin-bottom: 4px;
-}
-.tarot-cards-row {
-  display: flex; gap: 14px; justify-content: center; align-items: center; width: 100%; margin-bottom: 6px;
-}
-.tarot-slot-card {
-  width: 56px; height: 90px; perspective: 1000px; cursor: pointer; border-radius: 6px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.7);
-}
-.tarot-slot-card-inner {
-  position: relative; width: 100%; height: 100%; transition: transform 0.6s cubic-bezier(0.4, 0, 0.2, 1); transform-style: preserve-3d;
-}
-.tarot-slot-card.flipped .tarot-slot-card-inner { transform: rotateY(180deg); }
-.tarot-card-face {
-  position: absolute; inset: 0; backface-visibility: hidden; border-radius: 6px; overflow: hidden; border: 1.2px solid #a38253;
-}
-.tarot-card-face-back { background: #0d0f14 url('tarot/images/card_back.png') center/cover no-repeat; }
-.tarot-card-face-front { background: #000000; transform: rotateY(180deg); }
-.tarot-card-face-front img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.tarot-card-face-front.reversed img { transform: rotate(180deg); }
-
-.tarot-gold-btn {
-    background: linear-gradient(180deg, #382717 0%, #1e130a 100%);
-    border: 1.2px solid #e5c365; color: #fce8a6; font-size: 10px; font-weight: 700;
-    letter-spacing: 1.8px; padding: 4px 12px; border-radius: 6px; cursor: pointer;
-    box-shadow: inset 0 0 6px rgba(229, 195, 101, 0.4), 0 3px 8px rgba(0, 0, 0, 0.7);
-    transition: all 0.2s ease; user-select: none;
-}
-.tarot-gold-btn:active { transform: scale(0.96); background: #140c06; border-color: #ffd978; }
-
-/* 📝 2. 日历与待办组件挂载插槽 */
+/* 动态组件插槽 */
 .desktop-widgets-slot {
     display: flex;
     gap: 8px;
@@ -519,122 +424,8 @@ body {
     align-items: stretch;
     position: relative;
 }
-.desktop-widgets-slot:empty {
-    display: none;
-}
-.desktop-widgets-slot.single-widget .calendar-widget-card,
-.desktop-widgets-slot.single-widget .todo-widget-card {
-    flex: 1 !important;
-    max-width: 320px;
-    margin: 0 auto;
-}
-.desktop-music-widget-card {
-    flex: 1 !important;
-    width: 100% !important;
-    min-width: 0 !important;
-    box-sizing: border-box !important;
-}
-.desktop-widgets-slot.single-widget .desktop-music-widget-card {
-    flex: 1 !important;
-    width: 100% !important;
-    max-width: 100% !important;
-    margin: 0 !important;
-}
 
-@keyframes widgetJiggle {
-    0% { transform: rotate(0deg); }
-    25% { transform: rotate(-1.5deg) scale(0.98); }
-    75% { transform: rotate(1.5deg) scale(0.98); }
-    100% { transform: rotate(0deg); }
-}
-.widget-jiggle {
-    animation: widgetJiggle 0.26s infinite ease-in-out !important;
-    outline: 2px dashed var(--primary) !important;
-    outline-offset: 3px;
-    cursor: grab !important;
-    user-select: none;
-    -webkit-user-select: none;
-}
-
-/* 日历组件 */
-.calendar-widget-card {
-    flex: 1.05;
-    background: #ffffff;
-    border-radius: 18px;
-    padding: 4px 7px;
-    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
-    border: 1px solid rgba(235, 232, 225, 0.85);
-    display: flex;
-    flex-direction: column;
-    justify-content: space-between;
-    user-select: none;
-    overflow: hidden;
-    touch-action: none;
-}
-.calendar-widget-top { text-align: center; }
-.calendar-month-title {
-    font-size: 9.5px; font-weight: 500; letter-spacing: 2px; color: #000; text-transform: uppercase;
-}
-.calendar-year-title {
-    font-size: 7.5px; font-weight: 500; letter-spacing: 1.5px; color: #222; border-bottom: 1px solid #000; padding-bottom: 1px;
-}
-.calendar-week-row {
-    display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 7px; font-weight: 800; color: #000;
-}
-.calendar-days-grid {
-    display: grid; grid-template-columns: repeat(7, 1fr); text-align: center; font-size: 7px; font-weight: 600; color: #222;
-}
-.calendar-day-cell {
-    height: 11px; display: flex; align-items: center; justify-content: center; position: relative;
-}
-.calendar-day-cell.today-cell::after {
-    content: ""; position: absolute; width: 11px; height: 11px; border-radius: 50%; background: #111; z-index: 1;
-}
-.calendar-day-cell.today-cell span { color: #fff !important; position: relative; z-index: 2; font-weight: 800; }
-.calendar-widget-notes {
-    font-size: 6.5px; font-weight: 800; letter-spacing: 1px; color: #111; text-transform: uppercase;
-}
-
-/* 待办组件 */
-.todo-widget-card {
-    flex: 1.15;
-    background: #fdfcf7;
-    border-radius: 18px;
-    padding: 5px 9px;
-    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.06);
-    border: 1px solid rgba(235, 232, 225, 0.85);
-    display: flex;
-    flex-direction: column;
-    user-select: none;
-    overflow: hidden;
-    touch-action: none;
-}
-.todo-widget-header {
-    display: flex; justify-content: space-between; align-items: center;
-    margin-bottom: 2px; padding-bottom: 2px; border-bottom: 1px solid #f2ede4; flex-shrink: 0;
-}
-.todo-widget-count { font-size: 10px; font-weight: 600; color: #433d3c; }
-.todo-widget-actions { display: flex; align-items: center; gap: 6px; }
-.todo-icon-btn { background: transparent; border: none; cursor: pointer; display: flex; align-items: center; color: #2b2725; }
-.todo-icon-btn svg { width: 12px; height: 12px; stroke: #2b2725; stroke-width: 2.2; fill: none; }
-.todo-list-wrap { flex: 1; overflow-y: auto; display: flex; flex-direction: column; min-height: 0; }
-.todo-list-wrap::-webkit-scrollbar { display: none; }
-.todo-item-row { display: flex; align-items: center; gap: 5px; padding: 2px 0; border-bottom: 1px solid #f5f0e6; }
-.todo-item-row:last-child { border-bottom: none; }
-.todo-check-circle {
-    width: 11px; height: 11px; border-radius: 50%; border: 1.2px solid #d4cdc5;
-    background: transparent; flex-shrink: 0; cursor: pointer; display: flex; align-items: center; justify-content: center;
-}
-.todo-item-row.completed .todo-check-circle { background: #63b97b; border-color: #63b97b; }
-.todo-item-row.completed .todo-check-circle::after {
-    content: ""; width: 3px; height: 5px; border: solid #fff; border-width: 0 1.5px 1.5px 0; transform: rotate(45deg) translate(-0.5px, -0.8px);
-}
-.todo-item-text {
-    font-size: 9.5px; color: #2b2725; font-weight: 500; flex: 1; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.todo-item-row.completed .todo-item-text { color: #a49c95; text-decoration: line-through; }
-
-/* 📱 3. 应用网格 */
+/* 应用网格 */
 .app-grid {
     display: grid;
     grid-template-columns: repeat(4, 1fr);
@@ -730,352 +521,8 @@ body {
     overflow: hidden !important; position: absolute !important; top: -9999px !important;
 }
 
-/* ============================================================ */
-/* ✦ 星轨启示专属黑金神秘弹窗规范 ✦ */
-/* ============================================================ */
-.modal-box.tarot-mystic-modal-box {
-    background: #0f1118 !important;
-    border: 2px solid #d4af37 !important;
-    border-radius: 18px !important;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.9), 0 0 24px rgba(185, 142, 255, 0.2) !important;
-    padding: 8px !important;
-}
-.tarot-mystic-modal-box .retro-pink-titlebar {
-    background: linear-gradient(90deg, #241432, #141724, #241432) !important;
-    color: #f4d06f !important;
-    border-radius: 12px 12px 0 0 !important;
-    border-bottom: 1px solid rgba(212, 175, 55, 0.35) !important;
-    text-shadow: none !important;
-    font-size: 13.5px !important;
-    padding: 8px 12px !important;
-}
-.tarot-mystic-modal-box .retro-pink-content {
-    background: #090a10 !important;
-    border: 1px solid rgba(255, 255, 255, 0.08) !important;
-    border-radius: 0 0 12px 12px !important;
-    color: #f6f2e8 !important;
-    padding: 16px 14px !important;
-}
-.tarot-meaning-item-card {
-    background: rgba(185, 142, 255, 0.06) !important;
-    border: 1px solid rgba(212, 175, 55, 0.35) !important;
-    border-radius: 10px !important;
-    padding: 12px 14px !important;
-    margin-bottom: 12px !important;
-}
-.tarot-meaning-item-title {
-    font-size: 13px !important;
-    font-weight: 700 !important;
-    color: #fce8a6 !important;
-    margin-bottom: 4px !important;
-}
-.tarot-meaning-item-desc {
-    font-size: 12px !important;
-    color: #e5e0d8 !important;
-    line-height: 1.7 !important;
-}
-.tarot-purple-glow-btn {
-    background: linear-gradient(135deg, #9356e8 0%, #6332ba 100%) !important;
-    border: 1px solid #c9a3ff !important;
-    color: #ffffff !important;
-    font-size: 12.5px !important;
-    font-weight: 700 !important;
-    letter-spacing: 2px !important;
-    padding: 10px 24px !important;
-    border-radius: 10px !important;
-    cursor: pointer !important;
-    box-shadow: 0 4px 18px rgba(147, 86, 232, 0.45) !important;
-    transition: all 0.2s ease !important;
-    user-select: none !important;
-}
-.tarot-purple-glow-btn:active {
-    transform: scale(0.96) !important;
-    background: #5627a6 !important;
-}
-
-/* ============================================================
-   ⚠️防回归标记：设置类App通用组件样式
-   ============================================================ */
-.theme-setting-card {
-    background: var(--card2);
-    border: 1.5px solid #ffd4e0;
-    border-radius: 14px;
-    padding: 14px 14px 16px;
-    margin-bottom: 14px;
-    box-shadow: var(--shadow);
-}
-.theme-setting-title {
-    display: flex; justify-content: space-between; align-items: center;
-    font-size: 14.5px; font-weight: 700; color: var(--text); margin-bottom: 8px;
-}
-.theme-setting-desc {
-    font-size: 12px; color: var(--text2); line-height: 1.55; margin-bottom: 12px;
-}
-.theme-action-bar {
-    display: flex; gap: 8px; margin-top: 10px;
-}
-
-.btn-primary, .btn-secondary {
-    border: none; border-radius: 10px; padding: 10px 14px;
-    font-size: 13px; font-weight: 700; cursor: pointer;
-    transition: var(--transition); text-align: center;
-}
-.btn-primary {
-    background: linear-gradient(135deg, var(--primary), var(--primary2));
-    color: #ffffff; box-shadow: 0 4px 12px rgba(255, 92, 138, 0.32);
-}
-.btn-primary:active { transform: scale(0.97); }
-.btn-secondary {
-    background: #ffffff; border: 1.5px solid #ffccd9; color: var(--text);
-}
-.btn-secondary:active { background: #fff0f3; }
-
-.theme-pointer-group { display: flex; flex-direction: column; gap: 8px; }
-.theme-pointer-item {
-    display: flex; align-items: center; gap: 8px;
-    padding: 10px 12px; border: 1px solid #ffd4e0; border-radius: 10px;
-    background: #ffffff; font-size: 13px; color: var(--text); cursor: pointer;
-}
-.theme-pointer-item.active { background: #fff0f3; border-color: var(--primary); font-weight: 700; }
-
-.theme-collapsible-header {
-    font-size: 13.5px; font-weight: 700; color: var(--text); padding: 4px 0;
-}
-.theme-collapsible-arrow { color: var(--primary); font-size: 12px; font-weight: 700; }
-
-.custom-theme-target-dropdown {
-    display: flex; justify-content: space-between; align-items: center;
-    padding: 10px 14px; border: 1.5px solid #ffd4e0; border-radius: 10px;
-    background: #ffffff; font-size: 13px; font-weight: 600; color: var(--text);
-    cursor: pointer; margin-bottom: 10px; position: relative;
-}
-.custom-theme-dropdown-menu {
-    position: absolute; left: 0; right: 0; top: calc(100% + 4px);
-    background: #ffffff; border: 1.5px solid #ffd4e0; border-radius: 10px;
-    box-shadow: var(--shadow); z-index: 60; max-height: 240px; overflow-y: auto;
-}
-.custom-theme-dropdown-item {
-    padding: 10px 14px; font-size: 12.5px; color: var(--text); cursor: pointer;
-    border-bottom: 1px solid #fbe4ea;
-}
-.custom-theme-dropdown-item:last-child { border-bottom: none; }
-.custom-theme-dropdown-item:active { background: #fff0f3; }
-.custom-theme-dropdown-item.active { background: #ffe3ec; color: var(--primary); font-weight: 700; }
-
-.hsv-number-input {
-    width: 56px; text-align: center; padding: 5px 2px;
-    background: #1c1c1c; color: #fff; border: 1px solid #555; border-radius: 6px; font-size: 12px;
-}
-
-.widget-page-btn {
-    padding: 4px 10px; border: 1px solid #ddd; border-radius: 8px;
-    font-size: 11px; background: #fff; color: #999; cursor: pointer;
-}
-.widget-page-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); font-weight: 700; }
-
-.profile-chip-list { display: flex; flex-wrap: wrap; gap: 8px; }
-.profile-chip {
-    display: inline-flex; align-items: center; gap: 6px;
-    padding: 6px 10px; background: #fff0f3; border: 1px solid #ffccd9;
-    border-radius: 20px; font-size: 12px; color: var(--text);
-}
-.profile-chip-del { cursor: pointer; color: #c92a2a; font-weight: 700; }
-
-.agent-profile-select-card {
-    background: var(--card2); border: 1.5px dashed #ffccd9; border-radius: 12px; padding: 12px; margin-bottom: 10px;
-}
-
-.font-fmt-btn {
-    padding: 6px 10px; border: 1px solid #ffccd9; border-radius: 8px;
-    background: #fff; font-size: 12px; cursor: pointer; color: var(--text);
-}
-.font-fmt-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
-
-.settings-app-container { padding: 16px 16px 40px; }
-
-/* ============================================================ */
-/* 全站通用原生微信白灰微绿弹窗规范（彻底铲除死亡粉框与红黑重影） */
-/* ============================================================ */
-.retro-pink-window {
-    background: #ffffff !important;
-    border: 0.5px solid #eaeaea !important;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.16) !important;
-    border-radius: 14px !important;
-    padding: 0 !important;
-    overflow: hidden !important;
-}
-.retro-pink-titlebar {
-    background: #ffffff !important;
-    padding: 15px 16px 12px 18px !important;
-    display: flex !important;
-    justify-content: space-between !important;
-    align-items: center !important;
-    color: #191919 !important;
-    font-weight: 600 !important;
-    font-size: 15.5px !important;
-    text-shadow: none !important; /* 彻底消灭红字重影！ */
-    border-bottom: 0.5px solid #f0f0f0 !important;
-    margin-bottom: 0 !important;
-    border-radius: 14px 14px 0 0 !important;
-}
-.retro-pink-btn {
-    background: #f4f4f4 !important;
-    border: none !important;
-    box-shadow: none !important;
-    cursor: pointer !important;
-    font-size: 12.5px !important;
-    font-weight: 600 !important;
-    color: #555555 !important;
-    height: 32px !important;
-    border-radius: 6px !important;
-    display: inline-flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    padding: 0 14px !important;
-    user-select: none !important;
-    transition: background 0.15s ease !important;
-}
-.retro-pink-btn:active {
-    background: #eaeaea !important;
-    transform: none !important;
-}
-.retro-pink-btn.close-btn {
-    width: 26px !important;
-    height: 26px !important;
-    border-radius: 50% !important;
-    padding: 0 !important;
-    color: #888888 !important;
-    font-size: 15px !important;
-    line-height: 26px !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    background: #f4f4f4 !important;
-}
-.retro-pink-btn.close-btn:active {
-    background: #e5e5e5 !important;
-}
-.retro-pink-content {
-    background: #ffffff !important;
-    border: none !important;
-    padding: 16px 18px 20px !important;
-    border-radius: 0 0 14px 14px !important;
-    max-height: 65vh !important;
-    overflow-y: auto !important;
-    color: #222222 !important;
-    text-shadow: none !important;
-    font-size: 13.5px !important;
-    line-height: 1.55 !important;
-}
-.retro-input-field {
-    width: 100% !important;
-    border: 0.5px solid #dcdcdc !important;
-    background: #f9f9f9 !important;
-    padding: 9px 12px !important;
-    font-size: 13px !important;
-    color: #191919 !important;
-    outline: none !important;
-    border-radius: 6px !important;
-    box-sizing: border-box !important;
-    margin: 8px 0 14px 0 !important;
-    transition: border-color 0.2s ease, background 0.2s ease !important;
-}
-.retro-input-field:focus {
-    border-color: #07c160 !important;
-    background: #ffffff !important;
-}
-.modal-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.48) !important;
-    backdrop-filter: blur(4px) !important;
-    -webkit-backdrop-filter: blur(4px) !important;
-    display: none;
-    justify-content: center;
-    align-items: center;
-    z-index: 2000;
-    padding: 20px;
-    box-sizing: border-box;
-}
-.modal-overlay.open {
-    display: flex;
-}
-.modal-box {
-    width: 100%;
-    max-width: 325px !important;
-}
-#deviceBanLockScreen { z-index: 99999 !important; }
-.toast {
-    position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
-    background: rgba(24, 24, 24, 0.92); color: #fff; padding: 10px 20px; border-radius: 12px;
-    font-weight: 500; z-index: 2500; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25); max-width: 90%; text-align: center; display: none; font-size: 13px; backdrop-filter: blur(10px);
-}
-@keyframes bounceUp { 0%, 100% { transform: translateY(0); opacity: 0.7; } 50% { transform: translateY(-6px); opacity: 1; } }
-.debug-floating-orb {
-    position: fixed; z-index: 1800; touch-action: none; user-select: none; cursor: grab;
-    display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 14px rgba(216, 27, 96, 0.28); transition: transform 0.15s ease;
-}
-.debug-floating-orb:active { cursor: grabbing; transform: scale(0.93); }
-.debug-floating-orb.orb-transparent-skin { box-shadow: none !important; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.15)); }
-.orb-inner-icon { width: 65%; height: 65%; display: flex; align-items: center; justify-content: center; pointer-events: none; }
-.orb-inner-icon img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
-.orb-badge {
-    position: absolute; top: -4px; right: -4px; background: #e53935; color: #ffffff;
-    font-size: 10px; font-weight: 800; min-width: 17px; height: 17px; border-radius: 9px;
-    display: flex; align-items: center; justify-content: center; padding: 0 3px; border: 2px solid #ffffff; box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25); pointer-events: none;
-}
-@keyframes orbShakeAnim {
-    0% { transform: translate(0, 0) rotate(0deg); } 15% { transform: translate(-3px, 2px) rotate(-4deg); }
-    30% { transform: translate(3px, -2px) rotate(4deg); } 45% { transform: translate(-3px, -1px) rotate(-3deg); }
-    60% { transform: translate(2px, 2px) rotate(2deg); } 75% { transform: translate(-1px, 1px) rotate(-1deg); } 100% { transform: translate(0, 0) rotate(0deg); }
-}
-.orb-shake { animation: orbShakeAnim 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97) both; }
-.orb-shape-btn.active-shape { background: var(--primary) !important; color: #ffffff !important; border-color: var(--primary) !important; box-shadow: 0 3px 10px rgba(255, 92, 138, 0.35); }
-.settings-nav-tabs::-webkit-scrollbar { display: none; }
-
-/* ============================================================ */
-/* 🛡️ 全站原生表单与控件微信化兜底防线（彻底歼灭黑框白底原生怪） */
-/* ============================================================ */
-select {
-    border: 0.5px solid #e0e0e0 !important;
-    background-color: #fafafa !important;
-    border-radius: 8px !important;
-    padding: 8px 12px !important;
-    outline: none !important;
-    color: #222222 !important;
-    font-family: inherit !important;
-    box-shadow: none !important;
-    font-size: 13px !important;
-    transition: border-color 0.15s ease, background-color 0.15s ease !important;
-}
-select:focus {
-    border-color: #07c160 !important;
-    background-color: #ffffff !important;
-}
-option {
-    background-color: #ffffff !important;
-    color: #222222 !important;
-    padding: 6px 10px !important;
-}
-
-/* 原生单选按钮与复选框：统一微信微绿主调 */
-input[type="radio"],
-input[type="checkbox"] {
-    accent-color: #07c160 !important;
-    cursor: pointer !important;
-}
-
-/* 通用输入框美化兜底，防止直角生硬边框 */
-input[type="text"]:not(.hsv-number-input),
-input[type="number"]:not(.hsv-number-input),
-input[type="password"] {
-    font-family: inherit;
-    border-radius: 6px;
-    outline: none;
-}
-
 /* ==========================================================================
-   伴窝 (Nest) 专属视觉体系 - 极简二次元 / 深空微粒 / 纯线条 SVG 质感
+   伴窝 (Nest) 专属视觉体系 - 极简二次元 / 纯线条 SVG 质感 / 现代胶囊导航
    ========================================================================== */
 .app-fullscreen-modal,
 .nest-app-modal {
@@ -1181,7 +628,7 @@ input[type="password"] {
     display: block;
 }
 
-/* 同心圆聚落主舞台 (参考图布局) */
+/* 星轨主舞台 */
 .nest-orbit-stage {
     flex: 1;
     position: relative;
@@ -1366,7 +813,7 @@ input[type="password"] {
     background: #f59e0b;
 }
 
-/* 3D 视图与顶部控制条 */
+/* 3D 视图与顶部导航栏 */
 .nest-3d-view {
     width: 100%;
     height: 100%;
@@ -1425,6 +872,229 @@ input[type="password"] {
 .nest-bar-actions {
     display: flex;
     gap: 8px;
+}
+
+/* ============================================================ */
+/* 多房间胶囊切换条 (默认卧室 + 导入图标/SVG + 添加按键) */
+/* ============================================================ */
+.nest-room-nav-scroll {
+    position: absolute;
+    top: 66px;
+    left: 14px;
+    right: 14px;
+    z-index: 20;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 4px;
+}
+.nest-room-nav-scroll::-webkit-scrollbar {
+    display: none;
+}
+.nest-room-pill-track {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.nest-room-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: rgba(25, 29, 41, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 20px;
+    padding: 5px 12px 5px 6px;
+    cursor: pointer;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    transition: all 0.2s ease;
+}
+.nest-room-chip.active {
+    background: rgba(245, 158, 11, 0.22);
+    border-color: #f59e0b;
+    box-shadow: 0 4px 14px rgba(245, 158, 11, 0.25);
+}
+.chip-icon-box {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.08);
+}
+.chip-custom-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+.chip-svg-icon svg {
+    width: 14px;
+    height: 14px;
+    stroke: #e2e8f0;
+    display: block;
+}
+.nest-room-chip.active .chip-svg-icon svg {
+    stroke: #fbbf24;
+}
+.chip-name {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #e2e8f0;
+    white-space: nowrap;
+}
+.nest-room-chip.active .chip-name {
+    color: #fbbf24;
+}
+.nest-add-room-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px dashed rgba(255, 255, 255, 0.28);
+    border-radius: 20px;
+    padding: 6px 12px;
+    color: #cbd5e1;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+.nest-add-room-chip:active {
+    transform: scale(0.95);
+    background: rgba(255, 255, 255, 0.14);
+}
+.nest-add-room-chip .chip-svg-icon svg {
+    width: 13px;
+    height: 13px;
+}
+
+/* ============================================================ */
+/* 添加房间弹窗 */
+/* ============================================================ */
+.nest-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    padding: 20px;
+}
+.nest-modal-dialog {
+    width: 100%;
+    max-width: 310px;
+    background: #191d29;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 18px;
+    padding: 16px 18px 18px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8);
+}
+.nest-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+    font-weight: 800;
+    color: #f8fafc;
+    margin-bottom: 14px;
+}
+.nest-modal-close {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 16px;
+    cursor: pointer;
+}
+.nest-input-group {
+    margin-bottom: 12px;
+}
+.nest-input-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: #94a3b8;
+    margin-bottom: 6px;
+}
+.nest-text-field {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 13px;
+    color: #ffffff;
+    outline: none;
+}
+.nest-text-field:focus {
+    border-color: #f59e0b;
+}
+.nest-upload-preview-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.nest-icon-preview-box {
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+.nest-icon-preview-box svg {
+    width: 18px;
+    height: 18px;
+    stroke: #94a3b8;
+}
+.nest-upload-btn-outline {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px dashed rgba(255, 255, 255, 0.22);
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #cbd5e1;
+    cursor: pointer;
+}
+.nest-modal-footer {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+}
+.nest-btn-cancel,
+.nest-btn-confirm {
+    flex: 1;
+    padding: 9px;
+    border-radius: 10px;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+}
+.nest-btn-cancel {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #cbd5e1;
+}
+.nest-btn-confirm {
+    background: #f59e0b;
+    border: none;
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35);
 }
 
 /* 底部抽屉工坊 */
