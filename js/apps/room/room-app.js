@@ -33,6 +33,7 @@ window.RoomApp = {
     showHub() {
         this.currentView = 'hub';
         this.activeRoomId = null;
+        this.activeCharId = null;
         if (window.RoomEngine) window.RoomEngine.destroy();
         this.appEl.innerHTML = '<div id="nestHubContainer" class="nest-container"></div>';
         const hubBox = this.appEl.querySelector('#nestHubContainer');
@@ -44,16 +45,20 @@ window.RoomApp = {
     },
 
     /**
-     * 进入指定角色的空间（默认主卧室，可切换房间）
+     * 进入指定角色的空间（100% 独立隔离，绝不与其他角色共用房间或配置）
      */
     enterRoom(charId, targetRoomId = null) {
         this.currentView = 'room';
+        const isSwitchingChar = (this.activeCharId !== charId);
         this.activeCharId = charId;
         if (window.RoomStars) window.RoomStars.stop();
 
-        // 提取该角色名下的所有房间
+        // 提取该角色名下的专属房间列表（各角色独立）
         const rooms = window.RoomManager.getRoomsForChar(charId);
-        const activeRoom = window.RoomManager.getActiveRoom(charId, targetRoomId || this.activeRoomId);
+        
+        // 若切换了角色，且没指定 targetRoomId，强制取该角色的专属首个房间
+        const roomIdToLoad = isSwitchingChar ? (targetRoomId || rooms[0].id) : (targetRoomId || this.activeRoomId || rooms[0].id);
+        const activeRoom = window.RoomManager.getActiveRoom(charId, roomIdToLoad);
         this.activeRoomId = activeRoom.id;
 
         const icons = window.RoomIcons;
@@ -81,7 +86,7 @@ window.RoomApp = {
                 </div>
             </div>
 
-            <!-- 顶部多房间胶囊切换条（默认主体卧室，支持导入PNG/GIF图标，点击进房间） -->
+            <!-- 顶部多房间胶囊切换条（各角色独占独立房间） -->
             <div class="nest-room-nav-scroll" id="nestRoomNavScroll">
                 <div class="nest-room-pill-track">
                     ${rooms.map(r => {
@@ -100,7 +105,7 @@ window.RoomApp = {
                     }).join('')}
                     
                     <!-- ＋ 添加房间按键 -->
-                    <button class="nest-add-room-chip" id="btnAddRoomBtn" title="给角色添加新房间">
+                    <button class="nest-add-room-chip" id="btnAddRoomBtn" title="给该角色添加独立新房间">
                         <span class="chip-svg-icon">${icons.plus}</span>
                         <span>添加房间</span>
                     </button>
@@ -111,7 +116,7 @@ window.RoomApp = {
             <div class="nest-modal-backdrop" id="nestAddRoomModal" style="display:none;">
                 <div class="nest-modal-dialog">
                     <div class="nest-modal-header">
-                        <span>添加专属房间</span>
+                        <span>为【${charName}】添加专属房间</span>
                         <button class="nest-modal-close" id="btnCloseAddRoom">✕</button>
                     </div>
                     <div class="nest-modal-body">
