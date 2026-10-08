@@ -1,0 +1,786 @@
+[
+  {
+    "id": "001-coffee-lab__bank",
+    "file": "001-coffee-lab__bank.glb",
+    "name": "银行柜",
+    "scene": "☕ 咖啡实验室",
+    "sceneId": "001-coffee-lab",
+    "size": 479.9
+  },
+  {
+    "id": "001-coffee-lab__brewing-unit",
+    "file": "001-coffee-lab__brewing-unit.glb",
+    "name": "虹吸壶",
+    "scene": "☕ 咖啡实验室",
+    "sceneId": "001-coffee-lab",
+    "size": 3844.6
+  },
+  {
+    "id": "001-coffee-lab__filtration",
+    "file": "001-coffee-lab__filtration.glb",
+    "name": "过滤器",
+    "scene": "☕ 咖啡实验室",
+    "sceneId": "001-coffee-lab",
+    "size": 1077.0
+  },
+  {
+    "id": "001-coffee-lab__grinder",
+    "file": "001-coffee-lab__grinder.glb",
+    "name": "咖啡研磨机",
+    "scene": "☕ 咖啡实验室",
+    "sceneId": "001-coffee-lab",
+    "size": 3497.0
+  },
+  {
+    "id": "001-coffee-lab__shark",
+    "file": "001-coffee-lab__shark.glb",
+    "name": "鲨鱼摆件",
+    "scene": "☕ 咖啡实验室",
+    "sceneId": "001-coffee-lab",
+    "size": 15.8
+  },
+  {
+    "id": "001-coffee-lab__table",
+    "file": "001-coffee-lab__table.glb",
+    "name": "桌子",
+    "scene": "☕ 咖啡实验室",
+    "sceneId": "001-coffee-lab",
+    "size": 324.9
+  },
+  {
+    "id": "001-coffee-lab__table_001",
+    "file": "001-coffee-lab__table_001.glb",
+    "name": "Table 001",
+    "scene": "☕ 咖啡实验室",
+    "sceneId": "001-coffee-lab",
+    "size": 930.6
+  },
+  {
+    "id": "001-coffee-lab__tank",
+    "file": "001-coffee-lab__tank.glb",
+    "name": "玻璃水缸",
+    "scene": "☕ 咖啡实验室",
+    "sceneId": "001-coffee-lab",
+    "size": 154.1
+  },
+  {
+    "id": "001-coffee-lab__tank_001",
+    "file": "001-coffee-lab__tank_001.glb",
+    "name": "Tank 001",
+    "scene": "☕ 咖啡实验室",
+    "sceneId": "001-coffee-lab",
+    "size": 231.5
+  },
+  {
+    "id": "001-coffee-lab__tub",
+    "file": "001-coffee-lab__tub.glb",
+    "name": "木桶",
+    "scene": "☕ 咖啡实验室",
+    "sceneId": "001-coffee-lab",
+    "size": 53.4
+  },
+  {
+    "id": "001-coffee-lab__tube",
+    "file": "001-coffee-lab__tube.glb",
+    "name": "玻璃管",
+    "scene": "☕ 咖啡实验室",
+    "sceneId": "001-coffee-lab",
+    "size": 205.9
+  },
+  {
+    "id": "001-coffee-lab__tube_002",
+    "file": "001-coffee-lab__tube_002.glb",
+    "name": "Tube 002",
+    "scene": "☕ 咖啡实验室",
+    "sceneId": "001-coffee-lab",
+    "size": 820.3
+  },
+  {
+    "id": "001-coffee-lab__tubes",
+    "file": "001-coffee-lab__tubes.glb",
+    "name": "玻璃管组",
+    "scene": "☕ 咖啡实验室",
+    "sceneId": "001-coffee-lab",
+    "size": 3643.8
+  },
+  {
+    "id": "001-coffee-lab__water",
+    "file": "001-coffee-lab__water.glb",
+    "name": "水",
+    "scene": "☕ 咖啡实验室",
+    "sceneId": "001-coffee-lab",
+    "size": 329.7
+  },
+  {
+    "id": "057-room-hacker__arcade",
+    "file": "057-room-hacker__arcade.glb",
+    "name": "复古街机",
+    "scene": "💻 赛博机房",
+    "sceneId": "057-room-hacker",
+    "size": 153.4
+  },
+  {
+    "id": "057-room-hacker__chair",
+    "file": "057-room-hacker__chair.glb",
+    "name": "椅子",
+    "scene": "💻 赛博机房",
+    "sceneId": "057-room-hacker",
+    "size": 51.4
+  },
+  {
+    "id": "057-room-hacker__keyboard",
+    "file": "057-room-hacker__keyboard.glb",
+    "name": "键盘",
+    "scene": "💻 赛博机房",
+    "sceneId": "057-room-hacker",
+    "size": 76.2
+  },
+  {
+    "id": "057-room-hacker__keyboard_001",
+    "file": "057-room-hacker__keyboard_001.glb",
+    "name": "Keyboard 001",
+    "scene": "💻 赛博机房",
+    "sceneId": "057-room-hacker",
+    "size": 76.1
+  },
+  {
+    "id": "057-room-hacker__lamp",
+    "file": "057-room-hacker__lamp.glb",
+    "name": "台灯",
+    "scene": "💻 赛博机房",
+    "sceneId": "057-room-hacker",
+    "size": 38.6
+  },
+  {
+    "id": "057-room-hacker__mouse",
+    "file": "057-room-hacker__mouse.glb",
+    "name": "鼠标",
+    "scene": "💻 赛博机房",
+    "sceneId": "057-room-hacker",
+    "size": 7.3
+  },
+  {
+    "id": "057-room-hacker__pc",
+    "file": "057-room-hacker__pc.glb",
+    "name": "电脑主机",
+    "scene": "💻 赛博机房",
+    "sceneId": "057-room-hacker",
+    "size": 149.7
+  },
+  {
+    "id": "057-room-hacker__pc_001",
+    "file": "057-room-hacker__pc_001.glb",
+    "name": "Pc 001",
+    "scene": "💻 赛博机房",
+    "sceneId": "057-room-hacker",
+    "size": 44.3
+  },
+  {
+    "id": "057-room-hacker__pc_002",
+    "file": "057-room-hacker__pc_002.glb",
+    "name": "Pc 002",
+    "scene": "💻 赛博机房",
+    "sceneId": "057-room-hacker",
+    "size": 36.2
+  },
+  {
+    "id": "057-room-hacker__plate",
+    "file": "057-room-hacker__plate.glb",
+    "name": "餐盘",
+    "scene": "💻 赛博机房",
+    "sceneId": "057-room-hacker",
+    "size": 10.3
+  },
+  {
+    "id": "057-room-hacker__poster",
+    "file": "057-room-hacker__poster.glb",
+    "name": "海报",
+    "scene": "💻 赛博机房",
+    "sceneId": "057-room-hacker",
+    "size": 342.5
+  },
+  {
+    "id": "057-room-hacker__poster_001",
+    "file": "057-room-hacker__poster_001.glb",
+    "name": "海报2",
+    "scene": "💻 赛博机房",
+    "sceneId": "057-room-hacker",
+    "size": 129.9
+  },
+  {
+    "id": "057-room-hacker__sandwich",
+    "file": "057-room-hacker__sandwich.glb",
+    "name": "三明治",
+    "scene": "💻 赛博机房",
+    "sceneId": "057-room-hacker",
+    "size": 17.5
+  },
+  {
+    "id": "057-room-hacker__sofa",
+    "file": "057-room-hacker__sofa.glb",
+    "name": "沙发",
+    "scene": "💻 赛博机房",
+    "sceneId": "057-room-hacker",
+    "size": 23.1
+  },
+  {
+    "id": "057-room-hacker__table",
+    "file": "057-room-hacker__table.glb",
+    "name": "桌子",
+    "scene": "💻 赛博机房",
+    "sceneId": "057-room-hacker",
+    "size": 5.9
+  },
+  {
+    "id": "057-room-hacker__table_001",
+    "file": "057-room-hacker__table_001.glb",
+    "name": "Table 001",
+    "scene": "💻 赛博机房",
+    "sceneId": "057-room-hacker",
+    "size": 6.0
+  },
+  {
+    "id": "057-room-hacker__table_002",
+    "file": "057-room-hacker__table_002.glb",
+    "name": "Table 002",
+    "scene": "💻 赛博机房",
+    "sceneId": "057-room-hacker",
+    "size": 6.0
+  },
+  {
+    "id": "057-room-hacker__trash",
+    "file": "057-room-hacker__trash.glb",
+    "name": "垃圾桶",
+    "scene": "💻 赛博机房",
+    "sceneId": "057-room-hacker",
+    "size": 6.9
+  },
+  {
+    "id": "057-room-hacker__tv",
+    "file": "057-room-hacker__tv.glb",
+    "name": "电视机",
+    "scene": "💻 赛博机房",
+    "sceneId": "057-room-hacker",
+    "size": 84.9
+  },
+  {
+    "id": "057-room-hacker__walkman",
+    "file": "057-room-hacker__walkman.glb",
+    "name": "随身听",
+    "scene": "💻 赛博机房",
+    "sceneId": "057-room-hacker",
+    "size": 92.6
+  },
+  {
+    "id": "061-central-perk__bar",
+    "file": "061-central-perk__bar.glb",
+    "name": "吧台",
+    "scene": "☕ Central Perk",
+    "sceneId": "061-central-perk",
+    "size": 168.8
+  },
+  {
+    "id": "061-central-perk__bar_001",
+    "file": "061-central-perk__bar_001.glb",
+    "name": "吧台柜",
+    "scene": "☕ Central Perk",
+    "sceneId": "061-central-perk",
+    "size": 353.1
+  },
+  {
+    "id": "061-central-perk__carpet_001",
+    "file": "061-central-perk__carpet_001.glb",
+    "name": "地毯",
+    "scene": "☕ Central Perk",
+    "sceneId": "061-central-perk",
+    "size": 347.2
+  },
+  {
+    "id": "061-central-perk__door",
+    "file": "061-central-perk__door.glb",
+    "name": "门",
+    "scene": "☕ Central Perk",
+    "sceneId": "061-central-perk",
+    "size": 23.7
+  },
+  {
+    "id": "061-central-perk__furniture",
+    "file": "061-central-perk__furniture.glb",
+    "name": "家具组合",
+    "scene": "☕ Central Perk",
+    "sceneId": "061-central-perk",
+    "size": 236.2
+  },
+  {
+    "id": "061-central-perk__sofa",
+    "file": "061-central-perk__sofa.glb",
+    "name": "沙发",
+    "scene": "☕ Central Perk",
+    "sceneId": "061-central-perk",
+    "size": 72.2
+  },
+  {
+    "id": "061-central-perk__table-and-chairs",
+    "file": "061-central-perk__table-and-chairs.glb",
+    "name": "桌椅组合",
+    "scene": "☕ Central Perk",
+    "sceneId": "061-central-perk",
+    "size": 425.8
+  },
+  {
+    "id": "061-central-perk__table",
+    "file": "061-central-perk__table.glb",
+    "name": "桌子",
+    "scene": "☕ Central Perk",
+    "sceneId": "061-central-perk",
+    "size": 153.9
+  },
+  {
+    "id": "086-room-workshop__boots",
+    "file": "086-room-workshop__boots.glb",
+    "name": "靴子摆件",
+    "scene": "🔧 手工匠人工坊",
+    "sceneId": "086-room-workshop",
+    "size": 41.0
+  },
+  {
+    "id": "086-room-workshop__brush",
+    "file": "086-room-workshop__brush.glb",
+    "name": "刷子",
+    "scene": "🔧 手工匠人工坊",
+    "sceneId": "086-room-workshop",
+    "size": 6.9
+  },
+  {
+    "id": "086-room-workshop__brush_001",
+    "file": "086-room-workshop__brush_001.glb",
+    "name": "Brush 001",
+    "scene": "🔧 手工匠人工坊",
+    "sceneId": "086-room-workshop",
+    "size": 6.6
+  },
+  {
+    "id": "086-room-workshop__brush_002",
+    "file": "086-room-workshop__brush_002.glb",
+    "name": "Brush 002",
+    "scene": "🔧 手工匠人工坊",
+    "sceneId": "086-room-workshop",
+    "size": 6.9
+  },
+  {
+    "id": "086-room-workshop__can",
+    "file": "086-room-workshop__can.glb",
+    "name": "铁罐",
+    "scene": "🔧 手工匠人工坊",
+    "sceneId": "086-room-workshop",
+    "size": 23.9
+  },
+  {
+    "id": "086-room-workshop__can_001",
+    "file": "086-room-workshop__can_001.glb",
+    "name": "Can 001",
+    "scene": "🔧 手工匠人工坊",
+    "sceneId": "086-room-workshop",
+    "size": 23.9
+  },
+  {
+    "id": "086-room-workshop__can_002",
+    "file": "086-room-workshop__can_002.glb",
+    "name": "Can 002",
+    "scene": "🔧 手工匠人工坊",
+    "sceneId": "086-room-workshop",
+    "size": 23.9
+  },
+  {
+    "id": "086-room-workshop__can_003",
+    "file": "086-room-workshop__can_003.glb",
+    "name": "Can 003",
+    "scene": "🔧 手工匠人工坊",
+    "sceneId": "086-room-workshop",
+    "size": 23.9
+  },
+  {
+    "id": "086-room-workshop__can_004",
+    "file": "086-room-workshop__can_004.glb",
+    "name": "Can 004",
+    "scene": "🔧 手工匠人工坊",
+    "sceneId": "086-room-workshop",
+    "size": 23.9
+  },
+  {
+    "id": "086-room-workshop__can_005",
+    "file": "086-room-workshop__can_005.glb",
+    "name": "Can 005",
+    "scene": "🔧 手工匠人工坊",
+    "sceneId": "086-room-workshop",
+    "size": 16.8
+  },
+  {
+    "id": "086-room-workshop__candle",
+    "file": "086-room-workshop__candle.glb",
+    "name": "蜡烛",
+    "scene": "🔧 手工匠人工坊",
+    "sceneId": "086-room-workshop",
+    "size": 18.7
+  },
+  {
+    "id": "086-room-workshop__carpet",
+    "file": "086-room-workshop__carpet.glb",
+    "name": "地毯",
+    "scene": "🔧 手工匠人工坊",
+    "sceneId": "086-room-workshop",
+    "size": 31.6
+  },
+  {
+    "id": "086-room-workshop__chair",
+    "file": "086-room-workshop__chair.glb",
+    "name": "椅子",
+    "scene": "🔧 手工匠人工坊",
+    "sceneId": "086-room-workshop",
+    "size": 24.6
+  },
+  {
+    "id": "086-room-workshop__cylinder_009",
+    "file": "086-room-workshop__cylinder_009.glb",
+    "name": "圆柱装饰",
+    "scene": "🔧 手工匠人工坊",
+    "sceneId": "086-room-workshop",
+    "size": 18.6
+  },
+  {
+    "id": "086-room-workshop__fireplace",
+    "file": "086-room-workshop__fireplace.glb",
+    "name": "壁炉",
+    "scene": "🔧 手工匠人工坊",
+    "sceneId": "086-room-workshop",
+    "size": 76.7
+  },
+  {
+    "id": "086-room-workshop__hang",
+    "file": "086-room-workshop__hang.glb",
+    "name": "挂架",
+    "scene": "🔧 手工匠人工坊",
+    "sceneId": "086-room-workshop",
+    "size": 27.5
+  },
+  {
+    "id": "086-room-workshop__lamp",
+    "file": "086-room-workshop__lamp.glb",
+    "name": "台灯",
+    "scene": "🔧 手工匠人工坊",
+    "sceneId": "086-room-workshop",
+    "size": 36.2
+  },
+  {
+    "id": "086-room-workshop__stairs",
+    "file": "086-room-workshop__stairs.glb",
+    "name": "小楼梯",
+    "scene": "🔧 手工匠人工坊",
+    "sceneId": "086-room-workshop",
+    "size": 13.5
+  },
+  {
+    "id": "086-room-workshop__stones",
+    "file": "086-room-workshop__stones.glb",
+    "name": "石头装饰",
+    "scene": "🔧 手工匠人工坊",
+    "sceneId": "086-room-workshop",
+    "size": 9.8
+  },
+  {
+    "id": "086-room-workshop__stones_001",
+    "file": "086-room-workshop__stones_001.glb",
+    "name": "Stones 001",
+    "scene": "🔧 手工匠人工坊",
+    "sceneId": "086-room-workshop",
+    "size": 9.7
+  },
+  {
+    "id": "086-room-workshop__storage",
+    "file": "086-room-workshop__storage.glb",
+    "name": "收纳柜",
+    "scene": "🔧 手工匠人工坊",
+    "sceneId": "086-room-workshop",
+    "size": 190.6
+  },
+  {
+    "id": "086-room-workshop__table",
+    "file": "086-room-workshop__table.glb",
+    "name": "桌子",
+    "scene": "🔧 手工匠人工坊",
+    "sceneId": "086-room-workshop",
+    "size": 41.1
+  },
+  {
+    "id": "086-room-workshop__tool",
+    "file": "086-room-workshop__tool.glb",
+    "name": "工具",
+    "scene": "🔧 手工匠人工坊",
+    "sceneId": "086-room-workshop",
+    "size": 12.6
+  },
+  {
+    "id": "086-room-workshop__tool_001",
+    "file": "086-room-workshop__tool_001.glb",
+    "name": "Tool 001",
+    "scene": "🔧 手工匠人工坊",
+    "sceneId": "086-room-workshop",
+    "size": 20.3
+  },
+  {
+    "id": "086-room-workshop__tool_002",
+    "file": "086-room-workshop__tool_002.glb",
+    "name": "Tool 002",
+    "scene": "🔧 手工匠人工坊",
+    "sceneId": "086-room-workshop",
+    "size": 5.0
+  },
+  {
+    "id": "086-room-workshop__toy",
+    "file": "086-room-workshop__toy.glb",
+    "name": "小玩具",
+    "scene": "🔧 手工匠人工坊",
+    "sceneId": "086-room-workshop",
+    "size": 32.9
+  },
+  {
+    "id": "086-room-workshop__toy_001",
+    "file": "086-room-workshop__toy_001.glb",
+    "name": "Toy 001",
+    "scene": "🔧 手工匠人工坊",
+    "sceneId": "086-room-workshop",
+    "size": 13.2
+  },
+  {
+    "id": "086-room-workshop__toy_002",
+    "file": "086-room-workshop__toy_002.glb",
+    "name": "Toy 002",
+    "scene": "🔧 手工匠人工坊",
+    "sceneId": "086-room-workshop",
+    "size": 31.2
+  },
+  {
+    "id": "086-room-workshop__toy_008",
+    "file": "086-room-workshop__toy_008.glb",
+    "name": "Toy 008",
+    "scene": "🔧 手工匠人工坊",
+    "sceneId": "086-room-workshop",
+    "size": 10.2
+  },
+  {
+    "id": "086-room-workshop__window_002",
+    "file": "086-room-workshop__window_002.glb",
+    "name": "Window 002",
+    "scene": "🔧 手工匠人工坊",
+    "sceneId": "086-room-workshop",
+    "size": 24.9
+  },
+  {
+    "id": "090-room-studio__chair",
+    "file": "090-room-studio__chair.glb",
+    "name": "椅子",
+    "scene": "🎨 艺术工作室",
+    "sceneId": "090-room-studio",
+    "size": 167.2
+  },
+  {
+    "id": "090-room-studio__consoles",
+    "file": "090-room-studio__consoles.glb",
+    "name": "控制台",
+    "scene": "🎨 艺术工作室",
+    "sceneId": "090-room-studio",
+    "size": 1866.5
+  },
+  {
+    "id": "090-room-studio__cup",
+    "file": "090-room-studio__cup.glb",
+    "name": "马克杯",
+    "scene": "🎨 艺术工作室",
+    "sceneId": "090-room-studio",
+    "size": 255.5
+  },
+  {
+    "id": "090-room-studio__desktop",
+    "file": "090-room-studio__desktop.glb",
+    "name": "电脑桌",
+    "scene": "🎨 艺术工作室",
+    "sceneId": "090-room-studio",
+    "size": 1660.9
+  },
+  {
+    "id": "090-room-studio__fx",
+    "file": "090-room-studio__fx.glb",
+    "name": "效果器",
+    "scene": "🎨 艺术工作室",
+    "sceneId": "090-room-studio",
+    "size": 1676.2
+  },
+  {
+    "id": "090-room-studio__fx_001",
+    "file": "090-room-studio__fx_001.glb",
+    "name": "Fx 001",
+    "scene": "🎨 艺术工作室",
+    "sceneId": "090-room-studio",
+    "size": 1676.2
+  },
+  {
+    "id": "090-room-studio__golden-record",
+    "file": "090-room-studio__golden-record.glb",
+    "name": "金唱片",
+    "scene": "🎨 艺术工作室",
+    "sceneId": "090-room-studio",
+    "size": 44.5
+  },
+  {
+    "id": "090-room-studio__keyboard",
+    "file": "090-room-studio__keyboard.glb",
+    "name": "键盘",
+    "scene": "🎨 艺术工作室",
+    "sceneId": "090-room-studio",
+    "size": 123.6
+  },
+  {
+    "id": "090-room-studio__lamp",
+    "file": "090-room-studio__lamp.glb",
+    "name": "台灯",
+    "scene": "🎨 艺术工作室",
+    "sceneId": "090-room-studio",
+    "size": 139.0
+  },
+  {
+    "id": "090-room-studio__mixing-console",
+    "file": "090-room-studio__mixing-console.glb",
+    "name": "调音台",
+    "scene": "🎨 艺术工作室",
+    "sceneId": "090-room-studio",
+    "size": 12701.4
+  },
+  {
+    "id": "090-room-studio__mouse",
+    "file": "090-room-studio__mouse.glb",
+    "name": "鼠标",
+    "scene": "🎨 艺术工作室",
+    "sceneId": "090-room-studio",
+    "size": 26.8
+  },
+  {
+    "id": "090-room-studio__piano",
+    "file": "090-room-studio__piano.glb",
+    "name": "钢琴",
+    "scene": "🎨 艺术工作室",
+    "sceneId": "090-room-studio",
+    "size": 2312.4
+  },
+  {
+    "id": "090-room-studio__sofa",
+    "file": "090-room-studio__sofa.glb",
+    "name": "沙发",
+    "scene": "🎨 艺术工作室",
+    "sceneId": "090-room-studio",
+    "size": 473.5
+  },
+  {
+    "id": "090-room-studio__soundproofing",
+    "file": "090-room-studio__soundproofing.glb",
+    "name": "隔音板",
+    "scene": "🎨 艺术工作室",
+    "sceneId": "090-room-studio",
+    "size": 1244.8
+  },
+  {
+    "id": "090-room-studio__speakers",
+    "file": "090-room-studio__speakers.glb",
+    "name": "音响",
+    "scene": "🎨 艺术工作室",
+    "sceneId": "090-room-studio",
+    "size": 500.0
+  },
+  {
+    "id": "090-room-studio__stand",
+    "file": "090-room-studio__stand.glb",
+    "name": "音响支架",
+    "scene": "🎨 艺术工作室",
+    "sceneId": "090-room-studio",
+    "size": 4918.3
+  },
+  {
+    "id": "090-room-studio__tv",
+    "file": "090-room-studio__tv.glb",
+    "name": "电视机",
+    "scene": "🎨 艺术工作室",
+    "sceneId": "090-room-studio",
+    "size": 160.4
+  },
+  {
+    "id": "090-room-studio__window_001",
+    "file": "090-room-studio__window_001.glb",
+    "name": "Window 001",
+    "scene": "🎨 艺术工作室",
+    "sceneId": "090-room-studio",
+    "size": 71.8
+  },
+  {
+    "id": "living-room__abstract-abstract-painting-art-contemporary-art-1572386",
+    "file": "living-room__abstract-abstract-painting-art-contemporary-art-1572386.glb",
+    "name": "Abstract Abstract Painting Art Contemporary Art 1572386",
+    "scene": "🛋️ 温馨大客厅",
+    "sceneId": "living-room",
+    "size": 15687.2
+  },
+  {
+    "id": "living-room__coffee",
+    "file": "living-room__coffee.glb",
+    "name": "咖啡杯",
+    "scene": "🛋️ 温馨大客厅",
+    "sceneId": "living-room",
+    "size": 255.4
+  },
+  {
+    "id": "living-room__furniture",
+    "file": "living-room__furniture.glb",
+    "name": "家具组合",
+    "scene": "🛋️ 温馨大客厅",
+    "sceneId": "living-room",
+    "size": 13640.5
+  },
+  {
+    "id": "living-room__leaves",
+    "file": "living-room__leaves.glb",
+    "name": "阔叶植物",
+    "scene": "🛋️ 温馨大客厅",
+    "sceneId": "living-room",
+    "size": 1029.0
+  },
+  {
+    "id": "living-room__plant",
+    "file": "living-room__plant.glb",
+    "name": "盆栽",
+    "scene": "🛋️ 温馨大客厅",
+    "sceneId": "living-room",
+    "size": 1136.1
+  },
+  {
+    "id": "living-room__sofa",
+    "file": "living-room__sofa.glb",
+    "name": "沙发",
+    "scene": "🛋️ 温馨大客厅",
+    "sceneId": "living-room",
+    "size": 371.1
+  },
+  {
+    "id": "living-room__table",
+    "file": "living-room__table.glb",
+    "name": "桌子",
+    "scene": "🛋️ 温馨大客厅",
+    "sceneId": "living-room",
+    "size": 29746.6
+  },
+  {
+    "id": "living-room__tv",
+    "file": "living-room__tv.glb",
+    "name": "电视机",
+    "scene": "🛋️ 温馨大客厅",
+    "sceneId": "living-room",
+    "size": 278.5
+  }
+]
