@@ -528,6 +528,18 @@ body {
     max-width: 320px;
     margin: 0 auto;
 }
+.desktop-music-widget-card {
+    flex: 1 !important;
+    width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box !important;
+}
+.desktop-widgets-slot.single-widget .desktop-music-widget-card {
+    flex: 1 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+}
 
 @keyframes widgetJiggle {
     0% { transform: rotate(0deg); }
@@ -1065,6 +1077,36 @@ input[type="password"] {
 /* ==========================================================================
    伴窝 (Nest) 专属视觉体系 - 极简二次元 / 深空微粒 / 纯线条 SVG 质感
    ========================================================================== */
+.app-fullscreen-modal,
+.nest-app-modal {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 760;
+    background: #0a0d14;
+    display: none;
+    overflow: hidden;
+}
+.nest-back-desktop-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 20px;
+    padding: 6px 12px;
+    color: #e5ebf8;
+    font-size: 12px;
+    font-weight: 700;
+    backdrop-filter: blur(8px);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.nest-back-desktop-btn:active {
+    transform: scale(0.96);
+    background: rgba(255, 255, 255, 0.16);
+}
 .nest-container {
     width: 100%;
     height: 100%;

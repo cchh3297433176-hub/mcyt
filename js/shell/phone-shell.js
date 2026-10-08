@@ -769,6 +769,7 @@
 
         return `
             <div class="desktop-music-widget-card" id="desktopMusicWidget" data-widget-type="music" style="
+                flex: 1; width: 100%; min-width: 0;
                 background: #ffffff; border-radius: 18px; padding: 12px 14px;
                 border: 0.5px solid rgba(0,0,0,0.06); box-shadow: 0 4px 16px rgba(0,0,0,0.04);
                 display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -1521,6 +1522,15 @@
             return;
         }
 
+        if (appKey === 'room') {
+            if (window.RoomApp && typeof window.RoomApp.open === 'function') {
+                window.RoomApp.open();
+            } else if (typeof window.openRoomApp === 'function') {
+                window.openRoomApp();
+            }
+            return;
+        }
+
         if (appKey === 'youtube' && typeof window.renderYouTubePanel === 'function') {
             appModalTitle.textContent = "▶️ YouTube 视频";
             appModalBody.innerHTML = '<div id="youtubeTab" style="width:100%;height:100%;"></div>';
@@ -1560,6 +1570,9 @@
             appModal.classList.remove('wechat-seamless-shell');
         }
         document.body.classList.remove('ao3-active-fullscreen');
+        if (window.RoomApp && typeof window.RoomApp.close === 'function') {
+            window.RoomApp.close();
+        }
     };
 
     function bootShell() {

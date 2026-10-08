@@ -38,6 +38,10 @@ window.RoomHub = {
             <canvas id="nestStarCanvas" class="nest-star-bg"></canvas>
             
             <div class="nest-top-nav">
+                <button class="nest-back-desktop-btn" id="btnNestExitDesktop" title="返回桌面">
+                    <svg viewBox="0 0 24 24" style="width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;"><path d="M15 18l-6-6 6-6"/></svg>
+                    <span>桌面</span>
+                </button>
                 <div class="nest-title-badge">
                     <span class="nest-brand">伴窝</span>
                     <span class="nest-sub">空间羁绊</span>
@@ -100,6 +104,14 @@ window.RoomHub = {
         containerEl.innerHTML = html;
         window.RoomStars.init(document.getElementById('nestStarCanvas'));
 
+        const exitBtn = document.getElementById('btnNestExitDesktop');
+        if (exitBtn) {
+            exitBtn.onclick = () => {
+                if (window.RoomApp && typeof window.RoomApp.close === 'function') {
+                    window.RoomApp.close();
+                }
+            };
+        }
         document.getElementById('btnNestCoffee').onclick = () => onOpenCoffee && onOpenCoffee();
         document.getElementById('btnMyNest').onclick = () => onSelectRole && onSelectRole('user_me');
 

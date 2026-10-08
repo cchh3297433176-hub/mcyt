@@ -12,8 +12,9 @@ window.RoomApp = {
         if (!modal) {
             modal = document.createElement('div');
             modal.id = 'appModalRoom';
-            modal.className = 'app-fullscreen-modal';
-            document.body.appendChild(modal);
+            modal.className = 'app-fullscreen-modal nest-app-modal';
+            const phoneWrapper = document.getElementById('phoneWrapper') || document.body;
+            phoneWrapper.appendChild(modal);
         }
         this.appEl = modal;
         modal.style.display = 'block';
