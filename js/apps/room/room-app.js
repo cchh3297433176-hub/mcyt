@@ -67,8 +67,7 @@ window.RoomApp = {
             '  </div>',
             '  <div id="nestDrawerMount"></div>',
             '</div>'
-        ].join('
-');
+        ].join('');
 
         const canvasBox = this.appEl.querySelector('#nest3dCanvas');
         window.RoomEngine.init(canvasBox);
