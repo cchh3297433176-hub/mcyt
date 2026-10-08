@@ -41,16 +41,20 @@
 
 
 ### 1.11 伴窝 (Nest) 3D 空间与角色羁绊枢纽
-- **定位**：离线优先的极简 Q 版粘土风专属小窝与角色聚合空间（位于桌面 Page 2，图标 ）。
-- **去 Emoji 规范**：全系统杜绝 Emoji，统一采用单色细线条精致矢量 SVG 图标库 ()。
-- **动态星幕与星轨选人环 ()**：
-  - 纯 Canvas 轻量高帧率微粒星尘呼吸背景 ()。
-  - C 位用户拍板大卡牌 + 环绕角色徽章 ( ~ ) 同心圆聚落布局，支持底栏左右切页。
+- **定位**：离线优先的极简 Q 版粘土风专属小窝与角色聚合空间（位于桌面 Page 2，图标 `assets/icons/room.png`）。
+- **去 Emoji 规范**：全系统杜绝 Emoji，统一采用单色细线条精致矢量 SVG 图标库 (`js/apps/room/room-icons.js`)。
+- **主控制器与路由驱动 (`js/apps/room/room-app.js`, `js/shell/phone-shell.js`)**：
+  - 统一由 `openPhoneApp('room')` 路由调度，内部唤起 `RoomApp.open()`。
+  - 模态窗容器挂载至 `#phoneWrapper` 内（使用 `.nest-app-modal` 确保手机屏内全屏沉浸覆盖且不逃逸至外层 body）。
+  - 星轨 Hub 顶栏内置专属 `.nest-back-desktop-btn` 桌面返回键，支持随时丝滑退回手机桌面并自动释放 Canvas 与 Three.js 动画循环。
+- **动态星幕与星轨选人环 (`js/apps/room/room-hub.js`)**：
+  - 纯 Canvas 轻量高帧率微粒星尘呼吸背景 (`js/apps/room/room-stars.js`)。
+  - C 位用户拍板大卡牌 + 环绕角色徽章 (No.01 ~ No.05) 同心圆聚落布局，支持底栏左右切页。
   - 预留公共咖啡厅闲聚入口，为未来多 AI 角色串门闲聊打通空间插槽。
-- **纯净房间 3D 渲染内核 ()**：
+- **纯净房间 3D 渲染内核 (`js/apps/room/room-engine.js`)**：
   - 彻底剥离冗余大模型，采用纯净程序化网格动态生成（0 依赖、极速冷启）。
   - 进入即近景特写对角线视角，自适应移动端手势旋转平移缩放。
-- **空间定制与工坊抽屉 ()**：
+- **空间定制与工坊抽屉 (`js/apps/room/room-customizer.js`)**：
   - **尺寸拉伸**：长 (Z)、宽 (X)、高 (Y) 滑块实时动态生成网格。
   - **材质上墙**：墙面与地板色阶微调，支持本地图片/手绘涂鸦一键贴图上墙与地毯。
   - **布局管理**：支持一键导出包含空间尺寸、色彩贴图配置的完整 JSON 布局文件，支持随时导入还原。
@@ -95,3 +99,25 @@
 - **账号封禁**：`#封禁 <QQ号>` 或 `#拉黑 <QQ号>` —— 永久注销过审资格并踢入黑名单。
 - **账号解封**：`#解封 <QQ号>` —— 移出黑名单（需重新发送 `#通过` 重新放行）。
 - **设备解封**：`#解封设备 <设备UUID前缀>` —— 将特定硬件指纹移出黑名单。
+
+---
+
+## 5. 维护排坑与经验教训总结 (Lessons Learned)
+
+### 5.1 独立 App 路由调度中枢契约 (Router Exhaustiveness)
+- **踩坑现象**：桌面新增独立应用（如“伴窝” `room`）在 `index.html` 中绑定了 `onclick="openPhoneApp('room')"`，但点击后页面展示通用模态框并卡在“应用窗口 就绪 / 应用装载中...”。
+- **根因分析**：`js/shell/phone-shell.js` 的 `openPhoneApp(appKey)` 存在通用 fallback 逻辑。任何新增的子 App 若未在路由中显式编写 `if (appKey === "xxx")` 拦截，就会直接掉入 fallback 占位模板，导致实际的控制器代码完全未执行。
+- **经验防线**：
+  1. 新增任何桌面独立 App 时，第一站必须在 `phone-shell.js` 的 `openPhoneApp` 和 `closePhoneApp` 中登记路由，严禁只在桌面 HTML 加 slot 而遗漏调度内核。
+  2. 独立全屏 App（如伴窝）的挂载容器优先使用 `#phoneWrapper` 作为父容器，禁止直接 `document.body.appendChild`，防止脱离虚拟手机外壳或在网页端逃逸至外层。
+  3. 自定义模态框必须在顶级 Hub 页面提供明确的“返回桌面”按钮，并在关闭时连带销毁或暂停 `requestAnimationFrame` 循环，防止后台空转消耗 CPU/GPU。
+
+### 5.2 桌面小组件 Flex 宽度契约 (Widget Width Isolation)
+- **踩坑现象**：桌面第 2 页的微音黑胶音乐小组件两端严重缩水变窄，无法占满桌面整行宽度。
+- **根因分析**：
+  1. 宿主插槽容器 `.desktop-widgets-slot` 为 `display: flex; gap: 8px; width: 100%`。
+  2. 当单页仅有一个小组件时，容器会自动添加 `.single-widget` 类名，但此前 CSS 仅为 `.calendar-widget-card` 与 `.todo-widget-card` 配置了样式，漏掉了 `.desktop-music-widget-card`。
+  3. 组件卡片自身缺少 `flex: 1; width: 100%; min-width: 0;` 声明，在 Flex 容器中仅靠内部图标与文本自然收缩至固有尺寸（约 200px 宽），造成视觉塌陷。
+- **经验防线**：
+  1. 所有挂载进 `.desktop-widgets-slot` 的小组件卡片，基础类名必须统一具备 `flex: 1 !important; width: 100% !important; min-width: 0 !important; box-sizing: border-box !important;`。
+  2. 横条通栏组件（如音乐组件）严禁被日历类单卡片的 `max-width: 320px` 限制截断，确保与下方的应用网格 (`.app-grid`) 两端边界严格对齐。
