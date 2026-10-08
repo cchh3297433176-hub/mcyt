@@ -75,8 +75,7 @@ window.RoomCustomizer = {
             '    </div>',
             '  </div>',
             '</div>'
-        ].join('
-');
+        ].join('');
 
         this.bindEvents(containerEl);
     },
@@ -195,7 +194,7 @@ window.RoomCustomizer = {
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = '伴窝布局_' + new Date().toLocaleDateString().replace(/\//g, '-') + '.json';
+        a.download = '伴窝布局_' + new Date().toLocaleDateString().replace(///g, '-') + '.json';
         a.click();
         URL.revokeObjectURL(url);
     },

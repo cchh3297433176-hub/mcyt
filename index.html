@@ -136,16 +136,7 @@
                                 <div class="app-title-label">开播中心</div>
                             </div>
 
-                                                        <!-- 🏰 伴窝 (Nest) 专属 APP 卡位：读取 assets/icons/room.png -->
-                            <div class="app-slot" id="appSlotRoom" onclick="openPhoneApp('room')">
-                                <div class="app-icon-box" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
-                                    <img src="assets/icons/room.png" alt="伴窝" draggable="false" style="display:none;" onload="this.style.display='block';if(this.nextElementSibling)this.nextElementSibling.style.display='none';this.parentElement.style.background='none';" onerror="this.style.display='none';" />
-                                    <svg class="app-icon-svg" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M3 10.5L12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1v-9.5z"/>
-                                    </svg>
-                                </div>
-                                <div class="app-title-label">伴窝</div>
-                            </div>
+                                                        
 
 <!-- 🎮 全新【游戏大厅】APP（替换原主线频道）：精准读取 assets/icons/lobby.png -->
                             <div class="app-slot" id="appSlotLobby" onclick="openPhoneApp('lobby')">
@@ -190,6 +181,16 @@
                         <!-- 独立 App 卡位网格 -->
                         <div class="app-grid">
                             <!-- 塔罗独立 App 专属卡位：精确读取 assets/icons/tarot.png -->
+                            <!-- 🏰 伴窝 (Nest) 专属 APP 卡位：读取 assets/icons/room.png -->
+                            <div class="app-slot" id="appSlotRoom" onclick="openPhoneApp('room')">
+                                <div class="app-icon-box" style="background: linear-gradient(135deg, #f59e0b, #d97706);">
+                                    <img src="assets/icons/room.png" alt="伴窝" draggable="false" style="display:none;" onload="this.style.display='block';if(this.nextElementSibling)this.nextElementSibling.style.display='none';this.parentElement.style.background='none';" onerror="this.style.display='none';" />
+                                    <svg class="app-icon-svg" viewBox="0 0 24 24" fill="none" stroke="#ffffff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M3 10.5L12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1v-9.5z"/>
+                                    </svg>
+                                </div>
+                                <div class="app-title-label">伴窝</div>
+                            </div>
                             <div class="app-slot" id="appSlotTarot" onclick="openPhoneApp('tarot')">
                                 <div class="app-icon-box" style="background: #19141f;">
                                     <img src="assets/icons/tarot.png" alt="塔罗星轨" draggable="false" onerror="this.onerror=null;this.src='tarot/images/card_back.png';" />
