@@ -1061,3 +1061,480 @@ input[type="password"] {
     border-radius: 6px;
     outline: none;
 }
+
+/* ==========================================================================
+   伴窝 (Nest) 专属视觉体系 - 极简二次元 / 深空微粒 / 纯线条 SVG 质感
+   ========================================================================== */
+.nest-container {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    background: #0a0d14;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+}
+.nest-star-bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+}
+.nest-hub-wrapper {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+}
+.nest-top-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 20px 10px;
+    z-index: 10;
+}
+.nest-title-badge {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+.nest-brand {
+    font-size: 20px;
+    font-weight: 900;
+    color: #f7f9fd;
+    letter-spacing: 0.5px;
+}
+.nest-sub {
+    font-size: 11px;
+    color: #929bb0;
+    font-weight: 600;
+}
+.nest-coffee-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 20px;
+    padding: 7px 14px;
+    color: #e5ebf8;
+    font-size: 12px;
+    font-weight: 700;
+    backdrop-filter: blur(8px);
+    cursor: pointer;
+}
+.nest-coffee-btn:active {
+    transform: scale(0.96);
+    background: rgba(255, 255, 255, 0.15);
+}
+.nest-btn-icon svg {
+    width: 15px;
+    height: 15px;
+    display: block;
+}
+
+/* 同心圆聚落主舞台 (参考图布局) */
+.nest-orbit-stage {
+    flex: 1;
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+}
+
+/* C位用户拍板大卡牌 */
+.nest-center-clapper {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 140px;
+    background: #1b1f2b;
+    border: 2px solid #363d50;
+    border-radius: 18px;
+    padding: 8px 8px 10px;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    z-index: 5;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.nest-center-clapper:active {
+    transform: translate(-50%, -50%) scale(0.95);
+}
+.clapper-top-stripes {
+    width: 100%;
+    height: 12px;
+    background: #252a38;
+    border-radius: 6px;
+    display: flex;
+    gap: 6px;
+    padding: 2px 4px;
+    margin-bottom: 8px;
+}
+.clapper-top-stripes .stripe {
+    flex: 1;
+    background: #ffffff;
+    opacity: 0.85;
+    border-radius: 2px;
+    transform: skewX(-20deg);
+}
+.clapper-avatar-box {
+    width: 90px;
+    height: 90px;
+    border-radius: 14px;
+    overflow: hidden;
+    background: #0f121a;
+    border: 1.5px solid #2f3647;
+}
+.clapper-avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.clapper-meta-board {
+    margin-top: 8px;
+    text-align: center;
+}
+.clapper-scene-id {
+    font-size: 9px;
+    font-family: monospace;
+    color: #8c97ad;
+    letter-spacing: 0.5px;
+}
+.clapper-director-tag {
+    margin-top: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #f59e0b;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 3px 10px;
+    border-radius: 12px;
+}
+.clapper-director-tag svg {
+    width: 12px;
+    height: 12px;
+}
+
+/* 环绕角色圆盘 */
+.nest-char-orb {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    z-index: 6;
+    transition: transform 0.25s ease;
+}
+.nest-char-orb:active {
+    transform: translate(-50%, -50%) scale(0.92);
+}
+.char-avatar-ring {
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    padding: 3px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.05));
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+.char-avatar-img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #1e2433;
+}
+.char-director-badge {
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(25, 29, 41, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 12px;
+    padding: 3px 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+.char-num-pill {
+    font-size: 9px;
+    font-family: monospace;
+    font-weight: 800;
+    color: #e5a73d;
+}
+.char-name-text {
+    font-size: 11px;
+    font-weight: 700;
+    color: #f0f3fa;
+}
+
+/* 底部切页 Dock */
+.nest-page-dock {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 20px 24px;
+    z-index: 10;
+}
+.nest-page-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #f7f9fd;
+    cursor: pointer;
+}
+.nest-page-btn:disabled {
+    opacity: 0.25;
+    pointer-events: none;
+}
+.nest-page-btn svg {
+    width: 18px;
+    height: 18px;
+}
+.nest-page-dots {
+    display: flex;
+    gap: 6px;
+}
+.nest-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    transition: all 0.2s ease;
+}
+.nest-dot.active {
+    width: 18px;
+    border-radius: 4px;
+    background: #f59e0b;
+}
+
+/* 3D 视图与顶部控制条 */
+.nest-3d-view {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    background: #12141a;
+    overflow: hidden;
+}
+.nest-canvas-wrap {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+}
+.nest-room-bar {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    right: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(25, 29, 41, 0.85);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 18px;
+    padding: 8px 14px;
+    z-index: 20;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+.nest-room-title {
+    font-size: 14px;
+    font-weight: 800;
+    color: #f7f9fd;
+}
+.nest-icon-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: none;
+    border-radius: 10px;
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #e5ebf8;
+    cursor: pointer;
+}
+.nest-icon-btn:active {
+    transform: scale(0.92);
+}
+.nest-icon-btn svg {
+    width: 18px;
+    height: 18px;
+}
+.nest-bar-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* 底部抽屉工坊 */
+.nest-edit-drawer {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(21, 25, 36, 0.94);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 24px 24px 0 0;
+    padding: 12px 18px 24px;
+    z-index: 30;
+    box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.5);
+    transform: translateY(105%);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.nest-edit-drawer.open {
+    transform: translateY(0);
+}
+.drawer-handle {
+    width: 38px;
+    height: 4px;
+    border-radius: 2px;
+    background: rgba(255, 255, 255, 0.25);
+    margin: 0 auto 10px;
+}
+.drawer-tabs {
+    display: flex;
+    gap: 8px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 8px;
+}
+.drawer-tab {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: transparent;
+    border: none;
+    color: #929bb0;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 8px 6px;
+    border-radius: 10px;
+    cursor: pointer;
+}
+.drawer-tab.active {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.1);
+}
+.tab-icon svg {
+    width: 15px;
+    height: 15px;
+    display: block;
+}
+.drawer-panel {
+    display: none;
+    padding-top: 14px;
+}
+.drawer-panel.active {
+    display: block;
+}
+.prop-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+.prop-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #cbd5e1;
+    width: 60px;
+}
+.nest-slider {
+    flex: 1;
+    accent-color: #f59e0b;
+}
+.prop-val {
+    font-size: 12px;
+    font-family: monospace;
+    font-weight: 700;
+    color: #f59e0b;
+    width: 44px;
+    text-align: right;
+}
+.mat-section-title {
+    font-size: 12px;
+    font-weight: 700;
+    color: #94a3b8;
+    margin-bottom: 6px;
+}
+.mat-actions-bar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.nest-color-btn {
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    background: transparent;
+}
+.nest-upload-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px dashed rgba(255, 255, 255, 0.22);
+    border-radius: 12px;
+    padding: 8px 12px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #e2e8f0;
+    cursor: pointer;
+}
+.nest-upload-btn svg {
+    width: 15px;
+    height: 15px;
+}
+.export-actions-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.nest-action-pill {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 14px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #f1f5f9;
+    cursor: pointer;
+}
+.nest-action-pill:active {
+    background: rgba(255, 255, 255, 0.15);
+}
+.pill-icon svg {
+    width: 16px;
+    height: 16px;
+}
