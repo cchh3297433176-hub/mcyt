@@ -1,0 +1,1149 @@
+/* ==========================================================================
+   伴窝 (Nest) 专属样式表 - 极简二次元 / 深空微粒 / 纯线条 SVG 质感
+   文件路径: mcyt/js/apps/room/room.css
+   ========================================================================== */
+
+.app-fullscreen-modal,
+.nest-app-modal {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 760;
+    background: #0a0d14;
+    display: none;
+    overflow: hidden;
+}
+
+.nest-back-desktop-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 20px;
+    padding: 6px 12px;
+    color: #e5ebf8;
+    font-size: 12px;
+    font-weight: 700;
+    backdrop-filter: blur(8px);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.nest-back-desktop-btn:active {
+    transform: scale(0.96);
+    background: rgba(255, 255, 255, 0.16);
+}
+
+.nest-container {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    background: #0a0d14;
+    overflow: hidden;
+    user-select: none;
+    -webkit-user-select: none;
+}
+
+.nest-star-bg {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+}
+
+.nest-hub-wrapper {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 2;
+    display: flex;
+    flex-direction: column;
+}
+
+.nest-top-nav {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 20px 10px;
+    z-index: 10;
+}
+
+.nest-title-badge {
+    display: flex;
+    align-items: baseline;
+    gap: 8px;
+}
+
+.nest-brand {
+    font-size: 20px;
+    font-weight: 900;
+    color: #f7f9fd;
+    letter-spacing: 0.5px;
+}
+
+.nest-sub {
+    font-size: 11px;
+    color: #929bb0;
+    font-weight: 600;
+}
+
+.nest-coffee-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 20px;
+    padding: 7px 14px;
+    color: #e5ebf8;
+    font-size: 12px;
+    font-weight: 700;
+    backdrop-filter: blur(8px);
+    cursor: pointer;
+}
+.nest-coffee-btn:active {
+    transform: scale(0.96);
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.nest-btn-icon svg {
+    width: 15px;
+    height: 15px;
+    display: block;
+}
+
+/* 同心圆聚落主舞台 */
+.nest-orbit-stage {
+    flex: 1;
+    position: relative;
+    width: 100%;
+    overflow: hidden;
+}
+
+/* C位用户拍板大卡牌 */
+.nest-center-clapper {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 140px;
+    background: #1b1f2b;
+    border: 2px solid #363d50;
+    border-radius: 18px;
+    padding: 8px 8px 10px;
+    box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    z-index: 5;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.nest-center-clapper:active {
+    transform: translate(-50%, -50%) scale(0.95);
+}
+
+.clapper-top-stripes {
+    width: 100%;
+    height: 12px;
+    background: #252a38;
+    border-radius: 6px;
+    display: flex;
+    gap: 6px;
+    padding: 2px 4px;
+    margin-bottom: 8px;
+}
+.clapper-top-stripes .stripe {
+    flex: 1;
+    background: #ffffff;
+    opacity: 0.85;
+    border-radius: 2px;
+    transform: skewX(-20deg);
+}
+
+.clapper-avatar-box {
+    width: 90px;
+    height: 90px;
+    border-radius: 14px;
+    overflow: hidden;
+    background: #0f121a;
+    border: 1.5px solid #2f3647;
+}
+.clapper-avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.clapper-meta-board {
+    margin-top: 8px;
+    text-align: center;
+}
+
+.clapper-scene-id {
+    font-size: 9px;
+    font-family: monospace;
+    color: #8c97ad;
+    letter-spacing: 0.5px;
+}
+
+.clapper-director-tag {
+    margin-top: 4px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #f59e0b;
+    color: #ffffff;
+    font-size: 11px;
+    font-weight: 800;
+    padding: 3px 10px;
+    border-radius: 12px;
+}
+.clapper-director-tag svg {
+    width: 12px;
+    height: 12px;
+}
+
+/* 环绕角色圆盘 */
+.nest-char-orb {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    cursor: pointer;
+    z-index: 6;
+    transition: transform 0.25s ease;
+}
+.nest-char-orb:active {
+    transform: translate(-50%, -50%) scale(0.92);
+}
+
+.char-avatar-ring {
+    width: 68px;
+    height: 68px;
+    border-radius: 50%;
+    padding: 3px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.05));
+    box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+}
+.char-avatar-img {
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #1e2433;
+}
+
+.char-director-badge {
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(25, 29, 41, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 12px;
+    padding: 3px 8px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.char-num-pill {
+    font-size: 9px;
+    font-family: monospace;
+    font-weight: 800;
+    color: #e5a73d;
+}
+
+.char-name-text {
+    font-size: 11px;
+    font-weight: 700;
+    color: #f0f3fa;
+}
+
+/* 底部切页 Dock */
+.nest-page-dock {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 16px;
+    padding: 12px 20px 24px;
+    z-index: 10;
+}
+
+.nest-page-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #f7f9fd;
+    cursor: pointer;
+}
+.nest-page-btn:disabled {
+    opacity: 0.25;
+    pointer-events: none;
+}
+.nest-page-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+.nest-page-dots {
+    display: flex;
+    gap: 6px;
+}
+.nest-dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    transition: all 0.2s ease;
+}
+.nest-dot.active {
+    width: 18px;
+    border-radius: 4px;
+    background: #f59e0b;
+}
+
+/* 3D 视图与顶部控制条 */
+.nest-3d-view {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    background: #12141a;
+    overflow: hidden;
+}
+
+.nest-canvas-wrap {
+    width: 100%;
+    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    transition: background 0.4s ease;
+}
+
+.nest-room-bar {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    right: 14px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: rgba(25, 29, 41, 0.85);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 18px;
+    padding: 8px 14px;
+    z-index: 20;
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+}
+
+.nest-room-title {
+    font-size: 14px;
+    font-weight: 800;
+    color: #f7f9fd;
+}
+
+.nest-icon-btn {
+    background: rgba(255, 255, 255, 0.08);
+    border: none;
+    border-radius: 10px;
+    width: 32px;
+    height: 32px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #e5ebf8;
+    cursor: pointer;
+}
+.nest-icon-btn:active {
+    transform: scale(0.92);
+}
+.nest-icon-btn svg {
+    width: 18px;
+    height: 18px;
+}
+
+.nest-bar-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* 底部抽屉工坊 */
+.nest-edit-drawer {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(21, 25, 36, 0.95);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 24px 24px 0 0;
+    padding: 10px 16px 22px;
+    z-index: 30;
+    box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.5);
+    transform: translateY(105%);
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    max-height: 48vh;
+    display: flex;
+    flex-direction: column;
+}
+.nest-edit-drawer.open {
+    transform: translateY(0);
+}
+
+.drawer-handle {
+    width: 44px;
+    height: 5px;
+    border-radius: 3px;
+    background: rgba(255, 255, 255, 0.28);
+    margin: 0 auto 10px;
+    cursor: pointer;
+}
+
+.drawer-tabs {
+    display: flex;
+    gap: 6px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 8px;
+    flex-shrink: 0;
+}
+
+.drawer-tab {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    background: transparent;
+    border: none;
+    color: #929bb0;
+    font-size: 11.5px;
+    font-weight: 700;
+    padding: 8px 4px;
+    border-radius: 10px;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.drawer-tab.active {
+    color: #ffffff;
+    background: rgba(255, 255, 255, 0.12);
+}
+
+.tab-icon svg {
+    width: 14px;
+    height: 14px;
+    display: block;
+}
+
+.drawer-panel {
+    display: none;
+    padding-top: 12px;
+    flex: 1;
+    overflow-y: auto;
+}
+.drawer-panel.active {
+    display: block;
+}
+
+.prop-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.prop-label {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #cbd5e1;
+    width: 80px;
+}
+
+.nest-slider {
+    flex: 1;
+    accent-color: #f59e0b;
+}
+
+.prop-val {
+    font-size: 11.5px;
+    font-family: monospace;
+    font-weight: 700;
+    color: #f59e0b;
+    width: 44px;
+    text-align: right;
+}
+
+.mat-section-title {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #94a3b8;
+    margin-bottom: 8px;
+}
+
+/* 单表面定制面板样式 */
+.nest-surface-subtabs {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 10px;
+}
+
+.surface-subtab {
+    flex: 1;
+    padding: 6px 4px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    color: #94a3b8;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+.surface-subtab.active {
+    background: rgba(16, 185, 129, 0.2);
+    border-color: #10b981;
+    color: #34d399;
+}
+
+.surface-editor-card {
+    background: rgba(0, 0, 0, 0.22);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 12px;
+    padding: 10px 12px;
+}
+
+.surface-card-title {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    font-size: 12px;
+    font-weight: 800;
+    color: #f1f5f9;
+}
+
+.surface-hint {
+    font-size: 9.5px;
+    font-weight: 500;
+    color: #64748b;
+}
+
+.nest-color-picker-wrap {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    padding: 4px 8px;
+    border-radius: 10px;
+}
+
+.prop-sublabel {
+    font-size: 11px;
+    color: #94a3b8;
+}
+
+.nest-color-btn {
+    width: 28px;
+    height: 28px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    background: transparent;
+}
+
+.nest-upload-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px dashed rgba(255, 255, 255, 0.22);
+    border-radius: 10px;
+    padding: 7px 10px;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #e2e8f0;
+    cursor: pointer;
+}
+.nest-upload-btn svg {
+    width: 14px;
+    height: 14px;
+}
+
+.nest-clear-btn {
+    background: rgba(239, 68, 68, 0.15);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 8px;
+    padding: 6px 10px;
+    color: #f87171;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+/* 背景主题药丸按钮 */
+.nest-bg-theme-row {
+    display: flex;
+    gap: 6px;
+    overflow-x: auto;
+    padding-bottom: 6px;
+}
+.nest-bg-theme-row::-webkit-scrollbar { display: none; }
+
+.bg-theme-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 16px;
+    padding: 5px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #cbd5e1;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.bg-theme-pill.active {
+    background: rgba(245, 158, 11, 0.2);
+    border-color: #f59e0b;
+    color: #fbbf24;
+}
+
+.bg-preview-circle {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+}
+
+.nest-grid-toggle-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 12px;
+    padding: 3px 8px;
+    font-size: 10.5px;
+    font-weight: 700;
+    color: #cbd5e1;
+    cursor: pointer;
+}
+.nest-grid-toggle-btn svg {
+    width: 12px;
+    height: 12px;
+}
+
+/* 家具搜索与列表 */
+.nest-search-row {
+    margin-bottom: 10px;
+}
+
+.nest-search-box {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 12px;
+    padding: 6px 12px;
+}
+.nest-search-box .search-icon svg {
+    width: 14px;
+    height: 14px;
+    stroke: #94a3b8;
+}
+
+.nest-search-field {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    color: #ffffff;
+    font-size: 12px;
+}
+
+.nest-furn-scroll-list {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px;
+    max-height: 240px;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.nest-furn-card {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 8px;
+    cursor: pointer;
+    transition: all 0.18s ease;
+}
+.nest-furn-card:active {
+    transform: scale(0.96);
+    border-color: #f59e0b;
+}
+
+.furn-card-icon-box {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    background: rgba(245, 158, 11, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 6px;
+}
+.furn-card-icon-box svg {
+    width: 16px;
+    height: 16px;
+    stroke: #f59e0b;
+}
+
+.furn-card-name {
+    font-size: 11.5px;
+    font-weight: 800;
+    color: #f1f5f9;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.furn-card-scene {
+    font-size: 9.5px;
+    color: #64748b;
+    margin-top: 2px;
+}
+
+.nest-loading-text {
+    grid-column: span 2;
+    text-align: center;
+    color: #94a3b8;
+    font-size: 12px;
+    padding: 24px;
+}
+
+/* 悬浮选中小物件微调条 */
+.nest-furn-action-bar {
+    position: absolute;
+    bottom: 56px;
+    left: 20px;
+    right: 20px;
+    z-index: 45;
+    background: rgba(25, 29, 41, 0.92);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 20px;
+    padding: 8px 14px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.furn-bar-info {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.furn-bar-name {
+    font-size: 12.5px;
+    font-weight: 800;
+    color: #f1f5f9;
+}
+
+.furn-bar-btns {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.furn-act-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 12px;
+    padding: 5px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    color: #e2e8f0;
+    cursor: pointer;
+}
+.furn-act-btn svg {
+    width: 13px;
+    height: 13px;
+}
+.furn-act-btn.btn-trash {
+    background: rgba(239, 68, 68, 0.18);
+    border-color: rgba(239, 68, 68, 0.35);
+    color: #fca5a5;
+}
+
+/* 改色贴图工坊特写弹层 */
+.nest-studio-modal {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 60;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.nest-studio-box {
+    width: 100%;
+    max-width: 320px;
+    background: #191d29;
+    border: 1px solid rgba(255, 255, 255, 0.16);
+    border-radius: 20px;
+    padding: 16px 18px 20px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.85);
+}
+
+.nest-studio-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 14px;
+}
+
+.nest-studio-title {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13.5px;
+    font-weight: 800;
+    color: #ffffff;
+}
+.nest-studio-title svg {
+    width: 16px;
+    height: 16px;
+    stroke: #f59e0b;
+}
+
+.studio-section-label {
+    font-size: 11px;
+    font-weight: 700;
+    color: #94a3b8;
+    margin-bottom: 8px;
+}
+
+.studio-swatch-grid {
+    display: grid;
+    grid-template-columns: repeat(8, 1fr);
+    gap: 6px;
+}
+
+.studio-swatch {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    cursor: pointer;
+    border: 1.5px solid rgba(255, 255, 255, 0.2);
+    transition: transform 0.15s ease;
+}
+.studio-swatch:active {
+    transform: scale(0.85);
+}
+
+.nest-color-picker-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.studio-subtext {
+    font-size: 11px;
+    color: #94a3b8;
+}
+
+/* 多房间胶囊切换条 */
+.nest-room-nav-scroll {
+    position: absolute;
+    top: 66px;
+    left: 14px;
+    right: 14px;
+    z-index: 20;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 4px;
+}
+.nest-room-nav-scroll::-webkit-scrollbar {
+    display: none;
+}
+
+.nest-room-pill-track {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.nest-room-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    background: rgba(25, 29, 41, 0.78);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 20px;
+    padding: 5px 12px 5px 6px;
+    cursor: pointer;
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    transition: all 0.2s ease;
+}
+.nest-room-chip.active {
+    background: rgba(245, 158, 11, 0.22);
+    border-color: #f59e0b;
+    box-shadow: 0 4px 14px rgba(245, 158, 11, 0.25);
+}
+
+.chip-icon-box {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.chip-custom-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.chip-svg-icon svg {
+    width: 14px;
+    height: 14px;
+    stroke: #e2e8f0;
+    display: block;
+}
+.nest-room-chip.active .chip-svg-icon svg {
+    stroke: #fbbf24;
+}
+
+.chip-name {
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #e2e8f0;
+    white-space: nowrap;
+}
+.nest-room-chip.active .chip-name {
+    color: #fbbf24;
+}
+
+.nest-add-room-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px dashed rgba(255, 255, 255, 0.28);
+    border-radius: 20px;
+    padding: 6px 12px;
+    color: #cbd5e1;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    backdrop-filter: blur(8px);
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+.nest-add-room-chip:active {
+    transform: scale(0.95);
+    background: rgba(255, 255, 255, 0.14);
+}
+.nest-add-room-chip .chip-svg-icon svg {
+    width: 13px;
+    height: 13px;
+}
+
+/* 添加房间弹窗 */
+.nest-modal-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 50;
+    padding: 20px;
+}
+
+.nest-modal-dialog {
+    width: 100%;
+    max-width: 310px;
+    background: #191d29;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 18px;
+    padding: 16px 18px 18px;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8);
+}
+
+.nest-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 14px;
+    font-weight: 800;
+    color: #f8fafc;
+    margin-bottom: 14px;
+}
+
+.nest-modal-close {
+    background: transparent;
+    border: none;
+    color: #94a3b8;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+.nest-input-group {
+    margin-bottom: 12px;
+}
+
+.nest-input-label {
+    display: block;
+    font-size: 11px;
+    font-weight: 600;
+    color: #94a3b8;
+    margin-bottom: 6px;
+}
+
+.nest-text-field {
+    width: 100%;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 10px;
+    padding: 8px 12px;
+    font-size: 13px;
+    color: #ffffff;
+    outline: none;
+}
+.nest-text-field:focus {
+    border-color: #f59e0b;
+}
+
+.nest-upload-preview-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.nest-icon-preview-box {
+    width: 38px;
+    height: 38px;
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+}
+.nest-icon-preview-box svg {
+    width: 18px;
+    height: 18px;
+    stroke: #94a3b8;
+}
+
+.nest-upload-btn-outline {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px dashed rgba(255, 255, 255, 0.22);
+    border-radius: 10px;
+    padding: 8px 10px;
+    font-size: 11.5px;
+    font-weight: 700;
+    color: #cbd5e1;
+    cursor: pointer;
+}
+
+.nest-modal-footer {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.nest-btn-cancel,
+.nest-btn-confirm {
+    flex: 1;
+    padding: 9px;
+    border-radius: 10px;
+    font-size: 12.5px;
+    font-weight: 700;
+    cursor: pointer;
+}
+
+.nest-btn-cancel {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #cbd5e1;
+}
+
+.nest-btn-confirm {
+    background: #f59e0b;
+    border: none;
+    color: #ffffff;
+    box-shadow: 0 4px 12px rgba(245, 158, 11, 0.35);
+}
+
+.export-actions-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.nest-action-pill {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 14px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #f1f5f9;
+    cursor: pointer;
+}
+.nest-action-pill:active {
+    background: rgba(255, 255, 255, 0.15);
+}
+.pill-icon svg {
+    width: 16px;
+    height: 16px;
+}
