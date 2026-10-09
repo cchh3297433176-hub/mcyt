@@ -15,6 +15,7 @@
 (function () {
     'use strict';
 
+    const DEFAULT_SERVER_URL = '';
     const API_PROFILES_KEY = 'mcyt_lobby_api_profiles';
     const ACTIVE_PROFILE_ID_KEY = 'mcyt_lobby_active_profile_id';
     const LOBBY_THEME_MODE_KEY = 'mcyt_lobby_theme_mode';
